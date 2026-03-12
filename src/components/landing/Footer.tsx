@@ -85,7 +85,7 @@ export default function Footer() {
             &copy; {year} Velte. All rights reserved.
           </p>
           <p className="text-white/20 text-xs">
-            Helping businesses sell smarter on WhatsApp
+            Helping businesses sell smarter
           </p>
         </div>
       </div>

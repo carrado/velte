@@ -1,3 +1,5 @@
+"use client"
+
 import { motion } from "motion/react";
 import { PhoneCall, Upload, Zap } from "lucide-react";
 

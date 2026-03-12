@@ -1,5 +1,7 @@
+"use client"
+
 import { motion } from "motion/react";
-import { Button } from "@/components/ui/button.tsx";
+import { Button } from "@/components/ui/button";
 import { ArrowRight, Play, CheckCircle2, CreditCard, Search } from "lucide-react";
 import Link from "next/link";
 

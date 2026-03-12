@@ -1,6 +1,8 @@
+"use client"
+
 import { motion } from "motion/react";
 import { CheckCircle2, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button.tsx";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 type Plan = {

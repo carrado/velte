@@ -1,8 +1,11 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Button } from "@/components/ui/button.tsx";
 import { Menu, X } from "lucide-react";
 import Link from "next/link";
+import { Button } from "../ui/button";
+import Image from "next/image";
 
 const navLinks = [
   { label: "Features", href: "#features" },
@@ -25,23 +28,22 @@ export default function Navbar() {
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
           ? "bg-[#050d08]/90 backdrop-blur-xl border-b border-white/[0.06]"
           : "bg-transparent"
-      }`}
+        }`}
     >
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/30">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 1L14 4.5V11.5L8 15L2 11.5V4.5L8 1Z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
-                <circle cx="8" cy="8" r="2.5" fill="white"/>
-              </svg>
-            </div>
-            <span className="text-white font-bold text-xl tracking-tight">Velte</span>
+            <Image
+              src="/velte_logo_preview.png"
+              alt="Velte logo"
+              width={100}
+              height={20}
+              priority
+            />
           </Link>
 
           {/* Desktop Nav */}
