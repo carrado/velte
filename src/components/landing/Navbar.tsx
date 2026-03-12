@@ -38,7 +38,7 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 group">
             <Image
-              src="/velte_logo_preview.png"
+              src="/velte_logo_preview_gem-removebg-preview.png"
               alt="Velte logo"
               width={100}
               height={20}

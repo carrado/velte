@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const footerLinks = [
@@ -39,18 +40,13 @@ export default function Footer() {
           {/* Brand */}
           <div className="col-span-1">
             <Link href="/" className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path
-                    d="M8 1L14 4.5V11.5L8 15L2 11.5V4.5L8 1Z"
-                    stroke="white"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  <circle cx="8" cy="8" r="2.5" fill="white" />
-                </svg>
-              </div>
-              <span className="text-white font-bold text-xl tracking-tight">Velte</span>
+            <Image
+              src="/velte_logo_preview_gem-removebg-preview.png"
+              alt="Velte logo"
+              width={100}
+              height={20}
+              priority
+            />
             </Link>
             <p className="text-white/40 text-sm leading-relaxed max-w-[220px]">
               AI-powered WhatsApp sales agents for modern businesses.
