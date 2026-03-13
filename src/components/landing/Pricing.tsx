@@ -118,7 +118,9 @@ export default function Pricing() {
               <div className="mb-6">
                 <p
                   className={`text-sm font-semibold mb-1 ${
-                    plan.popular ? "text-[rgb(247,107,16)]" : "text-[rgb(247,107,16)]"
+                    plan.popular
+                      ? "text-[rgb(247,107,16)]"
+                      : "text-[rgb(247,107,16)]"
                   }`}
                 >
                   {plan.name}
@@ -139,7 +141,9 @@ export default function Pricing() {
                     </span>
                   )}
                 </div>
-                <p className={`text-sm ${plan.popular ? "text-white/55" : "text-gray-500"}`}>
+                <p
+                  className={`text-sm ${plan.popular ? "text-white/55" : "text-gray-500"}`}
+                >
                   {plan.description}
                 </p>
               </div>
@@ -149,7 +153,9 @@ export default function Pricing() {
                   <li key={feature} className="flex items-start gap-2.5">
                     <CheckCircle2
                       className={`w-4 h-4 mt-0.5 shrink-0 ${
-                        plan.popular ? "text-[rgb(247,107,16)]" : "text-[rgb(247,107,16)]"
+                        plan.popular
+                          ? "text-[rgb(247,107,16)]"
+                          : "text-[rgb(247,107,16)]"
                       }`}
                     />
                     <span

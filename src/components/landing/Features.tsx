@@ -76,8 +76,8 @@ export default function Features() {
             built for WhatsApp
           </h2>
           <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-            Velte handles the full sales cycle — from first message to closed deal — so your team
-            can focus on what humans do best.
+            Velte handles the full sales cycle — from first message to closed
+            deal — so your team can focus on what humans do best.
           </p>
         </motion.div>
 
@@ -100,7 +100,9 @@ export default function Features() {
                 <h3 className="font-semibold text-gray-900 text-[17px] mb-2.5">
                   {feature.title}
                 </h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{feature.description}</p>
+                <p className="text-gray-500 text-sm leading-relaxed">
+                  {feature.description}
+                </p>
               </motion.div>
             );
           })}

@@ -5,27 +5,24 @@ const footerLinks = [
   {
     heading: "Product",
     links: [
-      { label: "Features", href: "#features" },
-      { label: "How It Works", href: "#how-it-works" },
-      { label: "Pricing", href: "#pricing" },
-      { label: "Changelog", href: "#" },
+      { label: "Features", href: "/#features" },
+      { label: "How It Works", href: "/#how-it-works" },
+      { label: "Pricing", href: "/#pricing" },
     ],
   },
   {
     heading: "Company",
     links: [
-      { label: "About", href: "#" },
-      { label: "Blog", href: "#" },
-      { label: "Careers", href: "#" },
-      { label: "Contact", href: "#" },
+      { label: "About", href: "/about" },
+      { label: "Contact", href: "/contact" },
+      { label: "Careers", href: "/careers" },
     ],
   },
   {
     heading: "Legal",
     links: [
-      { label: "Privacy Policy", href: "#" },
-      { label: "Terms of Service", href: "#" },
-      { label: "Cookie Policy", href: "#" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Service", href: "/terms" },
     ],
   },
 ];
@@ -41,8 +38,8 @@ export default function Footer() {
           <div className="col-span-1">
             <Link href="/" className="flex items-center gap-2.5 mb-4">
               <Image
-              src="/velte_ijulb7ijulb7ijul_h3d6xw.png"
-              alt="Velte logo"
+                src="/velte_ijulb7ijulb7ijul_h3d6xw.png"
+                alt="Velte logo"
                 width={80}
                 height={10}
                 priority
@@ -62,12 +59,12 @@ export default function Footer() {
               <ul className="space-y-3">
                 {col.links.map((link) => (
                   <li key={link.label}>
-                    <a
+                    <Link
                       href={link.href}
                       className="text-white/40 hover:text-white/70 text-sm transition-colors duration-150"
                     >
                       {link.label}
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>

@@ -38,8 +38,8 @@ export default function CallToAction() {
           </h2>
 
           <p className="text-lg text-white/50 mb-10 max-w-xl mx-auto">
-            Join hundreds of businesses using Velte to automate WhatsApp sales. Set up in
-            minutes, see results on day one.
+            Join hundreds of businesses using Velte to automate WhatsApp sales.
+            Set up in minutes, see results on day one.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">

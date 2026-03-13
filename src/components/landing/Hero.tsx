@@ -12,7 +12,10 @@ import {
 import Link from "next/link";
 
 const chatMessages = [
-  { from: "customer" as const, text: "Hi! Do you have Air Jordan 1 in size 42?" },
+  {
+    from: "customer" as const,
+    text: "Hi! Do you have Air Jordan 1 in size 42?",
+  },
   {
     from: "agent" as const,
     text: "Hey! Yes, available in Chicago Red & White and Black/White 🎉\n\nCurrently $189. Want more details?",
@@ -184,9 +187,9 @@ export default function Hero() {
               variants={fadeUp}
               className="text-lg text-white/55 mb-8 leading-relaxed max-w-lg"
             >
-              Deploy an intelligent AI agent on your WhatsApp Business number that
-              answers product questions, negotiates prices, checks inventory, and
-              closes sales — 24 hours a day, 7 days a week.
+              Deploy an intelligent AI agent on your WhatsApp Business number
+              that answers product questions, negotiates prices, checks
+              inventory, and closes sales — 24 hours a day, 7 days a week.
             </motion.p>
 
             <motion.div
@@ -218,14 +221,16 @@ export default function Hero() {
               variants={fadeUp}
               className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/40"
             >
-              {["No credit card required", "5-minute setup", "Cancel anytime"].map(
-                (item) => (
-                  <span key={item} className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-[rgb(247,107,16)]" />
-                    {item}
-                  </span>
-                )
-              )}
+              {[
+                "No credit card required",
+                "5-minute setup",
+                "Cancel anytime",
+              ].map((item) => (
+                <span key={item} className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[rgb(247,107,16)]" />
+                  {item}
+                </span>
+              ))}
             </motion.div>
           </motion.div>
 

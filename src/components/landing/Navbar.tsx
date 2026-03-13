@@ -71,9 +71,7 @@ export default function Navbar() {
               </Button>
             </Link>
             <Link href="/sign-in">
-              <Button
-                className="bg-[rgb(247,107,16)] cursor-pointer hover:bg-[rgb(247,107,16)]/90 text-white shadow-lg shadow-[rgba(247,107,16,0.25)] text-sm px-5"
-              >
+              <Button className="bg-[rgb(247,107,16)] cursor-pointer hover:bg-[rgb(247,107,16)]/90 text-white shadow-lg shadow-[rgba(247,107,16,0.25)] text-sm px-5">
                 Get Started Free
               </Button>
             </Link>
@@ -85,7 +83,11 @@ export default function Navbar() {
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="Toggle menu"
           >
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {mobileOpen ? (
+              <X className="w-5 h-5" />
+            ) : (
+              <Menu className="w-5 h-5" />
+            )}
           </button>
         </div>
       </div>
@@ -112,12 +114,23 @@ export default function Navbar() {
                 </a>
               ))}
               <div className="pt-3 space-y-2 border-t border-white/[0.06] mt-3">
-                <Link href="/sign-in" className="block" onClick={() => setMobileOpen(false)}>
-                  <Button variant="ghost" className="w-full cursor-pointer text-white/70 hover:text-white hover:bg-white/8">
+                <Link
+                  href="/sign-in"
+                  className="block"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <Button
+                    variant="ghost"
+                    className="w-full cursor-pointer text-white/70 hover:text-white hover:bg-white/8"
+                  >
                     Sign In
                   </Button>
                 </Link>
-                <Link href="/sign-in" className="block" onClick={() => setMobileOpen(false)}>
+                <Link
+                  href="/sign-in"
+                  className="block"
+                  onClick={() => setMobileOpen(false)}
+                >
                   <Button className="w-full bg-[rgb(247,107,16)] hover:bg-[rgb(247,107,16)]/90 text-white">
                     Get Started Free
                   </Button>

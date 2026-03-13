@@ -10,16 +10,16 @@ import Stats from "@/components/landing/Stats";
 export default function Home() {
   return (
     <>
-    <div className="min-h-screen">
-      <Navbar />
-      <Hero />
-      <Stats />
-      <Features />
-      <HowItWorks />
-      <Pricing />
-      <CallToAction />
-      <Footer />
-    </div>
+      <div className="min-h-screen">
+        <Navbar />
+        <Hero />
+        <Stats />
+        <Features />
+        <HowItWorks />
+        <Pricing />
+        <CallToAction />
+        <Footer />
+      </div>
     </>
   );
 }

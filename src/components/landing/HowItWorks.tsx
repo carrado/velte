@@ -49,7 +49,8 @@ export default function HowItWorks() {
             Up and selling in 15 minutes
           </h2>
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
-            No developers, no complex integrations. Three steps and your AI agent is live.
+            No developers, no complex integrations. Three steps and your AI
+            agent is live.
           </p>
         </motion.div>
 
@@ -83,7 +84,9 @@ export default function HowItWorks() {
                   <div className="text-[11px] font-bold text-[rgb(247,107,16)] tracking-widest uppercase mb-2">
                     Step {step.number}
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3">
+                    {step.title}
+                  </h3>
                   <p className="text-gray-500 text-[15px] leading-relaxed mb-4">
                     {step.description}
                   </p>
