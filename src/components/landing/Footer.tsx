@@ -40,13 +40,13 @@ export default function Footer() {
           {/* Brand */}
           <div className="col-span-1">
             <Link href="/" className="flex items-center gap-2.5 mb-4">
-            <Image
-              src="/velte_logo_preview_gem-removebg-preview.png"
+              <Image
+              src="/velte_ijulb7ijulb7ijul_h3d6xw.png"
               alt="Velte logo"
-              width={100}
-              height={20}
-              priority
-            />
+                width={80}
+                height={10}
+                priority
+              />
             </Link>
             <p className="text-white/40 text-sm leading-relaxed max-w-[220px]">
               AI-powered WhatsApp sales agents for modern businesses.

@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion } from "motion/react";
 import {
@@ -67,7 +67,7 @@ export default function Features() {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <span className="inline-block text-xs font-semibold tracking-widest text-emerald-600 uppercase mb-4">
+          <span className="inline-block text-xs font-semibold tracking-widest text-[rgb(247,107,16)] uppercase mb-4">
             Everything you need
           </span>
           <h2 className="text-4xl lg:text-5xl font-bold text-gray-950 tracking-tight mb-5 text-balance">
@@ -92,10 +92,10 @@ export default function Features() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.45, delay: i * 0.08 }}
-                className="group bg-gray-50 hover:bg-white border border-gray-100 hover:border-emerald-100 hover:shadow-lg hover:shadow-emerald-50 rounded-2xl p-7 transition-all duration-300"
+                className="group bg-gray-50 hover:bg-white border border-gray-100 hover:border-[rgb(247,107,16)]/30 hover:shadow-lg hover:shadow-[rgba(247,107,16,0.1)] rounded-2xl p-7 transition-all duration-300"
               >
-                <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-5 group-hover:bg-emerald-500 group-hover:border-emerald-500 transition-colors duration-300">
-                  <Icon className="w-5 h-5 text-emerald-600 group-hover:text-white transition-colors duration-300" />
+                <div className="w-11 h-11 rounded-xl bg-[rgb(247,107,16)]/10 border border-[rgb(247,107,16)]/20 flex items-center justify-center mb-5 group-hover:bg-[rgb(247,107,16)] group-hover:border-[rgb(247,107,16)] transition-colors duration-300">
+                  <Icon className="w-5 h-5 text-[rgb(247,107,16)] group-hover:text-white transition-colors duration-300" />
                 </div>
                 <h3 className="font-semibold text-gray-900 text-[17px] mb-2.5">
                   {feature.title}

@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion } from "motion/react";
 import { PhoneCall, Upload, Zap } from "lucide-react";
@@ -42,7 +42,7 @@ export default function HowItWorks() {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <span className="inline-block text-xs font-semibold tracking-widest text-emerald-600 uppercase mb-4">
+          <span className="inline-block text-xs font-semibold tracking-widest text-[rgb(247,107,16)] uppercase mb-4">
             Simple setup
           </span>
           <h2 className="text-4xl lg:text-5xl font-bold text-gray-950 tracking-tight mb-5 text-balance">
@@ -56,7 +56,7 @@ export default function HowItWorks() {
         {/* Steps */}
         <div className="relative">
           {/* Connector line */}
-          <div className="hidden lg:block absolute top-14 left-[16.67%] right-[16.67%] h-px bg-gradient-to-r from-transparent via-emerald-200 to-transparent" />
+          <div className="hidden lg:block absolute top-14 left-[16.67%] right-[16.67%] h-px bg-gradient-to-r from-transparent via-[rgb(247,107,16)] to-transparent" />
 
           <div className="grid lg:grid-cols-3 gap-8">
             {steps.map((step, i) => {
@@ -72,22 +72,22 @@ export default function HowItWorks() {
                 >
                   {/* Icon circle */}
                   <div className="relative inline-flex mb-7 lg:block">
-                    <div className="w-[56px] h-[56px] rounded-2xl bg-white border-2 border-emerald-100 shadow-md shadow-emerald-50 flex items-center justify-center mx-auto lg:mx-0">
-                      <Icon className="w-6 h-6 text-emerald-500" />
+                    <div className="w-[56px] h-[56px] rounded-2xl bg-white border-2 border-[rgb(247,107,16)]/30 shadow-md shadow-[rgba(247,107,16,0.1)] flex items-center justify-center mx-auto lg:mx-0">
+                      <Icon className="w-6 h-6 text-[rgb(247,107,16)]" />
                     </div>
-                    <span className="absolute -top-2 -right-2 lg:right-auto lg:-right-2 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    <span className="absolute -top-2 -right-2 lg:right-auto lg:-right-2 w-5 h-5 rounded-full bg-[rgb(247,107,16)] text-white text-[10px] font-bold flex items-center justify-center">
                       {i + 1}
                     </span>
                   </div>
 
-                  <div className="text-[11px] font-bold text-emerald-500 tracking-widest uppercase mb-2">
+                  <div className="text-[11px] font-bold text-[rgb(247,107,16)] tracking-widest uppercase mb-2">
                     Step {step.number}
                   </div>
                   <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
                   <p className="text-gray-500 text-[15px] leading-relaxed mb-4">
                     {step.description}
                   </p>
-                  <span className="inline-block bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-medium px-3 py-1 rounded-full">
+                  <span className="inline-block bg-[rgb(247,107,16)]/10 border border-[rgb(247,107,16)]/20 text-[rgb(247,107,16)] text-xs font-medium px-3 py-1 rounded-full">
                     {step.note}
                   </span>
                 </motion.div>

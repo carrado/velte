@@ -28,17 +28,18 @@ export default function Navbar() {
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled
           ? "bg-[#050d08]/90 backdrop-blur-xl border-b border-white/[0.06]"
           : "bg-transparent"
-        }`}
+      }`}
     >
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 group">
             <Image
-              src="/velte_logo_preview_gem-removebg-preview.png"
+              src="/velte_ijulb7ijulb7ijul_h3d6xw.png"
               alt="Velte logo"
               width={100}
               height={20}
@@ -64,13 +65,15 @@ export default function Navbar() {
             <Link href="/sign-in">
               <Button
                 variant="ghost"
-                className="text-white/70 hover:text-white hover:bg-white/8 text-sm"
+                className="text-white/70 cursor-pointer hover:text-white hover:bg-white/8 text-sm"
               >
                 Sign In
               </Button>
             </Link>
             <Link href="/sign-in">
-              <Button className="bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25 text-sm px-5">
+              <Button
+                className="bg-[rgb(247,107,16)] cursor-pointer hover:bg-[rgb(247,107,16)]/90 text-white shadow-lg shadow-[rgba(247,107,16,0.25)] text-sm px-5"
+              >
                 Get Started Free
               </Button>
             </Link>
@@ -110,12 +113,12 @@ export default function Navbar() {
               ))}
               <div className="pt-3 space-y-2 border-t border-white/[0.06] mt-3">
                 <Link href="/sign-in" className="block" onClick={() => setMobileOpen(false)}>
-                  <Button variant="ghost" className="w-full text-white/70 hover:text-white hover:bg-white/8">
+                  <Button variant="ghost" className="w-full cursor-pointer text-white/70 hover:text-white hover:bg-white/8">
                     Sign In
                   </Button>
                 </Link>
                 <Link href="/sign-in" className="block" onClick={() => setMobileOpen(false)}>
-                  <Button className="w-full bg-emerald-500 hover:bg-emerald-400 text-white">
+                  <Button className="w-full bg-[rgb(247,107,16)] hover:bg-[rgb(247,107,16)]/90 text-white">
                     Get Started Free
                   </Button>
                 </Link>

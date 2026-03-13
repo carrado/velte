@@ -7,16 +7,6 @@ import Navbar from "@/components/landing/Navbar";
 import Pricing from "@/components/landing/Pricing";
 import Stats from "@/components/landing/Stats";
 
-// import Image from "next/image";
-{/* <Image
-className="dark:invert"
-src="/next.svg"
-alt="Next.js logo"
-width={100}
-height={20}
-priority
-/> */}
-
 export default function Home() {
   return (
     <>

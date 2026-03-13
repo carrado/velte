@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion } from "motion/react";
 
@@ -23,7 +23,7 @@ export default function Stats() {
               transition={{ duration: 0.5, delay: i * 0.1 }}
               className="text-center"
             >
-              <p className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300 mb-1.5">
+              <p className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[rgb(247,107,16)] to-[rgb(255,140,50)] mb-1.5">
                 {stat.value}
               </p>
               <p className="text-white/45 text-sm leading-snug">{stat.label}</p>

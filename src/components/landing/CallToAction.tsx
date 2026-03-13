@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,13 @@ export default function CallToAction() {
   return (
     <section className="bg-[#050d08] py-24 lg:py-32 relative overflow-hidden">
       {/* Background glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-500/[0.08] rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[rgb(247,107,16)]/[0.08] rounded-full blur-[120px] pointer-events-none" />
 
       {/* Grid */}
       <div
         className="absolute inset-0 opacity-[0.025]"
         style={{
-          backgroundImage: `linear-gradient(rgba(52,211,153,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(52,211,153,0.6) 1px, transparent 1px)`,
+          backgroundImage: `linear-gradient(rgba(247,107,16,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(247,107,16,0.6) 1px, transparent 1px)`,
           backgroundSize: "64px 64px",
         }}
       />
@@ -27,8 +27,8 @@ export default function CallToAction() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-8">
-            <MessageCircle className="w-7 h-7 text-emerald-400" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[rgb(247,107,16)]/10 border border-[rgb(247,107,16)]/20 mb-8">
+            <MessageCircle className="w-7 h-7 text-[rgb(247,107,16)]" />
           </div>
 
           <h2 className="text-4xl lg:text-5xl font-bold text-white leading-tight tracking-tight mb-6 text-balance">
@@ -46,7 +46,7 @@ export default function CallToAction() {
             <Link href="/sign-in">
               <Button
                 size="lg"
-                className="bg-emerald-500 hover:bg-emerald-400 text-white shadow-xl shadow-emerald-500/30 text-[15px] px-10 h-12 gap-2"
+                className="bg-[rgb(247,107,16)] hover:bg-[rgb(247,107,16)]/90 text-white shadow-xl shadow-[rgba(247,107,16,0.3)] text-[15px] px-10 h-12 gap-2"
               >
                 Start Your Free Trial
                 <ArrowRight className="w-4 h-4" />

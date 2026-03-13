@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { motion } from "motion/react";
 import { CheckCircle2, Zap } from "lucide-react";
@@ -80,7 +80,7 @@ export default function Pricing() {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <span className="inline-block text-xs font-semibold tracking-widest text-emerald-600 uppercase mb-4">
+          <span className="inline-block text-xs font-semibold tracking-widest text-[rgb(247,107,16)] uppercase mb-4">
             Transparent pricing
           </span>
           <h2 className="text-4xl lg:text-5xl font-bold text-gray-950 tracking-tight mb-5 text-balance">
@@ -102,13 +102,13 @@ export default function Pricing() {
               transition={{ duration: 0.45, delay: i * 0.1 }}
               className={`relative flex flex-col rounded-2xl p-8 ${
                 plan.popular
-                  ? "bg-[#050d08] text-white shadow-2xl shadow-emerald-900/30 ring-1 ring-emerald-500/40"
+                  ? "bg-[#050d08] text-white shadow-2xl shadow-[rgba(247,107,16,0.3)] ring-1 ring-[rgb(247,107,16)]/40"
                   : "bg-gray-50 border border-gray-100"
               }`}
             >
               {plan.popular && (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-semibold px-4 py-1.5 rounded-full shadow-lg shadow-emerald-500/30">
+                  <span className="inline-flex items-center gap-1.5 bg-[rgb(247,107,16)] text-white text-xs font-semibold px-4 py-1.5 rounded-full shadow-lg shadow-[rgba(247,107,16,0.3)]">
                     <Zap className="w-3 h-3 fill-white" />
                     Most Popular
                   </span>
@@ -118,7 +118,7 @@ export default function Pricing() {
               <div className="mb-6">
                 <p
                   className={`text-sm font-semibold mb-1 ${
-                    plan.popular ? "text-emerald-400" : "text-emerald-600"
+                    plan.popular ? "text-[rgb(247,107,16)]" : "text-[rgb(247,107,16)]"
                   }`}
                 >
                   {plan.name}
@@ -149,7 +149,7 @@ export default function Pricing() {
                   <li key={feature} className="flex items-start gap-2.5">
                     <CheckCircle2
                       className={`w-4 h-4 mt-0.5 shrink-0 ${
-                        plan.popular ? "text-emerald-400" : "text-emerald-500"
+                        plan.popular ? "text-[rgb(247,107,16)]" : "text-[rgb(247,107,16)]"
                       }`}
                     />
                     <span
@@ -165,7 +165,7 @@ export default function Pricing() {
                 <Button
                   className={`w-full h-11 font-semibold ${
                     plan.popular
-                      ? "bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25"
+                      ? "bg-[rgb(247,107,16)] hover:bg-[rgb(247,107,16)]/90 text-white shadow-lg shadow-[rgba(247,107,16,0.25)]"
                       : "bg-gray-900 hover:bg-gray-800 text-white"
                   }`}
                 >
