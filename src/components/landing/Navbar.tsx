@@ -62,7 +62,7 @@ export default function Navbar() {
 
           {/* Desktop CTAs */}
           <div className="hidden md:flex items-center gap-2">
-            <Link href="/sign-in">
+            <Link href="/auth/login">
               <Button
                 variant="ghost"
                 className="text-white/70 cursor-pointer hover:text-white hover:bg-white/8 text-sm"
@@ -70,7 +70,7 @@ export default function Navbar() {
                 Sign In
               </Button>
             </Link>
-            <Link href="/sign-in">
+            <Link href="/auth/signup">
               <Button className="bg-[rgb(247,107,16)] cursor-pointer hover:bg-[rgb(247,107,16)]/90 text-white shadow-lg shadow-[rgba(247,107,16,0.25)] text-sm px-5">
                 Get Started Free
               </Button>
