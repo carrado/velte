@@ -14,6 +14,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import Image from "next/image";
+import { usersApi } from "@/services/users";
 
 const verifySchema = z.object({
   code: z
@@ -36,14 +37,10 @@ function VerifyForm() {
   const email = searchParams.get("email"); // email passed from signup
 
   const verifyMutation = useMutation({
-    mutationFn: (data: { email: string; code: string }) =>
-      apiClient("/auth/verify", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
+    mutationFn: (data: { email: string; otp: string }) => usersApi.verify(data),
     onSuccess: () => {
       toast.success("Email verified successfully!");
-      router.push("/login");
+      router.push("/auth/login");
     },
     onError: (error: Error) => {
       toast.error(error.message || "Invalid or expired code");
@@ -71,7 +68,7 @@ function VerifyForm() {
     onSubmit: ({ value }) => {
       const parsed = verifySchema.safeParse(value);
       if (!parsed.success || !email) return;
-      verifyMutation.mutate({ email, code: value.code });
+      verifyMutation.mutate({ email, otp: value.code });
     },
   });
 

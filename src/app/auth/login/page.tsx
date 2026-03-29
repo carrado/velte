@@ -12,8 +12,9 @@ import { Mail, Lock, ArrowRight, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
 import Image from "next/image";
+import { usersApi } from "@/services/users";
+import { useEffect } from "react";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -31,19 +32,23 @@ function FieldError({ message }: { message: string | undefined }) {
 export default function Login() {
   const router = useRouter();
 
+  useEffect(() => {
+    const result = usersApi.test();
+    console.log(result);
+  }, []);
+
   const loginMutation = useMutation({
     mutationFn: (data: { email: string; password: string }) =>
-      apiClient("/auth/login", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-    onSuccess: (data) => {
-      // Store token, user data, etc.
+      usersApi.login(data),
+    onSuccess: (response) => {
       toast.success("Welcome back!");
-      router.push("/dashboard"); // or home
+      // router.push("/dashboard");
     },
-    onError: (error: Error) => {
+    onError: (error: any, variables) => {
       toast.error(error.message || "Invalid email or password");
+      if (error.status === 403) {
+        router.push(`/auth/verify?email=${variables.email}`);
+      }
     },
   });
 

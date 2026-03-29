@@ -24,16 +24,18 @@ import {
   Mail,
   Lock,
   ArrowRight,
+  Briefcase,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { usersCollection } from "@/db/users";
-import { apiClient } from "@/lib/api";
 import Image from "next/image";
+import { useState } from "react";
+import { usersApi } from "@/services/users";
 
 // ---------------------------------------------------------------------
-// Validation schema (same as before)
+// Validation schema (now includes services)
 // ---------------------------------------------------------------------
 const COUNTRIES = [
   { label: "Nigeria", value: "Nigeria" },
@@ -63,6 +65,7 @@ const signupSchema = z
         /^[a-z0-9_]+$/,
         "Only lowercase letters, numbers, and underscores",
       ),
+    services: z.array(z.string()).min(1, "Add at least one service"),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -76,35 +79,99 @@ function FieldError({ message }: { message: string | undefined }) {
   return <p className="text-red-400 text-xs mt-1">{message}</p>;
 }
 
+// ---------------------------------------------------------------------
+// ServicesInput component – tag input with chips
+// ---------------------------------------------------------------------
+function ServicesInput({
+  value,
+  onChange,
+  onBlur,
+  error,
+}: {
+  value: string[];
+  onChange: (newServices: string[]) => void;
+  onBlur: () => void;
+  error?: string;
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  const addService = () => {
+    const trimmed = inputValue.trim();
+    if (trimmed === "") return;
+    if (!value.includes(trimmed)) {
+      onChange([...value, trimmed]);
+    }
+    setInputValue("");
+  };
+
+  const removeService = (serviceToRemove: string) => {
+    onChange(value.filter((s) => s !== serviceToRemove));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addService();
+    }
+  };
+
+  return (
+    <div>
+      <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+        <Briefcase className="w-3.5 h-3.5 text-orange-400" />
+        Services Offered
+      </Label>
+      <div className="bg-transparent border border-black/[0.3] rounded-md p-2 focus-within:border-orange-500/50 focus-within:ring-1 focus-within:ring-orange-500/20 transition-colors">
+        <div className="flex flex-wrap gap-2 mb-2">
+          {value.map((service) => (
+            <span
+              key={service}
+              className="inline-flex items-center gap-1 bg-orange-100 text-orange-800 text-sm px-2.5 py-1 rounded-full"
+            >
+              {service}
+              <button
+                type="button"
+                onClick={() => removeService(service)}
+                className="hover:text-orange-600 focus:outline-none"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={onBlur}
+          placeholder="e.g., Web Design, SEO, Photography"
+          className="w-full bg-transparent text-black placeholder:text-black/25 focus:outline-none"
+        />
+      </div>
+      {error && <FieldError message={error} />}
+      <p className="text-black/40 text-xs mt-1">
+        Type a service and press{" "}
+        <kbd className="px-1 bg-black/5 rounded">Enter</kbd> to add it. You can
+        add as many as you like.
+      </p>
+    </div>
+  );
+}
+
 export default function Signup() {
   const router = useRouter();
 
   // -----------------------------------------------------------------
   // TanStack Query mutation for the signup API call
   // -----------------------------------------------------------------
+
   const signupMutation = useMutation({
     mutationFn: (data: Omit<SignupForm, "confirmPassword">) =>
-      apiClient("/auth/signup", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-    onSuccess: (data) => {
-      // data is the response from your API (should include the created user)
-      const newUser = {
-        id: data.user.id,
-        name: data.user.name,
-        businessName: data.user.businessName,
-        email: data.user.email,
-        country: data.user.country,
-        address: data.user.address,
-        username: data.user.username,
-      };
-
-      // Insert the new user into the local collection
-      usersCollection.insert(newUser);
-
+      usersApi.create(data),
+    onSuccess: (response) => {
       toast.success("Account created! Welcome to Velte.");
-      router.push("/");
+      router.push(`/auth/verify?email=${response.user.email}`);
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -114,6 +181,7 @@ export default function Signup() {
   // -----------------------------------------------------------------
   // TanStack Form
   // -----------------------------------------------------------------
+
   const form = useForm({
     defaultValues: {
       name: "",
@@ -124,6 +192,7 @@ export default function Signup() {
       country: "",
       address: "",
       username: "",
+      services: [] as string[],
     } satisfies SignupForm,
     onSubmit: async ({ value }) => {
       const parsed = signupSchema.safeParse(value);
@@ -461,6 +530,29 @@ export default function Signup() {
                   </div>
                   <FieldError message={field.state.meta.errors[0]} />
                 </div>
+              )}
+            </form.Field>
+
+            {/* Services – new field */}
+            <form.Field
+              name="services"
+              validators={{
+                onChange: ({ value }) => {
+                  const r = z
+                    .array(z.string())
+                    .min(1, "Add at least one service")
+                    .safeParse(value);
+                  return r.success ? undefined : r.error.errors[0]?.message;
+                },
+              }}
+            >
+              {(field) => (
+                <ServicesInput
+                  value={field.state.value}
+                  onChange={(newServices) => field.handleChange(newServices)}
+                  onBlur={field.handleBlur}
+                  error={field.state.meta.errors[0]}
+                />
               )}
             </form.Field>
 
