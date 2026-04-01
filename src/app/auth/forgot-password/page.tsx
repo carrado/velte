@@ -11,9 +11,8 @@ import { Mail, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
 import Image from "next/image";
-import { useState } from "react";
+import { passwordApi } from "@/services/password";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -28,20 +27,18 @@ function FieldError({ message }: { message: string | undefined }) {
 
 export default function ForgotPassword() {
   const router = useRouter();
-  const [submitted, setSubmitted] = useState(false);
 
   const forgotMutation = useMutation({
-    mutationFn: (data: { email: string }) =>
-      apiClient("/auth/forgot-password", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-    onSuccess: () => {
-      setSubmitted(true);
-      toast.success("Password reset email sent!");
+    mutationFn: (data: { email: string }) => passwordApi.sendOTP(data),
+    onSuccess: (_, variables) => {
+      toast.success("OTP sent to your email!");
+      // Redirect to reset password page with email query param
+      router.push(
+        `/auth/reset-password?email=${encodeURIComponent(variables.email)}`,
+      );
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to send reset email");
+      toast.error(error.message || "Failed to send OTP");
     },
   });
 
@@ -96,100 +93,83 @@ export default function ForgotPassword() {
                 Forgot your password?
               </h1>
               <p className="text-black/45 text-sm">
-                Enter your email and we'll send you a reset link.
+                Enter your email and we'll send you a one-time password (OTP) to
+                reset your password.
               </p>
             </div>
 
-            {!submitted ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void form.handleSubmit();
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void form.handleSubmit();
+              }}
+              className="space-y-5"
+            >
+              {/* Email */}
+              <form.Field
+                name="email"
+                validators={{
+                  onChange: ({ value }) => {
+                    const r = z
+                      .string()
+                      .email("Invalid email address")
+                      .safeParse(value);
+                    return r.success ? undefined : r.error.errors[0]?.message;
+                  },
                 }}
-                className="space-y-5"
               >
-                {/* Email */}
-                <form.Field
-                  name="email"
-                  validators={{
-                    onChange: ({ value }) => {
-                      const r = z
-                        .string()
-                        .email("Invalid email address")
-                        .safeParse(value);
-                      return r.success ? undefined : r.error.errors[0]?.message;
-                    },
-                  }}
-                >
-                  {(field) => (
-                    <div>
-                      <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                        <Mail className="w-3.5 h-3.5 text-orange-400" />
-                        Email
-                      </Label>
-                      <Input
-                        type="email"
-                        value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                        placeholder="you@example.com"
-                        className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
-                      />
-                      <FieldError message={field.state.meta.errors[0]} />
-                    </div>
-                  )}
-                </form.Field>
+                {(field) => (
+                  <div>
+                    <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 text-orange-400" />
+                      Email
+                    </Label>
+                    <Input
+                      type="email"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      placeholder="you@example.com"
+                      className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
+                    />
+                    <FieldError message={field.state.meta.errors[0]} />
+                  </div>
+                )}
+              </form.Field>
 
-                <form.Subscribe
-                  selector={(state) => [state.canSubmit, state.isSubmitting]}
-                >
-                  {([canSubmit, isSubmitting]) => (
-                    <Button
-                      type="submit"
-                      disabled={
-                        !canSubmit || isSubmitting || forgotMutation.isPending
-                      }
-                      size="lg"
-                      className="w-full bg-orange-500 hover:bg-orange-400 cursor-pointer text-white font-semibold shadow-lg shadow-orange-500/20 mt-4 gap-2"
-                    >
-                      {isSubmitting || forgotMutation.isPending
-                        ? "Sending..."
-                        : "Send reset link"}
-                      {!isSubmitting && !forgotMutation.isPending && (
-                        <ArrowRight className="w-4 h-4" />
-                      )}
-                    </Button>
-                  )}
-                </form.Subscribe>
-              </form>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-black/70 text-sm mb-4">
-                  ✅ If an account exists for that email, you'll receive a reset
-                  link shortly.
-                </p>
-                <Button
-                  onClick={() => router.push("/login")}
-                  variant="outline"
-                  className="border-orange-500 text-orange-500 hover:bg-orange-50"
-                >
-                  Back to login
-                </Button>
-              </div>
-            )}
+              <form.Subscribe
+                selector={(state) => [state.canSubmit, state.isSubmitting]}
+              >
+                {([canSubmit, isSubmitting]) => (
+                  <Button
+                    type="submit"
+                    disabled={
+                      !canSubmit || isSubmitting || forgotMutation.isPending
+                    }
+                    size="lg"
+                    className="w-full bg-orange-500 hover:bg-orange-400 cursor-pointer text-white font-semibold shadow-lg shadow-orange-500/20 mt-4 gap-2"
+                  >
+                    {isSubmitting || forgotMutation.isPending
+                      ? "Sending..."
+                      : "Send OTP"}
+                    {!isSubmitting && !forgotMutation.isPending && (
+                      <ArrowRight className="w-4 h-4" />
+                    )}
+                  </Button>
+                )}
+              </form.Subscribe>
+            </form>
 
             {/* Back to login link */}
-            {!submitted && (
-              <p className="text-center text-black/40 text-sm mt-6">
-                Remember your password?{" "}
-                <Link
-                  href="/auth/login"
-                  className="text-orange-500 hover:text-orange-400 font-medium"
-                >
-                  Log in
-                </Link>
-              </p>
-            )}
+            <p className="text-center text-black/40 text-sm mt-6">
+              Remember your password?{" "}
+              <Link
+                href="/auth/login"
+                className="text-orange-500 hover:text-orange-400 font-medium"
+              >
+                Log in
+              </Link>
+            </p>
           </div>
         </motion.div>
       </div>

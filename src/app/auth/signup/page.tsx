@@ -26,6 +26,9 @@ import {
   ArrowRight,
   Briefcase,
   X,
+  Info,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -35,16 +38,42 @@ import { useState } from "react";
 import { usersApi } from "@/services/users";
 
 // ---------------------------------------------------------------------
-// Validation schema (now includes services)
+// Validation schema (updated with strong password and username rules)
 // ---------------------------------------------------------------------
-const COUNTRIES = [
-  { label: "Nigeria", value: "Nigeria" },
-  { label: "Ghana", value: "Ghana" },
-  { label: "Kenya", value: "Kenya" },
-  { label: "South Africa", value: "South Africa" },
-  { label: "United Kingdom", value: "United Kingdom" },
-  { label: "United States", value: "United States" },
-] as const;
+const COUNTRIES = [{ label: "Nigeria", value: "Nigeria" }] as const;
+
+// Password strength regex
+const hasUpperCase = (str: string) => /[A-Z]/.test(str);
+const hasLowerCase = (str: string) => /[a-z]/.test(str);
+const hasNumber = (str: string) => /\d/.test(str);
+const hasSpecialChar = (str: string) => /[!@#$%^&*(),.?":{}|<>]/.test(str);
+
+const passwordStrength = (password: string) => {
+  let strength = 0;
+  if (password.length >= 8) strength++;
+  if (hasUpperCase(password)) strength++;
+  if (hasLowerCase(password)) strength++;
+  if (hasNumber(password)) strength++;
+  if (hasSpecialChar(password)) strength++;
+  return strength;
+};
+
+const passwordSchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .refine(hasUpperCase, "Must contain at least one uppercase letter")
+  .refine(hasLowerCase, "Must contain at least one lowercase letter")
+  .refine(hasNumber, "Must contain at least one number")
+  .refine(hasSpecialChar, "Must contain at least one special character");
+
+const usernameSchema = z
+  .string()
+  .min(3, "Username must be at least 3 characters")
+  .max(30, "Username must be under 30 characters")
+  .regex(
+    /^[a-z][a-z0-9_]*$/,
+    "Must start with a letter and contain only lowercase letters, numbers, and underscores",
+  );
 
 const signupSchema = z
   .object({
@@ -53,18 +82,11 @@ const signupSchema = z
       .string()
       .min(2, "Business name must be at least 2 characters"),
     email: z.string().email("Invalid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    password: passwordSchema,
     confirmPassword: z.string(),
     country: z.string().min(1, "Please select your country"),
     address: z.string().min(5, "Please enter your business address"),
-    username: z
-      .string()
-      .min(3, "Username must be at least 3 characters")
-      .max(30, "Username must be under 30 characters")
-      .regex(
-        /^[a-z0-9_]+$/,
-        "Only lowercase letters, numbers, and underscores",
-      ),
+    username: usernameSchema,
     services: z.array(z.string()).min(1, "Add at least one service"),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -159,8 +181,105 @@ function ServicesInput({
   );
 }
 
+// ---------------------------------------------------------------------
+// PasswordStrengthMeter component
+// ---------------------------------------------------------------------
+function PasswordStrengthMeter({ password }: { password: string }) {
+  const strength = passwordStrength(password);
+  const getStrengthColor = () => {
+    if (strength <= 2) return "bg-red-500";
+    if (strength === 3) return "bg-yellow-500";
+    if (strength === 4) return "bg-green-500";
+    return "bg-green-600";
+  };
+  const getStrengthText = () => {
+    if (strength <= 2) return "Weak";
+    if (strength === 3) return "Fair";
+    if (strength === 4) return "Good";
+    return "Strong";
+  };
+  if (password.length === 0) return null;
+  return (
+    <div className="mt-1 space-y-1">
+      <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${getStrengthColor()} transition-all duration-300`}
+          style={{ width: `${(strength / 5) * 100}%` }}
+        />
+      </div>
+      <p className={`text-xs ${getStrengthColor().replace("bg-", "text-")}`}>
+        {getStrengthText()}
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// UsernameInput with @ prefix
+// ---------------------------------------------------------------------
+function UsernameInput({
+  value,
+  onChange,
+  onBlur,
+  error,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  onBlur: () => void;
+  error?: string;
+}) {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let newValue = e.target.value;
+    // Remove any characters that are not allowed (lowercase letters, numbers, underscores)
+    newValue = newValue.replace(/[^a-z0-9_]/g, "");
+
+    // Enforce first character must be a letter (if any character exists)
+    if (newValue.length > 0 && !/^[a-z]/.test(newValue)) {
+      // If first character is not a letter, do not update
+      return;
+    }
+
+    onChange(newValue);
+  };
+
+  return (
+    <div>
+      <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+        <AtSign className="w-3.5 h-3.5 text-orange-400" />
+        Username
+      </Label>
+      <div className="relative">
+        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-black text-sm pointer-events-none">
+          @
+        </span>
+        <Input
+          value={value}
+          onChange={handleChange}
+          onBlur={onBlur}
+          placeholder="yourstore"
+          className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pl-8"
+        />
+      </div>
+      <div className="flex items-center gap-1 mt-1">
+        <Info className="w-3 h-3 text-black/40" />
+        <p className="text-black/40 text-xs">
+          Must start with a letter; only lowercase letters, numbers, and
+          underscores allowed.
+        </p>
+      </div>
+      {error && <FieldError message={error} />}
+    </div>
+  );
+}
+
 export default function Signup() {
   const router = useRouter();
+
+  // -----------------------------------------------------------------
+  // State for password visibility
+  // -----------------------------------------------------------------
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // -----------------------------------------------------------------
   // TanStack Query mutation for the signup API call
@@ -353,71 +472,6 @@ export default function Signup() {
               )}
             </form.Field>
 
-            {/* Row: Password + Confirm Password */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <form.Field
-                name="password"
-                validators={{
-                  onChange: ({ value }) => {
-                    const r = z
-                      .string()
-                      .min(8, "Password must be at least 8 characters")
-                      .safeParse(value);
-                    return r.success ? undefined : r.error.errors[0]?.message;
-                  },
-                }}
-              >
-                {(field) => (
-                  <div>
-                    <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                      <Lock className="w-3.5 h-3.5 text-orange-400" />
-                      Password
-                    </Label>
-                    <Input
-                      type="password"
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      onBlur={field.handleBlur}
-                      placeholder="••••••••"
-                      className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
-                    />
-                    <FieldError message={field.state.meta.errors[0]} />
-                  </div>
-                )}
-              </form.Field>
-
-              <form.Field
-                name="confirmPassword"
-                validators={{
-                  onChange: ({ value }) => {
-                    const r = z
-                      .string()
-                      .min(1, "Please confirm your password")
-                      .safeParse(value);
-                    return r.success ? undefined : r.error.errors[0]?.message;
-                  },
-                }}
-              >
-                {(field) => (
-                  <div>
-                    <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                      <Lock className="w-3.5 h-3.5 text-orange-400" />
-                      Confirm Password
-                    </Label>
-                    <Input
-                      type="password"
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      onBlur={field.handleBlur}
-                      placeholder="••••••••"
-                      className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
-                    />
-                    <FieldError message={field.state.meta.errors[0]} />
-                  </div>
-                )}
-              </form.Field>
-            </div>
-
             {/* Country */}
             <form.Field
               name="country"
@@ -490,49 +544,6 @@ export default function Signup() {
               )}
             </form.Field>
 
-            {/* Username */}
-            <form.Field
-              name="username"
-              validators={{
-                onChange: ({ value }) => {
-                  const r = z
-                    .string()
-                    .min(3, "At least 3 characters")
-                    .max(30, "Under 30 characters")
-                    .regex(
-                      /^[a-z0-9_]+$/,
-                      "Lowercase letters, numbers, underscores only",
-                    )
-                    .safeParse(value);
-                  return r.success ? undefined : r.error.errors[0]?.message;
-                },
-              }}
-            >
-              {(field) => (
-                <div>
-                  <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                    <AtSign className="w-3.5 h-3.5 text-orange-400" />
-                    Username
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-black/30 text-sm pointer-events-none">
-                      @
-                    </span>
-                    <Input
-                      value={field.state.value}
-                      onChange={(e) =>
-                        field.handleChange(e.target.value.toLowerCase())
-                      }
-                      onBlur={field.handleBlur}
-                      placeholder="yourstore"
-                      className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pl-8"
-                    />
-                  </div>
-                  <FieldError message={field.state.meta.errors[0]} />
-                </div>
-              )}
-            </form.Field>
-
             {/* Services – new field */}
             <form.Field
               name="services"
@@ -556,7 +567,133 @@ export default function Signup() {
               )}
             </form.Field>
 
-            {/* Global password mismatch error */}
+            {/* Username - custom component with @ prefix */}
+            <form.Field
+              name="username"
+              validators={{
+                onChange: ({ value }) => {
+                  const r = usernameSchema.safeParse(value);
+                  return r.success ? undefined : r.error.errors[0]?.message;
+                },
+              }}
+            >
+              {(field) => (
+                <UsernameInput
+                  value={field.state.value}
+                  onChange={(val) => field.handleChange(val)}
+                  onBlur={field.handleBlur}
+                  error={field.state.meta.errors[0]}
+                />
+              )}
+            </form.Field>
+
+            {/* Row: Password + Confirm Password (with strength meter and eye toggles) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <form.Field
+                name="password"
+                validators={{
+                  onChange: ({ value }) => {
+                    const r = passwordSchema.safeParse(value);
+                    return r.success ? undefined : r.error.errors[0]?.message;
+                  },
+                }}
+              >
+                {(field) => (
+                  <div>
+                    <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 text-orange-400" />
+                      Password
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        value={field.state.value}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onBlur={field.handleBlur}
+                        placeholder="••••••••"
+                        className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    <PasswordStrengthMeter password={field.state.value} />
+                    <div className="text-black/40 text-xs mt-1 space-y-0.5">
+                      <p>Password must contain:</p>
+                      <ul className="list-disc list-inside">
+                        <li>At least 8 characters</li>
+                        <li>One uppercase letter</li>
+                        <li>One lowercase letter</li>
+                        <li>One number</li>
+                        <li>One special character (e.g., !@#$%^&*)</li>
+                      </ul>
+                    </div>
+                    <FieldError message={field.state.meta.errors[0]} />
+                  </div>
+                )}
+              </form.Field>
+
+              <form.Field
+                name="confirmPassword"
+                validators={{
+                  onChange: ({ value }) => {
+                    // Check if empty
+                    if (!value) {
+                      return "Please confirm your password";
+                    }
+                    // Compare with current password value from form state
+                    const currentPassword = form.store.state.values.password;
+                    if (value !== currentPassword) {
+                      return "Passwords don't match";
+                    }
+                    return undefined;
+                  },
+                }}
+              >
+                {(field) => (
+                  <div>
+                    <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 text-orange-400" />
+                      Confirm Password
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={field.state.value}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onBlur={field.handleBlur}
+                        placeholder="••••••••"
+                        className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    <FieldError message={field.state.meta.errors[0]} />
+                  </div>
+                )}
+              </form.Field>
+            </div>
+
+            {/* Global password mismatch error (optional, kept for safety) */}
             <form.Subscribe selector={(state) => state.errors}>
               {(errors) => {
                 const mismatchError: any = errors.find(

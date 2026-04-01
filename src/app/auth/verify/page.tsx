@@ -185,7 +185,7 @@ function VerifyForm() {
             <button
               onClick={() => resendMutation.mutate()}
               disabled={resendMutation.isPending || !email}
-              className="text-orange-500 hover:text-orange-400 font-medium inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-orange-500 hover:text-orange-400 cursor-pointer font-medium inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {resendMutation.isPending ? (
                 <>Sending...</>

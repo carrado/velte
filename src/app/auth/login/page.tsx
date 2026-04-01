@@ -32,11 +32,6 @@ function FieldError({ message }: { message: string | undefined }) {
 export default function Login() {
   const router = useRouter();
 
-  useEffect(() => {
-    const result = usersApi.test();
-    console.log(result);
-  }, []);
-
   const loginMutation = useMutation({
     mutationFn: (data: { email: string; password: string }) =>
       usersApi.login(data),
