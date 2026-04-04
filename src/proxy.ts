@@ -19,6 +19,11 @@ const publicRoutes = [
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ✅ Allow all static assets (images, etc.) – no authentication needed
+  if (/\.(png|jpg|jpeg|gif|webp|svg|ico|manifest)$/i.test(pathname)) {
+    return NextResponse.next();
+  }
+
   // Allow public assets and public pages first
   if (
     publicRoutes.some((route) => pathname.startsWith(route) && route !== "/")
@@ -62,20 +67,12 @@ export async function proxy(request: NextRequest) {
     }
 
     // Break path into segments
-    // "/123" => ["123"]
-    // "/123/dashboard" => ["123", "dashboard"]
     const segments = pathname.split("/").filter(Boolean);
 
-    // 2) Logged-in user visits "/:id" -> check token id, then redirect to "/:id/dashboard"
+    // 2) Logged-in user visits "/:id" -> redirect to "/:id/dashboard"
     if (segments.length === 1) {
       const routeId = segments[0];
-
-      if (routeId === userId) {
-        return NextResponse.redirect(
-          new URL(`/${userId}/dashboard`, request.url),
-        );
-      }
-
+      // No need to compare with userId – just redirect to dashboard
       return NextResponse.redirect(
         new URL(`/${userId}/dashboard`, request.url),
       );
@@ -83,7 +80,6 @@ export async function proxy(request: NextRequest) {
 
     // 3) Logged-in user visits "/:id/anything" -> verify id matches token
     const routeId = segments[0];
-
     if (routeId !== userId) {
       return NextResponse.redirect(
         new URL(`/${userId}/dashboard`, request.url),
@@ -95,6 +91,7 @@ export async function proxy(request: NextRequest) {
     return response;
   } catch {
     const response = NextResponse.redirect(new URL("/auth/login", request.url));
+    // Optionally clear the invalid token
     // response.cookies.delete("auth_token");
     return response;
   }
