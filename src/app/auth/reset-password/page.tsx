@@ -72,7 +72,7 @@ function ResetPasswordForm() {
         transition={{ duration: 0.5 }}
         className="relative w-full max-w-[440px]"
       >
-        <div className="bg-white border border-white/[0.08] rounded-2xl p-8 shadow-2xl text-center">
+        <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">
             Invalid Request
@@ -108,7 +108,7 @@ function ResetPasswordForm() {
         />
       </Link>
 
-      <div className="bg-white border border-white/[0.08] rounded-2xl p-8 shadow-2xl">
+      <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">
             Reset your password

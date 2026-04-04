@@ -54,7 +54,7 @@ export default function ForgotPassword() {
   });
 
   return (
-    <div className="h-screen bg-[#0d0804] overflow-hidden">
+    <div className="h-screen bg-[#0d0804] overflow-hidden sm:p-5">
       {/* Background effects */}
       <div
         className="absolute inset-0 opacity-[0.025]"
@@ -64,7 +64,7 @@ export default function ForgotPassword() {
         }}
       />
 
-      <div className="relative h-full flex items-center justify-center p-1">
+      <div className="relative h-full flex items-center justify-center">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -86,7 +86,7 @@ export default function ForgotPassword() {
           </Link>
 
           {/* Card */}
-          <div className="bg-white border border-white/[0.08] rounded-2xl p-8 shadow-2xl">
+          <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
             {/* Header */}
             <div className="mb-8 text-center">
               <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">

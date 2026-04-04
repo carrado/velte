@@ -61,7 +61,7 @@ export default function Login() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0d0804] flex items-center justify-center p-5">
+    <div className="min-h-screen bg-[#0d0804] flex items-center justify-center sm:p-5">
       {/* Background effects */}
       <div
         className="absolute inset-0 opacity-[0.025]"
@@ -92,7 +92,7 @@ export default function Login() {
         </Link>
 
         {/* Card */}
-        <div className="bg-white border border-white/[0.08] rounded-2xl p-8 shadow-2xl overflow-y-auto max-h-[80vh">
+        <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl overflow-y-auto max-h-[80vh]">
           {/* Header */}
           <div className="mb-8 text-center">
             <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">

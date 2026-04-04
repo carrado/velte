@@ -91,7 +91,7 @@ function VerifyForm() {
       </Link>
 
       {/* Card */}
-      <div className="bg-white border border-white/[0.08] rounded-2xl p-8 shadow-2xl">
+      <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
         {/* Header */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">

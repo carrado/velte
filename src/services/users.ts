@@ -26,6 +26,13 @@ export const usersApi = {
     return response;
   },
 
+  logout: async () => {
+    const data: any = {};
+    const response = await apiClient("/auth/logout", { method: "POST", data });
+    useUserStore.getState().clearUser();
+    return response;
+  },
+
   verify: async (data: any) => {
     const response = await apiClient("/auth/verify", { method: "POST", data });
     return response;

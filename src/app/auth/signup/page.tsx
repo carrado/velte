@@ -324,7 +324,7 @@ export default function Signup() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0d0804] flex items-center justify-center p-5">
+    <div className="min-h-screen bg-[#0d0804] flex items-center justify-center sm:p-5">
       {/* Background effects (unchanged) */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-orange-500/[0.07] rounded-full blur-[120px] pointer-events-none" />
       <div
@@ -356,7 +356,7 @@ export default function Signup() {
         </Link>
 
         {/* Card */}
-        <div className="bg-white border border-white/[0.08] rounded-2xl p-8 shadow-2xl">
+        <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
           {/* Header */}
           <div className="mb-8">
             <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
