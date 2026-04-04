@@ -1,6 +1,6 @@
 // stores/userStore.ts
 import { create } from "zustand";
-import { persist } from "zustand/middleware"; // optional: persist to localStorage
+import { persist } from "zustand/middleware";
 
 export interface User {
   id: string;
@@ -14,33 +14,30 @@ export interface User {
 }
 
 interface UserStore {
-  users: User[];
-  setUsers: (users: User[]) => void;
-  addUser: (user: User) => void;
-  updateUser: (id: string, updatedFields: Partial<User>) => void;
-  deleteUser: (id: string) => void;
+  user: User | null;
+  setUser: (user: User | null) => void;
+  updateUser: (updatedFields: Partial<User>) => void;
+  clearUser: () => void;
 }
 
 export const useUserStore = create<UserStore>()(
-  // Optional: persist to localStorage
   persist(
-    (set) => ({
-      users: [],
-      setUsers: (users) => set({ users }),
-      addUser: (user) => set((state) => ({ users: [...state.users, user] })),
-      updateUser: (id, updatedFields) =>
+    (set, get) => ({
+      user: null,
+      setUser: (user) => set({ user }),
+
+      updateUser: (updatedFields) =>
         set((state) => ({
-          users: state.users.map((user) =>
-            user.id === id ? { ...user, ...updatedFields } : user,
-          ),
+          user: state.user ? { ...state.user, ...updatedFields } : null,
         })),
-      deleteUser: (id) =>
-        set((state) => ({
-          users: state.users.filter((user) => user.id !== id),
-        })),
+
+      clearUser: () => set({ user: null }),
     }),
     {
-      name: "user-storage", // key in localStorage
+      name: "user-storage", // persists user to localStorage
+      skipHydration: true,
+      // Optionally, only persist specific fields:
+      // partialize: (state) => ({ user: state.user }),
     },
   ),
 );

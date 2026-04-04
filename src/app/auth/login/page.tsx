@@ -37,7 +37,7 @@ export default function Login() {
       usersApi.login(data),
     onSuccess: (response) => {
       toast.success("Welcome back!");
-      // router.push("/dashboard");
+      router.push(`/${response.user.id}/dashboard`);
     },
     onError: (error: any, variables) => {
       toast.error(error.message || "Invalid email or password");
