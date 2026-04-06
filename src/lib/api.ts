@@ -1,6 +1,5 @@
 // lib/api.ts
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api";
+const API_BASE = "/api"; // Proxy through Next.js
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
@@ -12,10 +11,10 @@ interface ApiOptions extends RequestInit {
 export async function apiClient(endpoint: string, options: ApiOptions = {}) {
   const { method = "GET", data, headers, ...rest } = options;
 
-  const url = `${API_BASE}${endpoint}`;
+  const url = `${API_BASE}${endpoint}`; // e.g., /api/auth/login
   const fetchOptions: RequestInit = {
     method,
-    credentials: "include",
+    credentials: "include", // Still needed for cookies on the same domain
     headers: {
       "Content-Type": "application/json",
       ...headers,
@@ -30,14 +29,11 @@ export async function apiClient(endpoint: string, options: ApiOptions = {}) {
   const res = await fetch(url, fetchOptions);
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-
     const err = new Error(
       error.message || `Request failed with status ${res.status}`,
     ) as Error & { status?: number; data?: any };
-
     err.status = res.status;
     err.data = error;
-
     throw err;
   }
   return res.json();

@@ -14,6 +14,7 @@ const publicRoutes = [
   "/_next",
   "/favicon.ico",
   "/site.webmanifest",
+  "/api",
 ];
 
 export async function proxy(request: NextRequest) {

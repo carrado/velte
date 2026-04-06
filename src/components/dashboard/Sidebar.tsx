@@ -107,7 +107,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {
           label: "Order Management",
           icon: <ShoppingBag size={16} />,
-          href: "/orders",
+          href: "orders",
         },
         {
           label: "Customers",
@@ -163,11 +163,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     },
   ];
 
-  const isDashboardActive = (href: string) => {
-    if (href === "/dashboard") {
-      return pathname.includes("/dashboard");
-    }
-    return pathname === href;
+  const isNavActive = (href: string) => {
+    return pathname.includes(href);
   };
 
   return (
@@ -214,7 +211,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   <NavLink
                     key={item.label}
                     item={item}
-                    active={isDashboardActive(item.href)}
+                    active={isNavActive(item.href)}
                     onClick={onClose}
                   />
                 ))}
