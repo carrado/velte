@@ -1,7 +1,7 @@
 // src/app/api/[...path]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-const API_BASE = "https://velte-backend.onrender.com/api";
+const API_BASE = process.env.BACKEND_API_URL || "http://localhost:5000/api";
 
 async function proxyRequest(
   req: NextRequest,
