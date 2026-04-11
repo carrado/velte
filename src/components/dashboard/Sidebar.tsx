@@ -79,11 +79,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   }, []);
 
   const handleLogout = () => {
-    loginMutation.mutate();
+    logoutMutation.mutate();
     setBtnDisabled(true);
   };
 
-  const loginMutation = useMutation({
+  const logoutMutation = useMutation({
     mutationFn: () => usersApi.logout(),
     onSuccess: () => {
       setBtnDisabled(false);
