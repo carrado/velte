@@ -112,7 +112,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {
           label: "Customers",
           icon: <Users size={16} />,
-          href: "/customers",
+          href: "customers",
         },
         {
           label: "Categories",

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 
-export default function DashboardLayout({
+export default function CustomersLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -15,7 +15,6 @@ export default function DashboardLayout({
     <div className="flex h-screen bg-[#F1F5F9] overflow-hidden">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-20 lg:hidden"
@@ -25,7 +24,7 @@ export default function DashboardLayout({
 
       <main className="flex-1 overflow-y-auto min-w-0">
         <div className="p-4 md:p-6 space-y-6">
-          <Header title="Dashboard" onMenuClick={() => setSidebarOpen(true)} />
+          <Header title="Customers" onMenuClick={() => setSidebarOpen(true)} />
           {children}
         </div>
       </main>
