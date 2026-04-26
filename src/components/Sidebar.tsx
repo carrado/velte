@@ -117,7 +117,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {
           label: "Categories",
           icon: <LayoutGrid size={16} />,
-          href: "/categories",
+          href: "categories",
         },
         {
           label: "Transaction",
