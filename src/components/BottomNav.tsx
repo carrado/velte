@@ -23,12 +23,12 @@ export default function BottomNav({
       icon: <LayoutDashboard size={20} />,
       href: "/dashboard",
     },
-    { label: "Orders", icon: <ShoppingBag size={20} />, href: "/orders" },
-    { label: "Customers", icon: <Users size={20} />, href: "/customers" },
+    { label: "Orders", icon: <ShoppingBag size={20} />, href: "orders" },
+    { label: "Customers", icon: <Users size={20} />, href: "customers" },
     {
-      label: "Categories",
+      label: "Products",
       icon: <LayoutGrid size={20} />,
-      href: "/categories",
+      href: "products",
     },
   ];
 

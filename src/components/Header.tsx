@@ -25,13 +25,6 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
     <div className="flex items-center justify-between gap-4">
       {/* Left: Hamburger (mobile) + Title */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={onMenuClick}
-          className="lg:hidden text-gray-600 hover:text-gray-800 cursor-pointer flex-shrink-0"
-          aria-label="Open menu"
-        >
-          <Menu size={22} />
-        </button>
         <h1 className="font-semibold text-xl text-[#111827] whitespace-nowrap">
           {title}
         </h1>

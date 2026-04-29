@@ -33,8 +33,7 @@ import {
   type OrderStatus,
 } from "@/services/orders";
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-
+// ─── Stat Card (unchanged) ──────────────────────────────────────────────────
 function StatCard({
   title,
   value,
@@ -60,8 +59,7 @@ function StatCard({
   );
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
-
+// ─── Status Badge ───────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: OrderStatus }) {
   switch (status) {
     case "Delivered":
@@ -95,8 +93,7 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   }
 }
 
-// ─── Payment Badge ────────────────────────────────────────────────────────────
-
+// ─── Payment Badge ──────────────────────────────────────────────────────────
 function PaymentBadge({ status }: { status: "Paid" | "Unpaid" }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -108,8 +105,7 @@ function PaymentBadge({ status }: { status: "Paid" | "Unpaid" }) {
   );
 }
 
-// ─── Row Actions (updated) ────────────────────────────────────────────────────
-
+// ─── Row Actions (unchanged) ────────────────────────────────────────────────
 function RowActions({
   orderId,
   status,
@@ -128,15 +124,13 @@ function RowActions({
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (ref.current && !ref.current.contains(e.target as Node))
         setOpen(false);
-      }
     }
     if (open) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  // Delivered → no actions
   if (status === "Delivered") return null;
 
   const getActions = () => {
@@ -174,11 +168,9 @@ function RowActions({
       <button
         onClick={() => setOpen((v) => !v)}
         className="p-1.5 rounded-md hover:bg-orange-50 text-[#6a717f] hover:text-orange-500 transition-colors cursor-pointer"
-        aria-label="More actions"
       >
         <MoreHorizontal size={18} />
       </button>
-
       {open && (
         <div className="absolute right-0 top-8 z-30 w-48 bg-white rounded-lg shadow-lg border border-[#e5e7eb] py-1 text-sm">
           {actions.map((action) => (
@@ -200,8 +192,7 @@ function RowActions({
   );
 }
 
-// ─── Confirmation Modal for Shipped ──────────────────────────────────────────
-
+// ─── Confirmation Modal (unchanged) ─────────────────────────────────────────
 function ShippedConfirmationModal({
   isOpen,
   onClose,
@@ -212,7 +203,6 @@ function ShippedConfirmationModal({
   onConfirm: () => void;
 }) {
   if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center h-full justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
@@ -230,13 +220,13 @@ function ShippedConfirmationModal({
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] bg-gray-50">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600"
           >
             Yes, Mark as Shipped
           </button>
@@ -246,8 +236,7 @@ function ShippedConfirmationModal({
   );
 }
 
-// ─── Filter Popover ───────────────────────────────────────────────────────────
-
+// ─── Filter Popover (unchanged) ─────────────────────────────────────────────
 interface FilterState {
   startDate: string;
   endDate: string;
@@ -270,9 +259,8 @@ function FilterPopover({
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (ref.current && !ref.current.contains(e.target as Node))
         setOpen(false);
-      }
     }
     if (open) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -282,7 +270,6 @@ function FilterPopover({
     onApply(localFilters);
     setOpen(false);
   };
-
   const handleReset = () => {
     const defaultFilters: FilterState = {
       startDate: "",
@@ -300,7 +287,6 @@ function FilterPopover({
       <button
         onClick={() => setOpen(!open)}
         className="p-2 border border-[#d1d5db] rounded bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
-        aria-label="Filter"
       >
         <Filter size={18} className="text-[#6a717f]" />
       </button>
@@ -322,7 +308,6 @@ function FilterPopover({
                     })
                   }
                   className="flex-1 px-2 py-1.5 border border-[#e5e7eb] rounded text-sm"
-                  placeholder="Start"
                 />
                 <input
                   type="date"
@@ -334,7 +319,6 @@ function FilterPopover({
                     })
                   }
                   className="flex-1 px-2 py-1.5 border border-[#e5e7eb] rounded text-sm"
-                  placeholder="End"
                 />
               </div>
             </div>
@@ -398,10 +382,8 @@ function FilterPopover({
   );
 }
 
-// ─── Sort Menu ────────────────────────────────────────────────────────────────
-
+// ─── Sort Menu (unchanged) ──────────────────────────────────────────────────
 type SortOption = "newest" | "oldest" | "price_asc" | "price_desc";
-
 function SortMenu({
   currentSort,
   onSort,
@@ -411,7 +393,6 @@ function SortMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node))
@@ -433,7 +414,6 @@ function SortMenu({
       <button
         onClick={() => setOpen(!open)}
         className="p-2 border border-[#d1d5db] rounded bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
-        aria-label="Sort"
       >
         <ArrowUpDown size={18} className="text-[#6a717f]" />
       </button>
@@ -446,11 +426,7 @@ function SortMenu({
                 onSort(opt.value);
                 setOpen(false);
               }}
-              className={`w-full text-left px-4 py-2 text-sm hover:bg-orange-50 transition-colors ${
-                currentSort === opt.value
-                  ? "bg-orange-100 text-orange-600"
-                  : "text-[#111827]"
-              }`}
+              className={`w-full text-left px-4 py-2 text-sm hover:bg-orange-50 transition-colors ${currentSort === opt.value ? "bg-orange-100 text-orange-600" : "text-[#111827]"}`}
             >
               {opt.label}
             </button>
@@ -461,8 +437,7 @@ function SortMenu({
   );
 }
 
-// ─── Skeleton Row ─────────────────────────────────────────────────────────────
-
+// ─── Skeleton Row (unchanged) ───────────────────────────────────────────────
 function SkeletonRow() {
   return (
     <tr className="border-b border-[#e5e7eb] animate-pulse">
@@ -475,15 +450,13 @@ function SkeletonRow() {
   );
 }
 
-// ─── Settings Modal (unchanged) ───────────────────────────────────────────────
-
+// ─── Settings Modal (unchanged) ─────────────────────────────────────────────
 interface SettingsData {
   minDurationDays: number;
   maxDurationDays: number;
   deliveryType: "bulk" | "single";
   paymentMethod: string;
 }
-
 function SettingsModal({
   isOpen,
   onClose,
@@ -496,13 +469,10 @@ function SettingsModal({
   onSave: (newSettings: SettingsData) => void;
 }) {
   const [localSettings, setLocalSettings] = useState<SettingsData>(settings);
-
   useEffect(() => {
     if (isOpen) setLocalSettings(settings);
   }, [isOpen, settings]);
-
   if (!isOpen) return null;
-
   const handleSave = () => {
     if (localSettings.minDurationDays < 0) localSettings.minDurationDays = 0;
     if (localSettings.maxDurationDays > 7) localSettings.maxDurationDays = 7;
@@ -510,7 +480,6 @@ function SettingsModal({
     onSave(localSettings);
     onClose();
   };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center h-full w-full bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
@@ -640,8 +609,7 @@ function SettingsModal({
   );
 }
 
-// ─── Bulk Action Dropdown (unchanged) ─────────────────────────────────────────
-
+// ─── Bulk Action Dropdown (unchanged) ───────────────────────────────────────
 function BulkActionDropdown({
   selectedCount,
   allowedActions,
@@ -653,7 +621,6 @@ function BulkActionDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node))
@@ -662,9 +629,7 @@ function BulkActionDropdown({
     if (open) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
-
   if (selectedCount === 0 || allowedActions.length === 0) return null;
-
   return (
     <div ref={ref} className="relative">
       <button
@@ -694,17 +659,14 @@ function BulkActionDropdown({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
+// ─── Main Component ─────────────────────────────────────────────────────────
 const TABS: { key: OrderFilter; label: string }[] = [
   { key: "all", label: "All order" },
   { key: "completed", label: "Completed" },
   { key: "pending", label: "Pending" },
   { key: "cancelled", label: "Cancelled" },
 ];
-
 const PAGE_SIZE = 10;
-
 const DEFAULT_SETTINGS: SettingsData = {
   minDurationDays: 1,
   maxDurationDays: 7,
@@ -720,8 +682,6 @@ export default function OrderManagement() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<SettingsData>(DEFAULT_SETTINGS);
-
-  // Filter and sort state
   const [filters, setFilters] = useState<FilterState>({
     startDate: "",
     endDate: "",
@@ -729,8 +689,6 @@ export default function OrderManagement() {
     orderStatus: "all",
   });
   const [sortBy, setSortBy] = useState<SortOption>("newest");
-
-  // State for shipped confirmation modal
   const [shippedModalOpen, setShippedModalOpen] = useState(false);
   const [pendingShippedOrderId, setPendingShippedOrderId] = useState<
     string | null
@@ -740,20 +698,15 @@ export default function OrderManagement() {
     queryKey: ["orderStats"],
     queryFn: fetchOrderStats,
   });
-
   const { data: orders = [], isLoading: ordersLoading } = useQuery({
     queryKey: ["orders", activeTab],
     queryFn: () => fetchOrders(activeTab),
   });
-
   const mutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
       updateOrderStatus(id, status),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
   });
-
   const bulkMutation = useMutation({
     mutationFn: ({ ids, status }: { ids: string[]; status: OrderStatus }) =>
       Promise.all(ids.map((id) => updateOrderStatus(id, status))),
@@ -763,25 +716,18 @@ export default function OrderManagement() {
     },
   });
 
-  // ─── Filtering & Sorting ─────────────────────────────────────────────────────
-
+  // Filtering & Sorting
   let filtered = orders.filter((o) => {
     const matchesSearch =
       o.orderId.toLowerCase().includes(search.toLowerCase()) ||
       o.product.name.toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
-
-    // Date filter
     if (filters.startDate && new Date(o.date) < new Date(filters.startDate))
       return false;
     if (filters.endDate && new Date(o.date) > new Date(filters.endDate))
       return false;
-
-    // Payment filter
     if (filters.paymentStatus !== "all" && o.payment !== filters.paymentStatus)
       return false;
-
-    // Order status filter (only if not overridden by activeTab)
     if (filters.orderStatus !== "all") {
       if (
         filters.orderStatus === "completed" &&
@@ -793,7 +739,6 @@ export default function OrderManagement() {
       if (filters.orderStatus === "cancelled" && o.status !== "Cancelled")
         return false;
     } else if (activeTab !== "all") {
-      // If filter not set, use activeTab
       if (
         activeTab === "completed" &&
         !(o.status === "Delivered" || o.status === "Shipped")
@@ -802,11 +747,9 @@ export default function OrderManagement() {
       if (activeTab === "pending" && o.status !== "Pending") return false;
       if (activeTab === "cancelled" && o.status !== "Cancelled") return false;
     }
-
     return true;
   });
 
-  // Sorting
   filtered = [...filtered].sort((a, b) => {
     if (sortBy === "newest")
       return new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -824,7 +767,6 @@ export default function OrderManagement() {
     setActiveTab(tab);
     setPage(1);
     setSelectedOrders(new Set());
-    // Reset filter's order status when changing tabs
     setFilters((prev) => ({ ...prev, orderStatus: "all" }));
   }
 
@@ -837,7 +779,6 @@ export default function OrderManagement() {
     cancelled: orders.filter((o) => o.status === "Cancelled").length,
   };
 
-  // Bulk action logic
   const selectedOrderObjects = paginated.filter((o) =>
     selectedOrders.has(o.id),
   );
@@ -857,34 +798,25 @@ export default function OrderManagement() {
   else if (allShipped)
     bulkActions = [{ label: "Mark as Delivered", status: "Delivered" }];
 
-  const handleBulkAction = (newStatus: OrderStatus) => {
-    const ids = Array.from(selectedOrders);
-    bulkMutation.mutate({ ids, status: newStatus });
-  };
-
+  const handleBulkAction = (newStatus: OrderStatus) =>
+    bulkMutation.mutate({ ids: Array.from(selectedOrders), status: newStatus });
   const toggleSelectAll = () => {
     if (selectedOrders.size === paginated.length) setSelectedOrders(new Set());
     else setSelectedOrders(new Set(paginated.map((o) => o.id)));
   };
-
   const toggleSelectOne = (id: string) => {
     const newSet = new Set(selectedOrders);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
+    newSet.has(id) ? newSet.delete(id) : newSet.add(id);
     setSelectedOrders(newSet);
   };
-
   const handleSaveSettings = (newSettings: SettingsData) => {
     setSettings(newSettings);
     console.log("Settings saved:", newSettings);
   };
-
-  // Row action handlers
   const handleMarkShipped = (orderId: string) => {
     setPendingShippedOrderId(orderId);
     setShippedModalOpen(true);
   };
-
   const confirmMarkShipped = () => {
     if (pendingShippedOrderId) {
       mutation.mutate({ id: pendingShippedOrderId, status: "Shipped" });
@@ -892,18 +824,79 @@ export default function OrderManagement() {
       setPendingShippedOrderId(null);
     }
   };
-
-  const handleMarkDelivered = (orderId: string) => {
+  const handleMarkDelivered = (orderId: string) =>
     mutation.mutate({ id: orderId, status: "Delivered" });
-  };
-
-  const handleMarkCancelled = (orderId: string) => {
+  const handleMarkCancelled = (orderId: string) =>
     mutation.mutate({ id: orderId, status: "Cancelled" });
+
+  // ─── Mobile Order Card Component ─────────────────────────────────────────
+  const MobileOrderCard = ({
+    order,
+    isSelected,
+    onSelect,
+  }: {
+    order: Order;
+    isSelected: boolean;
+    onSelect: (id: string) => void;
+  }) => {
+    return (
+      <div className="bg-white border border-gray-100 p-4 rounded-lg shadow-sm">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            {/* Checkbox on mobile */}
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onSelect(order.id)}
+              className="accent-orange-500 w-4 h-4"
+            />
+            <div
+              className={`w-10 h-10 rounded border flex items-center justify-center text-xs font-bold ${order.product.color}`}
+            >
+              {order.product.initials}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-800">
+                {order.product.name}
+              </p>
+              <p className="text-xs text-gray-400">{order.orderId}</p>
+            </div>
+          </div>
+          <RowActions
+            orderId={order.id}
+            status={order.status}
+            onMarkShipped={() => handleMarkShipped(order.id)}
+            onMarkDelivered={() => handleMarkDelivered(order.id)}
+            onMarkCancelled={() => handleMarkCancelled(order.id)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
+          <div>
+            <p className="text-gray-400">Date</p>
+            <p className="font-medium text-gray-700">{order.date}</p>
+          </div>
+          <div>
+            <p className="text-gray-400">Price</p>
+            <p className="font-medium text-gray-700">
+              ${order.price.toFixed(2)}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-400">Payment</p>
+            <PaymentBadge status={order.payment} />
+          </div>
+          <div>
+            <p className="text-gray-400">Status</p>
+            <StatusBadge status={order.status} />
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="space-y-5">
-      {/* Header */}
+      {/* Header (unchanged) */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-xl font-bold text-[#023337]"></h2>
         <div className="flex items-center gap-3">
@@ -933,7 +926,7 @@ export default function OrderManagement() {
         onConfirm={confirmMarkShipped}
       />
 
-      {/* Stats */}
+      {/* Stats Row (unchanged) */}
       <div className="flex gap-4 flex-wrap">
         {statsLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
@@ -1003,15 +996,16 @@ export default function OrderManagement() {
         )}
       </div>
 
-      {/* Table card */}
+      {/* Table Card */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        {/* Tabs: 2 per row on mobile */}
         <div className="flex items-center justify-between gap-3 p-4 flex-wrap border-b border-[#e5e7eb]">
-          <div className="flex items-center bg-orange-50 rounded-lg p-1 gap-0.5 flex-wrap">
+          <div className="grid grid-cols-2 gap-1 md:flex md:flex-row w-full md:w-auto bg-orange-50 rounded-lg p-1">
             {TABS.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => handleTabChange(tab.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
                   activeTab === tab.key
                     ? "bg-white text-[#111827] shadow-sm"
                     : "text-[#4b5563] hover:text-[#111827]"
@@ -1072,7 +1066,8 @@ export default function OrderManagement() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-orange-50">
@@ -1106,7 +1101,7 @@ export default function OrderManagement() {
                   </td>
                 </tr>
               ) : (
-                paginated.map((order, idx) => (
+                paginated.map((order) => (
                   <tr
                     key={order.id}
                     className="border-b border-[#e5e7eb] last:border-0 hover:bg-gray-50"
@@ -1156,7 +1151,32 @@ export default function OrderManagement() {
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3 p-4">
+          {ordersLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-gray-50 rounded-lg p-4 animate-pulse h-32"
+              />
+            ))
+          ) : paginated.length === 0 ? (
+            <div className="py-10 text-center text-sm text-gray-400">
+              No orders found.
+            </div>
+          ) : (
+            paginated.map((order) => (
+              <MobileOrderCard
+                key={order.id}
+                order={order}
+                isSelected={selectedOrders.has(order.id)}
+                onSelect={toggleSelectOne}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Pagination (unchanged) */}
         <div className="flex items-center justify-between px-4 py-4 border-t border-[#e5e7eb]">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}

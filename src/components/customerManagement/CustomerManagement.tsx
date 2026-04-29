@@ -9,6 +9,7 @@ import {
   MoreVertical,
   ArrowUp,
 } from "lucide-react";
+import { Pagination } from "../Pagination";
 
 type CustomerStatus = "Active" | "Inactive" | "VIP";
 
@@ -208,72 +209,11 @@ function CustomerCard({ customer }: { customer: Customer }) {
   );
 }
 
-const TOTAL_PAGES = 24;
-const VISIBLE_PAGES = [1, 2, 3, 4, 5];
-
-function Pagination({
-  currentPage,
-  setCurrentPage,
-}: {
-  currentPage: number;
-  setCurrentPage: (p: number) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between px-4 py-4 gap-4 flex-wrap border-t border-gray-100">
-      <button
-        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-        disabled={currentPage === 1}
-        className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-      >
-        <ChevronLeft size={16} />
-        Previous
-      </button>
-
-      <div className="flex items-center gap-1.5 flex-wrap justify-center">
-        {VISIBLE_PAGES.map((page) => (
-          <button
-            key={page}
-            onClick={() => setCurrentPage(page)}
-            className={`w-8 h-8 flex items-center justify-center rounded text-sm transition-colors cursor-pointer ${
-              currentPage === page
-                ? "bg-orange-200 text-[#023337] font-medium"
-                : "border border-gray-200 text-[#023337] hover:bg-gray-50"
-            }`}
-          >
-            {page}
-          </button>
-        ))}
-        <span className="w-8 h-8 flex items-center justify-center text-sm font-medium text-[#023337]">
-          …
-        </span>
-        <button
-          onClick={() => setCurrentPage(TOTAL_PAGES)}
-          className={`w-8 h-8 flex items-center justify-center rounded text-sm transition-colors cursor-pointer ${
-            currentPage === TOTAL_PAGES
-              ? "bg-orange-200 text-[#023337] font-medium"
-              : "border border-gray-200 text-[#023337] hover:bg-gray-50"
-          }`}
-        >
-          {TOTAL_PAGES}
-        </button>
-      </div>
-
-      <button
-        onClick={() => setCurrentPage(Math.min(TOTAL_PAGES, currentPage + 1))}
-        disabled={currentPage === TOTAL_PAGES}
-        className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-      >
-        Next
-        <ChevronRight size={16} />
-      </button>
-    </div>
-  );
-}
-
 export default function CustomerManagement() {
   const [activeMetric, setActiveMetric] = useState(0);
   const [weekFilter, setWeekFilter] = useState<"this" | "last">("this");
   const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = 24;
 
   const linePath = buildLinePath();
   const peakX = getX(PEAK_INDEX);
@@ -587,7 +527,11 @@ export default function CustomerManagement() {
           ))}
         </div>
 
-        <Pagination currentPage={currentPage} setCurrentPage={setCurrentPage} />
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
       </div>
     </div>
   );

@@ -64,6 +64,7 @@ function NavLink({
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  side?: "left" | "right"; // kept for compatibility but not used
 }
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
@@ -71,6 +72,21 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [userDetails, setUserDetails] = useState<any>({});
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [btnDisabled, setBtnDisabled] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [effectiveSide, setEffectiveSide] = useState<"left" | "right">("left");
+
+  // Determine side only on client after mount
+  useEffect(() => {
+    const handleResize = () => {
+      const isMobile = window.innerWidth < 1024;
+      setEffectiveSide(isMobile ? "right" : "left");
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    // Mark mounted after setting initial side
+    setMounted(true);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     useUserStore.persist.rehydrate();
@@ -87,10 +103,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     mutationFn: () => usersApi.logout(),
     onSuccess: () => {
       setBtnDisabled(false);
-      // Redirect to home page
       window.location.href = "/";
     },
-    onError: (error: any, variables) => {
+    onError: (error: any) => {
       toast.error(error.message || "Invalid email or password");
     },
   });
@@ -109,16 +124,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           icon: <ShoppingBag size={16} />,
           href: "orders",
         },
-        {
-          label: "Customers",
-          icon: <Users size={16} />,
-          href: "customers",
-        },
-        {
-          label: "Categories",
-          icon: <LayoutGrid size={16} />,
-          href: "categories",
-        },
+        { label: "Customers", icon: <Users size={16} />, href: "customers" },
         {
           label: "Transaction",
           icon: <CreditCard size={16} />,
@@ -132,17 +138,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {
           label: "Add Products",
           icon: <PlusCircle size={16} />,
-          href: "/products/add",
+          href: "products/add",
         },
-        {
-          label: "Product List",
-          icon: <List size={16} />,
-          href: "/products/list",
-        },
+        { label: "Product List", icon: <List size={16} />, href: "products" },
         {
           label: "Product Reviews",
           icon: <Star size={16} />,
-          href: "/products/reviews",
+          href: "products/reviews",
         },
       ],
     },
@@ -167,18 +169,50 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     return pathname.includes(href);
   };
 
+  // Build transform classes based on effectiveSide and isOpen
+  let translateClass = "";
+  if (effectiveSide === "left") {
+    translateClass = isOpen ? "translate-x-0" : "-translate-x-full";
+  } else {
+    translateClass = isOpen ? "translate-x-0" : "translate-x-full";
+  }
+
+  const sidePosition = effectiveSide === "left" ? "left-0" : "right-0";
+
+  // Do not render the actual sidebar until mounted to avoid flash
+  if (!mounted) {
+    // Return a placeholder with same dimensions to prevent layout shift, but invisible
+    return (
+      <div
+        className="hidden lg:block w-[260px] flex-shrink-0"
+        aria-hidden="true"
+      />
+    );
+  }
+
   return (
     <>
+      {/* Overlay (mobile only) */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-20 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
       <aside
         className={`
-        fixed lg:static inset-y-0 left-0 z-30
-        md:w-[260px] w-3/4 h-screen bg-[#FFFFFF] flex flex-col border-r border-[#E5E7EB] overflow-y-auto flex-shrink-0
-        transition-transform duration-300 ease-in-out
-        ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-      `}
+          fixed lg:static
+          top-0 bottom-0 ${sidePosition}
+          w-3/4 md:w-[260px] h-screen bg-white flex flex-col border-r border-gray-200
+          overflow-y-auto flex-shrink-0 z-30
+          transition-transform duration-300 ease-in-out
+          ${translateClass}
+          lg:translate-x-0
+        `}
       >
-        {/* Logo */}
-        <div className="flex items-center justify-between px-4 py-2 h-[70px] border-b border-[#E5E7EB]">
+        {/* Logo and close button */}
+        <div className="flex items-center justify-between px-4 py-2 h-[70px] border-b border-gray-200">
           <div className="flex gap-1.5 -ml-4">
             <img
               src="https://res.cloudinary.com/dbhpul04t/image/upload/q_auto/f_auto/v1775263781/velte_logo_esn5dj_kzprnp.png"
@@ -187,7 +221,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               height={20}
             />
           </div>
-          {/* Close button on mobile, collapse button on desktop */}
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 cursor-pointer lg:hidden"
@@ -199,11 +232,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Nav sections */}
+        {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-5">
           {sections.map((section) => (
             <div key={section.title}>
-              <p className="text-[10px] font-semibold uppercase text-[#9CA3AF] px-3 mb-2 tracking-wider">
+              <p className="text-[10px] font-semibold uppercase text-gray-400 px-3 mb-2 tracking-wider">
                 {section.title}
               </p>
               <div className="space-y-0.5">
@@ -220,17 +253,17 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           ))}
         </nav>
 
-        {/* Bottom user section */}
-        <div className="px-3 py-4 border-t border-[#E5E7EB] space-y-3">
+        {/* User section and logout */}
+        <div className="px-3 py-4 border-t border-gray-200 space-y-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
               {getInitial(userDetails?.company?.name)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-[#111827] leading-tight">
+              <p className="text-sm font-semibold text-gray-900 leading-tight">
                 {userDetails?.company?.name}
               </p>
-              <p className="text-xs text-[#9CA3AF] truncate">
+              <p className="text-xs text-gray-400 truncate">
                 @{userDetails?.username}
               </p>
             </div>
@@ -239,13 +272,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             onClick={() => setShowLogoutModal(true)}
             className="flex items-center justify-center gap-2 text-sm text-red-500 hover:text-red-600 transition-colors cursor-pointer"
           >
-            <LogOut size={18} className="align-middle" />
+            <LogOut size={18} />
             <span>Logout</span>
           </button>
         </div>
       </aside>
 
-      {/* Logout Modal */}
       <LogoutModal
         isOpen={showLogoutModal}
         disabled={btnDisabled}

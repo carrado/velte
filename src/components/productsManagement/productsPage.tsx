@@ -19,9 +19,18 @@ import {
   CATEGORIES_DATA,
   PRODUCTS_DATA,
   Category,
-  CategoryProduct,
   ProductTab,
-} from "@/services/categories";
+  CategoryCardProps,
+  CategoryProduct,
+} from "@/services/products";
+import {
+  PaginationProps,
+  PriceModalProps,
+  RestockModalProps,
+} from "@/types/products";
+import DeleteProductModal from "./DeleteProductModal";
+import ProductsTable from "./ProductsTable";
+import { Pagination } from "../Pagination";
 
 const EMOJI_OPTIONS = [
   "🛒",
@@ -108,7 +117,6 @@ function CategoryModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold text-[#023337]">
             {editing ? "Edit Category" : "Add Category"}
@@ -120,10 +128,7 @@ function CategoryModal({
             <X size={18} />
           </button>
         </div>
-
-        {/* Body */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* Preview */}
           <div className="flex justify-center">
             <div
               className={cn(
@@ -134,8 +139,6 @@ function CategoryModal({
               {selectedEmoji}
             </div>
           </div>
-
-          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Category Name <span className="text-red-500">*</span>
@@ -145,12 +148,10 @@ function CategoryModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Electronics"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#4ea674]/30 focus:border-[#4ea674]"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
               required
             />
           </div>
-
-          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Description{" "}
@@ -161,11 +162,9 @@ function CategoryModal({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Short description..."
               rows={2}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#4ea674]/30 focus:border-[#4ea674] resize-none"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 resize-none"
             />
           </div>
-
-          {/* Emoji picker */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Icon
@@ -179,7 +178,7 @@ function CategoryModal({
                   className={cn(
                     "w-9 h-9 rounded-lg border text-lg flex items-center justify-center transition-colors cursor-pointer",
                     selectedEmoji === em
-                      ? "border-[#4ea674] bg-[#eaf8e7]"
+                      ? "border-orange-500 bg-orange-50"
                       : "border-gray-200 hover:border-gray-300 bg-gray-50",
                   )}
                 >
@@ -188,8 +187,6 @@ function CategoryModal({
               ))}
             </div>
           </div>
-
-          {/* Color picker */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Background Color
@@ -204,15 +201,13 @@ function CategoryModal({
                     "w-8 h-8 rounded-full border-2 transition-all cursor-pointer",
                     bg,
                     selectedBg === bg
-                      ? "border-[#4ea674] scale-110"
+                      ? "border-orange-500 scale-110"
                       : "border-gray-200",
                   )}
                 />
               ))}
             </div>
           </div>
-
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -224,7 +219,7 @@ function CategoryModal({
             <button
               type="submit"
               disabled={!name.trim()}
-              className="flex-1 py-2.5 text-sm font-medium bg-[#4ea674] text-white rounded-lg hover:bg-[#3d8c62] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="flex-1 py-2.5 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {editing ? "Save Changes" : "Add Category"}
             </button>
@@ -235,15 +230,144 @@ function CategoryModal({
   );
 }
 
-// ─── Category Card ─────────────────────────────────────────────────────────────
+// ─── RESTOCK MODAL ─────────────────────────────────────────────────────────────
 
-interface CategoryCardProps {
-  category: Category;
-  selected: boolean;
-  onClick: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+function RestockModal({
+  open,
+  product,
+  onClose,
+  onConfirm,
+}: RestockModalProps) {
+  const [quantity, setQuantity] = useState(1);
+  useEffect(() => {
+    setQuantity(1);
+  }, [product, open]);
+  if (!open || !product) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (quantity > 0) {
+      onConfirm(product.id, quantity);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-[#023337]">
+            Restock Product
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <p className="text-sm text-gray-600">
+            Product:{" "}
+            <span className="font-medium text-gray-900">{product.name}</span>
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Restock Quantity
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) =>
+                setQuantity(Math.max(1, parseInt(e.target.value) || 1))
+              }
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+            />
+          </div>
+          <p className="text-xs text-gray-400">
+            {product.inStock
+              ? "Product is currently in stock. Quantity will be added to existing stock."
+              : "Product is out of stock. Total quantity will be reset to the restock amount."}
+          </p>
+          <button
+            type="submit"
+            className="w-full py-2.5 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
+          >
+            Confirm Restock
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 }
+
+// ─── PRICE MODAL ─────────────────────────────────────────────────────────────
+
+function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
+  const [price, setPrice] = useState("");
+  useEffect(() => {
+    if (product) setPrice(product.price.toString());
+  }, [product, open]);
+  if (!open || !product) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (Number(price) > 0) {
+      onConfirm(product.id, Number(price));
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-[#023337]">
+            Change Price
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <p className="text-sm text-gray-600">
+            Product:{" "}
+            <span className="font-medium text-gray-900">{product.name}</span>
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              New Price ($)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full py-2.5 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
+          >
+            Update Price
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+
+// ─── Category Card ─────────────────────────────────────────────────────────────
 
 function CategoryCard({
   category,
@@ -335,72 +459,9 @@ function CategoryCard({
   );
 }
 
-// ─── Pagination ──────────────────────────────────────────────────────────────
-
-interface PaginationProps {
-  currentPage: number;
-  setCurrentPage: (p: number) => void;
-}
-
-function Pagination({ currentPage, setCurrentPage }: PaginationProps) {
-  return (
-    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 flex-wrap gap-4">
-      <button
-        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-        disabled={currentPage === 1}
-        className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-lg shadow-sm text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-      >
-        <ChevronLeft size={16} />
-        Previous
-      </button>
-
-      <div className="flex items-center gap-1.5 flex-wrap justify-center">
-        {VISIBLE_PAGES.map((page) => (
-          <button
-            key={page}
-            onClick={() => setCurrentPage(page)}
-            className={cn(
-              "w-9 h-9 flex items-center justify-center rounded text-sm font-medium transition-colors cursor-pointer",
-              currentPage === page
-                ? "bg-[#c1e6ba] text-[#023337]"
-                : "border border-gray-200 text-[#023337] hover:bg-gray-50",
-            )}
-          >
-            {page}
-          </button>
-        ))}
-        <span className="w-9 h-9 flex items-center justify-center text-sm font-bold text-[#023337]">
-          .....
-        </span>
-        <button
-          onClick={() => setCurrentPage(TOTAL_PAGES)}
-          className={cn(
-            "w-9 h-9 flex items-center justify-center rounded text-sm font-medium transition-colors cursor-pointer",
-            currentPage === TOTAL_PAGES
-              ? "bg-[#c1e6ba] text-[#023337]"
-              : "border border-gray-200 text-[#023337] hover:bg-gray-50",
-          )}
-        >
-          {TOTAL_PAGES}
-        </button>
-      </div>
-
-      <button
-        onClick={() => setCurrentPage(Math.min(TOTAL_PAGES, currentPage + 1))}
-        disabled={currentPage === TOTAL_PAGES}
-        className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-lg shadow-sm text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-      >
-        Next
-        <ChevronRight size={16} />
-      </button>
-    </div>
-  );
-}
-
-// ─── Main Component ──────────────────────────────────────────────────────────
-
-export default function CategoriesPage() {
+export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>(CATEGORIES_DATA);
+  const [products, setProducts] = useState<CategoryProduct[]>(PRODUCTS_DATA);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
@@ -410,11 +471,34 @@ export default function CategoriesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
-  // Filtered products
-  const filtered = PRODUCTS_DATA.filter((p) => {
+  const [restockModal, setRestockModal] = useState<{
+    open: boolean;
+    product: CategoryProduct | null;
+  }>({
+    open: false,
+    product: null,
+  });
+
+  const [priceModal, setPriceModal] = useState<{
+    open: boolean;
+    product: CategoryProduct | null;
+  }>({
+    open: false,
+    product: null,
+  });
+
+  const [deleteModal, setDeleteModal] = useState<{
+    open: boolean;
+    product: CategoryProduct | null;
+  }>({
+    open: false,
+    product: null,
+  });
+
+  const filteredProducts = products.filter((p) => {
     if (selectedCategoryId && p.categoryId !== selectedCategoryId) return false;
     if (activeTab === "featured" && !p.featured) return false;
-    if (activeTab === "on-sale" && !p.onSale) return false;
+    if (activeTab === "on-sale" && (!p.onSale || !p.inStock)) return false;
     if (activeTab === "out-of-stock" && p.inStock) return false;
     if (
       searchQuery &&
@@ -424,17 +508,13 @@ export default function CategoriesPage() {
     return true;
   });
 
-  const totalFiltered = filtered.length;
-  const allCount = PRODUCTS_DATA.filter(
+  const totalFiltered = filteredProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / ITEMS_PER_PAGE));
+
+  const allCount = products.filter(
     (p) => !selectedCategoryId || p.categoryId === selectedCategoryId,
   ).length;
 
-  const paginated = filtered.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE,
-  );
-
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedCategoryId, activeTab, searchQuery]);
@@ -458,6 +538,7 @@ export default function CategoriesPage() {
       bgColor: data.bgColor,
       description: data.description,
     };
+
     setCategories((prev) => [...prev, newCat]);
     setModalOpen(false);
   };
@@ -469,6 +550,7 @@ export default function CategoriesPage() {
     bgColor: string;
   }) => {
     if (!editingCategory) return;
+
     setCategories((prev) =>
       prev.map((c) =>
         c.id === editingCategory.id
@@ -482,6 +564,7 @@ export default function CategoriesPage() {
           : c,
       ),
     );
+
     setEditingCategory(null);
     setModalOpen(false);
   };
@@ -491,67 +574,81 @@ export default function CategoriesPage() {
     if (selectedCategoryId === id) setSelectedCategoryId(null);
   };
 
-  const openEdit = (cat: Category) => {
-    setEditingCategory(cat);
-    setModalOpen(true);
+  const handleRestock = (productId: string, quantity: number) => {
+    setProducts((prev) =>
+      prev.map((p) => {
+        if (p.id !== productId) return p;
+
+        return {
+          ...p,
+          totalQuantity: p.inStock ? p.totalQuantity + quantity : quantity,
+        };
+      }),
+    );
   };
 
-  const openAdd = () => {
-    setEditingCategory(null);
-    setModalOpen(true);
+  const handlePriceChange = (productId: string, newPrice: number) => {
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, price: newPrice } : p)),
+    );
+  };
+
+  const handleDeleteProduct = (productId: string) => {
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
   };
 
   const tabs: { key: ProductTab; label: string }[] = [
-    { key: "all", label: `All Product` },
+    { key: "all", label: "All Product" },
     { key: "featured", label: "Featured Products" },
     { key: "on-sale", label: "On Sale" },
     { key: "out-of-stock", label: "Out of Stock" },
   ];
 
   return (
-    <div className="space-y-4">
-      {/* ── Top action bar ── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold text-[#023337] tracking-wide">
+    <div className="w-full space-y-4 sm:px-0 lg:pb-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold tracking-wide text-[#023337]">
           Discover
         </h1>
-        <div className="flex items-center gap-3">
-          {/* Add Product */}
-          <button className="flex items-center gap-1.5 h-11 pl-3 pr-4 bg-[#4ea674] text-white rounded-lg text-sm font-bold hover:bg-[#3d8c62] transition-colors cursor-pointer">
+
+        <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto sm:items-center">
+          <button className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 text-sm font-bold text-white transition-colors hover:bg-orange-600 sm:w-auto">
             <Plus size={18} />
-            Add Product
+            <span className="truncate">Add Product</span>
           </button>
-          {/* Add Categories */}
+
           <button
-            onClick={openAdd}
-            className="flex items-center gap-1.5 h-11 pl-3 pr-4 bg-white border border-gray-200 text-[#023337] rounded-lg text-sm font-bold hover:bg-gray-50 transition-colors cursor-pointer"
+            onClick={() => {
+              setEditingCategory(null);
+              setModalOpen(true);
+            }}
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-[#023337] transition-colors hover:bg-gray-50 sm:w-auto"
           >
-            <Plus size={16} className="text-[#4ea674]" />
-            Add Categories
+            <Plus size={16} className="text-orange-500" />
+            <span className="truncate">Add Categories</span>
           </button>
         </div>
       </div>
 
-      {/* ── Category cards grid ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
         {categories.map((cat) => (
           <CategoryCard
             key={cat.id}
             category={cat}
             selected={selectedCategoryId === cat.id}
             onClick={() => handleCategoryClick(cat.id)}
-            onEdit={() => openEdit(cat)}
+            onEdit={() => {
+              setEditingCategory(cat);
+              setModalOpen(true);
+            }}
             onDelete={() => handleDeleteCategory(cat.id)}
           />
         ))}
       </div>
 
-      {/* ── Product register ── */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        {/* Table header controls */}
-        <div className="flex items-center justify-between flex-wrap gap-3 px-6 pt-5 pb-4">
-          {/* Filter tabs */}
-          <div className="flex items-center bg-[#eaf8e7] rounded-lg p-1 gap-1 overflow-x-auto flex-shrink-0">
+      <div className="overflow-hidden rounded-lg bg-white shadow-sm">
+        <div className="flex flex-col gap-3 px-3 pb-4 pt-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="grid w-full grid-cols-2 gap-1 rounded-lg bg-orange-50 p-1 sm:grid-cols-4 lg:w-auto">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
@@ -560,15 +657,16 @@ export default function CategoriesPage() {
                   setCurrentPage(1);
                 }}
                 className={cn(
-                  "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors cursor-pointer",
+                  "flex items-center justify-center gap-1 rounded-md px-2 py-2 text-center text-xs transition-colors sm:px-3 sm:text-sm",
                   activeTab === tab.key
-                    ? "bg-white text-black font-medium shadow-sm"
+                    ? "bg-white font-medium text-black shadow-sm"
                     : "text-gray-600 hover:text-gray-800",
                 )}
               >
-                <span>{tab.label}</span>
+                <span className="truncate">{tab.label}</span>
+
                 {tab.key === "all" && (
-                  <span className="text-[#4ea674] text-xs font-bold">
+                  <span className="text-xs font-bold text-orange-500">
                     ({allCount})
                   </span>
                 )}
@@ -576,170 +674,56 @@ export default function CategoriesPage() {
             ))}
           </div>
 
-          {/* Right controls */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="flex items-center gap-2 bg-gray-50 rounded-lg pl-3 pr-2 py-1.5 w-56 border border-transparent focus-within:border-gray-200">
+          <div className="flex w-full items-center gap-2 lg:w-auto">
+            <div className="flex w-full flex-1 items-center gap-2 rounded-lg border border-transparent bg-gray-50 py-1.5 pl-3 pr-2 focus-within:border-gray-200 lg:w-56 lg:flex-none">
               <input
                 type="text"
                 placeholder="Search your product"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent text-sm text-gray-600 outline-none min-w-0 placeholder:text-gray-400"
+                className="min-w-0 flex-1 bg-transparent text-sm text-gray-600 outline-none placeholder:text-gray-400"
               />
-              <Search size={18} className="text-gray-400 flex-shrink-0" />
+              <Search size={18} className="shrink-0 text-gray-400" />
             </div>
-            <button className="p-2.5 border border-gray-200 rounded bg-white hover:bg-gray-50 transition-colors cursor-pointer">
+
+            <button className="shrink-0 rounded border border-gray-200 bg-white p-2.5 transition-colors hover:bg-gray-50">
               <SlidersHorizontal size={18} className="text-gray-500" />
             </button>
-            <button className="p-2.5 border border-gray-200 rounded bg-white hover:bg-gray-50 transition-colors cursor-pointer">
+
+            <button className="hidden shrink-0 rounded border border-gray-200 bg-white p-2.5 transition-colors hover:bg-gray-50 sm:block">
               <SquarePlus size={20} className="text-gray-500" />
             </button>
-            <button className="p-2.5 border border-gray-200 rounded bg-white hover:bg-gray-50 transition-colors cursor-pointer">
+
+            <button className="hidden shrink-0 rounded border border-gray-200 bg-white p-2.5 transition-colors hover:bg-gray-50 sm:block">
               <AlignJustify size={18} className="text-gray-500" />
             </button>
           </div>
         </div>
 
-        {/* Desktop table */}
-        <div className="hidden sm:block overflow-x-auto">
-          <table className="w-full min-w-[600px]">
-            <thead>
-              <tr className="bg-[#eaf8e7]">
-                {["No.", "Product", "Created Date", "Order", "Action"].map(
-                  (col) => (
-                    <th
-                      key={col}
-                      className="px-4 py-3 text-sm font-medium text-[#023337] text-center whitespace-nowrap"
-                    >
-                      {col}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.length > 0 ? (
-                paginated.map((product, idx) => (
-                  <tr
-                    key={product.id}
-                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                  >
-                    {/* No. + checkbox */}
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center gap-2 justify-center">
-                        <div className="w-5 h-5 rounded border-[1.5px] border-[#eaf8e7] bg-white flex-shrink-0" />
-                        <span className="text-sm text-black">
-                          {(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Product */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3 justify-center">
-                        <div
-                          className={cn(
-                            "w-10 h-10 rounded border border-gray-200 flex items-center justify-center flex-shrink-0 text-xs font-bold text-gray-500",
-                            product.colorClass,
-                          )}
-                        >
-                          {product.name.charAt(0)}
-                        </div>
-                        <p className="text-sm text-black w-48 line-clamp-2 text-left">
-                          {product.name}
-                        </p>
-                      </div>
-                    </td>
-
-                    {/* Created Date */}
-                    <td className="px-4 py-3 text-center">
-                      <span className="text-sm text-black">
-                        {product.createdDate}
-                      </span>
-                    </td>
-
-                    {/* Order */}
-                    <td className="px-4 py-3 text-center">
-                      <span className="text-sm text-black">
-                        {product.orders}
-                      </span>
-                    </td>
-
-                    {/* Action */}
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center gap-2 justify-center">
-                        <button
-                          className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
-                          aria-label="Edit product"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-                          aria-label="Delete product"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="py-12 text-center text-sm text-gray-400"
-                  >
-                    No products found for this selection.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="w-full overflow-x-auto">
+          <ProductsTable
+            products={filteredProducts}
+            currentPage={currentPage}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onRestock={(product: CategoryProduct) =>
+              setRestockModal({ open: true, product })
+            }
+            onChangePrice={(product: CategoryProduct) =>
+              setPriceModal({ open: true, product })
+            }
+            onDelete={(product: CategoryProduct) =>
+              setDeleteModal({ open: true, product })
+            }
+          />
         </div>
 
-        {/* Mobile cards */}
-        <div className="sm:hidden divide-y divide-gray-100">
-          {paginated.length > 0 ? (
-            paginated.map((product, idx) => (
-              <div key={product.id} className="p-4">
-                <div className="flex items-start gap-3">
-                  <div
-                    className={cn(
-                      "w-10 h-10 rounded border border-gray-200 flex items-center justify-center flex-shrink-0 text-xs font-bold text-gray-500",
-                      product.colorClass,
-                    )}
-                  >
-                    {product.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800">
-                      {product.name}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {product.createdDate}
-                    </p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-xs text-gray-400">Orders</p>
-                    <p className="text-sm font-medium text-gray-800">
-                      {product.orders}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="py-10 text-center text-sm text-gray-400">
-              No products found.
-            </div>
-          )}
-        </div>
-
-        <Pagination currentPage={currentPage} setCurrentPage={setCurrentPage} />
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
       </div>
 
-      {/* Modal */}
       <CategoryModal
         open={modalOpen}
         editing={editingCategory}
@@ -748,6 +732,27 @@ export default function CategoriesPage() {
           setEditingCategory(null);
         }}
         onSubmit={editingCategory ? handleEditCategory : handleAddCategory}
+      />
+
+      <RestockModal
+        open={restockModal.open}
+        product={restockModal.product}
+        onClose={() => setRestockModal({ open: false, product: null })}
+        onConfirm={handleRestock}
+      />
+
+      <PriceModal
+        open={priceModal.open}
+        product={priceModal.product}
+        onClose={() => setPriceModal({ open: false, product: null })}
+        onConfirm={handlePriceChange}
+      />
+
+      <DeleteProductModal
+        open={deleteModal.open}
+        product={deleteModal.product}
+        onClose={() => setDeleteModal({ open: false, product: null })}
+        onConfirm={handleDeleteProduct}
       />
     </div>
   );

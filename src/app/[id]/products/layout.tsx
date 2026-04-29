@@ -5,7 +5,7 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
 
-export default function DashboardLayout({
+export default function ProductsLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -32,7 +32,7 @@ export default function DashboardLayout({
 
       <main className="flex-1 overflow-y-auto pb-16 min-w-0">
         <div className="p-4 md:p-6 space-y-6">
-          <Header title="Dashboard" onMenuClick={() => setSidebarOpen(true)} />
+          <Header title="Products" onMenuClick={() => setSidebarOpen(true)} />
           {children}
         </div>
       </main>
