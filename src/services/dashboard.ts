@@ -1,84 +1,28 @@
+import type {
+  DashboardStats,
+  WeeklyReportPoint,
+  UsersActivity,
+  MonthlySale,
+  Transaction,
+  TopProduct,
+  BestSellingProduct,
+  DashboardCategory,
+  AddableProduct,
+} from "@/types/dashboard";
+
+export type {
+  DashboardStats,
+  WeeklyReportPoint,
+  UsersActivity,
+  MonthlySale,
+  Transaction,
+  TopProduct,
+  BestSellingProduct,
+  DashboardCategory,
+  AddableProduct,
+};
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// --- Types ---
-
-export interface DashboardStats {
-  totalSales: {
-    value: number;
-    growth: number;
-    previous: number;
-  };
-  totalOrders: {
-    value: number;
-    growth: number;
-    previous: number;
-  };
-  pending: {
-    orders: number;
-    users: number;
-  };
-  canceled: {
-    value: number;
-    growth: number;
-  };
-}
-
-export interface WeeklyReportPoint {
-  day: string;
-  value: number;
-}
-
-export interface UsersActivity {
-  total: number;
-  perMinute: number[];
-}
-
-export interface MonthlySale {
-  month: string;
-  sales: number;
-  change: number;
-  positive: boolean;
-}
-
-export interface Transaction {
-  id: string;
-  customerId: string;
-  date: string;
-  status: "Paid" | "Pending";
-  amount: number;
-}
-
-export interface TopProduct {
-  id: string;
-  name: string;
-  sku: string;
-  price: number;
-  image: string;
-}
-
-export interface BestSellingProduct {
-  id: string;
-  name: string;
-  totalOrder: number;
-  status: "Stock" | "Stock out";
-  price: number;
-  image: string;
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  icon: string;
-}
-
-export interface AddableProduct {
-  id: string;
-  name: string;
-  price: number;
-  image: string;
-}
-
-// --- API Functions ---
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
   await delay(300);
@@ -130,24 +74,9 @@ export async function fetchUsersActivity(): Promise<UsersActivity> {
 export async function fetchSalesByMonths(): Promise<MonthlySale[]> {
   await delay(300);
   return [
-    {
-      month: "February",
-      sales: 30000,
-      change: 25.8,
-      positive: true,
-    },
-    {
-      month: "March",
-      sales: 30000,
-      change: -15.8,
-      positive: false,
-    },
-    {
-      month: "April",
-      sales: 25000,
-      change: 35.8,
-      positive: true,
-    },
+    { month: "February", sales: 30000, change: 25.8, positive: true },
+    { month: "March", sales: 30000, change: -15.8, positive: false },
+    { month: "April", sales: 25000, change: 35.8, positive: true },
   ];
 }
 
@@ -209,13 +138,7 @@ export async function fetchTopProducts(): Promise<TopProduct[]> {
       price: 72.4,
       image: "",
     },
-    {
-      id: "p-003",
-      name: "T-shirt",
-      sku: "#FXZ-4569",
-      price: 35.4,
-      image: "",
-    },
+    { id: "p-003", name: "T-shirt", sku: "#FXZ-4569", price: 35.4, image: "" },
     {
       id: "p-004",
       name: "Assorted Cross Bag",
@@ -267,35 +190,10 @@ export async function fetchBestSelling(): Promise<BestSellingProduct[]> {
 export async function fetchAddableProducts(): Promise<AddableProduct[]> {
   await delay(300);
   return [
-    {
-      id: "a-001",
-      name: "Smart Fitness Tracker",
-      price: 39.99,
-      image: "",
-    },
-    {
-      id: "a-002",
-      name: "Leather Wallet",
-      price: 19.99,
-      image: "",
-    },
-    {
-      id: "a-003",
-      name: "Electric Hair Trimmer",
-      price: 34.99,
-      image: "",
-    },
-    {
-      id: "b-004",
-      name: "Assorted Cross Bag",
-      price: 999,
-      image: "",
-    },
-    {
-      id: "b-001",
-      name: "Apple iPhone 13",
-      price: 999,
-      image: "",
-    },
+    { id: "a-001", name: "Smart Fitness Tracker", price: 39.99, image: "" },
+    { id: "a-002", name: "Leather Wallet", price: 19.99, image: "" },
+    { id: "a-003", name: "Electric Hair Trimmer", price: 34.99, image: "" },
+    { id: "b-004", name: "Assorted Cross Bag", price: 999, image: "" },
+    { id: "b-001", name: "Apple iPhone 13", price: 999, image: "" },
   ];
 }

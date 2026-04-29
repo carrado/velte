@@ -1,36 +1,9 @@
+import type { Category, CategoryProduct } from "@/types/product";
+
+export type { Category, CategoryProduct };
+export type { ProductTab, CategoryCardProps } from "@/types/product";
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-export interface Category {
-  id: string;
-  name: string;
-  emoji: string;
-  bgColor: string;
-  description?: string;
-}
-
-export type ProductTab = "all" | "featured" | "on-sale" | "out-of-stock";
-
-export interface CategoryProduct {
-  id: string;
-  name: string;
-  categoryId: string;
-  price: number;
-  totalQuantity: number;
-  orderedQuantity: number;
-  createdDate: string;
-  featured: boolean;
-  onSale: boolean;
-  inStock: number;
-  colorClass: string;
-}
-
-export interface CategoryCardProps {
-  category: Category;
-  selected: boolean;
-  onClick: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}
 
 export const CATEGORIES_DATA: Category[] = [
   {
@@ -119,7 +92,6 @@ export const PRODUCTS_DATA: CategoryProduct[] = [
     inStock: 20,
     colorClass: "bg-blue-300",
   },
-  // Updated products from p3 to p45 with consistent structure
   {
     id: "p3",
     name: "Smart LED Color Bulb",

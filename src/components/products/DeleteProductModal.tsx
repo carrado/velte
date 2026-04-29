@@ -1,5 +1,5 @@
 import { getAvailableStock } from "@/services/products";
-import { DeleteProductModalProps } from "@/types/products";
+import type { DeleteProductModalProps } from "@/types/product";
 import { X } from "lucide-react";
 
 export default function DeleteProductModal({

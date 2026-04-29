@@ -1,4 +1,4 @@
-import { ProductActionsPopoverProps } from "@/types/products";
+import type { ProductActionsPopoverProps } from "@/types/product";
 import { DollarSign, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 

@@ -1,16 +1,9 @@
-// components/ui/Pagination.tsx
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
-
-interface PaginationProps {
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-  className?: string;
-}
+import type { PaginationProps } from "@/types/common";
 
 export function Pagination({
   currentPage,
@@ -32,7 +25,6 @@ export function Pagination({
   const getPageNumbers = () => {
     if (totalPages <= 1) return [];
 
-    // Mobile: simple layout
     if (!isDesktop) {
       if (totalPages <= 3) {
         return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -43,7 +35,6 @@ export function Pagination({
       return [currentPage, "...", totalPages];
     }
 
-    // Desktop: sliding window of up to 6 pages
     const maxVisible = 6;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
     let endPage = startPage + maxVisible - 1;
@@ -58,19 +49,13 @@ export function Pagination({
       visiblePages.push(i);
     }
 
-    // Add ellipsis on the left if needed
     if (startPage > 1) {
-      if (startPage > 2) {
-        visiblePages.unshift("...");
-      }
+      if (startPage > 2) visiblePages.unshift("...");
       visiblePages.unshift(1);
     }
 
-    // Add ellipsis on the right if needed
     if (endPage < totalPages) {
-      if (endPage < totalPages - 1) {
-        visiblePages.push("...");
-      }
+      if (endPage < totalPages - 1) visiblePages.push("...");
       visiblePages.push(totalPages);
     }
 
@@ -88,7 +73,6 @@ export function Pagination({
         className,
       )}
     >
-      {/* Previous button */}
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
@@ -98,7 +82,6 @@ export function Pagination({
         Previous
       </button>
 
-      {/* Page numbers / ellipsis */}
       <div className="flex items-center gap-1.5 flex-wrap">
         {pageNumbers.map((page, idx) =>
           page === "..." ? (
@@ -125,7 +108,6 @@ export function Pagination({
         )}
       </div>
 
-      {/* Next button */}
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}

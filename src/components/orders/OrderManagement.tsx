@@ -20,20 +20,21 @@ import {
   Settings,
   X,
   Filter,
-  Calendar,
-  DollarSign,
-  Tag,
 } from "lucide-react";
 import {
   fetchOrders,
   fetchOrderStats,
   updateOrderStatus,
-  type Order,
-  type OrderFilter,
-  type OrderStatus,
 } from "@/services/orders";
+import type {
+  Order,
+  OrderFilter,
+  OrderStatus,
+  FilterState,
+  SortOption,
+  SettingsData,
+} from "@/types/order";
 
-// ─── Stat Card (unchanged) ──────────────────────────────────────────────────
 function StatCard({
   title,
   value,
@@ -59,7 +60,6 @@ function StatCard({
   );
 }
 
-// ─── Status Badge ───────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: OrderStatus }) {
   switch (status) {
     case "Delivered":
@@ -93,7 +93,6 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   }
 }
 
-// ─── Payment Badge ──────────────────────────────────────────────────────────
 function PaymentBadge({ status }: { status: "Paid" | "Unpaid" }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -105,7 +104,6 @@ function PaymentBadge({ status }: { status: "Paid" | "Unpaid" }) {
   );
 }
 
-// ─── Row Actions (unchanged) ────────────────────────────────────────────────
 function RowActions({
   orderId,
   status,
@@ -192,7 +190,6 @@ function RowActions({
   );
 }
 
-// ─── Confirmation Modal (unchanged) ─────────────────────────────────────────
 function ShippedConfirmationModal({
   isOpen,
   onClose,
@@ -234,14 +231,6 @@ function ShippedConfirmationModal({
       </div>
     </div>
   );
-}
-
-// ─── Filter Popover (unchanged) ─────────────────────────────────────────────
-interface FilterState {
-  startDate: string;
-  endDate: string;
-  paymentStatus: "all" | "Paid" | "Unpaid";
-  orderStatus: OrderFilter;
 }
 
 function FilterPopover({
@@ -331,7 +320,8 @@ function FilterPopover({
                 onChange={(e) =>
                   setLocalFilters({
                     ...localFilters,
-                    paymentStatus: e.target.value as any,
+                    paymentStatus: e.target
+                      .value as FilterState["paymentStatus"],
                   })
                 }
                 className="w-full px-2 py-1.5 border border-[#e5e7eb] rounded text-sm"
@@ -382,8 +372,6 @@ function FilterPopover({
   );
 }
 
-// ─── Sort Menu (unchanged) ──────────────────────────────────────────────────
-type SortOption = "newest" | "oldest" | "price_asc" | "price_desc";
 function SortMenu({
   currentSort,
   onSort,
@@ -437,7 +425,6 @@ function SortMenu({
   );
 }
 
-// ─── Skeleton Row (unchanged) ───────────────────────────────────────────────
 function SkeletonRow() {
   return (
     <tr className="border-b border-[#e5e7eb] animate-pulse">
@@ -450,13 +437,6 @@ function SkeletonRow() {
   );
 }
 
-// ─── Settings Modal (unchanged) ─────────────────────────────────────────────
-interface SettingsData {
-  minDurationDays: number;
-  maxDurationDays: number;
-  deliveryType: "bulk" | "single";
-  paymentMethod: string;
-}
 function SettingsModal({
   isOpen,
   onClose,
@@ -609,7 +589,6 @@ function SettingsModal({
   );
 }
 
-// ─── Bulk Action Dropdown (unchanged) ───────────────────────────────────────
 function BulkActionDropdown({
   selectedCount,
   allowedActions,
@@ -659,7 +638,6 @@ function BulkActionDropdown({
   );
 }
 
-// ─── Main Component ─────────────────────────────────────────────────────────
 const TABS: { key: OrderFilter; label: string }[] = [
   { key: "all", label: "All order" },
   { key: "completed", label: "Completed" },
@@ -716,7 +694,6 @@ export default function OrderManagement() {
     },
   });
 
-  // Filtering & Sorting
   let filtered = orders.filter((o) => {
     const matchesSearch =
       o.orderId.toLowerCase().includes(search.toLowerCase()) ||
@@ -809,10 +786,8 @@ export default function OrderManagement() {
     newSet.has(id) ? newSet.delete(id) : newSet.add(id);
     setSelectedOrders(newSet);
   };
-  const handleSaveSettings = (newSettings: SettingsData) => {
+  const handleSaveSettings = (newSettings: SettingsData) =>
     setSettings(newSettings);
-    console.log("Settings saved:", newSettings);
-  };
   const handleMarkShipped = (orderId: string) => {
     setPendingShippedOrderId(orderId);
     setShippedModalOpen(true);
@@ -829,7 +804,6 @@ export default function OrderManagement() {
   const handleMarkCancelled = (orderId: string) =>
     mutation.mutate({ id: orderId, status: "Cancelled" });
 
-  // ─── Mobile Order Card Component ─────────────────────────────────────────
   const MobileOrderCard = ({
     order,
     isSelected,
@@ -843,7 +817,6 @@ export default function OrderManagement() {
       <div className="bg-white border border-gray-100 p-4 rounded-lg shadow-sm">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            {/* Checkbox on mobile */}
             <input
               type="checkbox"
               checked={isSelected}
@@ -896,7 +869,6 @@ export default function OrderManagement() {
 
   return (
     <div className="space-y-5">
-      {/* Header (unchanged) */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-xl font-bold text-[#023337]"></h2>
         <div className="flex items-center gap-3">
@@ -926,7 +898,6 @@ export default function OrderManagement() {
         onConfirm={confirmMarkShipped}
       />
 
-      {/* Stats Row (unchanged) */}
       <div className="flex gap-4 flex-wrap">
         {statsLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
@@ -996,9 +967,7 @@ export default function OrderManagement() {
         )}
       </div>
 
-      {/* Table Card */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        {/* Tabs: 2 per row on mobile */}
         <div className="flex items-center justify-between gap-3 p-4 flex-wrap border-b border-[#e5e7eb]">
           <div className="grid grid-cols-2 gap-1 md:flex md:flex-row w-full md:w-auto bg-orange-50 rounded-lg p-1">
             {TABS.map((tab) => (
@@ -1066,7 +1035,6 @@ export default function OrderManagement() {
           </div>
         </div>
 
-        {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1151,7 +1119,6 @@ export default function OrderManagement() {
           </table>
         </div>
 
-        {/* Mobile Card View */}
         <div className="md:hidden space-y-3 p-4">
           {ordersLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
@@ -1176,7 +1143,6 @@ export default function OrderManagement() {
           )}
         </div>
 
-        {/* Pagination (unchanged) */}
         <div className="flex items-center justify-between px-4 py-4 border-t border-[#e5e7eb]">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}

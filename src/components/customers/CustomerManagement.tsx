@@ -1,26 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import {
-  MessageSquare,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  MoreVertical,
-  ArrowUp,
-} from "lucide-react";
+import { MessageSquare, Trash2, ArrowUp, MoreVertical } from "lucide-react";
 import { Pagination } from "../Pagination";
-
-type CustomerStatus = "Active" | "Inactive" | "VIP";
-
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  orders: number;
-  spend: string;
-  status: CustomerStatus;
-}
+import type { Customer, CustomerStatus } from "@/types/customer";
 
 const customers: Customer[] = [
   {
@@ -231,9 +214,7 @@ export default function CustomerManagement() {
 
   return (
     <div className="space-y-4">
-      {/* ── Top row ── */}
       <div className="flex flex-col lg:flex-row gap-4">
-        {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4 lg:w-[260px] lg:flex-shrink-0">
           {[
             { title: "Total customers", value: "11,040", pct: "14.4%" },
@@ -261,9 +242,7 @@ export default function CustomerManagement() {
           ))}
         </div>
 
-        {/* Customer overview chart */}
         <div className="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
-          {/* Header */}
           <div className="flex items-center gap-2 px-5 pt-5">
             <h3 className="flex-1 text-sm font-medium text-gray-800">
               Customer overview
@@ -286,7 +265,6 @@ export default function CustomerManagement() {
             <MoreVertical size={15} className="text-gray-400 flex-shrink-0" />
           </div>
 
-          {/* Metric tabs */}
           <div className="flex overflow-x-auto mt-3 px-5 gap-1">
             {overviewMetrics.map((m, i) => (
               <button
@@ -308,7 +286,6 @@ export default function CustomerManagement() {
             ))}
           </div>
 
-          {/* SVG Chart */}
           <div className="px-4 pb-4 pt-2 overflow-x-auto">
             <div style={{ minWidth: "380px" }}>
               <svg
@@ -327,7 +304,6 @@ export default function CustomerManagement() {
                   </linearGradient>
                 </defs>
 
-                {/* Y-axis labels */}
                 {yAxisLabels.map((label, i) => (
                   <text
                     key={label}
@@ -342,7 +318,6 @@ export default function CustomerManagement() {
                   </text>
                 ))}
 
-                {/* Grid lines */}
                 {Array.from({ length: 6 }, (_, i) => (
                   <line
                     key={i}
@@ -355,10 +330,8 @@ export default function CustomerManagement() {
                   />
                 ))}
 
-                {/* Area fill */}
                 <path d={areaPath} fill="url(#areaGrad)" />
 
-                {/* Line */}
                 <path
                   d={linePath}
                   fill="none"
@@ -368,7 +341,6 @@ export default function CustomerManagement() {
                   strokeLinejoin="round"
                 />
 
-                {/* Vertical dashed line at peak */}
                 <line
                   x1={peakX}
                   y1={peakY + 6}
@@ -379,7 +351,6 @@ export default function CustomerManagement() {
                   strokeDasharray="4 3"
                 />
 
-                {/* Peak dot */}
                 <circle
                   cx={peakX}
                   cy={peakY}
@@ -389,7 +360,6 @@ export default function CustomerManagement() {
                   strokeWidth="2"
                 />
 
-                {/* Tooltip */}
                 <rect
                   x={ttX}
                   y={ttY}
@@ -424,7 +394,6 @@ export default function CustomerManagement() {
                   45,000
                 </text>
 
-                {/* X-axis labels */}
                 {chartData.map((d, i) => (
                   <text
                     key={d.day}
@@ -445,9 +414,7 @@ export default function CustomerManagement() {
         </div>
       </div>
 
-      {/* ── Customer list ── */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        {/* Desktop table — hidden on mobile */}
         <div className="hidden sm:block overflow-x-auto">
           <table className="w-full min-w-[600px]">
             <thead>
@@ -520,7 +487,6 @@ export default function CustomerManagement() {
           </table>
         </div>
 
-        {/* Mobile cards — hidden on sm+ */}
         <div className="sm:hidden divide-y divide-gray-100">
           {customers.map((customer) => (
             <CustomerCard key={customer.id} customer={customer} />

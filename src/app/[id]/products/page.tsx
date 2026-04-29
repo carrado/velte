@@ -1,6 +1,6 @@
 "use client";
 
-import ProductsPage from "@/components/productsManagement/productsPage";
+import ProductsPage from "@/components/products/ProductsPage";
 
 export default function CategoriesRoute() {
   return <ProductsPage />;

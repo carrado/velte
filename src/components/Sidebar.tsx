@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   ShoppingBag,
   Users,
-  LayoutGrid,
   CreditCard,
   PlusCircle,
   List,
@@ -24,17 +23,7 @@ import { useMutation } from "@tanstack/react-query";
 import { usersApi } from "@/services/users";
 import { toast } from "sonner";
 import LogoutModal from "@/components/LogOutModal";
-
-interface NavItem {
-  label: string;
-  icon: React.ReactNode;
-  href: string;
-}
-
-interface NavSection {
-  title: string;
-  items: NavItem[];
-}
+import type { NavItem, NavSection, SidebarProps } from "@/types/common";
 
 function NavLink({
   item,
@@ -61,21 +50,14 @@ function NavLink({
   );
 }
 
-interface SidebarProps {
-  isOpen: boolean;
-  onClose: () => void;
-  side?: "left" | "right"; // kept for compatibility but not used
-}
-
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const [userDetails, setUserDetails] = useState<any>({});
+  const [userDetails, setUserDetails] = useState<Record<string, any>>({});
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [btnDisabled, setBtnDisabled] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [effectiveSide, setEffectiveSide] = useState<"left" | "right">("left");
 
-  // Determine side only on client after mount
   useEffect(() => {
     const handleResize = () => {
       const isMobile = window.innerWidth < 1024;
@@ -83,15 +65,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     };
     handleResize();
     window.addEventListener("resize", handleResize);
-    // Mark mounted after setting initial side
     setMounted(true);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
     useUserStore.persist.rehydrate();
-    const userDetails: any = useUserStore.getState().user;
-    setUserDetails(userDetails);
+    const user = useUserStore.getState().user;
+    setUserDetails(user ?? {});
   }, []);
 
   const handleLogout = () => {
@@ -106,7 +87,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       window.location.href = "/";
     },
     onError: (error: any) => {
-      toast.error(error.message || "Invalid email or password");
+      toast.error(error.message || "Logout failed");
     },
   });
 
@@ -165,11 +146,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     },
   ];
 
-  const isNavActive = (href: string) => {
-    return pathname.includes(href);
-  };
+  const isNavActive = (href: string) => pathname.includes(href);
 
-  // Build transform classes based on effectiveSide and isOpen
   let translateClass = "";
   if (effectiveSide === "left") {
     translateClass = isOpen ? "translate-x-0" : "-translate-x-full";
@@ -179,9 +157,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const sidePosition = effectiveSide === "left" ? "left-0" : "right-0";
 
-  // Do not render the actual sidebar until mounted to avoid flash
   if (!mounted) {
-    // Return a placeholder with same dimensions to prevent layout shift, but invisible
     return (
       <div
         className="hidden lg:block w-[260px] flex-shrink-0"
@@ -192,7 +168,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Overlay (mobile only) */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-20 lg:hidden"
@@ -211,7 +186,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           lg:translate-x-0
         `}
       >
-        {/* Logo and close button */}
         <div className="flex items-center justify-between px-4 py-2 h-[70px] border-b border-gray-200">
           <div className="flex gap-1.5 -ml-4">
             <img
@@ -232,7 +206,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-5">
           {sections.map((section) => (
             <div key={section.title}>
@@ -253,7 +226,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           ))}
         </nav>
 
-        {/* User section and logout */}
         <div className="px-3 py-4 border-t border-gray-200 space-y-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">

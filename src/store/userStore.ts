@@ -1,17 +1,8 @@
-// stores/userStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { User } from "@/types/user";
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  country: string;
-  username: string;
-  businessName: string;
-  address: string;
-  services: string[];
-}
+export type { User };
 
 interface UserStore {
   user: User | null;
@@ -34,10 +25,8 @@ export const useUserStore = create<UserStore>()(
       clearUser: () => set({ user: null }),
     }),
     {
-      name: "user-storage", // persists user to localStorage
+      name: "user-storage",
       skipHydration: true,
-      // Optionally, only persist specific fields:
-      // partialize: (state) => ({ user: state.user }),
     },
   ),
 );

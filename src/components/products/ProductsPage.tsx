@@ -5,8 +5,6 @@ import {
   Plus,
   MoreHorizontal,
   Search,
-  ChevronLeft,
-  ChevronRight,
   Pencil,
   Trash2,
   X,
@@ -15,19 +13,16 @@ import {
   AlignJustify,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  CATEGORIES_DATA,
-  PRODUCTS_DATA,
+import { CATEGORIES_DATA, PRODUCTS_DATA } from "@/services/products";
+import type {
   Category,
   ProductTab,
   CategoryCardProps,
   CategoryProduct,
-} from "@/services/products";
-import {
-  PaginationProps,
-  PriceModalProps,
+  CategoryModalProps,
   RestockModalProps,
-} from "@/types/products";
+  PriceModalProps,
+} from "@/types/product";
 import DeleteProductModal from "./DeleteProductModal";
 import ProductsTable from "./ProductsTable";
 import { Pagination } from "../Pagination";
@@ -58,22 +53,6 @@ const BG_OPTIONS = [
 ];
 
 const ITEMS_PER_PAGE = 10;
-const TOTAL_PAGES = 24;
-const VISIBLE_PAGES = [1, 2, 3, 4, 5];
-
-// ─── Modal ────────────────────────────────────────────────────────────────────
-
-interface CategoryModalProps {
-  open: boolean;
-  editing: Category | null;
-  onClose: () => void;
-  onSubmit: (data: {
-    name: string;
-    description: string;
-    emoji: string;
-    bgColor: string;
-  }) => void;
-}
 
 function CategoryModal({
   open,
@@ -230,8 +209,6 @@ function CategoryModal({
   );
 }
 
-// ─── RESTOCK MODAL ─────────────────────────────────────────────────────────────
-
 function RestockModal({
   open,
   product,
@@ -303,8 +280,6 @@ function RestockModal({
   );
 }
 
-// ─── PRICE MODAL ─────────────────────────────────────────────────────────────
-
 function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
   const [price, setPrice] = useState("");
   useEffect(() => {
@@ -365,10 +340,6 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
   );
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
-
-// ─── Category Card ─────────────────────────────────────────────────────────────
-
 function CategoryCard({
   category,
   selected,
@@ -402,7 +373,6 @@ function CategoryCard({
       )}
       onClick={onClick}
     >
-      {/* Image box */}
       <div
         className={cn(
           "w-16 h-16 rounded flex items-center justify-center text-2xl flex-shrink-0 border border-gray-200",
@@ -412,12 +382,10 @@ function CategoryCard({
         {category.emoji}
       </div>
 
-      {/* Name */}
       <p className="flex-1 min-w-0 text-sm font-medium text-black leading-tight">
         {category.name}
       </p>
 
-      {/* More icon */}
       <div
         ref={popoverRef}
         className="relative flex-shrink-0"
@@ -474,26 +442,17 @@ export default function ProductsPage() {
   const [restockModal, setRestockModal] = useState<{
     open: boolean;
     product: CategoryProduct | null;
-  }>({
-    open: false,
-    product: null,
-  });
+  }>({ open: false, product: null });
 
   const [priceModal, setPriceModal] = useState<{
     open: boolean;
     product: CategoryProduct | null;
-  }>({
-    open: false,
-    product: null,
-  });
+  }>({ open: false, product: null });
 
   const [deleteModal, setDeleteModal] = useState<{
     open: boolean;
     product: CategoryProduct | null;
-  }>({
-    open: false,
-    product: null,
-  });
+  }>({ open: false, product: null });
 
   const filteredProducts = products.filter((p) => {
     if (selectedCategoryId && p.categoryId !== selectedCategoryId) return false;
@@ -538,7 +497,6 @@ export default function ProductsPage() {
       bgColor: data.bgColor,
       description: data.description,
     };
-
     setCategories((prev) => [...prev, newCat]);
     setModalOpen(false);
   };
@@ -550,7 +508,6 @@ export default function ProductsPage() {
     bgColor: string;
   }) => {
     if (!editingCategory) return;
-
     setCategories((prev) =>
       prev.map((c) =>
         c.id === editingCategory.id
@@ -564,7 +521,6 @@ export default function ProductsPage() {
           : c,
       ),
     );
-
     setEditingCategory(null);
     setModalOpen(false);
   };
@@ -578,7 +534,6 @@ export default function ProductsPage() {
     setProducts((prev) =>
       prev.map((p) => {
         if (p.id !== productId) return p;
-
         return {
           ...p,
           totalQuantity: p.inStock ? p.totalQuantity + quantity : quantity,
@@ -664,7 +619,6 @@ export default function ProductsPage() {
                 )}
               >
                 <span className="truncate">{tab.label}</span>
-
                 {tab.key === "all" && (
                   <span className="text-xs font-bold text-orange-500">
                     ({allCount})

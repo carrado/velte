@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { getAvailableStock } from "@/services/products";
-import { ProductsTableProps } from "@/types/products";
+import type { ProductsTableProps } from "@/types/product";
 import ProductActionsPopover from "./ProductActionsPopover";
 
 export default function ProductsTable({
@@ -14,7 +14,6 @@ export default function ProductsTable({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginated = products.slice(startIndex, startIndex + itemsPerPage);
 
-  // Desktop Table View
   const DesktopTable = () => (
     <div className="hidden md:block overflow-x-auto">
       <table className="w-full min-w-[800px]">
@@ -121,7 +120,6 @@ export default function ProductsTable({
     </div>
   );
 
-  // Mobile Card View
   const MobileCards = () => (
     <div className="md:hidden space-y-3">
       {paginated.map((product, idx) => {

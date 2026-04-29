@@ -1,25 +1,14 @@
+import type {
+  OrderStatus,
+  OrderFilter,
+  Order,
+  OrderStats,
+} from "@/types/order";
+
+export type { OrderStatus, OrderFilter, Order, OrderStats };
+export type { PaymentStatus } from "@/types/order";
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-export type OrderStatus = "Delivered" | "Pending" | "Shipped" | "Cancelled";
-export type PaymentStatus = "Paid" | "Unpaid";
-export type OrderFilter = "all" | "completed" | "pending" | "cancelled";
-
-export interface Order {
-  id: string;
-  orderId: string;
-  product: { name: string; initials: string; color: string };
-  date: string;
-  price: number;
-  payment: PaymentStatus;
-  status: OrderStatus;
-}
-
-export interface OrderStats {
-  totalOrders: { value: number; growth: number };
-  newOrders: { value: number; growth: number };
-  completedOrders: { value: number; percentage: number };
-  canceledOrders: { value: number; growth: number };
-}
 
 export async function fetchOrderStats(): Promise<OrderStats> {
   await delay(400);
@@ -164,7 +153,6 @@ const BASE_ORDERS: Order[] = [
   },
 ];
 
-// Mutable copy used for simulated in-memory updates
 let ordersData: Order[] = BASE_ORDERS.map((o) => ({ ...o }));
 
 export async function fetchOrders(
