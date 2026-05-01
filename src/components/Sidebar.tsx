@@ -109,7 +109,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {
           label: "Transaction",
           icon: <CreditCard size={16} />,
-          href: "/transactions",
+          href: "transactions",
         },
       ],
     },

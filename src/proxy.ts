@@ -93,7 +93,7 @@ export async function proxy(request: NextRequest) {
   } catch {
     const response = NextResponse.redirect(new URL("/auth/login", request.url));
     // Optionally clear the invalid token
-    // response.cookies.delete("auth_token");
+    response.cookies.delete("auth_token");
     return response;
   }
 }
