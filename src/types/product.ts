@@ -78,3 +78,12 @@ export interface ProductsTableProps {
   onChangePrice: (product: CategoryProduct) => void;
   onDelete: (product: CategoryProduct) => void;
 }
+
+export type AddProductTaxOption = "yes" | "no";
+
+export type AddProductStockStatus = "In Stock" | "Out of Stock" | "Low Stock";
+
+export interface AddProductColor {
+  name: string;
+  value: string;
+}

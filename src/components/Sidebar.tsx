@@ -121,7 +121,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           icon: <PlusCircle size={16} />,
           href: "products/add",
         },
-        { label: "Product List", icon: <List size={16} />, href: "products" },
+        { label: "Product List", icon: <List size={16} />, href: "products/" },
         {
           label: "Product Reviews",
           icon: <Star size={16} />,
@@ -146,7 +146,22 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     },
   ];
 
-  const isNavActive = (href: string) => pathname.includes(href);
+  // Extract user ID from the first segment of the pathname
+  const userId = pathname.split("/")[1]; // e.g., "69cc90bae9d771796ecdd3b4"
+
+  // Helper to build an absolute path for the sidebar link
+  const getFullPath = (relativePath: string) => {
+    const clean = relativePath.replace(/^\//, "").replace(/\/$/, "");
+    return `/${userId}/${clean}`;
+  };
+
+  // Helper to check if a given relative path matches the current route
+  const isNavActive = (relativePath: string) => {
+    const segments = pathname.split("/").filter(Boolean);
+    const currentRoute = segments.slice(1).join("/");
+    const normalized = relativePath.replace(/^\//, "").replace(/\/$/, "");
+    return currentRoute === normalized;
+  };
 
   let translateClass = "";
   if (effectiveSide === "left") {
@@ -216,7 +231,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 {section.items.map((item) => (
                   <NavLink
                     key={item.label}
-                    item={item}
+                    item={{ ...item, href: getFullPath(item.href) }}
                     active={isNavActive(item.href)}
                     onClick={onClose}
                   />
