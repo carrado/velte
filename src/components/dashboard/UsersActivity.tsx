@@ -21,7 +21,7 @@ export default function UsersActivity() {
   const total = data?.total ?? 0;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5">
+    <div className="bg-white sm:rounded-2xl shadow-sm p-5">
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs text-orange-500 font-medium">
           Today's User Activity

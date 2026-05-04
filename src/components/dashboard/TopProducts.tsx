@@ -26,7 +26,7 @@ export default function TopProducts() {
   );
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5">
+    <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 py-5 px-3">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-[#111827]">Top Products</h3>
         <button className="text-xs text-orange-500 hover:underline cursor-pointer">

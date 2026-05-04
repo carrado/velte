@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
+import { NavigationProgressProvider } from "@/components/NavigationProgressContext";
+import AISetupTour from "@/components/AISetupTour";
+import { checkAISetup, hasDismissedTourThisSession } from "@/services/aiSetup";
 
 const PATH_TITLES: Record<string, string> = {
   dashboard: "Dashboard",
@@ -35,22 +38,41 @@ export default function DashboardRootLayout({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showTour, setShowTour] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [pathname]);
+
+  useEffect(() => {
+    if (hasDismissedTourThisSession()) return;
+    checkAISetup()
+      .then(({ isSetup }) => {
+        if (!isSetup) setShowTour(true);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
-    <div className="flex h-screen bg-[#F1F5F9] overflow-hidden">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <NavigationProgressProvider>
+      <div className="flex h-screen bg-[#F1F5F9] overflow-hidden">
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className="flex-1 overflow-y-auto pb-16 min-w-0">
-        <div className="p-4 md:p-6 space-y-6">
-          <Header
-            title={getTitle(pathname)}
-            onMenuClick={() => setSidebarOpen(true)}
-          />
-          {children}
-        </div>
-      </main>
+        <main ref={mainRef} className="flex-1 overflow-y-auto pb-16 min-w-0">
+          <div className="py-4 md:p-6 space-y-6">
+            <Header
+              title={getTitle(pathname)}
+              onMenuClick={() => setSidebarOpen(true)}
+            />
+            {children}
+          </div>
+        </main>
 
-      <BottomNav onMenuClick={() => setSidebarOpen(true)} />
-    </div>
+        <BottomNav onMenuClick={() => setSidebarOpen(true)} />
+      </div>
+
+      {showTour && <AISetupTour onDismiss={() => setShowTour(false)} />}
+    </NavigationProgressProvider>
   );
 }

@@ -80,7 +80,7 @@ export default function WeeklyReport() {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5">
+    <div className="bg-white sm:rounded-2xl shadow-sm p-5">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-[#111827]">
@@ -135,7 +135,7 @@ export default function WeeklyReport() {
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart
             data={chartData}
-            margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+            margin={{ top: 10, right: 10, left: -30, bottom: 0 }}
           >
             <defs>
               <linearGradient id="orangeGradient" x1="0" y1="0" x2="0" y2="1">

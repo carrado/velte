@@ -2,19 +2,24 @@
 
 import { useState } from "react";
 import {
-  Search,
-  SlidersHorizontal,
-  ArrowUpDown,
   MoreHorizontal,
   Link2,
   MoreVertical,
   ArrowUp,
   ArrowDown,
   CreditCard,
+  Search,
 } from "lucide-react";
 import { Pagination } from "@/components/Pagination";
 import { cn } from "@/lib/utils";
 import type { Transaction, TransactionTabFilter } from "@/types/transaction";
+import type { ColumnDef, FilterField } from "@/types/common";
+import FilterPopover from "../FilterPopover";
+import SortMenu from "../SortMenu";
+import TabBar from "../TabBar";
+import DataTable from "../DataTable";
+import MobileCard from "../MobileCard";
+import { Input } from "../ui/input";
 
 const MOCK_TRANSACTIONS: Transaction[] = [
   {
@@ -157,10 +162,58 @@ const MOCK_TRANSACTIONS: Transaction[] = [
 const ITEMS_PER_PAGE = 10;
 
 const STATUS_CONFIG = {
-  Complete: { dot: "bg-green-500", text: "text-green-500" },
-  Pending: { dot: "bg-yellow-400", text: "text-yellow-400" },
-  Canceled: { dot: "bg-red-500", text: "text-red-500" },
+  Complete: { dot: "bg-green-500", text: "text-green-600" },
+  Pending: { dot: "bg-yellow-400", text: "text-yellow-600" },
+  Canceled: { dot: "bg-red-500", text: "text-red-600" },
 } as const;
+
+type TxSortOption = "newest" | "oldest" | "amount_asc" | "amount_desc";
+
+const SORT_OPTIONS: { value: TxSortOption; label: string }[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "amount_asc", label: "Amount low to high" },
+  { value: "amount_desc", label: "Amount high to low" },
+];
+
+const DEFAULT_FILTERS: Record<string, string> = {
+  startDate: "",
+  endDate: "",
+  paymentMethod: "all",
+  txStatus: "all",
+};
+
+const TX_FILTER_FIELDS: FilterField[] = [
+  {
+    type: "select",
+    key: "paymentMethod",
+    label: "Payment Method",
+    options: [
+      { value: "all", label: "All" },
+      { value: "CC", label: "Credit Card" },
+      { value: "PayPal", label: "PayPal" },
+      { value: "Bank", label: "Bank Transfer" },
+    ],
+  },
+  {
+    type: "select",
+    key: "txStatus",
+    label: "Transaction Status",
+    options: [
+      { value: "all", label: "All" },
+      { value: "Complete", label: "Complete" },
+      { value: "Pending", label: "Pending" },
+      { value: "Canceled", label: "Canceled" },
+    ],
+  },
+];
+
+const TABS: { key: TransactionTabFilter; label: string }[] = [
+  { key: "all", label: "All order" },
+  { key: "completed", label: "Completed" },
+  { key: "pending", label: "Pending" },
+  { key: "canceled", label: "Canceled" },
+];
 
 function StatCard({
   title,
@@ -174,15 +227,15 @@ function StatCard({
   positive?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 flex flex-col gap-2">
+    <div className="bg-white sm:rounded-lg shadow-sm p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <p className="text-base font-bold text-[#23272e]">{title}</p>
         <button className="text-gray-400 hover:text-gray-600 cursor-pointer">
           <MoreVertical size={18} />
         </button>
       </div>
-      <div className="flex items-end gap-2">
-        <p className="text-3xl font-bold text-[#023337]">{value}</p>
+      <div className="flex items-end gap-2 flex-wrap">
+        <p className="text-2xl sm:text-3xl font-bold text-[#023337]">{value}</p>
         <div
           className={cn(
             "flex items-center text-sm font-medium mb-1",
@@ -198,10 +251,23 @@ function StatCard({
   );
 }
 
+function TxStatusBadge({ status }: { status: Transaction["status"] }) {
+  const s = STATUS_CONFIG[status];
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <div className={cn("w-2 h-2 rounded-full", s.dot)} />
+      <span className={cn("text-sm", s.text)}>{status}</span>
+    </div>
+  );
+}
+
 export default function TransactionsPage() {
   const [activeTab, setActiveTab] = useState<TransactionTabFilter>("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState<TxSortOption>("newest");
+  const [filters, setFilters] =
+    useState<Record<string, string>>(DEFAULT_FILTERS);
 
   const filtered = MOCK_TRANSACTIONS.filter((t) => {
     const matchesTab =
@@ -214,7 +280,12 @@ export default function TransactionsPage() {
       !q ||
       t.name.toLowerCase().includes(q) ||
       t.customerId.toLowerCase().includes(q);
-    return matchesTab && matchesSearch;
+    const matchesMethod =
+      filters["paymentMethod"] === "all" ||
+      t.method === filters["paymentMethod"];
+    const matchesTxStatus =
+      filters["txStatus"] === "all" || t.status === filters["txStatus"];
+    return matchesTab && matchesSearch && matchesMethod && matchesTxStatus;
   });
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -228,306 +299,254 @@ export default function TransactionsPage() {
     setCurrentPage(1);
   };
 
-  const handleSearch = (value: string) => {
-    setSearch(value);
-    setCurrentPage(1);
+  const tabCounts = {
+    all: MOCK_TRANSACTIONS.length,
   };
 
-  const tabs: { key: TransactionTabFilter; label: string }[] = [
-    { key: "all", label: "All order" },
-    { key: "completed", label: "Completed" },
-    { key: "pending", label: "Pending" },
-    { key: "canceled", label: "Canceled" },
+  const columns: ColumnDef<Transaction>[] = [
+    {
+      key: "customerId",
+      header: "Customer Id",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (t) => t.customerId,
+    },
+    {
+      key: "name",
+      header: "Name",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (t) => t.name,
+    },
+    {
+      key: "date",
+      header: "Date",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (t) => t.date,
+    },
+    {
+      key: "total",
+      header: "Total",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (t) => t.total,
+    },
+    {
+      key: "method",
+      header: "Method",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (t) => t.method,
+    },
+    {
+      key: "status",
+      header: "Status",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (t) => <TxStatusBadge status={t.status} />,
+    },
+    {
+      key: "action",
+      header: "Action",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: () => (
+        <button className="text-sm text-indigo-500 hover:underline cursor-pointer">
+          View Details
+        </button>
+      ),
+    },
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Top row: stat cards + payment method */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* 2×2 stat grid */}
-        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-          <StatCard
-            title="Total Revenue"
-            value="$15,045"
-            change="14.4%"
-            positive
-          />
-          <StatCard
-            title="Completed Transactions"
-            value="3,150"
-            change="20%"
-            positive
-          />
-          <StatCard
-            title="Pending Transactions"
-            value="150"
-            change="85%"
-            positive
-          />
-          <StatCard
-            title="Failed Transactions"
-            value="75"
-            change="15%"
-            positive={false}
-          />
+    <div className="space-y-5">
+      <div className="flex flex-col lg:flex-row gap-4">
+        <div className="flex-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <StatCard
+              title="Total Revenue"
+              value="$15,045"
+              change="14.4%"
+              positive
+            />
+            <StatCard
+              title="Completed Transactions"
+              value="3,150"
+              change="20%"
+              positive
+            />
+            <StatCard
+              title="Pending Transactions"
+              value="150"
+              change="85%"
+              positive
+            />
+            <StatCard
+              title="Failed Transactions"
+              value="75"
+              change="15%"
+              positive={false}
+            />
+          </div>
         </div>
 
-        {/* Payment Method */}
-        <div className="bg-white rounded-lg shadow-sm p-5 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <p className="text-base font-bold text-[#23272e]">Payment Method</p>
-            <button className="text-gray-400 hover:text-gray-600 cursor-pointer">
-              <MoreVertical size={18} />
-            </button>
-          </div>
-
-          {/* Credit card visual */}
-          <div className="relative rounded-xl p-4 text-white h-36 flex flex-col justify-between overflow-hidden bg-gradient-to-br from-orange-500 to-orange-700">
-            <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10 pointer-events-none" />
-            <div className="absolute -right-2 bottom-2 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
-            <div className="flex items-center justify-between relative z-10">
-              <p className="text-sm font-semibold tracking-wide">Finaci</p>
-              <CreditCard size={20} className="opacity-80" />
-            </div>
-            <div className="relative z-10">
-              <p className="text-sm tracking-[0.18em] font-mono opacity-80">
-                •••• •••• •••• 2345
+        <div className="lg:w-[360px] w-full flex-shrink-0">
+          <div className="bg-white sm:rounded-lg shadow-sm p-5 flex flex-col gap-4 h-full">
+            <div className="flex items-center justify-between">
+              <p className="text-base font-bold text-[#23272e]">
+                Payment Method
               </p>
-              <div className="flex justify-between mt-1 text-[11px] opacity-70">
-                <span>Naman Manzoor</span>
-                <span>02/30</span>
+              <button className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <MoreVertical size={18} />
+              </button>
+            </div>
+
+            <div className="relative rounded-xl p-4 text-white h-36 flex flex-col justify-between overflow-hidden bg-gradient-to-br from-orange-500 to-orange-700">
+              <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
+              <div className="absolute -right-2 bottom-2 w-20 h-20 rounded-full bg-white/10" />
+              <div className="flex items-center justify-between relative z-10">
+                <p className="text-sm font-semibold tracking-wide">Finaci</p>
+                <CreditCard size={20} className="opacity-80" />
+              </div>
+              <div className="relative z-10">
+                <p className="text-sm tracking-[0.18em] font-mono opacity-80">
+                  •••• •••• •••• 2345
+                </p>
+                <div className="flex justify-between mt-1 text-[11px] opacity-70">
+                  <span>Naman Manzoor</span>
+                  <span>02/30</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Card info */}
-          <div className="space-y-1.5 text-sm">
-            <p>
-              <span className="text-gray-500">Status: </span>
-              <span className="text-green-500 font-medium">Active</span>
-            </p>
-            <p>
-              <span className="text-gray-500">Transactions: </span>
-              <span className="text-[#023337]">1,250</span>
-            </p>
-            <p>
-              <span className="text-gray-500">Revenue: </span>
-              <span className="text-[#023337] font-bold">$50,000</span>
-            </p>
-            <button className="text-indigo-500 hover:underline cursor-pointer text-left">
-              View Transactions
-            </button>
-          </div>
+            <div className="space-y-1.5 text-sm">
+              <p>
+                <span className="text-gray-500">Status: </span>
+                <span className="text-green-500 font-medium">Active</span>
+              </p>
+              <p>
+                <span className="text-gray-500">Transactions: </span>
+                <span className="text-[#023337]">1,250</span>
+              </p>
+              <p>
+                <span className="text-gray-500">Revenue: </span>
+                <span className="text-[#023337] font-bold">$50,000</span>
+              </p>
+              <button className="text-indigo-500 hover:underline cursor-pointer text-left">
+                View Transactions
+              </button>
+            </div>
 
-          {/* Actions */}
-          <div className="flex gap-2 mt-auto pt-1">
-            <button className="flex-1 flex items-center justify-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
-              <Link2 size={15} />
-              Generate Payment Link
-            </button>
-            <button className="border border-red-200 bg-red-50 text-red-500 rounded-lg px-3 py-2 text-sm hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap">
-              Deactivate
-            </button>
+            <div className="flex gap-2 mt-auto pt-1">
+              <button className="flex-1 flex items-center justify-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
+                <Link2 size={15} />
+                Generate Link
+              </button>
+              <button className="border border-red-200 bg-red-50 text-red-500 rounded-lg px-3 py-2 text-sm hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap">
+                Deactivate
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Transaction table */}
-      <div className="bg-white rounded-lg shadow-sm py-6 flex flex-col gap-6">
-        {/* Controls */}
-        <div className="flex items-center justify-between px-6 flex-wrap gap-3">
-          {/* Status tabs */}
-          <div className="bg-orange-50 flex items-center gap-0.5 p-1 rounded-lg flex-wrap">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => handleTabChange(tab.key)}
-                className={cn(
-                  "px-3 py-1.5 rounded-md text-sm transition-colors cursor-pointer whitespace-nowrap",
-                  activeTab === tab.key
-                    ? "bg-white text-black font-medium shadow-sm"
-                    : "text-gray-600 hover:text-gray-800",
-                )}
-              >
-                {tab.key === "all" ? (
-                  <>
-                    All order{" "}
-                    <span className="text-orange-500 font-bold text-xs">
-                      ({MOCK_TRANSACTIONS.length})
-                    </span>
-                  </>
-                ) : (
-                  tab.label
-                )}
-              </button>
-            ))}
-          </div>
+      <div className="bg-white sm:rounded-lg shadow-sm overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:p-4 py-4 px-3 gap-3 border-b border-gray-100">
+          <TabBar
+            tabs={TABS.map((t) => ({
+              ...t,
+              count: t.key === "all" ? tabCounts.all : undefined,
+            }))}
+            activeTab={activeTab}
+            onChange={handleTabChange}
+          />
 
-          {/* Search + filter buttons */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 w-60">
-              <input
+          <div className="flex items-center justify-between w-full sm:w-auto gap-2">
+            <div className="relative flex-1">
+              <Input
                 type="text"
-                placeholder="Search payment history"
                 value={search}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="flex-1 bg-transparent text-sm outline-none text-gray-700 placeholder-gray-400 min-w-0"
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Search transactions"
+                className="pl-3 pr-9 py-2 text-sm bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
               />
-              <Search size={16} className="text-gray-400 shrink-0" />
+              <Search
+                size={16}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6a717f]"
+              />
             </div>
-            <button className="border border-gray-300 bg-white p-2 rounded hover:bg-gray-50 transition-colors cursor-pointer">
-              <SlidersHorizontal size={18} className="text-gray-600" />
-            </button>
-            <button className="border border-gray-300 bg-white p-2 rounded hover:bg-gray-50 transition-colors cursor-pointer">
-              <ArrowUpDown size={18} className="text-gray-600" />
-            </button>
-            <button className="border border-gray-300 bg-white p-2 rounded hover:bg-gray-50 transition-colors cursor-pointer">
-              <MoreHorizontal size={18} className="text-gray-600" />
-            </button>
+            <FilterPopover
+              values={filters}
+              defaultValues={DEFAULT_FILTERS}
+              fields={TX_FILTER_FIELDS}
+              onApply={(newFilters) => {
+                setFilters(newFilters);
+                setCurrentPage(1);
+              }}
+              onReset={() => {
+                setFilters(DEFAULT_FILTERS);
+                setCurrentPage(1);
+              }}
+            />
+            <SortMenu
+              currentSort={sortBy}
+              onSort={(option) => {
+                setSortBy(option);
+                setCurrentPage(1);
+              }}
+              options={SORT_OPTIONS}
+            />
           </div>
         </div>
 
-        {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-orange-50">
-                <th className="px-4 py-3 text-sm font-medium text-[#023337] text-center">
-                  Customer Id
-                </th>
-                <th className="px-4 py-3 text-sm font-medium text-[#023337] text-center">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-sm font-medium text-[#023337] text-center">
-                  Date
-                </th>
-                <th className="px-4 py-3 text-sm font-medium text-[#023337] text-center">
-                  Total
-                </th>
-                <th className="px-4 py-3 text-sm font-medium text-[#023337] text-center">
-                  Method
-                </th>
-                <th className="px-4 py-3 text-sm font-medium text-[#023337] text-center">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-sm font-medium text-[#023337] text-center">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.map((tx) => {
-                const s = STATUS_CONFIG[tx.status];
-                return (
-                  <tr
-                    key={tx.id}
-                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-4 py-3 text-center text-sm text-black">
-                      {tx.customerId}
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm text-black">
-                      {tx.name}
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm text-black">
-                      {tx.date}
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm text-black">
-                      {tx.total}
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm text-black">
-                      {tx.method}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-2">
-                        <div
-                          className={cn(
-                            "w-2 h-2 rounded-full flex-shrink-0",
-                            s.dot,
-                          )}
-                        />
-                        <span className={cn("text-sm", s.text)}>
-                          {tx.status}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button className="text-sm text-indigo-500 hover:underline cursor-pointer">
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {paginated.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="py-12 text-center text-sm text-gray-400"
-                  >
-                    No transactions found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="md:hidden px-4 space-y-3">
-          {paginated.map((tx) => {
+        <DataTable
+          columns={columns}
+          data={paginated}
+          keyExtractor={(t) => t.id}
+          emptyMessage="No transactions found."
+          mobileCard={(tx) => {
             const s = STATUS_CONFIG[tx.status];
             return (
-              <div
-                key={tx.id}
-                className="border border-gray-100 rounded-lg p-4 space-y-3"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">
-                      {tx.name}
-                    </p>
-                    <p className="text-xs text-gray-400">{tx.customerId}</p>
-                  </div>
+              <MobileCard
+                title={tx.name}
+                subtitle={tx.customerId}
+                badge={
                   <div className="flex items-center gap-1.5">
                     <div className={cn("w-2 h-2 rounded-full", s.dot)} />
                     <span className={cn("text-xs font-medium", s.text)}>
                       {tx.status}
                     </span>
                   </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <p className="text-gray-400">Date</p>
-                    <p className="font-medium text-gray-700">{tx.date}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Total</p>
-                    <p className="font-medium text-gray-700">{tx.total}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Method</p>
-                    <p className="font-medium text-gray-700">{tx.method}</p>
-                  </div>
-                </div>
-                <button className="text-sm text-indigo-500 hover:underline cursor-pointer">
-                  View Details
-                </button>
-              </div>
+                }
+                fields={[
+                  { label: "Date", value: tx.date },
+                  { label: "Total", value: tx.total },
+                  { label: "Method", value: tx.method },
+                ]}
+                gridCols={3}
+                footer={
+                  <button className="text-sm text-indigo-500 hover:underline cursor-pointer">
+                    View Details
+                  </button>
+                }
+              />
             );
-          })}
-          {paginated.length === 0 && (
-            <div className="py-10 text-center text-sm text-gray-400">
-              No transactions found.
-            </div>
-          )}
-        </div>
-
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
+          }}
         />
+
+        {totalPages > 1 && (
+          <div className="px-4 py-4">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -58,7 +58,7 @@ export default function SalesByMonth() {
   });
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5 flex flex-col">
+    <div className="bg-white sm:rounded-2xl shadow-sm p-5 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-[#111827]">

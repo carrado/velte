@@ -33,7 +33,7 @@ export default function AddNewProduct() {
   );
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5">
+    <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 px-3 py-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-[#111827]">
           Add New Product

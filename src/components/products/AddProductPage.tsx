@@ -16,6 +16,13 @@ import {
 import { cn } from "@/lib/utils";
 import type { AddProductTaxOption, AddProductColor } from "@/types/product";
 import { Input } from "../ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type TaxType = "percentage" | "fixed";
 type MediaType = "image" | "video";
@@ -187,7 +194,7 @@ export default function AddProductPage() {
       {/* Two-column layout */}
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* ── Left column: Basic Details + Pricing + Inventory ── */}
-        <div className="bg-white rounded-lg shadow-sm flex-1 lg:min-w-0 w-full p-6 space-y-6">
+        <div className="bg-white sm:rounded-lg shadow-sm flex-1 lg:min-w-0 w-full p-4 sm:p-6 space-y-6">
           {/* Basic Details */}
           <h3 className="text-xl font-bold text-[#23272e]">Basic Details</h3>
 
@@ -271,7 +278,8 @@ export default function AddProductPage() {
             </div>
           </div>
 
-          <div className="flex gap-5">
+          {/* Discounted Price + Tax Included row: stack on mobile */}
+          <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-1 min-w-0 space-y-3">
               <label className="block text-sm font-bold text-[#023337]">
                 Discounted Price{" "}
@@ -335,8 +343,8 @@ export default function AddProductPage() {
 
           {/* Tax value input (only when tax included) */}
           {taxIncluded === "yes" && (
-            <div className="flex gap-4 items-end">
-              <div className="flex-1 space-y-2">
+            <div className="flex flex-col sm:flex-row gap-4 items-end">
+              <div className="flex-1 space-y-2 w-full">
                 <label className="block text-sm font-bold text-[#023337]">
                   Tax Amount
                 </label>
@@ -381,7 +389,7 @@ export default function AddProductPage() {
 
           {/* Dates */}
           <h3 className="text-xl font-bold text-[#23272e]">Dates</h3>
-          <div className="flex gap-5">
+          <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-1 relative space-y-2">
               <label className="block text-sm font-bold text-[#023337]">
                 Manufacturing Date
@@ -429,7 +437,7 @@ export default function AddProductPage() {
           {/* Inventory */}
           <h3 className="text-xl font-bold text-[#23272e]">Inventory</h3>
 
-          <div className="flex gap-5">
+          <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-1 min-w-0 space-y-3">
               <label className="block text-sm font-bold text-[#023337]">
                 Stock Quantity
@@ -501,8 +509,8 @@ export default function AddProductPage() {
         </div>
 
         {/* ── Right column: Upload + Categories + Tags + Attributes ── */}
-        <div className="bg-white rounded-lg shadow-sm w-full lg:w-[485px] flex-shrink-0 p-6 space-y-6">
-          {/* Media Upload Section */}
+        <div className="bg-white sm:rounded-lg shadow-sm w-full lg:w-[485px] flex-shrink-0 p-4 sm:p-6 space-y-6">
+          {/* Media Upload Section (unchanged) */}
           <div>
             <h3 className="text-xl font-bold text-[#23272e] mb-4">
               Upload Media
@@ -683,19 +691,19 @@ export default function AddProductPage() {
             <label className="block text-sm font-bold text-[#023337]">
               Product Categories
             </label>
-            <div className="relative">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full h-11 px-3 pr-9 appearance-none bg-white shadow-[0px_1px_1.5px_rgba(0,0,0,0.2)] rounded-lg text-sm text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-              >
-                <option value="">Select your product</option>
-              </select>
-              <ChevronDown
-                size={16}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-              />
-            </div>
+            <Select
+              value={selectedCategory}
+              onValueChange={(v) => setSelectedCategory(v ?? "")}
+            >
+              <SelectTrigger className="w-full h-11 bg-white shadow-[0px_1px_1.5px_rgba(0,0,0,0.2)] border-0 rounded-lg text-sm text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
+                <SelectValue placeholder="Select your product" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="" disabled>
+                  Select your product
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Product Tags (chips input) */}
@@ -729,7 +737,7 @@ export default function AddProductPage() {
             />
           </div>
 
-          {/* Add Attributes */}
+          {/* Add Attributes - with smaller button on mobile */}
           <div className="space-y-3">
             <h3 className="text-xl font-bold text-[#23272e]">Add Attributes</h3>
             <div className="flex gap-2">
@@ -749,9 +757,9 @@ export default function AddProductPage() {
               />
               <button
                 onClick={addAttribute}
-                className="px-4 h-12 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                className="px-2 sm:px-4 w-8 sm:w-12 sm:h-12 h-8 mt-2 sm:mt-0 bg-orange-500 text-white sm:rounded-lg rounded-sm hover:bg-orange-600 transition-colors flex items-center justify-center"
               >
-                <Plus size={20} />
+                <Plus size={20} className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
             {attributes.length > 0 && (
@@ -782,7 +790,7 @@ export default function AddProductPage() {
       </div>
 
       {/* Bottom action buttons - visible on mobile only */}
-      <div className="lg:hidden">
+      <div className="lg:hidden -mt-3">
         <ActionButtons />
       </div>
     </div>

@@ -1,17 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  Plus,
-  MoreHorizontal,
-  Search,
-  Pencil,
-  Trash2,
-  X,
-  SlidersHorizontal,
-  SquarePlus,
-  AlignJustify,
-} from "lucide-react";
+import { Plus, MoreHorizontal, Search, Pencil, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORIES_DATA, PRODUCTS_DATA } from "@/services/products";
 import type {
@@ -23,9 +13,15 @@ import type {
   RestockModalProps,
   PriceModalProps,
 } from "@/types/product";
+import type { FilterField } from "@/types/common";
 import DeleteProductModal from "./DeleteProductModal";
 import ProductsTable from "./ProductsTable";
 import { Pagination } from "../Pagination";
+import { useNavigation } from "../NavigationProgressContext";
+import TabBar from "../TabBar";
+import FilterPopover from "../FilterPopover";
+import SortMenu from "../SortMenu";
+import { Input } from "../ui/input";
 
 const EMOJI_OPTIONS = [
   "🛒",
@@ -53,6 +49,34 @@ const BG_OPTIONS = [
 ];
 
 const ITEMS_PER_PAGE = 10;
+
+type ProductSort = "newest" | "oldest" | "price_asc" | "price_desc";
+
+const PRODUCT_SORT_OPTIONS: { value: ProductSort; label: string }[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "price_asc", label: "Price low to high" },
+  { value: "price_desc", label: "Price high to low" },
+];
+
+const DEFAULT_PRODUCT_FILTERS: Record<string, string> = {
+  startDate: "",
+  endDate: "",
+  stockStatus: "all",
+};
+
+const PRODUCT_FILTER_FIELDS: FilterField[] = [
+  {
+    type: "select",
+    key: "stockStatus",
+    label: "Stock Status",
+    options: [
+      { value: "all", label: "All" },
+      { value: "in-stock", label: "In Stock" },
+      { value: "out-of-stock", label: "Out of Stock" },
+    ],
+  },
+];
 
 function CategoryModal({
   open,
@@ -366,7 +390,7 @@ function CategoryCard({
   return (
     <div
       className={cn(
-        "relative bg-white rounded-lg shadow-sm p-3 flex items-center gap-3 cursor-pointer transition-all border-2",
+        "relative bg-white sm:rounded-lg shadow-sm p-3 flex items-center gap-3 cursor-pointer transition-all border-2",
         selected
           ? "border-[#4ea674] shadow-md"
           : "border-transparent hover:border-gray-200",
@@ -454,7 +478,12 @@ export default function ProductsPage() {
     product: CategoryProduct | null;
   }>({ open: false, product: null });
 
-  const filteredProducts = products.filter((p) => {
+  const [productFilters, setProductFilters] = useState<Record<string, string>>(
+    DEFAULT_PRODUCT_FILTERS,
+  );
+  const [productSort, setProductSort] = useState<ProductSort>("newest");
+
+  let filteredProducts = products.filter((p) => {
     if (selectedCategoryId && p.categoryId !== selectedCategoryId) return false;
     if (activeTab === "featured" && !p.featured) return false;
     if (activeTab === "on-sale" && (!p.onSale || !p.inStock)) return false;
@@ -464,11 +493,30 @@ export default function ProductsPage() {
       !p.name.toLowerCase().includes(searchQuery.toLowerCase())
     )
       return false;
+    if (productFilters["stockStatus"] === "in-stock" && !p.inStock)
+      return false;
+    if (productFilters["stockStatus"] === "out-of-stock" && p.inStock)
+      return false;
     return true;
+  });
+
+  filteredProducts = [...filteredProducts].sort((a, b) => {
+    if (productSort === "newest")
+      return b.createdDate.localeCompare(a.createdDate);
+    if (productSort === "oldest")
+      return a.createdDate.localeCompare(b.createdDate);
+    if (productSort === "price_asc") return a.price - b.price;
+    if (productSort === "price_desc") return b.price - a.price;
+    return 0;
   });
 
   const totalFiltered = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / ITEMS_PER_PAGE));
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedProducts = filteredProducts.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE,
+  );
 
   const allCount = products.filter(
     (p) => !selectedCategoryId || p.categoryId === selectedCategoryId,
@@ -559,15 +607,18 @@ export default function ProductsPage() {
     { key: "out-of-stock", label: "Out of Stock" },
   ];
 
+  const { navigate } = useNavigation();
+
   return (
     <div className="w-full space-y-4 sm:px-0 lg:pb-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold tracking-wide text-[#023337]">
-          Discover
-        </h1>
+        <h1 className="text-xl font-bold tracking-wide text-[#023337]"></h1>
 
-        <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto sm:items-center">
-          <button className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 text-sm font-bold text-white transition-colors hover:bg-orange-600 sm:w-auto">
+        <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto px-5 sm:items-center">
+          <button
+            onClick={() => navigate("products/add")}
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 text-sm font-bold text-white transition-colors hover:bg-orange-600 sm:w-auto"
+          >
             <Plus size={18} />
             <span className="truncate">Add Product</span>
           </button>
@@ -601,64 +652,65 @@ export default function ProductsPage() {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-lg bg-white shadow-sm">
-        <div className="flex flex-col gap-3 px-3 pb-4 pt-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="grid w-full grid-cols-2 gap-1 rounded-lg bg-orange-50 p-1 sm:grid-cols-4 lg:w-auto">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => {
-                  setActiveTab(tab.key);
-                  setCurrentPage(1);
-                }}
-                className={cn(
-                  "flex items-center justify-center gap-1 rounded-md px-2 py-2 text-center text-xs transition-colors sm:px-3 sm:text-sm",
-                  activeTab === tab.key
-                    ? "bg-white font-medium text-black shadow-sm"
-                    : "text-gray-600 hover:text-gray-800",
-                )}
-              >
-                <span className="truncate">{tab.label}</span>
-                {tab.key === "all" && (
-                  <span className="text-xs font-bold text-orange-500">
-                    ({allCount})
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+      <div className="overflow-hidden sm:rounded-lg bg-white shadow-sm">
+        <div className="flex flex-col gap-3 px-3 pb-4 pt-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between border-b border-gray-100">
+          <TabBar
+            tabs={tabs.map((t) => ({
+              ...t,
+              count: t.key === "all" ? allCount : undefined,
+            }))}
+            activeTab={activeTab}
+            onChange={(tab) => {
+              setActiveTab(tab);
+              setCurrentPage(1);
+            }}
+            className="sm:grid-cols-4"
+          />
 
           <div className="flex w-full items-center gap-2 lg:w-auto">
-            <div className="flex w-full flex-1 items-center gap-2 rounded-lg border border-transparent bg-gray-50 py-1.5 pl-3 pr-2 focus-within:border-gray-200 lg:w-56 lg:flex-none">
-              <input
+            <div className="relative flex-1">
+              <Input
                 type="text"
-                placeholder="Search your product"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-sm text-gray-600 outline-none placeholder:text-gray-400"
+                placeholder="Search order report"
+                className="pl-3 pr-9 py-2 text-sm bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
               />
-              <Search size={18} className="shrink-0 text-gray-400" />
+              <Search
+                size={16}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6a717f]"
+              />
             </div>
 
-            <button className="shrink-0 rounded border border-gray-200 bg-white p-2.5 transition-colors hover:bg-gray-50">
-              <SlidersHorizontal size={18} className="text-gray-500" />
-            </button>
+            <FilterPopover
+              values={productFilters}
+              defaultValues={DEFAULT_PRODUCT_FILTERS}
+              fields={PRODUCT_FILTER_FIELDS}
+              onApply={(newFilters) => {
+                setProductFilters(newFilters);
+                setCurrentPage(1);
+              }}
+              onReset={() => {
+                setProductFilters(DEFAULT_PRODUCT_FILTERS);
+                setCurrentPage(1);
+              }}
+            />
 
-            <button className="hidden shrink-0 rounded border border-gray-200 bg-white p-2.5 transition-colors hover:bg-gray-50 sm:block">
-              <SquarePlus size={20} className="text-gray-500" />
-            </button>
-
-            <button className="hidden shrink-0 rounded border border-gray-200 bg-white p-2.5 transition-colors hover:bg-gray-50 sm:block">
-              <AlignJustify size={18} className="text-gray-500" />
-            </button>
+            <SortMenu
+              currentSort={productSort}
+              onSort={(option) => {
+                setProductSort(option);
+                setCurrentPage(1);
+              }}
+              options={PRODUCT_SORT_OPTIONS}
+            />
           </div>
         </div>
 
         <div className="w-full overflow-x-auto">
           <ProductsTable
-            products={filteredProducts}
-            currentPage={currentPage}
-            itemsPerPage={ITEMS_PER_PAGE}
+            products={paginatedProducts}
+            rowOffset={startIndex}
             onRestock={(product: CategoryProduct) =>
               setRestockModal({ open: true, product })
             }

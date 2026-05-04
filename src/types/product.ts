@@ -72,8 +72,7 @@ export interface ProductActionsPopoverProps {
 
 export interface ProductsTableProps {
   products: CategoryProduct[];
-  currentPage: number;
-  itemsPerPage: number;
+  rowOffset?: number;
   onRestock: (product: CategoryProduct) => void;
   onChangePrice: (product: CategoryProduct) => void;
   onDelete: (product: CategoryProduct) => void;

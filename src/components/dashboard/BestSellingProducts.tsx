@@ -39,15 +39,11 @@ export default function BestSellingProducts() {
   });
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5">
+    <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 py-5 px-3">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-[#111827]">
           Best selling product
         </h3>
-        <button className="flex items-center gap-2 bg-orange-500 text-white rounded-lg px-4 py-2 text-xs font-medium hover:bg-orange-600 transition-colors cursor-pointer">
-          <SlidersHorizontal size={13} />
-          Filter
-        </button>
       </div>
 
       <div className="overflow-x-auto">
@@ -75,7 +71,7 @@ export default function BestSellingProducts() {
                     key={i}
                     className="border-b border-[#E5E7EB] animate-pulse"
                   >
-                    <td className="py-3 px-3">
+                    <td className="py-3">
                       <div className="flex items-center gap-2">
                         <div className="w-9 h-9 bg-gray-200 rounded-lg" />
                         <div className="h-3 bg-gray-200 rounded w-20" />
@@ -99,7 +95,7 @@ export default function BestSellingProducts() {
                       index === 0 ? "mt-1" : ""
                     }`}
                   >
-                    <td className="py-3 px-3">
+                    <td className="py-3">
                       <div className="flex items-center gap-2">
                         <ProductImage />
                         <span className="font-medium text-[#111827]">

@@ -28,7 +28,7 @@ export default function TransactionTable() {
   });
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5">
+    <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 py-5 px-3">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-[#111827]">Transaction</h3>
         <button className="flex items-center gap-2 bg-orange-500 text-white rounded-lg px-4 py-2 text-xs font-medium hover:bg-orange-600 transition-colors cursor-pointer">
@@ -42,9 +42,7 @@ export default function TransactionTable() {
           <thead>
             <tr className="border-b border-[#E5E7EB]">
               <th className="text-left pb-3 text-[#9CA3AF] font-medium">No</th>
-              <th className="text-left pb-3 text-[#9CA3AF] font-medium">
-                Id Customer
-              </th>
+              <th className="text-left pb-3 text-[#9CA3AF] font-medium">Id</th>
               <th className="text-left pb-3 text-[#9CA3AF] font-medium">
                 Order Date
               </th>
@@ -86,7 +84,9 @@ export default function TransactionTable() {
                     className="border-b border-[#E5E7EB] last:border-0 hover:bg-gray-50 transition-colors"
                   >
                     <td className="py-3 text-[#6B7280]">{index + 1}</td>
-                    <td className="py-3 font-medium text-[#111827]">{tx.id}</td>
+                    <td className="py-3 font-medium text-[#111827] underline">
+                      {tx.id}
+                    </td>
                     <td className="py-3 text-[#6B7280]">{tx.date}</td>
                     <td className="py-3">
                       <StatusBadge status={tx.status} />

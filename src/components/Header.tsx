@@ -16,7 +16,7 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
   }, []);
 
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex items-center px-5 sm:px-0 justify-between gap-4">
       <div className="flex items-center gap-3">
         <h1 className="font-semibold text-xl text-[#111827] whitespace-nowrap">
           {title}

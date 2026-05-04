@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
 import {
   AlignLeft,
@@ -34,11 +34,16 @@ function NavLink({
   active: boolean;
   onClick?: () => void;
 }) {
+  const { navigate } = useNavigation();
+
   return (
-    <Link
-      href={item.href}
-      onClick={onClick}
-      className={`flex items-center gap-3 py-2 px-3 rounded-lg text-sm cursor-pointer transition-colors ${
+    <button
+      id={item.id}
+      onClick={() => {
+        onClick?.();
+        navigate(item.href);
+      }}
+      className={`w-full flex items-center gap-3 py-2 px-3 rounded-lg text-sm cursor-pointer transition-colors ${
         active ? "bg-orange-500 text-white" : "text-gray-600 hover:bg-gray-100"
       }`}
     >
@@ -46,7 +51,7 @@ function NavLink({
         {item.icon}
       </span>
       <span>{item.label}</span>
-    </Link>
+    </button>
   );
 }
 
@@ -133,9 +138,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: "Admin",
       items: [
         {
-          label: "Admin role",
+          label: "AI Settings",
           icon: <Shield size={16} />,
           href: "/admin/role",
+          id: "ai-settings-nav",
         },
         {
           label: "Settings",

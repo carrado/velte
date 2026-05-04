@@ -69,25 +69,30 @@ export function Pagination({
   return (
     <div
       className={cn(
-        "flex items-center justify-between px-4 py-4 gap-1 flex-wrap border-t border-gray-100",
+        // Full width, no wrap, horizontal scroll if needed
+        "flex items-center justify-between px-2 sm:px-4 py-4 gap-1 sm:gap-2 border-t border-gray-100 overflow-x-auto",
+        "flex-nowrap",
         className,
       )}
     >
+      {/* Previous button */}
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
       >
         <ChevronLeft size={16} />
-        Previous
+        <span className="hidden sm:inline">Previous</span>
+        <span className="sm:hidden">Prev</span>
       </button>
 
-      <div className="flex items-center gap-1.5 flex-wrap">
+      {/* Page numbers section – also flex-nowrap */}
+      <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap flex-shrink-0">
         {pageNumbers.map((page, idx) =>
           page === "..." ? (
             <span
               key={`dots-${idx}`}
-              className="w-8 h-8 flex items-center justify-center text-sm font-medium text-[#023337]"
+              className="w-6 sm:w-8 h-8 flex items-center justify-center text-sm font-medium text-[#023337]"
             >
               …
             </span>
@@ -96,7 +101,7 @@ export function Pagination({
               key={page}
               onClick={() => onPageChange(page as number)}
               className={cn(
-                "w-8 h-8 flex items-center justify-center rounded text-sm transition-colors cursor-pointer",
+                "w-6 sm:w-8 h-8 flex items-center justify-center rounded text-sm transition-colors cursor-pointer",
                 currentPage === page
                   ? "bg-orange-200 text-[#023337] font-medium"
                   : "border border-gray-200 text-[#023337] hover:bg-gray-50",
@@ -108,12 +113,14 @@ export function Pagination({
         )}
       </div>
 
+      {/* Next button */}
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
       >
-        Next
+        <span className="hidden sm:inline">Next</span>
+        <span className="sm:hidden">Next</span>
         <ChevronRight size={16} />
       </button>
     </div>

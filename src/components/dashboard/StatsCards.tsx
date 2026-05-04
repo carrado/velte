@@ -6,7 +6,7 @@ import { fetchDashboardStats } from "@/services/dashboard";
 
 function SkeletonCard() {
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5 animate-pulse">
+    <div className="bg-white sm:rounded-2xl shadow-sm p-5 animate-pulse">
       <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
       <div className="h-8 bg-gray-200 rounded w-1/2 mb-2" />
       <div className="h-4 bg-gray-200 rounded w-2/3 mb-4" />
@@ -36,7 +36,7 @@ export default function StatsCards() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {/* Card 1: Total Sales */}
-      <div className="bg-white rounded-2xl shadow-sm p-5">
+      <div className="bg-white sm:rounded-2xl shadow-sm p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-sm font-semibold text-[#111827]">Total Sales</p>
@@ -68,7 +68,7 @@ export default function StatsCards() {
       </div>
 
       {/* Card 2: Total Orders */}
-      <div className="bg-white rounded-2xl shadow-sm p-5">
+      <div className="bg-white sm:rounded-2xl shadow-sm p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-sm font-semibold text-[#111827]">Total Orders</p>
@@ -100,7 +100,7 @@ export default function StatsCards() {
       </div>
 
       {/* Card 3: Pending & Canceled */}
-      <div className="bg-white rounded-2xl shadow-sm p-5">
+      <div className="bg-white sm:rounded-2xl shadow-sm p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex gap-6">
             <span className="text-sm font-semibold text-[#111827]">

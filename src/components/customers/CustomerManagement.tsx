@@ -1,9 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { MessageSquare, Trash2, ArrowUp, MoreVertical } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { MessageSquare, ArrowUp, MoreVertical, Search } from "lucide-react";
 import { Pagination } from "../Pagination";
-import type { Customer, CustomerStatus } from "@/types/customer";
+import type {
+  Customer,
+  CustomerFilter,
+  CustomerSort,
+  CustomerStatus,
+} from "@/types/customer";
+import type { ColumnDef, FilterField } from "@/types/common";
+import TabBar from "../TabBar";
+import DataTable from "../DataTable";
+import MobileCard from "../MobileCard";
+import FilterPopover from "../FilterPopover";
+import SortMenu from "../SortMenu";
+import { Input } from "../ui/input";
 
 const customers: Customer[] = [
   {
@@ -117,11 +129,9 @@ const PEAK_INDEX = 4;
 function getX(i: number) {
   return CX_START + (i / (chartData.length - 1)) * CW;
 }
-
 function getY(value: number) {
   return CY_START + (1 - value / MAX_VAL) * CH;
 }
-
 function buildLinePath(): string {
   const pts = chartData.map((d, i) => ({ x: getX(i), y: getY(d.value) }));
   return pts.reduce((acc, pt, i) => {
@@ -148,55 +158,63 @@ function StatusBadge({ status }: { status: CustomerStatus }) {
   );
 }
 
-function CustomerCard({ customer }: { customer: Customer }) {
-  return (
-    <div className="p-4 border-b border-gray-100 last:border-b-0">
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <p className="font-medium text-gray-900 text-sm">{customer.name}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{customer.id}</p>
-        </div>
-        <StatusBadge status={customer.status} />
-      </div>
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div>
-          <p className="text-xs text-gray-400">Phone</p>
-          <p className="text-sm font-medium text-gray-800 mt-0.5">
-            {customer.phone}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-400">Orders</p>
-          <p className="text-sm font-medium text-gray-800 mt-0.5">
-            {customer.orders}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-400">Total spend</p>
-          <p className="text-sm font-medium text-gray-800 mt-0.5">
-            ${customer.spend}
-          </p>
-        </div>
-      </div>
-      <div className="flex gap-2 pt-3 border-t border-gray-100">
-        <button className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-gray-200 text-xs text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">
-          <MessageSquare size={14} />
-          Message
-        </button>
-        <button className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-gray-200 text-xs text-gray-500 hover:text-red-500 hover:border-red-200 transition-colors cursor-pointer">
-          <Trash2 size={14} />
-          Delete
-        </button>
-      </div>
-    </div>
-  );
-}
+const TABS: { key: CustomerFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "active", label: "Active" },
+  { key: "inactive", label: "Inactive" },
+  { key: "vip", label: "VIP" },
+];
+
+const SORT_OPTIONS: { value: CustomerSort; label: string }[] = [
+  { value: "name_asc", label: "Name A–Z" },
+  { value: "name_desc", label: "Name Z–A" },
+  { value: "orders_asc", label: "Orders low–high" },
+  { value: "orders_desc", label: "Orders high–low" },
+];
+
+const DEFAULT_FILTERS: Record<string, string> = {
+  startDate: "",
+  endDate: "",
+  status: "all",
+};
+
+const CUSTOMER_FILTER_FIELDS: FilterField[] = [
+  {
+    type: "select",
+    key: "status",
+    label: "Status",
+    options: [
+      { value: "all", label: "All" },
+      { value: "Active", label: "Active" },
+      { value: "Inactive", label: "Inactive" },
+      { value: "VIP", label: "VIP" },
+    ],
+  },
+];
+
+const ITEMS_PER_PAGE = 10;
 
 export default function CustomerManagement() {
   const [activeMetric, setActiveMetric] = useState(0);
   const [weekFilter, setWeekFilter] = useState<"this" | "last">("this");
+  const [activeTab, setActiveTab] = useState<CustomerFilter>("all");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<CustomerSort>("name_asc");
+  const [filters, setFilters] =
+    useState<Record<string, string>>(DEFAULT_FILTERS);
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = 24;
+
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  const changeCurrentPage = (value: number) => {
+    setCurrentPage(value);
+    setTimeout(() => {
+      tableContainerRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  };
 
   const linePath = buildLinePath();
   const peakX = getX(PEAK_INDEX);
@@ -209,8 +227,109 @@ export default function CustomerManagement() {
   const ttArrowH = 8;
   const ttX = peakX - ttW / 2;
   const ttY = peakY - ttH - ttArrowH;
-
   const yAxisLabels = ["50k", "40k", "30k", "20k", "10k", "0k"];
+
+  let filtered = customers.filter((c) => {
+    const matchesTab =
+      activeTab === "all" ||
+      (activeTab === "active" && c.status === "Active") ||
+      (activeTab === "inactive" && c.status === "Inactive") ||
+      (activeTab === "vip" && c.status === "VIP");
+    const q = search.toLowerCase();
+    const matchesSearch =
+      !q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q);
+    const matchesStatusFilter =
+      filters["status"] === "all" || c.status === filters["status"];
+    return matchesTab && matchesSearch && matchesStatusFilter;
+  });
+
+  filtered = [...filtered].sort((a, b) => {
+    if (sortBy === "name_asc") return a.name.localeCompare(b.name);
+    if (sortBy === "name_desc") return b.name.localeCompare(a.name);
+    if (sortBy === "orders_asc") return a.orders - b.orders;
+    if (sortBy === "orders_desc") return b.orders - a.orders;
+    return 0;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paginated = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, search, filters, sortBy]);
+
+  const tabCounts: Record<CustomerFilter, number> = {
+    all: customers.length,
+    active: customers.filter((c) => c.status === "Active").length,
+    inactive: customers.filter((c) => c.status === "Inactive").length,
+    vip: customers.filter((c) => c.status === "VIP").length,
+  };
+
+  const columns: ColumnDef<Customer>[] = [
+    {
+      key: "id",
+      header: "Customer ID",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (c) => c.id,
+    },
+    {
+      key: "name",
+      header: "Name",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (c) => c.name,
+    },
+    {
+      key: "phone",
+      header: "Phone",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (c) => c.phone,
+    },
+    {
+      key: "orders",
+      header: "Orders",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (c) => c.orders,
+    },
+    {
+      key: "spend",
+      header: "Total spend",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (c) => `$${c.spend}`,
+    },
+    {
+      key: "status",
+      header: "Status",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: (c) => (
+        <div className="flex justify-center">
+          <StatusBadge status={c.status} />
+        </div>
+      ),
+    },
+    {
+      key: "action",
+      header: "Action",
+      headerClassName: "text-center",
+      className: "text-center",
+      cell: () => (
+        <button
+          className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
+          aria-label="Message customer"
+        >
+          <MessageSquare size={16} />
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -221,7 +340,10 @@ export default function CustomerManagement() {
             { title: "New customers", value: "2,370", pct: "20%" },
             { title: "Visitors", value: "250k", pct: "20%" },
           ].map((card) => (
-            <div key={card.title} className="bg-white rounded-lg shadow-sm p-4">
+            <div
+              key={card.title}
+              className="bg-white sm:rounded-lg shadow-sm p-5"
+            >
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-gray-700">
                   {card.title}
@@ -242,7 +364,7 @@ export default function CustomerManagement() {
           ))}
         </div>
 
-        <div className="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="flex-1 bg-white sm:rounded-lg shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-5 pt-5">
             <h3 className="flex-1 text-sm font-medium text-gray-800">
               Customer overview
@@ -286,7 +408,7 @@ export default function CustomerManagement() {
             ))}
           </div>
 
-          <div className="px-4 pb-4 pt-2 overflow-x-auto">
+          <div className="px-5 pb-4 pt-2 overflow-x-auto">
             <div style={{ minWidth: "380px" }}>
               <svg
                 viewBox={`0 0 ${SVG_W} ${SVG_H}`}
@@ -303,7 +425,6 @@ export default function CustomerManagement() {
                     />
                   </linearGradient>
                 </defs>
-
                 {yAxisLabels.map((label, i) => (
                   <text
                     key={label}
@@ -317,7 +438,6 @@ export default function CustomerManagement() {
                     {label}
                   </text>
                 ))}
-
                 {Array.from({ length: 6 }, (_, i) => (
                   <line
                     key={i}
@@ -329,9 +449,7 @@ export default function CustomerManagement() {
                     strokeWidth="1"
                   />
                 ))}
-
                 <path d={areaPath} fill="url(#areaGrad)" />
-
                 <path
                   d={linePath}
                   fill="none"
@@ -340,7 +458,6 @@ export default function CustomerManagement() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
-
                 <line
                   x1={peakX}
                   y1={peakY + 6}
@@ -350,7 +467,6 @@ export default function CustomerManagement() {
                   strokeWidth="1.5"
                   strokeDasharray="4 3"
                 />
-
                 <circle
                   cx={peakX}
                   cy={peakY}
@@ -359,7 +475,6 @@ export default function CustomerManagement() {
                   stroke="#f97316"
                   strokeWidth="2"
                 />
-
                 <rect
                   x={ttX}
                   y={ttY}
@@ -393,7 +508,6 @@ export default function CustomerManagement() {
                 >
                   45,000
                 </text>
-
                 {chartData.map((d, i) => (
                   <text
                     key={d.day}
@@ -414,89 +528,89 @@ export default function CustomerManagement() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="hidden sm:block overflow-x-auto">
-          <table className="w-full min-w-[600px]">
-            <thead>
-              <tr className="bg-orange-50">
-                {[
-                  "Customer ID",
-                  "Name",
-                  "Phone",
-                  "Orders",
-                  "Total spend",
-                  "Status",
-                  "Action",
-                ].map((col) => (
-                  <th
-                    key={col}
-                    className="px-4 py-3 text-xs font-medium text-[#023337] text-center whitespace-nowrap"
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((customer, idx) => (
-                <tr
-                  key={customer.id}
-                  className={`hover:bg-gray-50 transition-colors ${
-                    idx < customers.length - 1 ? "border-b border-gray-100" : ""
-                  }`}
-                >
-                  <td className="px-4 py-3 text-sm text-gray-700 text-center">
-                    {customer.id}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 text-center">
-                    {customer.name}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 text-center">
-                    {customer.phone}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 text-center">
-                    {customer.orders}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 text-center">
-                    ${customer.spend}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-center">
-                    <div className="flex justify-center">
-                      <StatusBadge status={customer.status} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-center">
-                    <div className="flex items-center justify-center gap-3">
-                      <button
-                        className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
-                        aria-label="Message customer"
-                      >
-                        <MessageSquare size={16} />
-                      </button>
-                      <button
-                        className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-                        aria-label="Delete customer"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div
+        ref={tableContainerRef}
+        className="bg-white sm:rounded-lg shadow-sm overflow-hidden"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:p-4 py-4 px-3 gap-3 border-b border-gray-100">
+          <TabBar
+            tabs={TABS.map((t) => ({
+              ...t,
+              count: t.key === "all" ? tabCounts.all : undefined,
+            }))}
+            activeTab={activeTab}
+            onChange={(tab) => {
+              setActiveTab(tab);
+              setCurrentPage(1);
+            }}
+          />
+          <div className="flex items-center justify-between w-full sm:w-auto gap-2">
+            <div className="relative flex-1">
+              <Input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search customers"
+                className="pl-3 pr-9 py-2 text-sm bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
+              />
+              <Search
+                size={16}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6a717f]"
+              />
+            </div>
+            <FilterPopover
+              values={filters}
+              defaultValues={DEFAULT_FILTERS}
+              fields={CUSTOMER_FILTER_FIELDS}
+              onApply={(newFilters) => {
+                setFilters(newFilters);
+                setCurrentPage(1);
+              }}
+              onReset={() => {
+                setFilters(DEFAULT_FILTERS);
+                setCurrentPage(1);
+              }}
+            />
+            <SortMenu
+              currentSort={sortBy}
+              onSort={(option) => {
+                setSortBy(option);
+                setCurrentPage(1);
+              }}
+              options={SORT_OPTIONS}
+            />
+          </div>
         </div>
 
-        <div className="sm:hidden divide-y divide-gray-100">
-          {customers.map((customer) => (
-            <CustomerCard key={customer.id} customer={customer} />
-          ))}
-        </div>
+        <DataTable
+          columns={columns}
+          data={paginated}
+          keyExtractor={(c) => c.id}
+          emptyMessage="No customers found."
+          mobileCard={(customer) => (
+            <MobileCard
+              title={customer.name}
+              subtitle={customer.id}
+              badge={<StatusBadge status={customer.status} />}
+              fields={[
+                { label: "Phone", value: customer.phone },
+                { label: "Orders", value: customer.orders },
+                { label: "Total spend", value: `$${customer.spend}` },
+              ]}
+              footer={
+                <button className="flex items-center gap-1.5 py-2 px-3 rounded-lg border border-gray-200 text-xs text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">
+                  <MessageSquare size={14} />
+                  Message
+                </button>
+              }
+            />
+          )}
+        />
 
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
-          onPageChange={setCurrentPage}
+          onPageChange={changeCurrentPage}
         />
       </div>
     </div>
