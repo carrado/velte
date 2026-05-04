@@ -88,7 +88,12 @@ export default function FilterPopover({
                 </label>
                 <Select
                   value={local[field.key] ?? "all"}
-                  onValueChange={(v) => setLocal({ ...local, [field.key]: v })}
+                  onValueChange={(v) =>
+                    setLocal((prev) => ({
+                      ...prev,
+                      [field.key]: v ?? "all",
+                    }))
+                  }
                 >
                   <SelectTrigger className="w-full text-sm h-8">
                     <SelectValue />
