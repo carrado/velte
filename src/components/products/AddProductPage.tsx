@@ -70,6 +70,7 @@ export default function AddProductPage() {
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
   const [attributeNameInput, setAttributeNameInput] = useState("");
   const [attributeValueInput, setAttributeValueInput] = useState("");
+  const [attributeError, setAttributeError] = useState("");
 
   // UI state for currency popover
   const [currencyPopoverOpen, setCurrencyPopoverOpen] = useState(false);
@@ -141,9 +142,11 @@ export default function AddProductPage() {
     if (videoRef.current) videoRef.current.value = "";
   };
 
-  // Tag handling
+  // Tag handling – supports Enter and Space (for mobile)
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && tagInput.trim()) {
+    const isEnter = e.key === "Enter";
+    const isSpace = e.key === " " || e.key === "Space";
+    if ((isEnter || isSpace) && tagInput.trim()) {
       e.preventDefault();
       if (!tags.includes(tagInput.trim())) {
         setTags([...tags, tagInput.trim()]);
@@ -156,24 +159,45 @@ export default function AddProductPage() {
     setTags(tags.filter((t) => t !== tag));
   };
 
-  // Attributes handling
+  // Attributes handling – with validation and prepending
   const addAttribute = () => {
-    if (attributeNameInput.trim() && attributeValueInput.trim()) {
-      setAttributes([
-        ...attributes,
-        {
-          id: Date.now().toString(),
-          name: attributeNameInput.trim(),
-          value: attributeValueInput.trim(),
-        },
-      ]);
-      setAttributeNameInput("");
-      setAttributeValueInput("");
+    const name = attributeNameInput.trim();
+    const value = attributeValueInput.trim();
+    if (!name || !value) {
+      setAttributeError("Both attribute name and value are required.");
+      return;
     }
+    setAttributeError("");
+    // Prepend so most recent appears first
+    setAttributes([
+      {
+        id: Date.now().toString(),
+        name: name,
+        value: value,
+      },
+      ...attributes,
+    ]);
+    setAttributeNameInput("");
+    setAttributeValueInput("");
   };
 
   const removeAttribute = (id: string) => {
     setAttributes(attributes.filter((attr) => attr.id !== id));
+  };
+
+  // Clear error when user starts typing again
+  const handleAttributeNameChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    setAttributeNameInput(e.target.value);
+    if (attributeError) setAttributeError("");
+  };
+
+  const handleAttributeValueChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    setAttributeValueInput(e.target.value);
+    if (attributeError) setAttributeError("");
   };
 
   // Action buttons component (reused at bottom)
@@ -392,7 +416,8 @@ export default function AddProductPage() {
           <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-1 relative space-y-2">
               <label className="block text-sm font-bold text-[#023337]">
-                Manufacturing Date
+                Manufacturing Date{" "}
+                <span className="font-normal text-gray-500">(Optional)</span>
               </label>
               <div className="relative">
                 <Input
@@ -510,7 +535,7 @@ export default function AddProductPage() {
 
         {/* ── Right column: Upload + Categories + Tags + Attributes ── */}
         <div className="bg-white sm:rounded-lg shadow-sm w-full lg:w-[485px] flex-shrink-0 p-4 sm:p-6 space-y-6">
-          {/* Media Upload Section (unchanged) */}
+          {/* Media Upload Section */}
           <div>
             <h3 className="text-xl font-bold text-[#23272e] mb-4">
               Upload Media
@@ -706,7 +731,7 @@ export default function AddProductPage() {
             </Select>
           </div>
 
-          {/* Product Tags (chips input) */}
+          {/* Product Tags (chips input) – Enter or Space adds tag */}
           <div className="space-y-3">
             <label className="block text-sm font-bold text-[#023337]">
               Product Tags
@@ -732,26 +757,30 @@ export default function AddProductPage() {
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={handleTagKeyDown}
-              placeholder="Type a tag and press Enter"
+              placeholder="Type a tag and press Enter or Space"
               className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
             />
+            <p className="text-xs text-gray-500">
+              Press <kbd className="px-1 border rounded">Enter</kbd> or{" "}
+              <kbd className="px-1 border rounded">Space</kbd> to add a tag.
+            </p>
           </div>
 
-          {/* Add Attributes - with smaller button on mobile */}
+          {/* Add Attributes - with inline error message */}
           <div className="space-y-3">
             <h3 className="text-xl font-bold text-[#23272e]">Add Attributes</h3>
             <div className="flex gap-2">
               <Input
                 type="text"
                 value={attributeNameInput}
-                onChange={(e) => setAttributeNameInput(e.target.value)}
+                onChange={handleAttributeNameChange}
                 placeholder="Attribute name (e.g., Size)"
                 className="flex-1 h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
               <Input
                 type="text"
                 value={attributeValueInput}
-                onChange={(e) => setAttributeValueInput(e.target.value)}
+                onChange={handleAttributeValueChange}
                 placeholder="Value (e.g., Large)"
                 className="flex-1 h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
@@ -762,6 +791,9 @@ export default function AddProductPage() {
                 <Plus size={20} className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
+            {attributeError && (
+              <div className="text-red-500 text-sm mt-1">{attributeError}</div>
+            )}
             {attributes.length > 0 && (
               <div className="mt-3 space-y-2">
                 {attributes.map((attr) => (

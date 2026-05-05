@@ -140,7 +140,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {
           label: "AI Settings",
           icon: <Shield size={16} />,
-          href: "/admin/role",
+          href: "ai-setup",
           id: "ai-settings-nav",
         },
         {

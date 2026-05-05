@@ -56,7 +56,7 @@ export default function AISetupTour({ onDismiss }: AISetupTourProps) {
      */
     // dismissTourForSession();
     onDismiss();
-    navigate(`/${userId}/admin/role`);
+    navigate(`/${userId}/ai-setup`);
   };
 
   const handleSkip = () => {

@@ -1,3 +1,22 @@
+import type { AIConfig } from "@/types/ai-setup";
+
+export function saveAIConfig(config: AIConfig): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("ai_config", JSON.stringify(config));
+  }
+}
+
+export function loadAIConfig(): AIConfig | null {
+  if (typeof window === "undefined") return null;
+  const stored = localStorage.getItem("ai_config");
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored) as AIConfig;
+  } catch {
+    return null;
+  }
+}
+
 /** Simulates a backend call to check whether an AI model is configured. */
 export async function checkAISetup(): Promise<{ isSetup: boolean }> {
   await new Promise((r) => setTimeout(r, 650));
