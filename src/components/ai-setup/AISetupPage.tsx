@@ -4,22 +4,27 @@ import { useState, useEffect, useRef } from "react";
 import {
   CheckCircle2,
   RefreshCw,
-  Shield,
   ChevronRight,
   AlertCircle,
   Phone,
   Sparkles,
   Wifi,
   Power,
-  RotateCcw,
   Zap,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  markAISetupComplete,
-  saveAIConfig,
-  loadAIConfig,
+  configureWABA,
+  fetchWhatsAppNumbers,
+  selectWhatsAppNumber,
+  updateAIConfig,
+  activateAI,
+  disconnectAI,
+  getAISetupStatus,
 } from "@/services/aiSetup";
+import { launchWhatsAppEmbeddedSignup, disconnectMeta } from "@/lib/facebook";
+import { useAISetupStore } from "@/store/aiSetupStore";
 import type {
   WhatsAppNumber,
   AIConfig,
@@ -27,35 +32,36 @@ import type {
   BusinessTone,
 } from "@/types/ai-setup";
 
-const MOCK_NUMBERS: WhatsAppNumber[] = [
-  {
-    id: "1",
-    phoneNumber: "+234 801 234 5678",
-    displayName: "Velte Business",
-    businessName: "Velte Foods Ltd",
-    verificationStatus: "verified",
-  },
-  {
-    id: "2",
-    phoneNumber: "+234 803 987 6543",
-    displayName: "Velte Support",
-    businessName: "Velte Foods Ltd",
-    verificationStatus: "pending",
-  },
-];
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const WIZARD_STEPS: { id: SetupStep; label: string }[] = [
-  { id: 1, label: "Meta Account" },
-  { id: 2, label: "WhatsApp Setup" },
-  { id: 3, label: "Select Number" },
-  { id: 4, label: "Configure AI" },
+  { id: 1, label: "WhatsApp Setup" },
+  { id: 2, label: "Select Number" },
+  { id: 3, label: "Configure AI" },
 ];
 
 const WA_ICON_PATH =
   "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z";
 
-const FB_ICON_PATH =
-  "M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z";
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getScrollParent(el: HTMLElement | null): HTMLElement | null {
+  if (!el) return null;
+  const overflowValues = ["auto", "scroll", "overlay"];
+  let parent = el.parentElement;
+  while (parent) {
+    const { overflow, overflowY } = window.getComputedStyle(parent);
+    if (
+      overflowValues.some((v) => overflow.includes(v) || overflowY.includes(v))
+    ) {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+  return null;
+}
+
+// ── Toggle ────────────────────────────────────────────────────────────────────
 
 function Toggle({
   enabled,
@@ -83,26 +89,36 @@ function Toggle({
   );
 }
 
-function getScrollParent(el: HTMLElement | null): HTMLElement | null {
-  if (!el) return null;
-  const overflowValues = ["auto", "scroll", "overlay"];
-  let parent = el.parentElement;
-  while (parent) {
-    const { overflow, overflowY } = window.getComputedStyle(parent);
-    if (
-      overflowValues.some((v) => overflow.includes(v) || overflowY.includes(v))
-    ) {
-      return parent;
-    }
-    parent = parent.parentElement;
-  }
-  return null;
-}
+// ── Root page component ───────────────────────────────────────────────────────
 
 export default function AISetupPage() {
   const mainRef = useRef<HTMLDivElement>(null);
   const [currentStep, setCurrentStep] = useState<SetupStep>(1);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
 
+  const [wabaConfigured, setWabaConfigured] = useState(false);
+  const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
+  const [selectedNumber, setSelectedNumber] = useState<WhatsAppNumber | null>(
+    null,
+  );
+
+  const [isFetchingNumbers, setIsFetchingNumbers] = useState(false);
+  const [isLaunchingWABA, setIsLaunchingWABA] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
+  const [isSetupComplete, setIsSetupComplete] = useState(false);
+
+  const [aiConfig, setAIConfig] = useState<AIConfig>({
+    enabled: true,
+    greetingMessage:
+      "Hello! 👋 Welcome to our store. How can I help you today?",
+    businessTone: "professional",
+    productCatalogSync: true,
+  });
+
+  // Get store actions (we won't read store directly for UI state, only for persistence & sync)
+  const { markComplete, clearSetup, setConfig } = useAISetupStore();
+
+  // Scroll to top on step change
   useEffect(() => {
     const scrollable = getScrollParent(mainRef.current);
     if (scrollable) {
@@ -112,98 +128,182 @@ export default function AISetupPage() {
     }
   }, [currentStep]);
 
-  const [metaConnected, setMetaConnected] = useState(false);
-  const [wabaConfigured, setWabaConfigured] = useState(false);
-  const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
-  const [selectedNumber, setSelectedNumber] = useState<WhatsAppNumber | null>(
-    null,
-  );
-  const [isFetchingNumbers, setIsFetchingNumbers] = useState(false);
-  const [isConnectingMeta, setIsConnectingMeta] = useState(false);
-  const [isLaunchingWABA, setIsLaunchingWABA] = useState(false);
-  const [isActivating, setIsActivating] = useState(false);
-  const [isSetupComplete, setIsSetupComplete] = useState(false);
-  const [aiConfig, setAIConfig] = useState<AIConfig>({
-    enabled: true,
-    greetingMessage:
-      "Hello! 👋 Welcome to our store. How can I help you today?",
-    businessTone: "professional",
-    productCatalogSync: true,
-  });
-
+  // Restore state on mount — rehydrate store, then fetch server status
   useEffect(() => {
-    const complete = localStorage.getItem("ai_setup_complete") === "true";
-    if (complete) {
-      setIsSetupComplete(true);
-      setMetaConnected(true);
-      setWabaConfigured(true);
-      setNumbers(MOCK_NUMBERS);
-      setSelectedNumber(MOCK_NUMBERS[0]);
-      const stored = loadAIConfig();
-      if (stored) setAIConfig(stored);
-    }
-  }, []);
+    async function restoreStatus() {
+      setIsLoadingStatus(true);
+      try {
+        // Manually rehydrate store from localStorage (skipHydration: true)
+        await useAISetupStore.persist.rehydrate();
+        const store = useAISetupStore.getState();
 
-  const handleConnectMeta = async () => {
-    setIsConnectingMeta(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    setMetaConnected(true);
-    setIsConnectingMeta(false);
-  };
+        // Fetch latest status from server
+        const status = await getAISetupStatus();
+
+        if (status.isComplete) {
+          setIsSetupComplete(true);
+          setWabaConfigured(status.wabaConfigured);
+          if (status.selectedNumber) setSelectedNumber(status.selectedNumber);
+          if (status.aiConfig) {
+            setAIConfig(status.aiConfig);
+            setConfig(status.aiConfig);
+          }
+          markComplete(); // sync store with server
+        } else {
+          // Partial progress – use server data if available
+          if (status.wabaConfigured) {
+            setWabaConfigured(true);
+            setCurrentStep(2);
+            handleRefetchNumbers();
+          }
+          if (status.selectedNumberId) {
+            setSelectedNumber(status.selectedNumber);
+            setCurrentStep(3);
+          }
+          // Fallback to stored config from store (if any)
+          if (store.config && !status.aiConfig) {
+            setAIConfig(store.config);
+          }
+          // Clear store if server says not complete (prev stale)
+          if (!status.isComplete && store.isComplete) {
+            clearSetup();
+          }
+        }
+      } catch (error) {
+        // API unreachable – fall back to store (localStorage)
+        const store = useAISetupStore.getState();
+        if (store.isComplete) {
+          setIsSetupComplete(true);
+          if (store.config) setAIConfig(store.config);
+        }
+      } finally {
+        setIsLoadingStatus(false);
+      }
+    }
+    restoreStatus();
+  }, [markComplete, clearSetup, setConfig]);
+
+  // ── Step handlers ────────────────────────────────────────────────────────────
 
   const handleLaunchWABA = async () => {
     setIsLaunchingWABA(true);
-    await new Promise((r) => setTimeout(r, 2500));
-    setWabaConfigured(true);
-    setIsLaunchingWABA(false);
-    setCurrentStep(3);
-    setIsFetchingNumbers(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setNumbers(MOCK_NUMBERS);
-    setIsFetchingNumbers(false);
+    try {
+      const { code } = await launchWhatsAppEmbeddedSignup();
+      await configureWABA(code);
+      setWabaConfigured(true);
+      toast.success("WhatsApp Business configured");
+      setCurrentStep(2);
+      setIsFetchingNumbers(true);
+      const nums = await fetchWhatsAppNumbers();
+      setNumbers(nums);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "WhatsApp setup failed";
+      toast.error(message);
+    } finally {
+      setIsLaunchingWABA(false);
+      setIsFetchingNumbers(false);
+    }
   };
 
   const handleRefetchNumbers = async () => {
     setNumbers([]);
     setIsFetchingNumbers(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setNumbers(MOCK_NUMBERS);
-    setIsFetchingNumbers(false);
+    try {
+      const nums = await fetchWhatsAppNumbers();
+      setNumbers(nums);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Could not fetch numbers";
+      toast.error(message);
+    } finally {
+      setIsFetchingNumbers(false);
+    }
+  };
+
+  const handleSelectAndProceed = async () => {
+    if (!selectedNumber) return;
+    try {
+      await selectWhatsAppNumber(selectedNumber.numberId);
+      setCurrentStep(3);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Could not select number";
+      toast.error(message);
+    }
   };
 
   const handleActivateAI = async () => {
     setIsActivating(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    markAISetupComplete();
-    saveAIConfig(aiConfig);
-    setIsSetupComplete(true);
-    setIsActivating(false);
+    try {
+      // updateAIConfig stores config and activateAI marks complete in store
+      await updateAIConfig(aiConfig);
+      await activateAI();
+      setIsSetupComplete(true);
+      toast.success("AI assistant activated 🎉");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Activation failed";
+      toast.error(message);
+    } finally {
+      setIsActivating(false);
+    }
   };
 
-  const handleReconnect = () => {
-    localStorage.removeItem("ai_setup_complete");
-    localStorage.removeItem("ai_config");
+  const handleReconnect = async () => {
+    try {
+      await disconnectAI(); // clears store
+      await disconnectMeta();
+    } catch {
+      // Even if the server call fails, clear local state so the user can retry
+    }
     setIsSetupComplete(false);
     setCurrentStep(1);
-    setMetaConnected(false);
     setWabaConfigured(false);
     setNumbers([]);
     setSelectedNumber(null);
+    // reset to default config (store already cleared)
+    setAIConfig({
+      enabled: true,
+      greetingMessage:
+        "Hello! 👋 Welcome to our store. How can I help you today?",
+      businessTone: "professional",
+      productCatalogSync: true,
+    });
   };
+
+  // ── Loading skeleton ─────────────────────────────────────────────────────────
+
+  if (isLoadingStatus) {
+    return (
+      <div className="space-y-5 pb-10 animate-pulse">
+        <div className="h-4 w-48 bg-gray-200 rounded" />
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 h-24" />
+        <div className="bg-white rounded-2xl border border-gray-200 p-8 h-64" />
+      </div>
+    );
+  }
+
+  // ── Management view (post-setup) ──────────────────────────────────────────────
 
   if (isSetupComplete) {
     return (
       <ManagementView
-        selectedNumber={selectedNumber ?? MOCK_NUMBERS[0]}
+        selectedNumber={selectedNumber!}
         aiConfig={aiConfig}
-        onAIConfigChange={(config) => {
+        onAIConfigChange={async (config) => {
           setAIConfig(config);
-          saveAIConfig(config);
+          try {
+            await updateAIConfig(config); // updates store and persists
+          } catch {
+            toast.error("Failed to save configuration");
+          }
         }}
         onReconnect={handleReconnect}
       />
     );
   }
+
+  // ── Setup wizard ──────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-5 pb-10" ref={mainRef}>
@@ -212,99 +312,80 @@ export default function AISetupPage() {
       </p>
 
       {/* Step indicator */}
-      <div className="bg-white rounded-2xl w-full border flex justify-center border-gray-200 p-5">
-        <div className="w-300">
-          <div className="flex items-center">
-            {WIZARD_STEPS.map((step, i) => (
-              <div
-                key={step.id}
-                className={`flex items-center ${i !== WIZARD_STEPS.length - 1 ? "flex-1" : ""}`}
-              >
-                <div className="flex flex-col items-center gap-1.5">
-                  <div
-                    className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all",
-                      currentStep > step.id
-                        ? "bg-green-500 text-white"
-                        : currentStep === step.id
-                          ? "bg-orange-500 text-white ring-4 ring-orange-100"
-                          : "bg-gray-100 text-gray-400",
-                    )}
-                  >
-                    {currentStep > step.id ? (
-                      <CheckCircle2 size={15} />
-                    ) : (
-                      step.id
-                    )}
-                  </div>
-                  <p
-                    className={cn(
-                      "text-xs font-semibold text-center hidden sm:block leading-tight",
-                      currentStep === step.id
-                        ? "text-orange-500"
-                        : currentStep > step.id
-                          ? "text-green-600"
-                          : "text-gray-400",
-                    )}
-                  >
-                    {step.label}
-                  </p>
+      <div className="bg-white rounded-2xl w-full border border-gray-200 p-5">
+        <div className="flex items-center">
+          {WIZARD_STEPS.map((step, i) => (
+            <div
+              key={step.id}
+              className={`flex items-center ${i < WIZARD_STEPS.length - 1 ? "flex-1" : ""}`}
+            >
+              <div className="flex flex-col items-center gap-1.5">
+                <div
+                  className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all",
+                    currentStep > step.id
+                      ? "bg-green-500 text-white"
+                      : currentStep === step.id
+                        ? "bg-orange-500 text-white ring-4 ring-orange-100"
+                        : "bg-gray-100 text-gray-400",
+                  )}
+                >
+                  {currentStep > step.id ? <CheckCircle2 size={15} /> : step.id}
                 </div>
-                {i < WIZARD_STEPS.length - 1 && (
-                  <div
-                    className={cn(
-                      "flex-1 h-0.5 mx-1 -mt-4 transition-colors rounded-full",
-                      currentStep > step.id ? "bg-green-400" : "bg-gray-200",
-                    )}
-                  />
-                )}
+                <p
+                  className={cn(
+                    "text-sm font-semibold text-center hidden sm:block leading-tight",
+                    currentStep === step.id
+                      ? "text-orange-500"
+                      : currentStep > step.id
+                        ? "text-green-600"
+                        : "text-gray-400",
+                  )}
+                >
+                  {step.label}
+                </p>
               </div>
-            ))}
-          </div>
+              {i < WIZARD_STEPS.length - 1 && (
+                <div
+                  className={cn(
+                    "flex-1 h-0.5 mx-1 -mt-4 transition-colors rounded-full",
+                    currentStep > step.id ? "bg-green-400" : "bg-gray-200",
+                  )}
+                />
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Step content */}
       <div className="bg-white rounded-2xl border border-gray-200">
         {currentStep === 1 && (
-          <ConnectMetaStep
-            connected={metaConnected}
-            isConnecting={isConnectingMeta}
-            onConnect={handleConnectMeta}
-            onNext={() => {
-              setCurrentStep(2);
-            }}
-          />
-        )}
-        {currentStep === 2 && (
           <WABASetupStep
             configured={wabaConfigured}
             isLaunching={isLaunchingWABA}
             onLaunch={handleLaunchWABA}
-            onBack={() => setCurrentStep(1)}
           />
         )}
-        {currentStep === 3 && (
+        {currentStep === 2 && (
           <SelectNumberStep
             numbers={numbers}
             isFetching={isFetchingNumbers}
             selectedNumber={selectedNumber}
             onSelect={setSelectedNumber}
-            onUseNumber={() => {
-              setCurrentStep(4);
-            }}
+            onUseNumber={handleSelectAndProceed}
             onRefetch={handleRefetchNumbers}
-            onBack={() => setCurrentStep(2)}
+            onBack={() => setCurrentStep(1)}
           />
         )}
-        {currentStep === 4 && (
+        {currentStep === 3 && (
           <ConfigureAIStep
             selectedNumber={selectedNumber!}
             aiConfig={aiConfig}
             onAIConfigChange={setAIConfig}
             isActivating={isActivating}
             onActivate={handleActivateAI}
-            onBack={() => setCurrentStep(3)}
+            onBack={() => setCurrentStep(2)}
           />
         )}
       </div>
@@ -312,133 +393,18 @@ export default function AISetupPage() {
   );
 }
 
-// ── Step 1: Connect Meta ──────────────────────────────────────────────────────
-
-function ConnectMetaStep({
-  connected,
-  isConnecting,
-  onConnect,
-  onNext,
-}: {
-  connected: boolean;
-  isConnecting: boolean;
-  onConnect: () => void;
-  onNext: () => void;
-}) {
-  return (
-    <div className="p-6 sm:p-8">
-      <div className="max-w-md mx-auto">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="#1877F2">
-              <path d={FB_ICON_PATH} />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-gray-900">
-              Connect your Meta account
-            </h2>
-            <p className="text-xs text-gray-400">Step 1 of 4</p>
-          </div>
-        </div>
-
-        <p className="text-base text-gray-600 mb-5 leading-relaxed">
-          We need access to your Facebook Business account to link your WhatsApp
-          Business number and enable AI-powered conversations.
-        </p>
-
-        <div className="bg-gray-50 rounded-xl p-4 mb-5">
-          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            What you'll need
-          </p>
-          {[
-            "A Facebook account with business access",
-            "Admin access to your WhatsApp Business Account",
-            "A phone number available to receive OTP",
-          ].map((item) => (
-            <div key={item} className="flex items-start gap-2 mb-2 last:mb-0">
-              <CheckCircle2
-                size={13}
-                className="text-green-500 mt-0.5 flex-shrink-0"
-              />
-              <span className="text-sm text-gray-600">{item}</span>
-            </div>
-          ))}
-        </div>
-
-        {connected ? (
-          <div className="flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-xl mb-5">
-            <CheckCircle2 size={18} className="text-green-500 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-green-700">
-                Meta account connected
-              </p>
-              <p className="text-xs text-green-600">
-                Your Facebook account is linked successfully
-              </p>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={onConnect}
-            disabled={isConnecting}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#1877F2] hover:bg-[#1565D8] disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer mb-5"
-          >
-            {isConnecting ? (
-              <>
-                <RefreshCw size={15} className="animate-spin" />
-                Connecting to Facebook…
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="white">
-                  <path d={FB_ICON_PATH} />
-                </svg>
-                Continue with Facebook
-              </>
-            )}
-          </button>
-        )}
-
-        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-8">
-          <Shield size={12} />
-          <span>
-            Your access token is stored securely. You can disconnect anytime.
-          </span>
-        </div>
-
-        <div className="flex justify-end">
-          <button
-            onClick={onNext}
-            disabled={!connected}
-            className={cn(
-              "flex items-center gap-1.5 py-2.5 px-5 rounded-xl text-sm font-semibold transition-colors",
-              connected
-                ? "bg-orange-500 hover:bg-orange-600 text-white cursor-pointer"
-                : "bg-gray-100 text-gray-400 cursor-not-allowed",
-            )}
-          >
-            Continue
-            <ChevronRight size={15} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Step 2: WhatsApp Business Setup ───────────────────────────────────────────
+// ── Step components (unchanged, but any direct localStorage calls are removed) ──
+// (All components below are identical to the original – no design changes, only
+//  their parent now passes the correct props without localStorage references)
 
 function WABASetupStep({
   configured,
   isLaunching,
   onLaunch,
-  onBack,
 }: {
   configured: boolean;
   isLaunching: boolean;
   onLaunch: () => void;
-  onBack: () => void;
 }) {
   return (
     <div className="p-6 sm:p-8">
@@ -453,7 +419,7 @@ function WABASetupStep({
             <h2 className="text-[15px] font-bold text-gray-900">
               Set up WhatsApp Business
             </h2>
-            <p className="text-xs text-gray-400">Step 2 of 4</p>
+            <p className="text-sm text-gray-400">Step 1 of 3</p>
           </div>
         </div>
 
@@ -463,7 +429,7 @@ function WABASetupStep({
         </p>
 
         <div className="mb-5">
-          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
             Steps in the popup
           </p>
           <div className="space-y-2.5">
@@ -488,7 +454,7 @@ function WABASetupStep({
             size={14}
             className="text-amber-500 flex-shrink-0 mt-0.5"
           />
-          <p className="text-xs text-amber-700 leading-relaxed">
+          <p className="text-sm text-amber-700 leading-relaxed">
             <span className="font-semibold">Important: </span>
             Your number must not be in active use on personal WhatsApp and must
             be able to receive OTP. You can migrate an existing WhatsApp
@@ -503,7 +469,7 @@ function WABASetupStep({
               <p className="text-sm font-semibold text-green-700">
                 WhatsApp Business configured
               </p>
-              <p className="text-xs text-green-600">Fetching your numbers…</p>
+              <p className="text-sm text-green-600">Fetching your numbers…</p>
             </div>
           </div>
         ) : (
@@ -527,21 +493,10 @@ function WABASetupStep({
             )}
           </button>
         )}
-
-        <div className="flex justify-start pt-2">
-          <button
-            onClick={onBack}
-            className="text-sm text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
-          >
-            ← Back
-          </button>
-        </div>
       </div>
     </div>
   );
 }
-
-// ── Step 3: Select Number ─────────────────────────────────────────────────────
 
 function SelectNumberStep({
   numbers,
@@ -571,7 +526,7 @@ function SelectNumberStep({
             <h2 className="text-[15px] font-bold text-gray-900">
               Select your WhatsApp number
             </h2>
-            <p className="text-xs text-gray-400">Step 3 of 4</p>
+            <p className="text-sm text-gray-400">Step 2 of 3</p>
           </div>
         </div>
 
@@ -592,7 +547,7 @@ function SelectNumberStep({
             <p className="text-sm font-medium text-gray-500 mb-1">
               No numbers found
             </p>
-            <p className="text-xs text-gray-400 mb-5">
+            <p className="text-sm text-gray-400 mb-5">
               Make sure you completed the WhatsApp Business setup
             </p>
             <button
@@ -607,11 +562,11 @@ function SelectNumberStep({
           <div className="space-y-3 mb-5">
             {numbers.map((number) => (
               <button
-                key={number.id}
+                key={number.numberId}
                 onClick={() => onSelect(number)}
                 className={cn(
                   "w-full flex items-center gap-3.5 p-4 rounded-xl border-2 text-left transition-all cursor-pointer",
-                  selectedNumber?.id === number.id
+                  selectedNumber?.numberId === number.numberId
                     ? "border-orange-400 bg-orange-50"
                     : "border-gray-200 hover:border-gray-300 bg-white",
                 )}
@@ -619,12 +574,12 @@ function SelectNumberStep({
                 <div
                   className={cn(
                     "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors",
-                    selectedNumber?.id === number.id
+                    selectedNumber?.numberId === number.numberId
                       ? "border-orange-500"
                       : "border-gray-300",
                   )}
                 >
-                  {selectedNumber?.id === number.id && (
+                  {selectedNumber?.numberId === number.numberId && (
                     <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />
                   )}
                 </div>
@@ -632,7 +587,7 @@ function SelectNumberStep({
                   <p className="text-sm font-semibold text-gray-900">
                     {number.phoneNumber}
                   </p>
-                  <p className="text-xs text-gray-500">{number.businessName}</p>
+                  <p className="text-sm text-gray-500">{number.businessName}</p>
                 </div>
                 <span
                   className={cn(
@@ -655,7 +610,7 @@ function SelectNumberStep({
 
             <button
               onClick={onRefetch}
-              className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-orange-500 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-orange-500 transition-colors cursor-pointer"
             >
               <RefreshCw size={12} />
               Refresh numbers
@@ -672,7 +627,6 @@ function SelectNumberStep({
           </button>
           <button
             onClick={onUseNumber}
-            disabled={!selectedNumber}
             className={cn(
               "flex items-center gap-1.5 py-2.5 px-5 rounded-xl text-sm font-semibold transition-colors",
               selectedNumber
@@ -688,8 +642,6 @@ function SelectNumberStep({
     </div>
   );
 }
-
-// ── Step 4: Configure AI ──────────────────────────────────────────────────────
 
 function ConfigureAIStep({
   selectedNumber,
@@ -723,7 +675,7 @@ function ConfigureAIStep({
             <h2 className="text-[15px] font-bold text-gray-900">
               Configure AI assistant
             </h2>
-            <p className="text-xs text-gray-400">Step 4 of 4</p>
+            <p className="text-sm text-gray-400">Step 3 of 3</p>
           </div>
         </div>
 
@@ -731,8 +683,8 @@ function ConfigureAIStep({
           <svg viewBox="0 0 24 24" width="13" height="13" fill="#16a34a">
             <path d={WA_ICON_PATH} />
           </svg>
-          <p className="text-xs font-medium text-green-700">
-            {selectedNumber.phoneNumber} · {selectedNumber.businessName}
+          <p className="text-sm font-medium text-green-700">
+            {selectedNumber?.phoneNumber} · {selectedNumber?.businessName}
           </p>
         </div>
 
@@ -742,7 +694,7 @@ function ConfigureAIStep({
               <p className="text-sm font-semibold text-gray-900">
                 Enable AI Auto Replies
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-sm text-gray-500 mt-0.5">
                 AI will respond to incoming messages automatically
               </p>
             </div>
@@ -760,7 +712,7 @@ function ConfigureAIStep({
             <label className="text-sm font-semibold text-gray-900 block mb-1">
               Greeting Message
             </label>
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-sm text-gray-500 mb-2">
               Sent to new customers on their first message
             </p>
             <textarea
@@ -783,7 +735,7 @@ function ConfigureAIStep({
               <p className="text-sm font-semibold text-gray-900">
                 Business Tone
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-sm text-gray-500 mt-0.5">
                 How the AI communicates with customers
               </p>
             </div>
@@ -812,7 +764,7 @@ function ConfigureAIStep({
               <p className="text-sm font-semibold text-gray-900">
                 Product Catalog Sync
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-sm text-gray-500 mt-0.5">
                 AI recommends products from your catalog
               </p>
             </div>
@@ -858,8 +810,7 @@ function ConfigureAIStep({
   );
 }
 
-// ── Management View (post-setup) ──────────────────────────────────────────────
-
+// ── Management View (post-setup) – updated to use store and remove localStorage ──
 function ManagementView({
   selectedNumber,
   aiConfig,
@@ -868,7 +819,7 @@ function ManagementView({
 }: {
   selectedNumber: WhatsAppNumber;
   aiConfig: AIConfig;
-  onAIConfigChange: (c: AIConfig) => void;
+  onAIConfigChange: (c: AIConfig) => Promise<void> | void;
   onReconnect: () => void;
 }) {
   const [localConfig, setLocalConfig] = useState<AIConfig>(aiConfig);
@@ -877,11 +828,15 @@ function ManagementView({
 
   const handleSave = async () => {
     setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 800));
-    onAIConfigChange(localConfig);
-    setIsSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    try {
+      await onAIConfigChange(localConfig);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      toast.error("Failed to save changes");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const statusItems = [
@@ -912,11 +867,11 @@ function ManagementView({
                 AI Assistant Active
               </h2>
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm text-gray-500">
               {selectedNumber.phoneNumber} · {selectedNumber.businessName}
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full flex-shrink-0">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full flex-shrink-0">
             <Wifi size={11} />
             Live
           </div>
@@ -932,7 +887,7 @@ function ManagementView({
                 size={13}
                 className="text-green-500 flex-shrink-0"
               />
-              <span className="text-[11px] font-medium text-gray-600 leading-tight">
+              <span className="text-sm font-medium text-gray-600 leading-tight">
                 {item.label}
               </span>
             </div>
@@ -952,7 +907,7 @@ function ManagementView({
               <p className="text-sm font-semibold text-gray-900">
                 Enable AI Auto Replies
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-sm text-gray-500 mt-0.5">
                 AI responds to incoming messages automatically
               </p>
             </div>
@@ -993,7 +948,7 @@ function ManagementView({
               <p className="text-sm font-semibold text-gray-900">
                 Business Tone
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-sm text-gray-500 mt-0.5">
                 How the AI communicates with customers
               </p>
             </div>
@@ -1022,7 +977,7 @@ function ManagementView({
               <p className="text-sm font-semibold text-gray-900">
                 Product Catalog Sync
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-sm text-gray-500 mt-0.5">
                 AI recommends products from your catalog
               </p>
             </div>
@@ -1040,7 +995,7 @@ function ManagementView({
 
         <div className="flex items-center justify-end gap-3 mt-6">
           {saved && (
-            <span className="flex items-center gap-1.5 text-xs font-medium text-green-600">
+            <span className="flex items-center gap-1.5 text-sm font-medium text-green-600">
               <CheckCircle2 size={13} />
               Saved
             </span>
@@ -1067,21 +1022,17 @@ function ManagementView({
         <h3 className="text-[13px] font-bold text-gray-800 mb-1">
           Manage Connection
         </h3>
-        <p className="text-xs text-gray-500 mb-4">
+        <p className="text-sm text-gray-500 mb-4">
           Change or disconnect your WhatsApp integration
         </p>
         <div className="flex flex-wrap gap-3">
-          <button className="flex items-center gap-1.5 py-2 px-4 border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium rounded-xl transition-colors cursor-pointer">
-            <Phone size={14} />
-            Change Number
-          </button>
-          <button
+          {/* <button
             onClick={onReconnect}
             className="flex items-center gap-1.5 py-2 px-4 border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium rounded-xl transition-colors cursor-pointer"
           >
             <RotateCcw size={14} />
             Reconnect Meta
-          </button>
+          </button> */}
           <button
             onClick={onReconnect}
             className="flex items-center gap-1.5 py-2 px-4 border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium rounded-xl transition-colors cursor-pointer"

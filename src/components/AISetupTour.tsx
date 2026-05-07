@@ -50,10 +50,6 @@ export default function AISetupTour({ onDismiss }: AISetupTourProps) {
   }, [mounted, isMobile]);
 
   const handleSetupNow = () => {
-    /**
-     * Use this functions when it has been completely set up on the AI
-     * set up page
-     */
     // dismissTourForSession();
     onDismiss();
     navigate(`/${userId}/ai-setup`);

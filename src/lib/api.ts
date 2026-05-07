@@ -1,14 +1,17 @@
 // lib/api.ts
 const API_BASE = "/api"; // Proxy through Next.js
 
-type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 interface ApiOptions extends RequestInit {
   method?: HttpMethod;
-  data?: any;
+  data?: unknown;
 }
 
-export async function apiClient(endpoint: string, options: ApiOptions = {}) {
+export async function apiClient<TResponse = any>(
+  endpoint: string,
+  options: ApiOptions = {},
+): Promise<TResponse> {
   const { method = "GET", data, headers, ...rest } = options;
 
   const url = `${API_BASE}${endpoint}`; // e.g., /api/auth/login
@@ -36,5 +39,5 @@ export async function apiClient(endpoint: string, options: ApiOptions = {}) {
     err.data = error;
     throw err;
   }
-  return res.json();
+  return (await res.json()) as TResponse;
 }

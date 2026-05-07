@@ -52,7 +52,11 @@ export default function DashboardRootLayout({
       .then(({ isSetup }) => {
         if (!isSetup) setShowTour(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Status couldn't be confirmed (no setup record yet, transient error,
+        // etc.) — default to showing the tour so first-time users get prompted.
+        setShowTour(true);
+      });
   }, []);
 
   return (
