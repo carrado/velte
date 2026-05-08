@@ -887,7 +887,7 @@ function ManagementView({
                 size={13}
                 className="text-green-500 flex-shrink-0"
               />
-              <span className="text-sm font-medium text-gray-600 leading-tight">
+              <span className="sm:text-sm text-xs font-medium text-gray-600 leading-tight">
                 {item.label}
               </span>
             </div>
@@ -1023,7 +1023,7 @@ function ManagementView({
           Manage Connection
         </h3>
         <p className="text-sm text-gray-500 mb-4">
-          Change or disconnect your WhatsApp integration
+          Disconnect your WhatsApp integration
         </p>
         <div className="flex flex-wrap gap-3">
           {/* <button
