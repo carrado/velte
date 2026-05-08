@@ -306,13 +306,13 @@ export default function AISetupPage() {
   // ── Setup wizard ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-5 pb-10" ref={mainRef}>
-      <p className="text-sm text-gray-500">
+    <div className="space-y-5 sm:pb-10" ref={mainRef}>
+      <p className="text-sm text-gray-500 px-5 sm:px-0">
         Connect WhatsApp and configure your AI assistant
       </p>
 
       {/* Step indicator */}
-      <div className="bg-white rounded-2xl w-full border border-gray-200 p-5">
+      <div className="bg-white sm:rounded-2xl w-full border border-gray-200 p-5">
         <div className="flex items-center">
           {WIZARD_STEPS.map((step, i) => (
             <div
@@ -359,7 +359,7 @@ export default function AISetupPage() {
       </div>
 
       {/* Step content */}
-      <div className="bg-white rounded-2xl border border-gray-200">
+      <div className="bg-white sm:rounded-2xl border border-gray-200">
         {currentStep === 1 && (
           <WABASetupStep
             configured={wabaConfigured}
@@ -855,7 +855,7 @@ function ManagementView({
   return (
     <div className="space-y-5 pb-10">
       {/* Status banner */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5">
+      <div className="bg-white sm:rounded-2xl border border-gray-200 p-5">
         <div className="flex items-start gap-3.5">
           <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
             <Sparkles size={18} className="text-green-600" />
@@ -896,7 +896,7 @@ function ManagementView({
       </div>
 
       {/* AI Configuration */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6">
+      <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
         <h3 className="text-[13px] font-bold text-gray-800 mb-5">
           AI Configuration
         </h3>
@@ -1018,7 +1018,7 @@ function ManagementView({
       </div>
 
       {/* Manage Connection */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6">
+      <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
         <h3 className="text-[13px] font-bold text-gray-800 mb-1">
           Manage Connection
         </h3>
