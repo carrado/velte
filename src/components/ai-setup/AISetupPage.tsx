@@ -23,11 +23,7 @@ import {
   disconnectAI,
   getAISetupStatus,
 } from "@/services/aiSetup";
-import {
-  launchWhatsAppEmbeddedSignup,
-  disconnectMeta,
-  consumePendingOAuthResult,
-} from "@/lib/facebook";
+import { launchWhatsAppEmbeddedSignup, disconnectMeta } from "@/lib/facebook";
 import { useAISetupStore } from "@/store/aiSetupStore";
 import type {
   WhatsAppNumber,
@@ -141,20 +137,6 @@ export default function AISetupPage() {
         await useAISetupStore.persist.rehydrate();
         const store = useAISetupStore.getState();
 
-        // If the user just returned from the mobile Facebook OAuth redirect,
-        // finalize the WABA configuration before asking the server for status.
-        const pending = consumePendingOAuthResult();
-        if (pending?.accessToken || pending?.code) {
-          try {
-            await configureWABA(pending.accessToken, pending.code);
-            toast.success("WhatsApp Business configured");
-          } catch (err: unknown) {
-            const message =
-              err instanceof Error ? err.message : "WhatsApp setup failed";
-            toast.error(message);
-          }
-        }
-
         // Fetch latest status from server
         const status = await getAISetupStatus();
 
@@ -187,7 +169,7 @@ export default function AISetupPage() {
             clearSetup();
           }
         }
-      } catch {
+      } catch (error) {
         // API unreachable – fall back to store (localStorage)
         const store = useAISetupStore.getState();
         if (store.isComplete) {
@@ -206,8 +188,8 @@ export default function AISetupPage() {
   const handleLaunchWABA = async () => {
     setIsLaunchingWABA(true);
     try {
-      const { accessToken } = await launchWhatsAppEmbeddedSignup();
-      await configureWABA(accessToken);
+      const { code } = await launchWhatsAppEmbeddedSignup();
+      await configureWABA(code);
       setWabaConfigured(true);
       toast.success("WhatsApp Business configured");
       setCurrentStep(2);
@@ -324,13 +306,13 @@ export default function AISetupPage() {
   // ── Setup wizard ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-5 sm:pb-10" ref={mainRef}>
-      <p className="text-sm text-gray-500 px-5 sm:px-0">
+    <div className="space-y-5 pb-10" ref={mainRef}>
+      <p className="text-sm text-gray-500">
         Connect WhatsApp and configure your AI assistant
       </p>
 
       {/* Step indicator */}
-      <div className="bg-white sm:rounded-2xl w-full border border-gray-200 p-5">
+      <div className="bg-white rounded-2xl w-full border border-gray-200 p-5">
         <div className="flex items-center">
           {WIZARD_STEPS.map((step, i) => (
             <div
@@ -377,7 +359,7 @@ export default function AISetupPage() {
       </div>
 
       {/* Step content */}
-      <div className="bg-white sm:rounded-2xl border border-gray-200">
+      <div className="bg-white rounded-2xl border border-gray-200">
         {currentStep === 1 && (
           <WABASetupStep
             configured={wabaConfigured}
@@ -442,9 +424,8 @@ function WABASetupStep({
         </div>
 
         <p className="text-sm text-gray-600 mb-5 leading-relaxed">
-          Launch Meta&apos;s guided signup to link your WhatsApp Business
-          Account (WABA). A secure popup will guide you through the full
-          process.
+          Launch Meta's guided signup to link your WhatsApp Business Account
+          (WABA). A secure popup will guide you through the full process.
         </p>
 
         <div className="mb-5">
@@ -874,7 +855,7 @@ function ManagementView({
   return (
     <div className="space-y-5 pb-10">
       {/* Status banner */}
-      <div className="bg-white sm:rounded-2xl border border-gray-200 p-5">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
         <div className="flex items-start gap-3.5">
           <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
             <Sparkles size={18} className="text-green-600" />
@@ -906,7 +887,7 @@ function ManagementView({
                 size={13}
                 className="text-green-500 flex-shrink-0"
               />
-              <span className="sm:text-sm text-xs font-medium text-gray-600 leading-tight">
+              <span className="text-sm font-medium text-gray-600 leading-tight">
                 {item.label}
               </span>
             </div>
@@ -915,7 +896,7 @@ function ManagementView({
       </div>
 
       {/* AI Configuration */}
-      <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6">
         <h3 className="text-[13px] font-bold text-gray-800 mb-5">
           AI Configuration
         </h3>
@@ -1037,12 +1018,12 @@ function ManagementView({
       </div>
 
       {/* Manage Connection */}
-      <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6">
         <h3 className="text-[13px] font-bold text-gray-800 mb-1">
           Manage Connection
         </h3>
         <p className="text-sm text-gray-500 mb-4">
-          Disconnect your WhatsApp integration
+          Change or disconnect your WhatsApp integration
         </p>
         <div className="flex flex-wrap gap-3">
           {/* <button
