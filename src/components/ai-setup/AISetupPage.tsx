@@ -11,6 +11,7 @@ import {
   Wifi,
   Power,
   Zap,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -275,7 +276,7 @@ export default function AISetupPage() {
 
   if (isLoadingStatus) {
     return (
-      <div className="space-y-5 pb-10 animate-pulse">
+      <div className="space-y-5 animate-pulse">
         <div className="h-4 w-48 bg-gray-200 rounded" />
         <div className="bg-white rounded-2xl border border-gray-200 p-5 h-24" />
         <div className="bg-white rounded-2xl border border-gray-200 p-8 h-64" />
@@ -306,7 +307,7 @@ export default function AISetupPage() {
   // ── Setup wizard ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-5 pb-10" ref={mainRef}>
+    <div className="space-y-5" ref={mainRef}>
       <p className="text-sm text-gray-500">
         Connect WhatsApp and configure your AI assistant
       </p>
@@ -406,95 +407,228 @@ function WABASetupStep({
   isLaunching: boolean;
   onLaunch: () => void;
 }) {
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const handleLaunchClick = () => setShowConfirmModal(true);
+
+  const handleConfirm = () => {
+    setShowConfirmModal(false);
+    onLaunch();
+  };
+
   return (
-    <div className="p-6 sm:p-8">
-      <div className="max-w-md mx-auto">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-11 h-11 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="#25D366">
-              <path d={WA_ICON_PATH} />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-[15px] font-bold text-gray-900">
-              Set up WhatsApp Business
-            </h2>
-            <p className="text-sm text-gray-400">Step 1 of 3</p>
-          </div>
-        </div>
-
-        <p className="text-sm text-gray-600 mb-5 leading-relaxed">
-          Launch Meta's guided signup to link your WhatsApp Business Account
-          (WABA). A secure popup will guide you through the full process.
-        </p>
-
-        <div className="mb-5">
-          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Steps in the popup
-          </p>
-          <div className="space-y-2.5">
-            {[
-              "Select or create a Business Account",
-              "Create or select a WhatsApp Business Account (WABA)",
-              "Add or confirm a phone number",
-              "Verify the number via OTP (SMS or call)",
-            ].map((item, i) => (
-              <div key={item} className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                  {i + 1}
-                </div>
-                <span className="text-sm text-gray-600">{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-start gap-2.5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-5">
-          <AlertCircle
-            size={14}
-            className="text-amber-500 flex-shrink-0 mt-0.5"
-          />
-          <p className="text-sm text-amber-700 leading-relaxed">
-            <span className="font-semibold">Important: </span>
-            Your number must not be in active use on personal WhatsApp and must
-            be able to receive OTP. You can migrate an existing WhatsApp
-            Business number.
-          </p>
-        </div>
-
-        {configured ? (
-          <div className="flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-xl mb-5">
-            <CheckCircle2 size={18} className="text-green-500 flex-shrink-0" />
+    <>
+      <div className="p-6 sm:p-8">
+        <div className="max-w-md mx-auto">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-11 h-11 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="#25D366">
+                <path d={WA_ICON_PATH} />
+              </svg>
+            </div>
             <div>
-              <p className="text-sm font-semibold text-green-700">
-                WhatsApp Business configured
-              </p>
-              <p className="text-sm text-green-600">Fetching your numbers…</p>
+              <h2 className="text-[15px] font-bold text-gray-900">
+                Set up WhatsApp Business
+              </h2>
+              <p className="text-sm text-gray-400">Step 1 of 3</p>
             </div>
           </div>
-        ) : (
-          <button
-            onClick={onLaunch}
-            disabled={isLaunching}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#25D366] hover:bg-[#1ea855] disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer mb-5"
-          >
-            {isLaunching ? (
-              <>
-                <RefreshCw size={15} className="animate-spin" />
-                Completing WhatsApp setup…
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="white">
+
+          <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+            Connect your WhatsApp Business Account to start sending and
+            receiving messages through Velte AI. The process takes less than 2
+            minutes via Meta's secure guided flow.
+          </p>
+
+          {configured ? (
+            <div className="flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-xl">
+              <CheckCircle2
+                size={18}
+                className="text-green-500 flex-shrink-0"
+              />
+              <div>
+                <p className="text-sm font-semibold text-green-700">
+                  WhatsApp Business configured
+                </p>
+                <p className="text-sm text-green-600">Fetching your numbers…</p>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={handleLaunchClick}
+              disabled={isLaunching}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#25D366] hover:bg-[#1ea855] disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+            >
+              {isLaunching ? (
+                <>
+                  <RefreshCw size={15} className="animate-spin" />
+                  Completing WhatsApp setup…
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="white">
+                    <path d={WA_ICON_PATH} />
+                  </svg>
+                  Connect WhatsApp Business
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-0 sm:px-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setShowConfirmModal(false)}
+          />
+
+          {/* Modal */}
+          <div className="relative w-full sm:max-w-xl bg-white sm:rounded-2xl rounded-t-2xl overflow-hidden shadow-xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="#25D366"
+                  >
+                    <path d={WA_ICON_PATH} />
+                  </svg>
+                </div>
+                <h3 className="text-[15px] font-bold text-gray-900">
+                  Before you continue
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* What happens in the popup */}
+              <div>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  What happens in the popup
+                </p>
+                <div className="space-y-2.5">
+                  {[
+                    "Log in to Facebook and grant permissions",
+                    "Select or create a Business Portfolio",
+                    "Create or select a WhatsApp Business Account (WABA)",
+                    "Add or confirm a phone number",
+                    "Verify the number via OTP (SMS or call)",
+                  ].map((item, i) => (
+                    <div key={item} className="flex items-start gap-3">
+                      <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                        {i + 1}
+                      </div>
+                      <span className="text-sm text-gray-600">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-px bg-gray-100" />
+
+              {/* Requirements */}
+              <div>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  Phone number requirements
+                </p>
+                <div className="space-y-2.5">
+                  {[
+                    {
+                      ok: true,
+                      text: "A number currently on WhatsApp Business app can be used — it will appear automatically if it's already linked to your Meta Business Portfolio.",
+                    },
+                    {
+                      ok: true,
+                      text: "A completely new number (not on any WhatsApp) works too — you'll add and verify it via OTP inside the popup.",
+                    },
+                    {
+                      ok: false,
+                      text: "Numbers active on personal WhatsApp cannot be used. The number must be on WhatsApp Business app or unused entirely.",
+                    },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2.5">
+                      <div
+                        className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                          item.ok ? "bg-green-100" : "bg-red-50"
+                        }`}
+                      >
+                        {item.ok ? (
+                          <CheckCircle2 size={10} className="text-green-600" />
+                        ) : (
+                          <AlertCircle size={10} className="text-red-400" />
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        {item.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-px bg-gray-100" />
+
+              {/* Already on WA Business app warning */}
+              <div className="flex items-start gap-2.5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+                <AlertCircle
+                  size={14}
+                  className="text-amber-500 flex-shrink-0 mt-0.5"
+                />
+                <p className="text-sm text-amber-700 leading-relaxed">
+                  <span className="font-semibold">
+                    Using WhatsApp Business app already?{" "}
+                  </span>
+                  If your number doesn't appear in the popup, you'll need to
+                  link it to your Meta Business Portfolio first at{" "}
+                  <a
+                    href="https://business.facebook.com/latest/settings/whatsapp_account"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline font-medium"
+                  >
+                    business.facebook.com
+                  </a>{" "}
+                  before restarting this flow. You cannot add it manually if
+                  it's already registered.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 py-2.5 border border-gray-200 text-gray-600 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="flex-1 py-2.5 bg-[#25D366] hover:bg-[#1ea855] text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="white">
                   <path d={WA_ICON_PATH} />
                 </svg>
-                Launch WhatsApp Embedded Signup
-              </>
-            )}
-          </button>
-        )}
-      </div>
-    </div>
+                Continue to Facebook
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -120,35 +120,30 @@ export async function launchWhatsAppEmbeddedSignup(): Promise<WhatsAppSignupResu
     let wabaId: string | null = null;
     let phoneNumberId: string | null = null;
     let completed = false;
+    let cancelled = false; // ← add this
+    let finishTimer: ReturnType<typeof setTimeout> | null = null; // ← and this
 
     const cleanup = () => {
       window.removeEventListener("message", messageHandler);
+      if (finishTimer) clearTimeout(finishTimer); // ← cancel the timer too
     };
 
     const finish = () => {
-      if (completed) return;
-
+      if (completed || cancelled) return; // ← guard against cancelled state
       if (!authCode) return;
-
       completed = true;
       cleanup();
-
-      resolve({
-        code: authCode,
-        wabaId,
-        phoneNumberId,
-      });
+      resolve({ code: authCode, wabaId, phoneNumberId });
     };
 
     const messageHandler = (event: MessageEvent) => {
+      if (cancelled) return; // ← ignore messages after cancel
       if (
         event.origin !== "https://www.facebook.com" &&
         event.origin !== "https://web.facebook.com"
-      ) {
+      )
         return;
-      }
 
-      // Format 1: JSON payload from WhatsApp Embedded Signup
       try {
         const payload =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
@@ -156,24 +151,23 @@ export async function launchWhatsAppEmbeddedSignup(): Promise<WhatsAppSignupResu
         if (payload?.type === "WA_EMBEDDED_SIGNUP") {
           const eventName = String(payload.event || "").toLowerCase();
 
-          if (
-            eventName === "finish" ||
-            eventName === "finish_only_waba" ||
-            eventName === "finished"
-          ) {
+          if (["finish", "finish_only_waba", "finished"].includes(eventName)) {
             wabaId = payload.data?.waba_id ?? null;
             phoneNumberId = payload.data?.phone_number_id ?? null;
-
             finish();
+          }
+
+          if (eventName === "cancel") {
+            // ← handle Meta's own cancel event
+            cancelled = true;
+            cleanup();
+            reject(new Error("WhatsApp signup was cancelled"));
           }
         }
       } catch {
-        // Format 2: query-string payload from Facebook login callback
         if (typeof event.data === "string") {
           const params = new URLSearchParams(event.data);
-
           const codeFromMessage = params.get("code");
-
           if (codeFromMessage) {
             authCode = codeFromMessage;
             finish();
@@ -187,6 +181,7 @@ export async function launchWhatsAppEmbeddedSignup(): Promise<WhatsAppSignupResu
     window.FB!.login(
       (response) => {
         if (response.status !== "connected") {
+          cancelled = true; // ← set cancelled before cleanup
           cleanup();
           reject(new Error("WhatsApp signup was cancelled"));
           return;
@@ -195,19 +190,13 @@ export async function launchWhatsAppEmbeddedSignup(): Promise<WhatsAppSignupResu
         authCode = response.authResponse?.accessToken ?? authCode;
 
         if (!authCode) {
+          cancelled = true;
           cleanup();
           reject(new Error("No OAuth code was returned by Facebook"));
           return;
         }
 
-        /**
-         * Do not reject immediately if WABA data is missing.
-         * Sometimes Meta only returns the OAuth code on frontend.
-         * Backend can use the code to fetch WABA + phone numbers.
-         */
-        setTimeout(() => {
-          finish();
-        }, 3000);
+        finishTimer = setTimeout(finish, 3000); // ← store the timer reference
       },
       {
         scope:
