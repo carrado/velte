@@ -144,9 +144,9 @@ export default function AISetupPage() {
         // If the user just returned from the mobile Facebook OAuth redirect,
         // finalize the WABA configuration before asking the server for status.
         const pending = consumePendingOAuthResult();
-        if (pending?.code) {
+        if (pending?.accessToken || pending?.code) {
           try {
-            await configureWABA(pending.code);
+            await configureWABA(pending.accessToken, pending.code);
             toast.success("WhatsApp Business configured");
           } catch (err: unknown) {
             const message =
@@ -206,8 +206,8 @@ export default function AISetupPage() {
   const handleLaunchWABA = async () => {
     setIsLaunchingWABA(true);
     try {
-      const { code } = await launchWhatsAppEmbeddedSignup();
-      await configureWABA(code);
+      const { accessToken } = await launchWhatsAppEmbeddedSignup();
+      await configureWABA(accessToken);
       setWabaConfigured(true);
       toast.success("WhatsApp Business configured");
       setCurrentStep(2);

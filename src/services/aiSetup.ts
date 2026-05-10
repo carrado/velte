@@ -53,11 +53,12 @@ export async function getAISetupStatus(): Promise<AISetupStatus> {
 }
 
 export async function configureWABA(
-  accessToken: string,
+  accessToken?: string,
+  code?: string,
 ): Promise<WABAConfigureResponse> {
   return unwrap<WABAConfigureResponse>("/ai-setup/waba/configure", {
     method: "POST",
-    body: JSON.stringify({ accessToken }),
+    body: JSON.stringify({ accessToken, code }),
   });
 }
 
