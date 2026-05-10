@@ -288,7 +288,7 @@ export default function Signup() {
   const signupMutation = useMutation({
     mutationFn: (data: Omit<SignupForm, "confirmPassword">) =>
       usersApi.create(data),
-    onSuccess: (response) => {
+    onSuccess: (response: any) => {
       toast.success("Account created! Welcome to Velte.");
       router.push(`/auth/verify?email=${response.user.email}`);
     },
@@ -697,8 +697,9 @@ export default function Signup() {
             {/* Global password mismatch error (optional, kept for safety) */}
             <form.Subscribe selector={(state) => state.errors}>
               {(errors) => {
-                const mismatchError = errors.find(
-                  (e) =>
+                const errorList: unknown[] = errors;
+                const mismatchError = errorList.find(
+                  (e): e is { path?: unknown; message?: unknown } =>
                     typeof e === "object" &&
                     e !== null &&
                     "path" in e &&
@@ -707,7 +708,7 @@ export default function Signup() {
                 );
                 return mismatchError ? (
                   <p className="text-red-400 text-xs -mt-2">
-                    {"message" in mismatchError
+                    {mismatchError.message
                       ? String(mismatchError.message)
                       : "Passwords do not match"}
                   </p>
