@@ -7,4 +7,5 @@ export interface User {
   businessName: string;
   address: string;
   services: string[];
+  company?: any;
 }
