@@ -1,6 +1,7 @@
 // services/users.ts
 import { apiClient } from "@/lib/api";
 import { useUserStore } from "@/store/userStore";
+import type { User } from "@/types/user";
 
 export const usersApi = {
   // GET a single user (optional: update store if needed)
@@ -20,10 +21,10 @@ export const usersApi = {
 
   // POST (login) – API call, then add to store
   login: async (data: Record<string, unknown>) => {
-    const response = await apiClient<{ user: Record<string, unknown> }>(
-      "/auth/login",
-      { method: "POST", data },
-    );
+    const response = await apiClient<{ user: User }>("/auth/login", {
+      method: "POST",
+      data,
+    });
     useUserStore.getState().setUser(response.user);
     return response;
   },
@@ -42,7 +43,10 @@ export const usersApi = {
 
   // PATCH (update) – API call, then update store
   update: async (id: string, data: Record<string, unknown>) => {
-    const response = await apiClient(`/users/${id}`, { method: "PATCH", data });
+    const response = await apiClient<{ user: Partial<User> }>(`/users/${id}`, {
+      method: "PATCH",
+      data,
+    });
     useUserStore.getState().updateUser(response.user);
     return response;
   },
