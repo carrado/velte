@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RefreshCw, AlertCircle } from "lucide-react";
 
 const OAUTH_RETURN_KEY = "velte:fb-oauth-return";
 const OAUTH_RESULT_KEY = "velte:fb-oauth-result";
 
-export default function FacebookCallbackPage() {
+function FacebookCallback() {
   const router = useRouter();
   const params = useSearchParams();
   const code = params.get("code");
@@ -68,5 +68,30 @@ export default function FacebookCallbackPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function FacebookCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center px-6 bg-gray-50">
+          <div className="max-w-sm w-full bg-white border border-gray-200 rounded-2xl p-6 text-center">
+            <RefreshCw
+              size={22}
+              className="text-orange-400 animate-spin mx-auto mb-3"
+            />
+            <h1 className="text-[15px] font-bold text-gray-900 mb-1">
+              Finishing WhatsApp setup
+            </h1>
+            <p className="text-sm text-gray-500">
+              Please wait while we complete your connection…
+            </p>
+          </div>
+        </div>
+      }
+    >
+      <FacebookCallback />
+    </Suspense>
   );
 }
