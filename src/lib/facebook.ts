@@ -280,10 +280,10 @@ export async function launchWhatsAppEmbeddedSignup(
           reject(new Error("WhatsApp signup was cancelled"));
           return;
         }
-        accessToken = response.authResponse?.accessToken ?? null;
+        accessToken = response.authResponse?.code ?? null;
         if (!accessToken) {
           cleanup();
-          reject(new Error("No access token was returned by Facebook"));
+          reject(new Error("No code was returned by Facebook"));
           return;
         }
         setTimeout(finish, 3000);
