@@ -24,7 +24,7 @@ export default function UsersActivity() {
     <div className="bg-white sm:rounded-2xl shadow-sm p-5">
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs text-orange-500 font-medium">
-          Today's User Activity
+          Today&apos;s User Activity
         </p>
         <MoreVertical size={16} className="text-[#9CA3AF]" />
       </div>

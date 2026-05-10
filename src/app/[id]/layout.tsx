@@ -64,7 +64,10 @@ export default function DashboardRootLayout({
       <div className="flex h-screen bg-[#F1F5F9] overflow-hidden">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        <main ref={mainRef} className="flex-1 overflow-y-auto pb-16 min-w-0">
+        <main
+          ref={mainRef}
+          className="flex-1 overflow-y-auto pb-16 sm:pb-0 min-w-0"
+        >
           <div className="py-4 md:p-6 space-y-6">
             <Header
               title={getTitle(pathname)}

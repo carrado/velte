@@ -33,10 +33,6 @@ export default function FilterPopover({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open) setLocal(values);
-  }, [open]);
-
-  useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node))
         setOpen(false);
@@ -48,7 +44,13 @@ export default function FilterPopover({
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          setOpen((prev) => {
+            const next = !prev;
+            if (next) setLocal(values);
+            return next;
+          });
+        }}
         className="p-2 border border-[#d1d5db] rounded bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
       >
         <Filter size={18} className="text-[#6a717f]" />

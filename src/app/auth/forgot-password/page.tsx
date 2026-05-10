@@ -93,8 +93,8 @@ export default function ForgotPassword() {
                 Forgot your password?
               </h1>
               <p className="text-black/45 text-sm">
-                Enter your email and we'll send you a one-time password (OTP) to
-                reset your password.
+                Enter your email and we&apos;ll send you a one-time password
+                (OTP) to reset your password.
               </p>
             </div>
 

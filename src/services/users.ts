@@ -10,7 +10,7 @@ export const usersApi = {
   },
 
   // POST (create) – API call
-  create: async (data: any) => {
+  create: async (data: Record<string, unknown>) => {
     const response = await apiClient("/auth/register", {
       method: "POST",
       data,
@@ -19,27 +19,29 @@ export const usersApi = {
   },
 
   // POST (login) – API call, then add to store
-  login: async (data: any) => {
-    const response = await apiClient("/auth/login", { method: "POST", data });
-    const { id, ...newUser } = response.user;
-    useUserStore.getState().setUser(newUser);
+  login: async (data: Record<string, unknown>) => {
+    const response = await apiClient<{ user: Record<string, unknown> }>(
+      "/auth/login",
+      { method: "POST", data },
+    );
+    useUserStore.getState().setUser(response.user);
     return response;
   },
 
   logout: async () => {
-    const data: any = {};
+    const data: Record<string, never> = {};
     const response = await apiClient("/auth/logout", { method: "POST", data });
     useUserStore.getState().clearUser();
     return response;
   },
 
-  verify: async (data: any) => {
+  verify: async (data: Record<string, unknown>) => {
     const response = await apiClient("/auth/verify", { method: "POST", data });
     return response;
   },
 
   // PATCH (update) – API call, then update store
-  update: async (id: string, data: any) => {
+  update: async (id: string, data: Record<string, unknown>) => {
     const response = await apiClient(`/users/${id}`, { method: "PATCH", data });
     useUserStore.getState().updateUser(response.user);
     return response;

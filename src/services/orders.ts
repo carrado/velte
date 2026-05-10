@@ -153,7 +153,7 @@ const BASE_ORDERS: Order[] = [
   },
 ];
 
-let ordersData: Order[] = BASE_ORDERS.map((o) => ({ ...o }));
+const ordersData: Order[] = BASE_ORDERS.map((o) => ({ ...o }));
 
 export async function fetchOrders(
   filter: OrderFilter = "all",

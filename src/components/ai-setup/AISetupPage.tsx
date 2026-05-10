@@ -23,7 +23,11 @@ import {
   disconnectAI,
   getAISetupStatus,
 } from "@/services/aiSetup";
-import { launchWhatsAppEmbeddedSignup, disconnectMeta } from "@/lib/facebook";
+import {
+  launchWhatsAppEmbeddedSignup,
+  disconnectMeta,
+  consumePendingOAuthResult,
+} from "@/lib/facebook";
 import { useAISetupStore } from "@/store/aiSetupStore";
 import type {
   WhatsAppNumber,
@@ -137,6 +141,20 @@ export default function AISetupPage() {
         await useAISetupStore.persist.rehydrate();
         const store = useAISetupStore.getState();
 
+        // If the user just returned from the mobile Facebook OAuth redirect,
+        // finalize the WABA configuration before asking the server for status.
+        const pending = consumePendingOAuthResult();
+        if (pending?.code) {
+          try {
+            await configureWABA(pending.code);
+            toast.success("WhatsApp Business configured");
+          } catch (err: unknown) {
+            const message =
+              err instanceof Error ? err.message : "WhatsApp setup failed";
+            toast.error(message);
+          }
+        }
+
         // Fetch latest status from server
         const status = await getAISetupStatus();
 
@@ -169,7 +187,7 @@ export default function AISetupPage() {
             clearSetup();
           }
         }
-      } catch (error) {
+      } catch {
         // API unreachable – fall back to store (localStorage)
         const store = useAISetupStore.getState();
         if (store.isComplete) {
@@ -424,8 +442,9 @@ function WABASetupStep({
         </div>
 
         <p className="text-sm text-gray-600 mb-5 leading-relaxed">
-          Launch Meta's guided signup to link your WhatsApp Business Account
-          (WABA). A secure popup will guide you through the full process.
+          Launch Meta&apos;s guided signup to link your WhatsApp Business
+          Account (WABA). A secure popup will guide you through the full
+          process.
         </p>
 
         <div className="mb-5">

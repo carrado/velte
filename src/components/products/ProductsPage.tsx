@@ -91,6 +91,7 @@ function CategoryModal({
 
   useEffect(() => {
     if (editing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(editing.name);
       setDescription(editing.description ?? "");
       setSelectedEmoji(editing.emoji);
@@ -241,6 +242,7 @@ function RestockModal({
 }: RestockModalProps) {
   const [quantity, setQuantity] = useState(1);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuantity(1);
   }, [product, open]);
   if (!open || !product) return null;
@@ -307,6 +309,7 @@ function RestockModal({
 function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
   const [price, setPrice] = useState("");
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (product) setPrice(product.price.toString());
   }, [product, open]);
   if (!open || !product) return null;
@@ -523,6 +526,7 @@ export default function ProductsPage() {
   ).length;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
   }, [selectedCategoryId, activeTab, searchQuery]);
 

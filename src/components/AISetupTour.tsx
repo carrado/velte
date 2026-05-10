@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Sparkles, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "./NavigationProgressContext";
-import { dismissTourForSession } from "@/services/aiSetup";
 
 interface AISetupTourProps {
   onDismiss: () => void;

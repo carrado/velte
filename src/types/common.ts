@@ -38,6 +38,7 @@ export interface NavItem {
   icon: React.ReactNode;
   href: string;
   id?: string;
+  mobile?: boolean;
 }
 
 export interface NavSection {

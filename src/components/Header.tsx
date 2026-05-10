@@ -1,19 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { Search, Bell } from "lucide-react";
 import { useUserStore } from "@/store/userStore";
 import { getInitial } from "@/lib/initials";
 import type { HeaderProps } from "@/types/common";
 
 export default function Header({ title, onMenuClick }: HeaderProps) {
-  const [userDetails, setUserDetails] = useState<Record<string, any>>({});
+  void onMenuClick;
+  const userDetails = useUserStore((state) => state.user);
+  const [isReadOnly, setIsReadOnly] = useState(true);
+  const [value, setValue] = useState("");
 
-  useEffect(() => {
-    useUserStore.persist.rehydrate();
-    const user = useUserStore.getState().user;
-    setUserDetails(user ?? {});
-  }, []);
+  const handleFocus = () => {
+    setIsReadOnly(false);
+  };
+
+  const handleBlur = () => {
+    if (value.trim() === "") {
+      setIsReadOnly(true);
+    }
+  };
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setValue(e.target.value);
+  };
 
   return (
     <div className="flex items-center px-5 sm:px-0 justify-between gap-4">
@@ -26,6 +37,12 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
       <div className="relative w-96 hidden md:block flex-shrink-0">
         <input
           type="text"
+          autoComplete="new-password"
+          readOnly={isReadOnly}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          onChange={handleChange}
+          name="search_query"
           placeholder="Search data, users, or reports"
           className="w-full pl-6 pr-4 py-2 rounded-full border border-[#E5E7EB] bg-white text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
         />

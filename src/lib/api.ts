@@ -8,7 +8,9 @@ interface ApiOptions extends RequestInit {
   data?: unknown;
 }
 
-export async function apiClient<TResponse = any>(
+type ApiClientError = Error & { status?: number; data?: unknown };
+
+export async function apiClient<TResponse = unknown>(
   endpoint: string,
   options: ApiOptions = {},
 ): Promise<TResponse> {
@@ -34,7 +36,7 @@ export async function apiClient<TResponse = any>(
     const error = await res.json().catch(() => ({}));
     const err = new Error(
       error.message || `Request failed with status ${res.status}`,
-    ) as Error & { status?: number; data?: any };
+    ) as ApiClientError;
     err.status = res.status;
     err.data = error;
     throw err;

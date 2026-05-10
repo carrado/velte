@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
@@ -45,7 +46,7 @@ function NavLink({
       }}
       className={`w-full flex items-center gap-3 py-2 px-3 rounded-lg text-sm cursor-pointer transition-colors ${
         active ? "bg-orange-500 text-white" : "text-gray-600 hover:bg-gray-100"
-      }`}
+      } ${item.mobile ? "" : "hidden sm:flex"}`}
     >
       <span className={active ? "text-white" : "text-gray-500"}>
         {item.icon}
@@ -61,6 +62,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [btnDisabled, setBtnDisabled] = useState(false);
   const [mounted, setMounted] = useState(false);
+
   const [effectiveSide, setEffectiveSide] = useState<"left" | "right">("left");
 
   useEffect(() => {
@@ -71,9 +73,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     handleResize();
     window.addEventListener("resize", handleResize);
     setMounted(true);
+
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-
   useEffect(() => {
     useUserStore.persist.rehydrate();
     const user = useUserStore.getState().user;
@@ -91,8 +93,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       setBtnDisabled(false);
       window.location.href = "/";
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Logout failed");
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Logout failed";
+      toast.error(message);
     },
   });
 
@@ -104,17 +107,25 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           label: "Dashboard",
           icon: <LayoutDashboard size={16} />,
           href: "/dashboard",
+          mobile: false,
         },
         {
           label: "Order Management",
           icon: <ShoppingBag size={16} />,
           href: "orders",
+          mobile: false,
         },
-        { label: "Customers", icon: <Users size={16} />, href: "customers" },
+        {
+          label: "Customers",
+          icon: <Users size={16} />,
+          href: "customers",
+          mobile: false,
+        },
         {
           label: "Transaction",
           icon: <CreditCard size={16} />,
           href: "transactions",
+          mobile: true,
         },
       ],
     },
@@ -125,12 +136,19 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           label: "Add Products",
           icon: <PlusCircle size={16} />,
           href: "products/add",
+          mobile: true,
         },
-        { label: "Product List", icon: <List size={16} />, href: "products/" },
+        {
+          label: "Product List",
+          icon: <List size={16} />,
+          href: "products/",
+          mobile: true,
+        },
         {
           label: "Product Reviews",
           icon: <Star size={16} />,
           href: "products/reviews",
+          mobile: true,
         },
       ],
     },
@@ -138,15 +156,17 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: "Admin",
       items: [
         {
-          label: "AI Settings",
+          label: "AI Set up",
           icon: <Shield size={16} />,
           href: "ai-setup",
           id: "ai-settings-nav",
+          mobile: true,
         },
         {
           label: "Settings",
           icon: <Settings size={16} />,
-          href: "/admin/settings",
+          href: "settings",
+          mobile: true,
         },
       ],
     },
@@ -200,7 +220,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         className={`
           fixed lg:static
           top-0 bottom-0 ${sidePosition}
-          w-3/4 md:w-[260px] h-screen bg-white flex flex-col border-r border-gray-200
+          w-3/4 md:w-[260px] h-full bg-white flex flex-col border-r border-gray-200
           overflow-y-auto flex-shrink-0 z-30
           transition-transform duration-300 ease-in-out
           ${translateClass}
@@ -227,7 +247,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-5">
+        <nav className="flex-1 flex-col px-3 py-4 space-y-5">
           {sections.map((section) => (
             <div key={section.title}>
               <p className="text-[10px] font-semibold uppercase text-gray-400 px-3 mb-2 tracking-wider">
@@ -263,7 +283,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center justify-center gap-2 text-sm text-red-500 hover:text-red-600 transition-colors cursor-pointer"
+            className="flex items-center px-3 justify-center gap-2 text-sm text-red-500 hover:text-red-600 transition-colors cursor-pointer"
           >
             <LogOut size={18} />
             <span>Logout</span>

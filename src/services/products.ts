@@ -684,7 +684,7 @@ export const categoriesApi = {
     const existing = CATEGORIES_DATA.find((c) => c.id === id);
     return { ...existing!, ...data };
   },
-  deleteCategory: async (id: string): Promise<void> => {
+  deleteCategory: async (): Promise<void> => {
     await delay(300);
   },
 };

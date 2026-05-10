@@ -72,7 +72,6 @@ export async function proxy(request: NextRequest) {
 
     // 2) Logged-in user visits "/:id" -> redirect to "/:id/dashboard"
     if (segments.length === 1) {
-      const routeId = segments[0];
       // No need to compare with userId – just redirect to dashboard
       return NextResponse.redirect(
         new URL(`/${userId}/dashboard`, request.url),

@@ -318,7 +318,8 @@ export default function Signup() {
       if (!parsed.success) return;
 
       // Remove confirmPassword before sending to API
-      const { confirmPassword, ...apiData } = parsed.data;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { confirmPassword: _confirmPassword, ...apiData } = parsed.data;
       signupMutation.mutate(apiData);
     },
   });
@@ -696,12 +697,19 @@ export default function Signup() {
             {/* Global password mismatch error (optional, kept for safety) */}
             <form.Subscribe selector={(state) => state.errors}>
               {(errors) => {
-                const mismatchError: any = errors.find(
-                  (e: any) => e.path?.[0] === "confirmPassword",
+                const mismatchError = errors.find(
+                  (e) =>
+                    typeof e === "object" &&
+                    e !== null &&
+                    "path" in e &&
+                    Array.isArray((e as { path?: unknown }).path) &&
+                    (e as { path: unknown[] }).path[0] === "confirmPassword",
                 );
                 return mismatchError ? (
                   <p className="text-red-400 text-xs -mt-2">
-                    {mismatchError.message}
+                    {"message" in mismatchError
+                      ? String(mismatchError.message)
+                      : "Passwords do not match"}
                   </p>
                 ) : null;
               }}

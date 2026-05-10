@@ -8,13 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox"; // shadcn checkbox
-import { Mail, Lock, ArrowRight, LogIn } from "lucide-react";
+import { Mail, Lock, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import Image from "next/image";
 import { usersApi } from "@/services/users";
-import { useEffect } from "react";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -39,9 +38,18 @@ export default function Login() {
       toast.success("Welcome back!");
       router.push(`/${response.user.id}/dashboard`);
     },
-    onError: (error: any, variables) => {
-      toast.error(error.message || "Invalid email or password");
-      if (error.status === 403) {
+    onError: (error: unknown, variables) => {
+      const message =
+        error instanceof Error ? error.message : "Invalid email or password";
+      const status =
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        typeof (error as { status?: unknown }).status === "number"
+          ? ((error as { status?: number }).status ?? 0)
+          : 0;
+      toast.error(message);
+      if (status === 403) {
         router.push(`/auth/verify?email=${variables.email}`);
       }
     },
@@ -228,7 +236,7 @@ export default function Login() {
 
           {/* Signup link */}
           <p className="text-center text-black/40 text-sm mt-6">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link
               href="/auth/signup"
               className="text-orange-500 hover:text-orange-400 font-medium"

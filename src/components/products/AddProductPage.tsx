@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef, useEffect } from "react";
 import {
@@ -14,7 +15,7 @@ import {
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { AddProductTaxOption, AddProductColor } from "@/types/product";
+import type { AddProductTaxOption } from "@/types/product";
 import { Input } from "../ui/input";
 import {
   Select,
@@ -45,6 +46,10 @@ export default function AddProductPage() {
   const [taxIncluded, setTaxIncluded] = useState<AddProductTaxOption>("yes");
   const [taxType, setTaxType] = useState<TaxType>("percentage");
   const [taxValue, setTaxValue] = useState("");
+
+  // Negotiable
+  const [isNegotiable, setIsNegotiable] = useState(false);
+  const [minimumPrice, setMinimumPrice] = useState("");
 
   // Dates
   const [manufacturingDate, setManufacturingDate] = useState("");
@@ -99,6 +104,19 @@ export default function AddProductPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Handle negotiable toggle — mutually exclusive with discounted price
+  const handleNegotiableToggle = () => {
+    const next = !isNegotiable;
+    setIsNegotiable(next);
+    if (next) {
+      // Turning ON negotiable: clear discounted price
+      setDiscountedPrice("");
+    } else {
+      // Turning OFF negotiable: clear minimum price
+      setMinimumPrice("");
+    }
+  };
 
   // Date picker helpers
   const openDatePicker = (ref: React.RefObject<HTMLInputElement | null>) => {
@@ -200,8 +218,7 @@ export default function AddProductPage() {
     if (attributeError) setAttributeError("");
   };
 
-  // Action buttons component (reused at bottom)
-  const ActionButtons = () => (
+  const actionButtons = (
     <div className="flex justify-end gap-3 pt-2 border-t border-gray-100 mt-6">
       <button className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold px-4 h-10 rounded-lg whitespace-nowrap transition-colors">
         Publish Product
@@ -302,27 +319,93 @@ export default function AddProductPage() {
             </div>
           </div>
 
-          {/* Discounted Price + Tax Included row: stack on mobile */}
+          {/* Negotiable toggle + Minimum Price */}
           <div className="flex flex-col sm:flex-row gap-5">
-            <div className="flex-1 min-w-0 space-y-3">
+            <div className="flex-1 min-w-0 space-y-2">
               <label className="block text-sm font-bold text-[#023337]">
-                Discounted Price{" "}
-                <span className="font-normal text-gray-500">(Optional)</span>
+                Negotiable
               </label>
-              <div className="flex h-12 items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 overflow-hidden">
-                <div className="bg-orange-50 rounded px-2 py-1 text-sm font-bold text-black flex-shrink-0">
-                  {currency === "NGN" ? "₦" : "$"}
-                </div>
-                <Input
-                  type="number"
-                  step="any"
-                  value={discountedPrice}
-                  onChange={(e) => setDiscountedPrice(e.target.value)}
-                  placeholder="0.00"
-                  className="flex-1 min-w-0 text-sm font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
-                />
+              <div className="flex items-center gap-3 h-12">
+                <span
+                  className={cn(
+                    "text-sm font-medium transition-colors",
+                    !isNegotiable ? "text-[#023337]" : "text-gray-400",
+                  )}
+                >
+                  NO
+                </span>
+                <button
+                  onClick={handleNegotiableToggle}
+                  className={cn(
+                    "relative w-12 h-6 rounded-full transition-colors focus:outline-none",
+                    isNegotiable ? "bg-orange-500" : "bg-gray-300",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform",
+                      isNegotiable ? "translate-x-7" : "translate-x-1",
+                    )}
+                  />
+                </button>
+                <span
+                  className={cn(
+                    "text-sm font-medium transition-colors",
+                    isNegotiable ? "text-[#023337]" : "text-gray-400",
+                  )}
+                >
+                  YES
+                </span>
               </div>
             </div>
+          </div>
+
+          {/* Discounted Price + Tax Included row — Discounted Price hidden when negotiable is on */}
+          <div className="flex flex-col sm:flex-row gap-5">
+            {!isNegotiable ? (
+              <div className="flex-1 min-w-0 space-y-3">
+                <label className="block text-sm font-bold text-[#023337]">
+                  Discounted Price{" "}
+                  <span className="font-normal text-gray-500">(Optional)</span>
+                </label>
+                <div className="flex h-12 items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 overflow-hidden">
+                  <div className="bg-orange-50 rounded px-2 py-1 text-sm font-bold text-black flex-shrink-0">
+                    {currency === "NGN" ? "₦" : "$"}
+                  </div>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={discountedPrice}
+                    onChange={(e) => setDiscountedPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="flex-1 min-w-0 text-sm font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 min-w-0 space-y-3">
+                <label className="block text-sm font-bold text-[#023337]">
+                  Minimum Price
+                </label>
+                <div className="flex h-12 items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 overflow-hidden">
+                  <div className="bg-orange-50 rounded px-2 py-1 text-sm font-bold text-black flex-shrink-0">
+                    {currency === "NGN" ? "₦" : "$"}
+                  </div>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={minimumPrice}
+                    onChange={(e) => setMinimumPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="flex-1 min-w-0 text-sm font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  The lowest price you&apos;re willing to accept for this
+                  product.
+                </p>
+              </div>
+            )}
 
             <div className="flex-1 min-w-0 space-y-3">
               <label className="block text-sm font-bold text-[#023337]">
@@ -491,8 +574,8 @@ export default function AddProductPage() {
                 className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
               <p className="text-xs text-gray-500 mt-1">
-                When stock quantity reaches this number, you’ll be notified to
-                restock.
+                When stock quantity reaches this number, you&apos;ll be notified
+                to restock.
               </p>
             </div>
           </div>
@@ -528,9 +611,7 @@ export default function AddProductPage() {
           </button>
 
           {/* Bottom action buttons - visible on desktop */}
-          <div className="hidden lg:block">
-            <ActionButtons />
-          </div>
+          <div className="hidden lg:block">{actionButtons}</div>
         </div>
 
         {/* ── Right column: Upload + Categories + Tags + Attributes ── */}
@@ -822,9 +903,7 @@ export default function AddProductPage() {
       </div>
 
       {/* Bottom action buttons - visible on mobile only */}
-      <div className="lg:hidden -mt-3">
-        <ActionButtons />
-      </div>
+      <div className="lg:hidden -mt-3">{actionButtons}</div>
     </div>
   );
 }

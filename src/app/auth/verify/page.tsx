@@ -181,7 +181,7 @@ function VerifyForm() {
         {/* Resend code */}
         <div className="text-center mt-6">
           <p className="text-black/40 text-sm">
-            Didn't receive the code?{" "}
+            Didn&apos;t receive the code?{" "}
             <button
               onClick={() => resendMutation.mutate()}
               disabled={resendMutation.isPending || !email}

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  MoreHorizontal,
   Link2,
   MoreVertical,
   ArrowUp,

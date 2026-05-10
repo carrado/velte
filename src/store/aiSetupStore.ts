@@ -17,7 +17,7 @@ interface AISetupState {
 
 export const useAISetupStore = create<AISetupState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       isComplete: false,
       config: null,
 

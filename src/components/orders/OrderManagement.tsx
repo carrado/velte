@@ -102,13 +102,11 @@ function PaymentBadge({ status }: { status: "Paid" | "Unpaid" }) {
 }
 
 function RowActions({
-  orderId,
   status,
   onMarkShipped,
   onMarkDelivered,
   onMarkCancelled,
 }: {
-  orderId: string;
   status: OrderStatus;
   onMarkShipped: () => void;
   onMarkDelivered: () => void;
@@ -282,7 +280,6 @@ export default function OrderManagement() {
   const [activeTab, setActiveTab] = useState<OrderFilter>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [filters, setFilters] =
     useState<Record<string, string>>(DEFAULT_FILTERS);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
@@ -360,7 +357,6 @@ export default function OrderManagement() {
   function handleTabChange(tab: OrderFilter) {
     setActiveTab(tab);
     setPage(1);
-    setSelectedOrders(new Set());
     setFilters((prev) => ({ ...prev, orderStatus: "all" }));
   }
 
@@ -371,12 +367,6 @@ export default function OrderManagement() {
     ).length,
     pending: orders.filter((o) => o.status === "Pending").length,
     cancelled: orders.filter((o) => o.status === "Cancelled").length,
-  };
-
-  const toggleSelectOne = (id: string) => {
-    const newSet = new Set(selectedOrders);
-    newSet.has(id) ? newSet.delete(id) : newSet.add(id);
-    setSelectedOrders(newSet);
   };
 
   const handleMarkShipped = (orderId: string) => {
@@ -440,7 +430,6 @@ export default function OrderManagement() {
       className: "text-center",
       cell: (o) => (
         <RowActions
-          orderId={o.id}
           status={o.status}
           onMarkShipped={() => handleMarkShipped(o.id)}
           onMarkDelivered={() => handleMarkDelivered(o.id)}
@@ -594,7 +583,6 @@ export default function OrderManagement() {
               }}
               action={
                 <RowActions
-                  orderId={order.id}
                   status={order.status}
                   onMarkShipped={() => handleMarkShipped(order.id)}
                   onMarkDelivered={() => handleMarkDelivered(order.id)}
