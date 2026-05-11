@@ -34,10 +34,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { CreditCard } from "lucide-react";
+import { BillingSettingsPanel } from "./BillingSettings";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = "account" | "orders" | "ai" | "invoice";
+type SettingsTab = "account" | "orders" | "ai" | "invoice" | "billing";
 type InvoiceTab = "invoice" | "receipt";
 
 interface UserProfile {
@@ -1818,6 +1820,12 @@ export default function SettingsPage() {
       icon: FileText,
       description: "Templates & branding",
     },
+    {
+      id: "billing",
+      label: "Billing",
+      icon: CreditCard,
+      description: "Plan & payments",
+    },
   ];
 
   return (
@@ -1827,7 +1835,7 @@ export default function SettingsPage() {
       </p>
 
       {/* Tab bar */}
-      <div className="bg-white sm:rounded-2xl border border-gray-200 p-1.5 grid grid-cols-2 sm:grid-cols-4 gap-1">
+      <div className="bg-white sm:rounded-2xl border border-gray-200 p-1.5 grid grid-cols-2 sm:grid-cols-5 gap-1">
         {tabs.map(({ id, label, icon: Icon, description }) => (
           <button
             key={id}
@@ -1870,6 +1878,7 @@ export default function SettingsPage() {
       {activeTab === "orders" && <OrderSettingsPanel />}
       {activeTab === "ai" && <AISettingsPanel />}
       {activeTab === "invoice" && <InvoiceReceiptPanel />}
+      {activeTab === "billing" && <BillingSettingsPanel />}
     </div>
   );
 }

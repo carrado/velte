@@ -7,6 +7,7 @@ import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
 import { NavigationProgressProvider } from "@/components/NavigationProgressContext";
 import AISetupTour from "@/components/AISetupTour";
+import TrialGate from "@/components/TrialGate";
 import { checkAISetup, hasDismissedTourThisSession } from "@/services/aiSetup";
 
 const PATH_TITLES: Record<string, string> = {
@@ -61,23 +62,26 @@ export default function DashboardRootLayout({
 
   return (
     <NavigationProgressProvider>
-      <div className="flex h-screen bg-[#F1F5F9] overflow-hidden">
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex flex-col h-screen bg-[#F1F5F9] overflow-hidden">
+        <TrialGate />
+        <div className="flex flex-1 min-h-0">
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        <main
-          ref={mainRef}
-          className="flex-1 overflow-y-auto pb-16 sm:pb-0 min-w-0"
-        >
-          <div className="py-4 md:p-6 space-y-6">
-            <Header
-              title={getTitle(pathname)}
-              onMenuClick={() => setSidebarOpen(true)}
-            />
-            {children}
-          </div>
-        </main>
+          <main
+            ref={mainRef}
+            className="flex-1 overflow-y-auto pb-16 sm:pb-0 min-w-0"
+          >
+            <div className="py-4 md:p-6 space-y-6">
+              <Header
+                title={getTitle(pathname)}
+                onMenuClick={() => setSidebarOpen(true)}
+              />
+              {children}
+            </div>
+          </main>
 
-        <BottomNav onMenuClick={() => setSidebarOpen(true)} />
+          <BottomNav onMenuClick={() => setSidebarOpen(true)} />
+        </div>
       </div>
 
       {showTour && <AISetupTour onDismiss={() => setShowTour(false)} />}
