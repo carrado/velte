@@ -138,6 +138,8 @@ export default function AISetupPage() {
         await useAISetupStore.persist.rehydrate();
         const store = useAISetupStore.getState();
 
+        console.log(store);
+
         // Fetch latest status from server
         const status = await getAISetupStatus();
 
@@ -162,8 +164,8 @@ export default function AISetupPage() {
             setCurrentStep(3);
           }
           // Fallback to stored config from store (if any)
-          if (store.config && !status.aiConfig) {
-            setAIConfig(store.config);
+          if (store.aiConfig && !status.aiConfig) {
+            setAIConfig(store.aiConfig);
           }
           // Clear store if server says not complete (prev stale)
           if (!status.isComplete && store.isComplete) {
@@ -175,7 +177,7 @@ export default function AISetupPage() {
         const store = useAISetupStore.getState();
         if (store.isComplete) {
           setIsSetupComplete(true);
-          if (store.config) setAIConfig(store.config);
+          if (store.aiConfig) setAIConfig(store.aiConfig);
         }
       } finally {
         setIsLoadingStatus(false);
@@ -308,12 +310,12 @@ export default function AISetupPage() {
 
   return (
     <div className="space-y-5" ref={mainRef}>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-gray-500 px-5">
         Connect WhatsApp and configure your AI assistant
       </p>
 
       {/* Step indicator */}
-      <div className="bg-white rounded-2xl w-full border border-gray-200 p-5">
+      <div className="bg-white sm:rounded-2xl w-full border border-gray-200 p-5">
         <div className="flex items-center">
           {WIZARD_STEPS.map((step, i) => (
             <div
@@ -360,7 +362,7 @@ export default function AISetupPage() {
       </div>
 
       {/* Step content */}
-      <div className="bg-white rounded-2xl border border-gray-200">
+      <div className="bg-white sm:rounded-2xl border border-gray-200">
         {currentStep === 1 && (
           <WABASetupStep
             configured={wabaConfigured}
@@ -487,7 +489,7 @@ function WABASetupStep({
           />
 
           {/* Modal */}
-          <div className="relative w-full sm:max-w-xl bg-white sm:rounded-2xl rounded-t-2xl overflow-hidden shadow-xl">
+          <div className="relative w-full sm:max-w-xl bg-white sm:rounded-2xl sm:rounded-t-2xl overflow-hidden shadow-xl">
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
@@ -622,7 +624,8 @@ function WABASetupStep({
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="white">
                   <path d={WA_ICON_PATH} />
                 </svg>
-                Continue to Facebook
+                <p className="hidden sm:flex">Continue to Facebook</p>
+                <p className="sm:hidden flex">Continue</p>
               </button>
             </div>
           </div>

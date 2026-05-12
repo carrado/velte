@@ -144,12 +144,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           href: "products/",
           mobile: true,
         },
-        {
-          label: "Product Reviews",
-          icon: <Star size={16} />,
-          href: "products/reviews",
-          mobile: true,
-        },
       ],
     },
     {
@@ -166,6 +160,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           label: "Settings",
           icon: <Settings size={16} />,
           href: "settings",
+          mobile: true,
+        },
+        {
+          label: "Billing",
+          icon: <CreditCard size={16} />,
+          href: "billing",
           mobile: true,
         },
       ],

@@ -1,40 +1,57 @@
 // store/aiSetupStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { AIConfig } from "@/types/ai-setup";
+import type { AIConfig, WhatsAppNumber } from "@/types/ai-setup";
 
 interface AISetupState {
   // Core state
   isComplete: boolean;
-  config: AIConfig | null;
+  metaConnected: boolean;
+  wabaConfigured: boolean;
+  selectedNumberId: string | null;
+  selectedNumber: WhatsAppNumber | null;
+  aiConfig: AIConfig | null;
 
   // Actions
   markComplete: () => void;
   clearSetup: () => void;
-  setConfig: (config: AIConfig) => void;
+  setConfig: (aiConfig: AIConfig) => void;
   updateConfig: (updates: Partial<AIConfig>) => void;
+  setWabaConfigured: (val: boolean) => void; // ← add
+  setSelectedNumber: (n: WhatsAppNumber | null) => void;
 }
 
 export const useAISetupStore = create<AISetupState>()(
   persist(
     (set) => ({
       isComplete: false,
-      config: null,
+      aiConfig: null,
+      metaConnected: false,
+      wabaConfigured: false,
+      selectedNumberId: null,
+      selectedNumber: null,
 
       markComplete: () => set({ isComplete: true }),
 
       clearSetup: () =>
         set({
           isComplete: false,
-          config: null,
+          aiConfig: null,
+          metaConnected: false,
+          wabaConfigured: false,
+          selectedNumberId: null,
         }),
 
-      setConfig: (config) => set({ config }),
+      setConfig: (aiConfig) => set({ aiConfig }),
 
       updateConfig: (updates) =>
         set((state) => ({
-          config: state.config ? { ...state.config, ...updates } : null,
+          aiConfig: state.aiConfig ? { ...state.aiConfig, ...updates } : null,
         })),
+
+      setWabaConfigured: (val) => set({ wabaConfigured: val }),
+      setSelectedNumber: (n) =>
+        set({ selectedNumber: n, selectedNumberId: n?.numberId ?? null }),
     }),
     {
       name: "ai-setup-storage",

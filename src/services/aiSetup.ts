@@ -117,5 +117,18 @@ export function dismissTourForSession(): void {
 
 export async function checkAISetup(): Promise<{ isSetup: boolean }> {
   const status = await getAISetupStatus();
+  const store = useAISetupStore.getState();
+
+  if (status.isComplete) {
+    store.markComplete();
+  } else {
+    store.clearSetup();
+  }
+
+  // Persist all status fields so the page can skip its own fetch
+  store.setWabaConfigured(status.wabaConfigured ?? false);
+  if (status.selectedNumber) store.setSelectedNumber(status.selectedNumber);
+  if (status.aiConfig) store.setConfig(status.aiConfig);
+
   return { isSetup: !!status.isComplete };
 }

@@ -34,12 +34,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { CreditCard } from "lucide-react";
-import { BillingSettingsPanel } from "./BillingSettings";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = "account" | "orders" | "ai" | "invoice" | "billing";
+type SettingsTab = "account" | "orders" | "ai" | "invoice";
 type InvoiceTab = "invoice" | "receipt";
 
 interface UserProfile {
@@ -209,9 +207,9 @@ function SectionCard({
           <Icon size={17} className="text-orange-500" />
         </div>
         <div>
-          <h3 className="text-[13px]  font-bold text-gray-900">{title}</h3>
+          <h3 className="text-[13px] font-bold text-gray-900">{title}</h3>
           {description && (
-            <p className="text-xs  text-gray-400 mt-0.5">{description}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{description}</p>
           )}
         </div>
       </div>
@@ -607,7 +605,6 @@ function OrderSettingsPanel() {
             : 1
           : p.minDeliveryDays + 1;
       const next = Math.max(floor, p[field] + delta);
-      // Prevent min from exceeding max and vice versa
       if (field === "minDeliveryDays") {
         return { ...p, minDeliveryDays: Math.min(next, p.maxDeliveryDays - 1) };
       }
@@ -896,7 +893,7 @@ function AISettingsPanel() {
                 <p className="text-sm font-semibold text-gray-900">
                   24/7 Availability
                 </p>
-                <p className="text-xs  text-gray-500">
+                <p className="text-xs text-gray-500">
                   AI responds at any time of day
                 </p>
               </div>
@@ -962,7 +959,7 @@ function AISettingsPanel() {
                 <label className="text-sm font-semibold text-gray-900 block mb-1">
                   Offline Message
                 </label>
-                <p className="text-xs  text-gray-500 mb-2">
+                <p className="text-xs text-gray-500 mb-2">
                   Sent to customers who message outside your operating hours
                 </p>
                 <textarea
@@ -987,7 +984,7 @@ function AISettingsPanel() {
                   size={13}
                   className="text-gray-400 flex-shrink-0 mt-0.5"
                 />
-                <p className="text-xs  text-gray-500 leading-relaxed">
+                <p className="text-xs text-gray-500 leading-relaxed">
                   Your AI will be active from{" "}
                   <span className="font-semibold text-gray-700">
                     {shopHours.openTime}
@@ -1017,7 +1014,7 @@ function AISettingsPanel() {
               <p className="text-sm font-semibold text-gray-900">
                 Enable Escalation Trigger
               </p>
-              <p className="text-xs  text-gray-500">
+              <p className="text-xs text-gray-500">
                 AI flags large orders for your manual review
               </p>
             </div>
@@ -1035,7 +1032,7 @@ function AISettingsPanel() {
                 <label className="text-sm font-semibold text-gray-900 block mb-1">
                   Order Quantity Threshold
                 </label>
-                <p className="text-xs  text-gray-500 mb-2">
+                <p className="text-xs text-gray-500 mb-2">
                   When a customer orders this many items or more, an invoice is
                   generated instead of automated fulfillment
                 </p>
@@ -1068,13 +1065,13 @@ function AISettingsPanel() {
                   <p className="text-sm font-semibold text-amber-800">
                     Important — Payment Notice
                   </p>
-                  <p className="text-xs  text-amber-700 leading-relaxed">
+                  <p className="text-xs text-amber-700 leading-relaxed">
                     The AI does <span className="font-bold">not</span> receive
                     payment on your behalf when a customer orders{" "}
                     <span className="font-bold">
                       {escalation.threshold}+ items
                     </span>
-                    , an invoice is automatically generated and sent to{" "}
+                    . An invoice is automatically generated and sent to{" "}
                     <span className="font-bold">your email</span> with the
                     customer's full details (name, contact, and order
                     breakdown). Customise the invoice format in the{" "}
@@ -1088,7 +1085,7 @@ function AISettingsPanel() {
                   size={13}
                   className="text-blue-500 flex-shrink-0 mt-0.5"
                 />
-                <p className="text-xs  text-blue-700 leading-relaxed">
+                <p className="text-xs text-blue-700 leading-relaxed">
                   Escalation invoices are delivered to your registered account
                   email with a full order breakdown and customer contact
                   details.
@@ -1480,18 +1477,18 @@ function InvoiceReceiptPanel() {
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-[13px]  font-bold text-gray-900">
+                <h3 className="text-[13px] font-bold text-gray-900">
                   Invoice Preview
                 </h3>
-                <p className="text-xs  text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-400 mt-0.5">
                   Updates live as you edit below
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button className="flex items-center gap-1.5 text-xs  font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
+                <button className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
                   <Eye size={12} /> Preview
                 </button>
-                <button className="flex items-center gap-1.5 text-xs  font-medium text-orange-600 hover:text-orange-700 border border-orange-200 bg-orange-50 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
+                <button className="flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 bg-orange-50 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
                   <Download size={12} /> Export PDF
                 </button>
               </div>
@@ -1500,7 +1497,7 @@ function InvoiceReceiptPanel() {
           </div>
 
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
-            <h3 className="text-[13px]  font-bold text-gray-800 mb-5">
+            <h3 className="text-[13px] font-bold text-gray-800 mb-5">
               Business Information
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1544,7 +1541,7 @@ function InvoiceReceiptPanel() {
             </div>
 
             <div className="h-px bg-gray-100 my-5" />
-            <h3 className="text-[13px]  font-bold text-gray-800 mb-5">
+            <h3 className="text-[13px] font-bold text-gray-800 mb-5">
               Payment & Invoice Settings
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1588,7 +1585,7 @@ function InvoiceReceiptPanel() {
             </div>
 
             <div className="h-px bg-gray-100 my-5" />
-            <h3 className="text-[13px]  font-bold text-gray-800 mb-4">
+            <h3 className="text-[13px] font-bold text-gray-800 mb-4">
               Appearance
             </h3>
             <div className="flex items-center gap-4 mb-4">
@@ -1640,18 +1637,18 @@ function InvoiceReceiptPanel() {
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-[13px]  font-bold text-gray-900">
+                <h3 className="text-[13px] font-bold text-gray-900">
                   Receipt Preview
                 </h3>
-                <p className="text-xs  text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-400 mt-0.5">
                   Updates live as you edit below
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button className="flex items-center gap-1.5 text-xs  font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
+                <button className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
                   <Printer size={12} /> Print
                 </button>
-                <button className="flex items-center gap-1.5 text-xs  font-medium text-orange-600 hover:text-orange-700 border border-orange-200 bg-orange-50 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
+                <button className="flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 bg-orange-50 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
                   <Download size={12} /> Export PDF
                 </button>
               </div>
@@ -1660,7 +1657,7 @@ function InvoiceReceiptPanel() {
           </div>
 
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
-            <h3 className="text-[13px]  font-bold text-gray-800 mb-5">
+            <h3 className="text-[13px] font-bold text-gray-800 mb-5">
               Business Information
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1689,7 +1686,7 @@ function InvoiceReceiptPanel() {
             </div>
 
             <div className="h-px bg-gray-100 my-5" />
-            <h3 className="text-[13px]  font-bold text-gray-800 mb-4">
+            <h3 className="text-[13px] font-bold text-gray-800 mb-4">
               Receipt Content
             </h3>
             <div className="space-y-4">
@@ -1730,7 +1727,7 @@ function InvoiceReceiptPanel() {
             </div>
 
             <div className="h-px bg-gray-100 my-5" />
-            <h3 className="text-[13px]  font-bold text-gray-800 mb-4">
+            <h3 className="text-[13px] font-bold text-gray-800 mb-4">
               Appearance
             </h3>
             <div className="flex items-center gap-6">
@@ -1820,12 +1817,6 @@ export default function SettingsPage() {
       icon: FileText,
       description: "Templates & branding",
     },
-    {
-      id: "billing",
-      label: "Billing",
-      icon: CreditCard,
-      description: "Plan & payments",
-    },
   ];
 
   return (
@@ -1835,7 +1826,7 @@ export default function SettingsPage() {
       </p>
 
       {/* Tab bar */}
-      <div className="bg-white sm:rounded-2xl border border-gray-200 p-1.5 grid grid-cols-2 sm:grid-cols-5 gap-1">
+      <div className="bg-white sm:rounded-2xl border border-gray-200 p-1.5 grid grid-cols-2 sm:grid-cols-4 gap-1">
         {tabs.map(({ id, label, icon: Icon, description }) => (
           <button
             key={id}
@@ -1855,7 +1846,7 @@ export default function SettingsPage() {
             <div className="text-center sm:text-left">
               <p
                 className={cn(
-                  "text-xs  font-semibold leading-none",
+                  "text-xs font-semibold leading-none",
                   activeTab === id ? "text-white" : "text-gray-800",
                 )}
               >
@@ -1878,7 +1869,6 @@ export default function SettingsPage() {
       {activeTab === "orders" && <OrderSettingsPanel />}
       {activeTab === "ai" && <AISettingsPanel />}
       {activeTab === "invoice" && <InvoiceReceiptPanel />}
-      {activeTab === "billing" && <BillingSettingsPanel />}
     </div>
   );
 }

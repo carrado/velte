@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   ChevronRight,
   Sparkles,
+  Wifi,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -176,65 +177,78 @@ function PlanCard({
   ];
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border-2 border-orange-300 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-5">
-      {/* Corner ribbon */}
-      <div className="absolute top-0 right-0">
-        <div className="bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wide">
-          MVP Plan
+    <div className="relative overflow-hidden bg-white sm:rounded-2xl border border-gray-200">
+      {/* Accent bar */}
+      <div className="h-1.5 bg-orange-400" />
+
+      <div className="p-5 sm:p-6">
+        {/* Corner ribbon */}
+        <div className="absolute top-1.5 right-0">
+          <div className="bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wide">
+            MVP Plan
+          </div>
         </div>
-      </div>
 
-      <div className="flex items-start gap-3 mb-4">
-        <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
-          <Sparkles size={18} className="text-white" />
+        <div className="flex items-start gap-3 mb-5">
+          <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Sparkles size={18} className="text-white" />
+          </div>
+          <div>
+            <h3 className="text-[13px] font-bold text-gray-900">
+              Velte AI PRO
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Everything you need to run AI sales
+            </p>
+          </div>
         </div>
-        <div>
-          <h4 className="text-sm font-black text-gray-900">Velte AI PRO</h4>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Everything you need to run AI sales
-          </p>
+
+        <div className="flex items-baseline gap-1.5 mb-5">
+          <span className="text-3xl font-black text-gray-900">₦8,500</span>
+          <span className="text-sm text-gray-400 font-medium">/ month</span>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4 mb-6">
+          {perks.map((p) => (
+            <div
+              key={p}
+              className="flex items-center gap-2 text-xs text-gray-700"
+            >
+              <CheckCircle2
+                size={13}
+                className="text-orange-500 flex-shrink-0"
+              />
+              {p}
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={onSubscribe}
+          disabled={loading}
+          className={cn(
+            "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.98] cursor-pointer",
+            "bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-200",
+            "disabled:opacity-60 disabled:cursor-not-allowed",
+          )}
+        >
+          {loading ? (
+            <>
+              <RefreshCw size={14} className="animate-spin" />
+              Processing…
+            </>
+          ) : (
+            <>
+              <CreditCard size={14} />
+              {isRenewal ? "Renew · ₦8,500" : "Subscribe · ₦8,500"}
+            </>
+          )}
+        </button>
+
+        <p className="text-[10px] text-gray-400 text-center mt-2">
+          One-time monthly payment · No automatic charges
+        </p>
       </div>
-
-      <div className="flex items-baseline gap-1.5 mb-4">
-        <span className="text-3xl font-black text-gray-900">₦8,500</span>
-        <span className="text-sm text-gray-400 font-medium">/ month</span>
-      </div>
-
-      <ul className="space-y-2 mb-5">
-        {perks.map((p) => (
-          <li key={p} className="flex items-center gap-2 text-xs text-gray-700">
-            <CheckCircle2 size={13} className="text-orange-500 flex-shrink-0" />
-            {p}
-          </li>
-        ))}
-      </ul>
-
-      <button
-        onClick={onSubscribe}
-        disabled={loading}
-        className={cn(
-          "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.98] cursor-pointer",
-          "bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-200",
-          "disabled:opacity-60 disabled:cursor-not-allowed",
-        )}
-      >
-        {loading ? (
-          <>
-            <RefreshCw size={14} className="animate-spin" />
-            Processing…
-          </>
-        ) : (
-          <>
-            <CreditCard size={14} />
-            {isRenewal ? "Renew · ₦8,500" : "Subscribe · ₦8,500"}
-          </>
-        )}
-      </button>
-
-      <p className="text-[10px] text-gray-400 text-center mt-2">
-        One-time monthly payment · No automatic charges
-      </p>
     </div>
   );
 }
@@ -280,12 +294,12 @@ function PaymentRow({ item }: { item: PaymentHistoryItem }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// BILLING PANEL
+// BILLING PAGE
 // ══════════════════════════════════════════════════════════════════════════════
 
-export function BillingSettingsPanel() {
+export default function BillingPage() {
   const subscription = useSubscriptionStore((s) => s.subscription);
-  const [loadingStatus, setLoadingStatus] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const [loadingPay, setLoadingPay] = useState(false);
 
   const history: PaymentHistoryItem[] =
@@ -297,14 +311,15 @@ export function BillingSettingsPanel() {
       status: item.status === "pending" ? "failed" : item.status,
     })) ?? [];
 
+  // Only fetch if store has no data (layout didn't pre-populate)
   useEffect(() => {
     if (!subscription) {
-      setLoadingStatus(true);
-      getSubscriptionStatus().finally(() => setLoadingStatus(false));
+      setIsLoadingStatus(true);
+      getSubscriptionStatus().finally(() => setIsLoadingStatus(false));
     }
   }, [subscription]);
 
-  // Derive status
+  // ── Derive status ────────────────────────────────────────────────────────────
   const isSubscribed = subscription?.isSubscribed ?? false;
   const trialEndsAt = subscription?.trialEndsAt ?? null;
   const currentPeriodEnd = subscription?.currentPeriodEnd ?? null;
@@ -316,11 +331,9 @@ export function BillingSettingsPanel() {
   if (isSubscribed) status = "active";
   else if (trialRemaining && !trialRemaining.expired) status = "trial";
 
-  // Days remaining display
   const trialDaysLeft = trialRemaining?.days ?? 0;
   const isUrgent = trialDaysLeft <= 2 && status === "trial";
 
-  // Access end date for active subscribers
   const accessEndDate = currentPeriodEnd
     ? fmtDate(currentPeriodEnd)
     : trialEndsAt && !isTrialExpired
@@ -361,17 +374,24 @@ export function BillingSettingsPanel() {
     }
   };
 
-  if (loadingStatus) {
+  // ── Loading skeleton (only on first fetch, mirrors AISetupPage skeleton) ────
+
+  if (isLoadingStatus) {
     return (
-      <div className="flex items-center justify-center py-16 gap-3 text-gray-400">
-        <RefreshCw size={16} className="animate-spin" />
-        <span className="text-sm">Loading billing information…</span>
+      <div className="space-y-5 animate-pulse">
+        <div className="h-4 w-48 bg-gray-200 rounded" />
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 h-24" />
+        <div className="bg-white rounded-2xl border border-gray-200 p-8 h-64" />
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
+      <p className="text-sm text-gray-500 px-5 sm:px-0">
+        Manage your subscription and payment history
+      </p>
+
       {/* ── Current Status Card ── */}
       <div className="bg-white sm:rounded-2xl border border-gray-200 overflow-hidden">
         {/* Accent bar */}
@@ -387,6 +407,7 @@ export function BillingSettingsPanel() {
                 : "bg-gray-300",
           )}
         />
+
         <div className="p-5 sm:p-6">
           <div className="flex items-center gap-3 mb-5">
             <div
@@ -418,6 +439,14 @@ export function BillingSettingsPanel() {
                 Your current plan and access details
               </p>
             </div>
+
+            {/* Live badge — only for active */}
+            {status === "active" && (
+              <div className="ml-auto flex items-center gap-1.5 text-sm font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full flex-shrink-0">
+                <Wifi size={11} />
+                Live
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-5">
@@ -472,7 +501,7 @@ export function BillingSettingsPanel() {
               )}
 
               {/* Quick stats row */}
-              <div className="flex items-center gap-4 pt-1">
+              <div className="flex flex-wrap items-center gap-4 pt-1">
                 <div className="flex items-center gap-1.5 text-xs text-gray-500">
                   <Zap size={11} className="text-orange-400" />
                   <span>Unlimited conversations / mo</span>
@@ -513,7 +542,7 @@ export function BillingSettingsPanel() {
       {/* ── Renew early — shown when active ── */}
       {status === "active" && (
         <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
-          <div className="flex items-center justify-between">
+          <div className="flex sm:items-center sm:justify-between sm:flex-row flex-col gap-3">
             <div>
               <h3 className="text-[13px] font-bold text-gray-900">
                 Renew Early
@@ -522,25 +551,27 @@ export function BillingSettingsPanel() {
                 Extend your access before it expires
               </p>
             </div>
-            <button
-              onClick={handleSubscribe}
-              disabled={loadingPay}
-              className={cn(
-                "flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-semibold transition-all cursor-pointer",
-                "bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200",
-                "disabled:opacity-60 disabled:cursor-not-allowed",
-              )}
-            >
-              {loadingPay ? (
-                <RefreshCw size={13} className="animate-spin" />
-              ) : (
-                <>
-                  <RefreshCw size={13} />
-                  Renew · ₦8,500
-                  <ChevronRight size={13} />
-                </>
-              )}
-            </button>
+            <div className="flex justify-end sm:justify-normal">
+              <button
+                onClick={handleSubscribe}
+                disabled={loadingPay}
+                className={cn(
+                  "flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-semibold transition-all cursor-pointer",
+                  "bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200",
+                  "disabled:opacity-60 disabled:cursor-not-allowed",
+                )}
+              >
+                {loadingPay ? (
+                  <RefreshCw size={13} className="animate-spin" />
+                ) : (
+                  <>
+                    <RefreshCw size={13} />
+                    Renew · ₦8,500
+                    <ChevronRight size={13} />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
