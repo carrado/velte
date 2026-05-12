@@ -14,6 +14,7 @@ const publicRoutes = [
   "/_next",
   "/favicon.ico",
   "/site.webmanifest",
+  "/payment/callback",
   "/api",
 ];
 
