@@ -28,8 +28,10 @@ export default function TopProducts() {
   return (
     <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 py-5 px-3">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#111827]">Top Products</h3>
-        <button className="text-xs text-orange-500 hover:underline cursor-pointer">
+        <h3 className="text-dash-heading font-semibold text-[#111827]">
+          Top Products
+        </h3>
+        <button className="text-dash-secondary text-orange-500 hover:underline cursor-pointer">
           All product
         </button>
       </div>
@@ -45,7 +47,7 @@ export default function TopProducts() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search products..."
-          className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[#E5E7EB] bg-gray-50 text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-1 focus:ring-orange-500"
+          className="w-full pl-8 pr-3 py-1.5 text-dash-secondary rounded-lg border border-[#E5E7EB] bg-gray-50 text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-1 focus:ring-orange-500"
         />
       </div>
 
@@ -69,14 +71,14 @@ export default function TopProducts() {
               >
                 <ProductImage />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-[#111827] truncate">
+                  <p className="text-dash-secondary font-semibold text-[#111827] truncate">
                     {product.name}
                   </p>
-                  <p className="text-[11px] text-[#9CA3AF]">
+                  <p className="text-dash-caption text-[#9CA3AF]">
                     Item: {product.sku}
                   </p>
                 </div>
-                <span className="text-xs font-bold text-[#111827] flex-shrink-0">
+                <span className="text-dash-secondary font-bold text-[#111827] flex-shrink-0">
                   ${product.price.toFixed(2)}
                 </span>
               </div>

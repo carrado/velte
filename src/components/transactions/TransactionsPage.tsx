@@ -228,16 +228,16 @@ function StatCard({
   return (
     <div className="bg-white sm:rounded-lg shadow-sm p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <p className="text-base font-bold text-[#23272e]">{title}</p>
+        <p className="text-dash-heading font-bold text-[#23272e]">{title}</p>
         <button className="text-gray-400 hover:text-gray-600 cursor-pointer">
           <MoreVertical size={18} />
         </button>
       </div>
       <div className="flex items-end gap-2 flex-wrap">
-        <p className="text-2xl sm:text-3xl font-bold text-[#023337]">{value}</p>
+        <p className="text-dash-display font-bold text-[#023337]">{value}</p>
         <div
           className={cn(
-            "flex items-center text-sm font-medium mb-1",
+            "flex items-center text-dash-body font-medium mb-1",
             positive ? "text-green-500" : "text-red-500",
           )}
         >
@@ -245,7 +245,7 @@ function StatCard({
           {change}
         </div>
       </div>
-      <p className="text-sm text-gray-500">Last 7 days</p>
+      <p className="text-dash-body text-gray-500">Last 7 days</p>
     </div>
   );
 }
@@ -255,7 +255,7 @@ function TxStatusBadge({ status }: { status: Transaction["status"] }) {
   return (
     <div className="flex items-center justify-center gap-2">
       <div className={cn("w-2 h-2 rounded-full", s.dot)} />
-      <span className={cn("text-sm", s.text)}>{status}</span>
+      <span className={cn("text-dash-body", s.text)}>{status}</span>
     </div>
   );
 }
@@ -351,7 +351,7 @@ export default function TransactionsPage() {
       headerClassName: "text-center",
       className: "text-center",
       cell: () => (
-        <button className="text-sm text-indigo-500 hover:underline cursor-pointer">
+        <button className="text-dash-body text-indigo-500 hover:underline cursor-pointer">
           View Details
         </button>
       ),
@@ -393,7 +393,7 @@ export default function TransactionsPage() {
         <div className="lg:w-[360px] w-full flex-shrink-0">
           <div className="bg-white sm:rounded-lg shadow-sm p-5 flex flex-col gap-4 h-full">
             <div className="flex items-center justify-between">
-              <p className="text-base font-bold text-[#23272e]">
+              <p className="text-dash-heading font-bold text-[#23272e]">
                 Payment Method
               </p>
               <button className="text-gray-400 hover:text-gray-600 cursor-pointer">
@@ -405,21 +405,23 @@ export default function TransactionsPage() {
               <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
               <div className="absolute -right-2 bottom-2 w-20 h-20 rounded-full bg-white/10" />
               <div className="flex items-center justify-between relative z-10">
-                <p className="text-sm font-semibold tracking-wide">Finaci</p>
+                <p className="text-dash-body font-semibold tracking-wide">
+                  Finaci
+                </p>
                 <CreditCard size={20} className="opacity-80" />
               </div>
               <div className="relative z-10">
-                <p className="text-sm tracking-[0.18em] font-mono opacity-80">
+                <p className="text-dash-body tracking-[0.18em] font-mono opacity-80">
                   •••• •••• •••• 2345
                 </p>
-                <div className="flex justify-between mt-1 text-[11px] opacity-70">
+                <div className="flex justify-between mt-1 text-dash-caption opacity-70">
                   <span>Naman Manzoor</span>
                   <span>02/30</span>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-1.5 text-sm">
+            <div className="space-y-1.5 text-dash-body">
               <p>
                 <span className="text-gray-500">Status: </span>
                 <span className="text-green-500 font-medium">Active</span>
@@ -438,11 +440,11 @@ export default function TransactionsPage() {
             </div>
 
             <div className="flex gap-2 mt-auto pt-1">
-              <button className="flex-1 flex items-center justify-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
+              <button className="flex-1 flex items-center justify-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2 text-dash-body text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
                 <Link2 size={15} />
                 Generate Link
               </button>
-              <button className="border border-red-200 bg-red-50 text-red-500 rounded-lg px-3 py-2 text-sm hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap">
+              <button className="border border-red-200 bg-red-50 text-red-500 rounded-lg px-3 py-2 text-dash-body hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap">
                 Deactivate
               </button>
             </div>
@@ -471,7 +473,7 @@ export default function TransactionsPage() {
                   setCurrentPage(1);
                 }}
                 placeholder="Search transactions"
-                className="pl-3 pr-9 py-2 text-sm bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
+                className="pl-3 pr-9 py-2 text-dash-body bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
               />
               <Search
                 size={16}
@@ -516,7 +518,9 @@ export default function TransactionsPage() {
                 badge={
                   <div className="flex items-center gap-1.5">
                     <div className={cn("w-2 h-2 rounded-full", s.dot)} />
-                    <span className={cn("text-xs font-medium", s.text)}>
+                    <span
+                      className={cn("text-dash-secondary font-medium", s.text)}
+                    >
                       {tx.status}
                     </span>
                   </div>
@@ -528,7 +532,7 @@ export default function TransactionsPage() {
                 ]}
                 gridCols={3}
                 footer={
-                  <button className="text-sm text-indigo-500 hover:underline cursor-pointer">
+                  <button className="text-dash-body text-indigo-500 hover:underline cursor-pointer">
                     View Details
                   </button>
                 }

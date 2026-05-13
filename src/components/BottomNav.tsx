@@ -45,7 +45,7 @@ export default function BottomNav({
             }`}
           >
             {item.icon}
-            <span className="text-[11px] font-medium">{item.label}</span>
+            <span className="text-dash-caption font-medium">{item.label}</span>
           </button>
         ))}
         <button
@@ -53,7 +53,7 @@ export default function BottomNav({
           className="flex flex-col items-center gap-1 px-3 py-1 rounded-lg text-gray-500"
         >
           <Menu size={20} />
-          <span className="text-[11px] font-medium">Menu</span>
+          <span className="text-dash-caption font-medium">Menu</span>
         </button>
       </div>
     </div>

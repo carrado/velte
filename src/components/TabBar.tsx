@@ -28,7 +28,7 @@ export default function TabBar<T extends string = string>({
           key={tab.key}
           onClick={() => onChange(tab.key)}
           className={cn(
-            "flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors whitespace-nowrap",
+            "flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer text-dash-body font-medium transition-colors whitespace-nowrap",
             activeTab === tab.key
               ? "bg-white text-[#111827] shadow-sm"
               : "text-[#4b5563] hover:text-[#111827]",
@@ -36,7 +36,7 @@ export default function TabBar<T extends string = string>({
         >
           {tab.label}
           {tab.count !== undefined && (
-            <span className="text-xs font-bold text-orange-500">
+            <span className="text-dash-secondary font-bold text-orange-500">
               ({tab.count})
             </span>
           )}

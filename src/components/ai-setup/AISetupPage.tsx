@@ -310,7 +310,7 @@ export default function AISetupPage() {
 
   return (
     <div className="space-y-5" ref={mainRef}>
-      <p className="text-sm text-gray-500 px-5">
+      <p className="text-dash-body text-gray-500 px-5">
         Connect WhatsApp and configure your AI assistant
       </p>
 
@@ -325,7 +325,7 @@ export default function AISetupPage() {
               <div className="flex flex-col items-center gap-1.5">
                 <div
                   className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all",
+                    "w-8 h-8 rounded-full flex items-center justify-center text-dash-body font-bold transition-all",
                     currentStep > step.id
                       ? "bg-green-500 text-white"
                       : currentStep === step.id
@@ -337,7 +337,7 @@ export default function AISetupPage() {
                 </div>
                 <p
                   className={cn(
-                    "text-sm font-semibold text-center hidden sm:block leading-tight",
+                    "text-dash-body font-semibold text-center hidden sm:block leading-tight",
                     currentStep === step.id
                       ? "text-orange-500"
                       : currentStep > step.id
@@ -429,14 +429,14 @@ function WABASetupStep({
               </svg>
             </div>
             <div>
-              <h2 className="text-[15px] font-bold text-gray-900">
+              <h2 className="text-dash-heading font-bold text-gray-900">
                 Set up WhatsApp Business
               </h2>
-              <p className="text-sm text-gray-400">Step 1 of 3</p>
+              <p className="text-dash-body text-gray-400">Step 1 of 3</p>
             </div>
           </div>
 
-          <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+          <p className="text-dash-body text-gray-600 mb-6 leading-relaxed">
             Connect your WhatsApp Business Account to start sending and
             receiving messages through Velte AI. The process takes less than 2
             minutes via Meta's secure guided flow.
@@ -449,17 +449,19 @@ function WABASetupStep({
                 className="text-green-500 flex-shrink-0"
               />
               <div>
-                <p className="text-sm font-semibold text-green-700">
+                <p className="text-dash-body font-semibold text-green-700">
                   WhatsApp Business configured
                 </p>
-                <p className="text-sm text-green-600">Fetching your numbers…</p>
+                <p className="text-dash-body text-green-600">
+                  Fetching your numbers…
+                </p>
               </div>
             </div>
           ) : (
             <button
               onClick={handleLaunchClick}
               disabled={isLaunching}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-[#25D366] hover:bg-[#1ea855] disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#25D366] hover:bg-[#1ea855] disabled:opacity-60 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
             >
               {isLaunching ? (
                 <>
@@ -503,7 +505,7 @@ function WABASetupStep({
                     <path d={WA_ICON_PATH} />
                   </svg>
                 </div>
-                <h3 className="text-[15px] font-bold text-gray-900">
+                <h3 className="text-dash-heading font-bold text-gray-900">
                   Before you continue
                 </h3>
               </div>
@@ -518,7 +520,7 @@ function WABASetupStep({
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
               {/* What happens in the popup */}
               <div>
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                <p className="text-dash-caption font-bold text-gray-400 uppercase tracking-wider mb-3">
                   What happens in the popup
                 </p>
                 <div className="space-y-2.5">
@@ -530,10 +532,12 @@ function WABASetupStep({
                     "Verify the number via OTP (SMS or call)",
                   ].map((item, i) => (
                     <div key={item} className="flex items-start gap-3">
-                      <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 text-dash-micro font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
                         {i + 1}
                       </div>
-                      <span className="text-sm text-gray-600">{item}</span>
+                      <span className="text-dash-body text-gray-600">
+                        {item}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -543,7 +547,7 @@ function WABASetupStep({
 
               {/* Requirements */}
               <div>
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                <p className="text-dash-caption font-bold text-gray-400 uppercase tracking-wider mb-3">
                   Phone number requirements
                 </p>
                 <div className="space-y-2.5">
@@ -573,7 +577,7 @@ function WABASetupStep({
                           <AlertCircle size={10} className="text-red-400" />
                         )}
                       </div>
-                      <p className="text-sm text-gray-600 leading-relaxed">
+                      <p className="text-dash-body text-gray-600 leading-relaxed">
                         {item.text}
                       </p>
                     </div>
@@ -589,7 +593,7 @@ function WABASetupStep({
                   size={14}
                   className="text-amber-500 flex-shrink-0 mt-0.5"
                 />
-                <p className="text-sm text-amber-700 leading-relaxed">
+                <p className="text-dash-body text-amber-700 leading-relaxed">
                   <span className="font-semibold">
                     Using WhatsApp Business app already?{" "}
                   </span>
@@ -613,13 +617,13 @@ function WABASetupStep({
             <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 py-2.5 border border-gray-200 text-gray-600 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+                className="flex-1 py-2.5 border border-gray-200 text-gray-600 text-dash-body font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirm}
-                className="flex-1 py-2.5 bg-[#25D366] hover:bg-[#1ea855] text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-[#25D366] hover:bg-[#1ea855] text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="white">
                   <path d={WA_ICON_PATH} />
@@ -660,36 +664,36 @@ function SelectNumberStep({
             <Phone size={20} className="text-orange-500" />
           </div>
           <div>
-            <h2 className="text-[15px] font-bold text-gray-900">
+            <h2 className="text-dash-heading font-bold text-gray-900">
               Select your WhatsApp number
             </h2>
-            <p className="text-sm text-gray-400">Step 2 of 3</p>
+            <p className="text-dash-body text-gray-400">Step 2 of 3</p>
           </div>
         </div>
 
-        <p className="text-sm text-gray-600 mb-5">
+        <p className="text-dash-body text-gray-600 mb-5">
           Choose which number you want the AI to manage.
         </p>
 
         {isFetching ? (
           <div className="flex flex-col items-center py-12 gap-3">
             <RefreshCw size={24} className="text-orange-400 animate-spin" />
-            <p className="text-sm text-gray-500">
+            <p className="text-dash-body text-gray-500">
               Fetching your WhatsApp numbers…
             </p>
           </div>
         ) : numbers.length === 0 ? (
           <div className="text-center py-12">
             <Phone size={32} className="text-gray-200 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-500 mb-1">
+            <p className="text-dash-body font-medium text-gray-500 mb-1">
               No numbers found
             </p>
-            <p className="text-sm text-gray-400 mb-5">
+            <p className="text-dash-body text-gray-400 mb-5">
               Make sure you completed the WhatsApp Business setup
             </p>
             <button
               onClick={onRefetch}
-              className="inline-flex items-center gap-1.5 text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-dash-body text-orange-500 hover:text-orange-600 font-medium transition-colors cursor-pointer"
             >
               <RefreshCw size={14} />
               Try again
@@ -721,14 +725,16 @@ function SelectNumberStep({
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900">
+                  <p className="text-dash-body font-semibold text-gray-900">
                     {number.phoneNumber}
                   </p>
-                  <p className="text-sm text-gray-500">{number.businessName}</p>
+                  <p className="text-dash-body text-gray-500">
+                    {number.businessName}
+                  </p>
                 </div>
                 <span
                   className={cn(
-                    "text-[10px] font-semibold px-2 py-1 rounded-full flex-shrink-0",
+                    "text-dash-micro font-semibold px-2 py-1 rounded-full flex-shrink-0",
                     number.verificationStatus === "verified"
                       ? "bg-green-100 text-green-700"
                       : number.verificationStatus === "pending"
@@ -747,7 +753,7 @@ function SelectNumberStep({
 
             <button
               onClick={onRefetch}
-              className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-orange-500 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-dash-body text-gray-400 hover:text-orange-500 transition-colors cursor-pointer"
             >
               <RefreshCw size={12} />
               Refresh numbers
@@ -758,14 +764,14 @@ function SelectNumberStep({
         <div className="flex items-center justify-between pt-2">
           <button
             onClick={onBack}
-            className="text-sm text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
+            className="text-dash-body text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
           >
             ← Back
           </button>
           <button
             onClick={onUseNumber}
             className={cn(
-              "flex items-center gap-1.5 py-2.5 px-5 rounded-xl text-sm font-semibold transition-colors",
+              "flex items-center gap-1.5 py-2.5 px-5 rounded-xl text-dash-body font-semibold transition-colors",
               selectedNumber
                 ? "bg-orange-500 hover:bg-orange-600 text-white cursor-pointer"
                 : "bg-gray-100 text-gray-400 cursor-not-allowed",
@@ -809,10 +815,10 @@ function ConfigureAIStep({
             <Sparkles size={20} className="text-orange-500" />
           </div>
           <div>
-            <h2 className="text-[15px] font-bold text-gray-900">
+            <h2 className="text-dash-heading font-bold text-gray-900">
               Configure AI assistant
             </h2>
-            <p className="text-sm text-gray-400">Step 3 of 3</p>
+            <p className="text-dash-body text-gray-400">Step 3 of 3</p>
           </div>
         </div>
 
@@ -820,7 +826,7 @@ function ConfigureAIStep({
           <svg viewBox="0 0 24 24" width="13" height="13" fill="#16a34a">
             <path d={WA_ICON_PATH} />
           </svg>
-          <p className="text-sm font-medium text-green-700">
+          <p className="text-dash-body font-medium text-green-700">
             {selectedNumber?.phoneNumber} · {selectedNumber?.businessName}
           </p>
         </div>
@@ -828,10 +834,10 @@ function ConfigureAIStep({
         <div className="space-y-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-dash-body font-semibold text-gray-900">
                 Enable AI Auto Replies
               </p>
-              <p className="text-sm text-gray-500 mt-0.5">
+              <p className="text-dash-body text-gray-500 mt-0.5">
                 AI will respond to incoming messages automatically
               </p>
             </div>
@@ -846,10 +852,10 @@ function ConfigureAIStep({
           <div className="h-px bg-gray-100" />
 
           <div>
-            <label className="text-sm font-semibold text-gray-900 block mb-1">
+            <label className="text-dash-body font-semibold text-gray-900 block mb-1">
               Greeting Message
             </label>
-            <p className="text-sm text-gray-500 mb-2">
+            <p className="text-dash-body text-gray-500 mb-2">
               Sent to new customers on their first message
             </p>
             <textarea
@@ -861,7 +867,7 @@ function ConfigureAIStep({
                 })
               }
               rows={3}
-              className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+              className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
             />
           </div>
 
@@ -869,10 +875,10 @@ function ConfigureAIStep({
 
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-dash-body font-semibold text-gray-900">
                 Business Tone
               </p>
-              <p className="text-sm text-gray-500 mt-0.5">
+              <p className="text-dash-body text-gray-500 mt-0.5">
                 How the AI communicates with customers
               </p>
             </div>
@@ -884,7 +890,7 @@ function ConfigureAIStep({
                   businessTone: e.target.value as BusinessTone,
                 })
               }
-              className="text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-300 cursor-pointer flex-shrink-0"
+              className="text-dash-body text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-300 cursor-pointer flex-shrink-0"
             >
               {tones.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -898,10 +904,10 @@ function ConfigureAIStep({
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-dash-body font-semibold text-gray-900">
                 Product Catalog Sync
               </p>
-              <p className="text-sm text-gray-500 mt-0.5">
+              <p className="text-dash-body text-gray-500 mt-0.5">
                 AI recommends products from your catalog
               </p>
             </div>
@@ -920,14 +926,14 @@ function ConfigureAIStep({
         <div className="mt-8 flex items-center justify-between">
           <button
             onClick={onBack}
-            className="text-sm text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
+            className="text-dash-body text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
           >
             ← Back
           </button>
           <button
             onClick={onActivate}
             disabled={isActivating}
-            className="flex items-center gap-2 py-2.5 px-6 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+            className="flex items-center gap-2 py-2.5 px-6 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
           >
             {isActivating ? (
               <>
@@ -1000,15 +1006,15 @@ function ManagementView({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
               <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-              <h2 className="text-[15px] font-bold text-gray-900">
+              <h2 className="text-dash-heading font-bold text-gray-900">
                 AI Assistant Active
               </h2>
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="text-dash-body text-gray-500">
               {selectedNumber.phoneNumber} · {selectedNumber.businessName}
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full flex-shrink-0">
+          <div className="flex items-center gap-1.5 text-dash-body font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full flex-shrink-0">
             <Wifi size={11} />
             Live
           </div>
@@ -1024,7 +1030,7 @@ function ManagementView({
                 size={13}
                 className="text-green-500 flex-shrink-0"
               />
-              <span className="text-sm font-medium text-gray-600 leading-tight">
+              <span className="text-dash-body font-medium text-gray-600 leading-tight">
                 {item.label}
               </span>
             </div>
@@ -1034,17 +1040,17 @@ function ManagementView({
 
       {/* AI Configuration */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6">
-        <h3 className="text-[13px] font-bold text-gray-800 mb-5">
+        <h3 className="text-dash-heading font-bold text-gray-800 mb-5">
           AI Configuration
         </h3>
 
         <div className="space-y-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-dash-body font-semibold text-gray-900">
                 Enable AI Auto Replies
               </p>
-              <p className="text-sm text-gray-500 mt-0.5">
+              <p className="text-dash-body text-gray-500 mt-0.5">
                 AI responds to incoming messages automatically
               </p>
             </div>
@@ -1062,7 +1068,7 @@ function ManagementView({
           <div className="h-px bg-gray-100" />
 
           <div>
-            <label className="text-sm font-semibold text-gray-900 block mb-1">
+            <label className="text-dash-body font-semibold text-gray-900 block mb-1">
               Greeting Message
             </label>
             <textarea
@@ -1074,7 +1080,7 @@ function ManagementView({
                 })
               }
               rows={3}
-              className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+              className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
             />
           </div>
 
@@ -1082,10 +1088,10 @@ function ManagementView({
 
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-dash-body font-semibold text-gray-900">
                 Business Tone
               </p>
-              <p className="text-sm text-gray-500 mt-0.5">
+              <p className="text-dash-body text-gray-500 mt-0.5">
                 How the AI communicates with customers
               </p>
             </div>
@@ -1097,7 +1103,7 @@ function ManagementView({
                   businessTone: e.target.value as BusinessTone,
                 })
               }
-              className="text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-300 cursor-pointer flex-shrink-0"
+              className="text-dash-body text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-300 cursor-pointer flex-shrink-0"
             >
               {tones.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -1111,10 +1117,10 @@ function ManagementView({
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-dash-body font-semibold text-gray-900">
                 Product Catalog Sync
               </p>
-              <p className="text-sm text-gray-500 mt-0.5">
+              <p className="text-dash-body text-gray-500 mt-0.5">
                 AI recommends products from your catalog
               </p>
             </div>
@@ -1132,7 +1138,7 @@ function ManagementView({
 
         <div className="flex items-center justify-end gap-3 mt-6">
           {saved && (
-            <span className="flex items-center gap-1.5 text-sm font-medium text-green-600">
+            <span className="flex items-center gap-1.5 text-dash-body font-medium text-green-600">
               <CheckCircle2 size={13} />
               Saved
             </span>
@@ -1140,7 +1146,7 @@ function ManagementView({
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center gap-1.5 py-2.5 px-5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 py-2.5 px-5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
           >
             {isSaving ? (
               <>
@@ -1156,23 +1162,23 @@ function ManagementView({
 
       {/* Manage Connection */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6">
-        <h3 className="text-[13px] font-bold text-gray-800 mb-1">
+        <h3 className="text-dash-heading font-bold text-gray-800 mb-1">
           Manage Connection
         </h3>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-dash-body text-gray-500 mb-4">
           Change or disconnect your WhatsApp integration
         </p>
         <div className="flex flex-wrap gap-3">
           {/* <button
             onClick={onReconnect}
-            className="flex items-center gap-1.5 py-2 px-4 border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium rounded-xl transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 py-2 px-4 border border-gray-200 text-gray-700 hover:bg-gray-50 text-dash-body font-medium rounded-xl transition-colors cursor-pointer"
           >
             <RotateCcw size={14} />
             Reconnect Meta
           </button> */}
           <button
             onClick={onReconnect}
-            className="flex items-center gap-1.5 py-2 px-4 border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium rounded-xl transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 py-2 px-4 border border-red-200 text-red-600 hover:bg-red-50 text-dash-body font-medium rounded-xl transition-colors cursor-pointer"
           >
             <Power size={14} />
             Disconnect

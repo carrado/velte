@@ -122,7 +122,7 @@ function CategoryModal({
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-[#023337]">
+          <h2 className="text-dash-heading font-semibold text-[#023337]">
             {editing ? "Edit Category" : "Add Category"}
           </h2>
           <button
@@ -144,7 +144,7 @@ function CategoryModal({
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-dash-body font-medium text-gray-700 mb-1">
               Category Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -152,12 +152,12 @@ function CategoryModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Electronics"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+              className="w-full px-3 py-2 text-dash-body border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-dash-body font-medium text-gray-700 mb-1">
               Description{" "}
               <span className="text-gray-400 font-normal">(optional)</span>
             </label>
@@ -166,11 +166,11 @@ function CategoryModal({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Short description..."
               rows={2}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 resize-none"
+              className="w-full px-3 py-2 text-dash-body border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 resize-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-dash-body font-medium text-gray-700 mb-2">
               Icon
             </label>
             <div className="flex flex-wrap gap-2">
@@ -180,7 +180,7 @@ function CategoryModal({
                   type="button"
                   onClick={() => setSelectedEmoji(em)}
                   className={cn(
-                    "w-9 h-9 rounded-lg border text-lg flex items-center justify-center transition-colors cursor-pointer",
+                    "w-9 h-9 rounded-lg border text-dash-title flex items-center justify-center transition-colors cursor-pointer",
                     selectedEmoji === em
                       ? "border-orange-500 bg-orange-50"
                       : "border-gray-200 hover:border-gray-300 bg-gray-50",
@@ -192,7 +192,7 @@ function CategoryModal({
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-dash-body font-medium text-gray-700 mb-2">
               Background Color
             </label>
             <div className="flex flex-wrap gap-2">
@@ -216,14 +216,14 @@ function CategoryModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+              className="flex-1 py-2.5 text-dash-body font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!name.trim()}
-              className="flex-1 py-2.5 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="flex-1 py-2.5 text-dash-body font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {editing ? "Save Changes" : "Add Category"}
             </button>
@@ -260,7 +260,7 @@ function RestockModal({
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-[#023337]">
+          <h2 className="text-dash-heading font-semibold text-[#023337]">
             Restock Product
           </h2>
           <button
@@ -271,12 +271,12 @@ function RestockModal({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          <p className="text-sm text-gray-600">
+          <p className="text-dash-body text-gray-600">
             Product:{" "}
             <span className="font-medium text-gray-900">{product.name}</span>
           </p>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-dash-body font-medium text-gray-700 mb-1">
               Restock Quantity
             </label>
             <input
@@ -286,17 +286,17 @@ function RestockModal({
               onChange={(e) =>
                 setQuantity(Math.max(1, parseInt(e.target.value) || 1))
               }
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+              className="w-full px-3 py-2 text-dash-body border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
             />
           </div>
-          <p className="text-xs text-gray-400">
+          <p className="text-dash-secondary text-gray-400">
             {product.inStock
               ? "Product is currently in stock. Quantity will be added to existing stock."
               : "Product is out of stock. Total quantity will be reset to the restock amount."}
           </p>
           <button
             type="submit"
-            className="w-full py-2.5 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
+            className="w-full py-2.5 text-dash-body font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
           >
             Confirm Restock
           </button>
@@ -327,7 +327,7 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-[#023337]">
+          <h2 className="text-dash-heading font-semibold text-[#023337]">
             Change Price
           </h2>
           <button
@@ -338,12 +338,12 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
           </button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          <p className="text-sm text-gray-600">
+          <p className="text-dash-body text-gray-600">
             Product:{" "}
             <span className="font-medium text-gray-900">{product.name}</span>
           </p>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-dash-body font-medium text-gray-700 mb-1">
               New Price ($)
             </label>
             <input
@@ -352,12 +352,12 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
               min="0"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+              className="w-full px-3 py-2 text-dash-body border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
             />
           </div>
           <button
             type="submit"
-            className="w-full py-2.5 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
+            className="w-full py-2.5 text-dash-body font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
           >
             Update Price
           </button>
@@ -402,14 +402,14 @@ function CategoryCard({
     >
       <div
         className={cn(
-          "w-16 h-16 rounded flex items-center justify-center text-2xl flex-shrink-0 border border-gray-200",
+          "w-16 h-16 rounded flex items-center justify-center text-dash-display flex-shrink-0 border border-gray-200",
           category.bgColor,
         )}
       >
         {category.emoji}
       </div>
 
-      <p className="flex-1 min-w-0 text-sm font-medium text-black leading-tight">
+      <p className="flex-1 min-w-0 text-dash-body font-medium text-black leading-tight">
         {category.name}
       </p>
 
@@ -432,7 +432,7 @@ function CategoryCard({
                 setPopoverOpen(false);
                 onEdit();
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
             >
               <Pencil size={13} className="text-gray-400" />
               Edit
@@ -442,7 +442,7 @@ function CategoryCard({
                 setPopoverOpen(false);
                 onDelete();
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
             >
               <Trash2 size={13} className="text-red-400" />
               Delete
@@ -616,12 +616,12 @@ export default function ProductsPage() {
   return (
     <div className="w-full space-y-4 sm:px-0 lg:pb-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold tracking-wide text-[#023337]"></h1>
+        <h1 className="text-dash-title font-bold tracking-wide text-[#023337]"></h1>
 
         <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto px-5 sm:items-center">
           <button
             onClick={() => navigate("products/add")}
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 text-sm font-bold text-white transition-colors hover:bg-orange-600 sm:w-auto"
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 text-dash-body font-bold text-white transition-colors hover:bg-orange-600 sm:w-auto"
           >
             <Plus size={18} />
             <span className="truncate">Add Product</span>
@@ -632,7 +632,7 @@ export default function ProductsPage() {
               setEditingCategory(null);
               setModalOpen(true);
             }}
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-[#023337] transition-colors hover:bg-gray-50 sm:w-auto"
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-dash-body font-bold text-[#023337] transition-colors hover:bg-gray-50 sm:w-auto"
           >
             <Plus size={16} className="text-orange-500" />
             <span className="truncate">Add Categories</span>
@@ -678,7 +678,7 @@ export default function ProductsPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search order report"
-                className="pl-3 pr-9 py-2 text-sm bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
+                className="pl-3 pr-9 py-2 text-dash-body bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
               />
               <Search
                 size={16}

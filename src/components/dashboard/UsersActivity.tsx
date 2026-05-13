@@ -23,7 +23,7 @@ export default function UsersActivity() {
   return (
     <div className="bg-white sm:rounded-2xl shadow-sm p-5">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-orange-500 font-medium">
+        <p className="text-dash-secondary text-orange-500 font-medium">
           Today&apos;s User Activity
         </p>
         <MoreVertical size={16} className="text-[#9CA3AF]" />
@@ -37,10 +37,10 @@ export default function UsersActivity() {
         </div>
       ) : (
         <>
-          <p className="text-2xl font-bold text-[#111827]">
+          <p className="text-dash-display font-bold text-[#111827]">
             {(total / 1000).toFixed(1)}K
           </p>
-          <p className="text-xs text-[#9CA3AF] mb-3">Users</p>
+          <p className="text-dash-secondary text-[#9CA3AF] mb-3">Users</p>
           <ResponsiveContainer width="100%" height={60}>
             <BarChart data={chartData} barSize={6} barGap={2}>
               <Bar dataKey="value" radius={[2, 2, 0, 0]}>

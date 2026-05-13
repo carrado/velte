@@ -45,7 +45,7 @@ export default function SortMenu<T extends string = string>({
                 setOpen(false);
               }}
               className={cn(
-                "w-full text-left px-4 py-2 text-sm hover:bg-orange-50 transition-colors cursor-pointer",
+                "w-full text-left px-4 py-2 text-dash-body hover:bg-orange-50 transition-colors cursor-pointer",
                 currentSort === opt.value
                   ? "bg-orange-100 text-orange-600"
                   : "text-[#111827]",

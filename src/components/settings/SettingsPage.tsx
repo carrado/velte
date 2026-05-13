@@ -162,10 +162,10 @@ function InputField({
 }) {
   return (
     <div className={className}>
-      <label className="text-sm font-semibold text-gray-900 block mb-1.5">
+      <label className="text-dash-body font-semibold text-gray-900 block mb-1.5">
         {label}
       </label>
-      {hint && <p className="text-xs text-gray-500 mb-2">{hint}</p>}
+      {hint && <p className="text-dash-secondary text-gray-500 mb-2">{hint}</p>}
       <div className="relative">
         {Icon && (
           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -178,7 +178,7 @@ function InputField({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           className={cn(
-            "w-full text-sm text-gray-700 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow",
+            "w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow",
             Icon ? "pl-9 pr-3.5" : "px-3.5",
           )}
         />
@@ -207,9 +207,11 @@ function SectionCard({
           <Icon size={17} className="text-orange-500" />
         </div>
         <div>
-          <h3 className="text-[13px] font-bold text-gray-900">{title}</h3>
+          <h3 className="text-dash-heading font-bold text-gray-900">{title}</h3>
           {description && (
-            <p className="text-xs text-gray-400 mt-0.5">{description}</p>
+            <p className="text-dash-secondary text-gray-400 mt-0.5">
+              {description}
+            </p>
           )}
         </div>
       </div>
@@ -234,7 +236,7 @@ function InlineSaveButton({
       <button
         onClick={onClick}
         disabled={loading}
-        className="flex items-center gap-2 py-2.5 px-5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+        className="flex items-center gap-2 py-2.5 px-5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
       >
         {loading ? (
           <>
@@ -268,7 +270,7 @@ function BottomSaveButton({
       <button
         onClick={onClick}
         disabled={loading}
-        className="flex items-center gap-2 py-2.5 px-6 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+        className="flex items-center gap-2 py-2.5 px-6 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
       >
         {loading ? (
           <>
@@ -410,9 +412,13 @@ function AccountSettingsPanel() {
             </button>
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">Profile Photo</p>
-            <p className="text-xs text-gray-400 mt-0.5">JPG or PNG, max 2MB</p>
-            <button className="text-xs text-orange-500 font-semibold mt-1 cursor-pointer hover:text-orange-600 transition-colors">
+            <p className="text-dash-body font-semibold text-gray-900">
+              Profile Photo
+            </p>
+            <p className="text-dash-secondary text-gray-400 mt-0.5">
+              JPG or PNG, max 2MB
+            </p>
+            <button className="text-dash-secondary text-orange-500 font-semibold mt-1 cursor-pointer hover:text-orange-600 transition-colors">
               Upload photo
             </button>
           </div>
@@ -512,7 +518,7 @@ function AccountSettingsPanel() {
               </div>
               <p
                 className={cn(
-                  "text-xs font-medium",
+                  "text-dash-secondary font-medium",
                   strengthLevel <= 1
                     ? "text-red-500"
                     : strengthLevel <= 2
@@ -545,8 +551,12 @@ function AccountSettingsPanel() {
           {notifItems.map(({ key, label, description }) => (
             <div key={key} className="flex items-center justify-between py-3.5">
               <div>
-                <p className="text-sm font-semibold text-gray-900">{label}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+                <p className="text-dash-body font-semibold text-gray-900">
+                  {label}
+                </p>
+                <p className="text-dash-secondary text-gray-500 mt-0.5">
+                  {description}
+                </p>
               </div>
               <Toggle
                 enabled={notifications[key]}
@@ -621,19 +631,19 @@ function OrderSettingsPanel() {
       >
         {/* Visual range display */}
         <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 rounded-2xl p-4 mb-6">
-          <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-3">
+          <p className="text-dash-secondary font-semibold text-orange-600 uppercase tracking-wide mb-3">
             Delivery Window Preview
           </p>
           <div className="flex items-center gap-3">
             <div className="text-center">
               <div className="w-14 h-14 rounded-xl bg-white border-2 border-orange-300 flex items-center justify-center shadow-sm">
-                <span className="text-2xl font-black text-orange-500">
+                <span className="text-dash-display font-black text-orange-500">
                   {settings.allowSameDay && settings.minDeliveryDays === 0
                     ? 0
                     : settings.minDeliveryDays}
                 </span>
               </div>
-              <p className="text-[10px] text-orange-500 font-bold mt-1.5 uppercase tracking-wide">
+              <p className="text-dash-micro text-orange-500 font-bold mt-1.5 uppercase tracking-wide">
                 Min
               </p>
             </div>
@@ -642,22 +652,22 @@ function OrderSettingsPanel() {
               <div className="w-full relative h-2 bg-orange-100 rounded-full overflow-hidden">
                 <div className="absolute left-0 top-0 h-full bg-orange-400 rounded-full w-full" />
               </div>
-              <p className="text-[10px] text-orange-400 font-medium">to</p>
+              <p className="text-dash-micro text-orange-400 font-medium">to</p>
             </div>
 
             <div className="text-center">
               <div className="w-14 h-14 rounded-xl bg-orange-500 flex items-center justify-center shadow-sm">
-                <span className="text-2xl font-black text-white">
+                <span className="text-dash-display font-black text-white">
                   {settings.maxDeliveryDays}
                 </span>
               </div>
-              <p className="text-[10px] text-orange-500 font-bold mt-1.5 uppercase tracking-wide">
+              <p className="text-dash-micro text-orange-500 font-bold mt-1.5 uppercase tracking-wide">
                 Max
               </p>
             </div>
           </div>
 
-          <p className="text-xs text-orange-700 text-center mt-3 font-medium">
+          <p className="text-dash-secondary text-orange-700 text-center mt-3 font-medium">
             Customers will be told:{" "}
             <span className="font-black">
               {settings.allowSameDay && settings.minDeliveryDays === 0
@@ -672,10 +682,10 @@ function OrderSettingsPanel() {
         {/* Same-day toggle */}
         <div className="flex items-center justify-between py-3.5 border-b border-gray-100 mb-5">
           <div>
-            <p className="text-sm font-semibold text-gray-900">
+            <p className="text-dash-body font-semibold text-gray-900">
               Allow Same-Day Delivery
             </p>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-dash-secondary text-gray-500 mt-0.5">
               Sets minimum delivery time to 0 days (today)
             </p>
           </div>
@@ -695,16 +705,16 @@ function OrderSettingsPanel() {
         <div className="grid sm:grid-cols-2 grid-cols-1 gap-5 mb-5">
           {/* Min */}
           <div>
-            <label className="text-sm font-semibold text-gray-900 block mb-1">
+            <label className="text-dash-body font-semibold text-gray-900 block mb-1">
               Minimum Delivery Days
             </label>
-            <p className="text-xs text-gray-500 mb-3">
+            <p className="text-dash-secondary text-gray-500 mb-3">
               Earliest a customer can expect their order
             </p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => nudge("minDeliveryDays", -1)}
-                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-xl font-bold flex-shrink-0"
+                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
               >
                 −
               </button>
@@ -725,16 +735,16 @@ function OrderSettingsPanel() {
                     ),
                   }))
                 }
-                className="flex-1 text-center text-sm font-black text-gray-800 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                className="flex-1 text-center text-dash-body font-black text-gray-800 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
               />
               <button
                 onClick={() => nudge("minDeliveryDays", 1)}
-                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-xl font-bold flex-shrink-0"
+                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
               >
                 +
               </button>
             </div>
-            <p className="text-[11px] text-gray-400 mt-1.5 text-center">
+            <p className="text-dash-caption text-gray-400 mt-1.5 text-center">
               {settings.minDeliveryDays === 0
                 ? "Same day"
                 : `${settings.minDeliveryDays} day${settings.minDeliveryDays !== 1 ? "s" : ""}`}
@@ -743,16 +753,16 @@ function OrderSettingsPanel() {
 
           {/* Max */}
           <div>
-            <label className="text-sm font-semibold text-gray-900 block mb-1">
+            <label className="text-dash-body font-semibold text-gray-900 block mb-1">
               Maximum Delivery Days
             </label>
-            <p className="text-xs text-gray-500 mb-3">
+            <p className="text-dash-secondary text-gray-500 mb-3">
               Latest a customer should receive their order
             </p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => nudge("maxDeliveryDays", -1)}
-                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-xl font-bold flex-shrink-0"
+                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
               >
                 −
               </button>
@@ -769,16 +779,16 @@ function OrderSettingsPanel() {
                     ),
                   }))
                 }
-                className="flex-1 text-center text-sm font-black text-gray-800 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                className="flex-1 text-center text-dash-body font-black text-gray-800 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
               />
               <button
                 onClick={() => nudge("maxDeliveryDays", 1)}
-                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-xl font-bold flex-shrink-0"
+                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
               >
                 +
               </button>
             </div>
-            <p className="text-[11px] text-gray-400 mt-1.5 text-center">
+            <p className="text-dash-caption text-gray-400 mt-1.5 text-center">
               {settings.maxDeliveryDays} day
               {settings.maxDeliveryDays !== 1 ? "s" : ""}
             </p>
@@ -792,7 +802,7 @@ function OrderSettingsPanel() {
               size={13}
               className="text-red-500 flex-shrink-0 mt-0.5"
             />
-            <p className="text-xs text-red-600 font-medium">
+            <p className="text-dash-secondary text-red-600 font-medium">
               Maximum delivery days must be greater than minimum delivery days.
             </p>
           </div>
@@ -800,11 +810,11 @@ function OrderSettingsPanel() {
 
         {/* Delivery note */}
         <div className="mb-4">
-          <label className="text-sm font-semibold text-gray-900 block mb-1">
+          <label className="text-dash-body font-semibold text-gray-900 block mb-1">
             Delivery Note{" "}
             <span className="text-gray-400 font-normal">(optional)</span>
           </label>
-          <p className="text-xs text-gray-500 mb-2">
+          <p className="text-dash-secondary text-gray-500 mb-2">
             Additional context shown to customers, e.g. exclusions for weekends
             or holidays.
           </p>
@@ -815,14 +825,14 @@ function OrderSettingsPanel() {
             }
             rows={2}
             placeholder="e.g. Delivery days exclude Sundays and public holidays."
-            className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+            className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
           />
         </div>
 
         {/* Info */}
         <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-200 rounded-xl">
           <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-blue-700 leading-relaxed">
+          <p className="text-dash-secondary text-blue-700 leading-relaxed">
             These estimates are communicated by the AI when customers ask about
             shipping times. They don't automatically trigger any logistics
             workflow.
@@ -890,10 +900,10 @@ function AISettingsPanel() {
                 )}
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-900">
+                <p className="text-dash-body font-semibold text-gray-900">
                   24/7 Availability
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-dash-secondary text-gray-500">
                   AI responds at any time of day
                 </p>
               </div>
@@ -910,7 +920,7 @@ function AISettingsPanel() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
+                  <label className="text-dash-secondary font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
                     Opening Time
                   </label>
                   <div className="relative">
@@ -927,12 +937,12 @@ function AISettingsPanel() {
                           openTime: e.target.value,
                         }))
                       }
-                      className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl pl-8 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                      className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl pl-8 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
+                  <label className="text-dash-secondary font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
                     Closing Time
                   </label>
                   <div className="relative">
@@ -949,17 +959,17 @@ function AISettingsPanel() {
                           closeTime: e.target.value,
                         }))
                       }
-                      className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl pl-8 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                      className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl pl-8 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="text-sm font-semibold text-gray-900 block mb-1">
+                <label className="text-dash-body font-semibold text-gray-900 block mb-1">
                   Offline Message
                 </label>
-                <p className="text-xs text-gray-500 mb-2">
+                <p className="text-dash-secondary text-gray-500 mb-2">
                   Sent to customers who message outside your operating hours
                 </p>
                 <textarea
@@ -972,9 +982,9 @@ function AISettingsPanel() {
                   }
                   rows={3}
                   placeholder="e.g. We're closed right now. We'll get back to you during business hours..."
-                  className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                  className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
                 />
-                <p className="text-xs text-gray-400 mt-1 text-right">
+                <p className="text-dash-secondary text-gray-400 mt-1 text-right">
                   {shopHours.offlineMessage.length}/300
                 </p>
               </div>
@@ -984,7 +994,7 @@ function AISettingsPanel() {
                   size={13}
                   className="text-gray-400 flex-shrink-0 mt-0.5"
                 />
-                <p className="text-xs text-gray-500 leading-relaxed">
+                <p className="text-dash-secondary text-gray-500 leading-relaxed">
                   Your AI will be active from{" "}
                   <span className="font-semibold text-gray-700">
                     {shopHours.openTime}
@@ -1011,10 +1021,10 @@ function AISettingsPanel() {
         <div className="space-y-4">
           <div className="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-dash-body font-semibold text-gray-900">
                 Enable Escalation Trigger
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-dash-secondary text-gray-500">
                 AI flags large orders for your manual review
               </p>
             </div>
@@ -1029,10 +1039,10 @@ function AISettingsPanel() {
           {escalation.enabled && (
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-semibold text-gray-900 block mb-1">
+                <label className="text-dash-body font-semibold text-gray-900 block mb-1">
                   Order Quantity Threshold
                 </label>
-                <p className="text-xs text-gray-500 mb-2">
+                <p className="text-dash-secondary text-gray-500 mb-2">
                   When a customer orders this many items or more, an invoice is
                   generated instead of automated fulfillment
                 </p>
@@ -1051,7 +1061,7 @@ function AISettingsPanel() {
                         threshold: parseInt(e.target.value) || 1,
                       }))
                     }
-                    className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl pl-8 pr-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                    className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl pl-8 pr-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
                   />
                 </div>
               </div>
@@ -1062,10 +1072,10 @@ function AISettingsPanel() {
                   className="text-amber-500 flex-shrink-0 mt-0.5"
                 />
                 <div className="space-y-1.5">
-                  <p className="text-sm font-semibold text-amber-800">
+                  <p className="text-dash-body font-semibold text-amber-800">
                     Important — Payment Notice
                   </p>
-                  <p className="text-xs text-amber-700 leading-relaxed">
+                  <p className="text-dash-secondary text-amber-700 leading-relaxed">
                     The AI does <span className="font-bold">not</span> receive
                     payment on your behalf when a customer orders{" "}
                     <span className="font-bold">
@@ -1085,7 +1095,7 @@ function AISettingsPanel() {
                   size={13}
                   className="text-blue-500 flex-shrink-0 mt-0.5"
                 />
-                <p className="text-xs text-blue-700 leading-relaxed">
+                <p className="text-dash-secondary text-blue-700 leading-relaxed">
                   Escalation invoices are delivered to your registered account
                   email with a full order breakdown and customer contact
                   details.
@@ -1130,18 +1140,20 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
         <div className="flex items-start justify-between mb-6">
           <div>
             <div
-              className="sm:text-2xl text-lg font-black tracking-tight"
+              className="text-dash-display font-black tracking-tight"
               style={{ color: config.primaryColor || "#f97316" }}
             >
               INVOICE
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">#INV-001/2</p>
+            <p className="text-dash-secondary text-gray-400 mt-0.5">
+              #INV-001/2
+            </p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-bold text-gray-900">
+            <p className="text-dash-body font-bold text-gray-900">
               {config.business.name || "Your Business Name"}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+            <p className="text-dash-secondary text-gray-500 mt-0.5 leading-relaxed">
               {config.business.address || "Business Address"}
               <br />
               {config.business.phone || "Phone Number"}
@@ -1153,10 +1165,10 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-gray-50 rounded-xl p-3">
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+            <p className="text-dash-micro font-semibold text-gray-400 uppercase tracking-wide">
               Issue Date
             </p>
-            <p className="text-sm font-semibold text-gray-800 mt-0.5">
+            <p className="text-dash-body font-semibold text-gray-800 mt-0.5">
               {fmt(today)}
             </p>
           </div>
@@ -1165,30 +1177,32 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
             style={{ backgroundColor: `${config.primaryColor || "#f97316"}18` }}
           >
             <p
-              className="text-[10px] font-semibold uppercase tracking-wide"
+              className="text-dash-micro font-semibold uppercase tracking-wide"
               style={{ color: config.primaryColor || "#f97316" }}
             >
               Due Date
             </p>
-            <p className="text-sm font-semibold text-gray-800 mt-0.5">
+            <p className="text-dash-body font-semibold text-gray-800 mt-0.5">
               {fmt(due)}
             </p>
           </div>
         </div>
 
         <div className="mb-5">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">
+          <p className="text-dash-micro font-bold text-gray-400 uppercase tracking-wide mb-2">
             Billed To
           </p>
-          <p className="text-sm font-semibold text-gray-900">Customer Name</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-dash-body font-semibold text-gray-900">
+            Customer Name
+          </p>
+          <p className="text-dash-secondary text-gray-500">
             customer@email.com · +234 800 000 0000
           </p>
         </div>
 
         <div className="mb-5">
           <div
-            className="grid grid-cols-12 text-[10px] font-bold uppercase tracking-wide px-3 py-2 rounded-lg mb-1"
+            className="grid grid-cols-12 text-dash-micro font-bold uppercase tracking-wide px-3 py-2 rounded-lg mb-1"
             style={{
               backgroundColor: `${config.primaryColor || "#f97316"}18`,
               color: config.primaryColor || "#f97316",
@@ -1205,7 +1219,7 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
           ].map((item, i) => (
             <div
               key={i}
-              className="grid grid-cols-12 text-xs px-3 py-2.5 border-b border-gray-100"
+              className="grid grid-cols-12 text-dash-secondary px-3 py-2.5 border-b border-gray-100"
             >
               <span className="col-span-4 sm:col-span-6 text-gray-800 font-medium">
                 {item.name}
@@ -1225,16 +1239,16 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
 
         <div className="flex justify-end mb-5">
           <div className="w-48 space-y-1.5">
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-dash-secondary text-gray-500">
               <span>Subtotal</span>
               <span>₦38,500</span>
             </div>
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-dash-secondary text-gray-500">
               <span>Tax (7.5%)</span>
               <span>₦2,888</span>
             </div>
             <div
-              className="flex justify-between text-sm font-bold pt-2 border-t border-gray-200"
+              className="flex justify-between text-dash-body font-bold pt-2 border-t border-gray-200"
               style={{ color: config.primaryColor || "#f97316" }}
             >
               <span>Total</span>
@@ -1245,18 +1259,18 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
 
         {(config.bankName || config.accountNumber) && (
           <div className="bg-gray-50 rounded-xl p-3 mb-4">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">
+            <p className="text-dash-micro font-bold text-gray-400 uppercase tracking-wide mb-1.5">
               Payment Details
             </p>
-            <p className="text-xs text-gray-700">
+            <p className="text-dash-secondary text-gray-700">
               <span className="font-semibold">Bank:</span>{" "}
               {config.bankName || "Bank Name"}
             </p>
-            <p className="text-xs text-gray-700">
+            <p className="text-dash-secondary text-gray-700">
               <span className="font-semibold">Account:</span>{" "}
               {config.accountNumber || "0000000000"}
             </p>
-            <p className="text-xs text-gray-700">
+            <p className="text-dash-secondary text-gray-700">
               <span className="font-semibold">Name:</span>{" "}
               {config.accountName || "Account Name"}
             </p>
@@ -1264,7 +1278,7 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
         )}
 
         {config.footerNote && (
-          <p className="text-[11px] text-gray-400 text-center border-t border-gray-100 pt-3">
+          <p className="text-dash-caption text-gray-400 text-center border-t border-gray-100 pt-3">
             {config.footerNote}
           </p>
         )}
@@ -1303,18 +1317,18 @@ function ReceiptPreview({ config }: { config: ReceiptConfig }) {
               style={{ color: config.primaryColor || "#f97316" }}
             />
           </div>
-          <p className="text-sm font-black text-gray-900">
+          <p className="text-dash-body font-black text-gray-900">
             {config.business.name || "Your Business Name"}
           </p>
-          <p className="text-[11px] text-gray-400 mt-0.5">
+          <p className="text-dash-caption text-gray-400 mt-0.5">
             {config.business.address || "Business Address"}
           </p>
-          <p className="text-[11px] text-gray-400">
+          <p className="text-dash-caption text-gray-400">
             {config.business.phone || "+234 800 000 0000"}
           </p>
         </div>
         <div className="border-t border-dashed border-gray-200 mb-4" />
-        <div className="flex justify-between text-[11px] text-gray-500 mb-4">
+        <div className="flex justify-between text-dash-caption text-gray-500 mb-4">
           <span>Receipt #RCP-001</span>
           <span>{fmt(today)}</span>
         </div>
@@ -1323,7 +1337,7 @@ function ReceiptPreview({ config }: { config: ReceiptConfig }) {
             { name: "Product A", qty: 2, price: 15000 },
             { name: "Product B", qty: 1, price: 8500 },
           ].map((item, i) => (
-            <div key={i} className="flex justify-between text-xs">
+            <div key={i} className="flex justify-between text-dash-secondary">
               <span className="text-gray-700">
                 {item.qty}x {item.name}
               </span>
@@ -1334,16 +1348,16 @@ function ReceiptPreview({ config }: { config: ReceiptConfig }) {
           ))}
         </div>
         <div className="border-t border-dashed border-gray-200 mb-3" />
-        <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <div className="flex justify-between text-dash-secondary text-gray-500 mb-1">
           <span>Subtotal</span>
           <span>₦38,500</span>
         </div>
-        <div className="flex justify-between text-xs text-gray-500 mb-2">
+        <div className="flex justify-between text-dash-secondary text-gray-500 mb-2">
           <span>Tax (7.5%)</span>
           <span>₦2,888</span>
         </div>
         <div
-          className="flex justify-between text-sm font-black"
+          className="flex justify-between text-dash-body font-black"
           style={{ color: config.primaryColor || "#f97316" }}
         >
           <span>TOTAL</span>
@@ -1351,11 +1365,11 @@ function ReceiptPreview({ config }: { config: ReceiptConfig }) {
         </div>
         <div className="border-t border-dashed border-gray-200 mt-3 mb-4" />
         <div className="text-center">
-          <p className="text-xs font-bold text-gray-800 mb-1">
+          <p className="text-dash-secondary font-bold text-gray-800 mb-1">
             {config.thankYouMessage || "Thank you for your purchase!"}
           </p>
           {config.returnPolicy && (
-            <p className="text-[10px] text-gray-400 leading-relaxed">
+            <p className="text-dash-micro text-gray-400 leading-relaxed">
               {config.returnPolicy}
             </p>
           )}
@@ -1374,7 +1388,7 @@ function ReceiptPreview({ config }: { config: ReceiptConfig }) {
                 />
               ))}
             </div>
-            <p className="text-[9px] text-gray-400 tracking-widest">
+            <p className="text-dash-micro text-gray-400 tracking-widest">
               RCP-2024-001
             </p>
           </div>
@@ -1460,7 +1474,7 @@ function InvoiceReceiptPanel() {
             key={id}
             onClick={() => setActiveTab(id)}
             className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer",
+              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-dash-body font-semibold transition-all cursor-pointer",
               activeTab === id
                 ? "bg-orange-500 text-white shadow-sm"
                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-50",
@@ -1477,18 +1491,18 @@ function InvoiceReceiptPanel() {
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-[13px] font-bold text-gray-900">
+                <h3 className="text-dash-heading font-bold text-gray-900">
                   Invoice Preview
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-dash-secondary text-gray-400 mt-0.5">
                   Updates live as you edit below
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
+                <button className="flex items-center gap-1.5 text-dash-secondary font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
                   <Eye size={12} /> Preview
                 </button>
-                <button className="flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 bg-orange-50 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
+                <button className="flex items-center gap-1.5 text-dash-secondary font-medium text-orange-600 hover:text-orange-700 border border-orange-200 bg-orange-50 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
                   <Download size={12} /> Export PDF
                 </button>
               </div>
@@ -1497,7 +1511,7 @@ function InvoiceReceiptPanel() {
           </div>
 
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
-            <h3 className="text-[13px] font-bold text-gray-800 mb-5">
+            <h3 className="text-dash-heading font-bold text-gray-800 mb-5">
               Business Information
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1541,7 +1555,7 @@ function InvoiceReceiptPanel() {
             </div>
 
             <div className="h-px bg-gray-100 my-5" />
-            <h3 className="text-[13px] font-bold text-gray-800 mb-5">
+            <h3 className="text-dash-heading font-bold text-gray-800 mb-5">
               Payment & Invoice Settings
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1585,12 +1599,12 @@ function InvoiceReceiptPanel() {
             </div>
 
             <div className="h-px bg-gray-100 my-5" />
-            <h3 className="text-[13px] font-bold text-gray-800 mb-4">
+            <h3 className="text-dash-heading font-bold text-gray-800 mb-4">
               Appearance
             </h3>
             <div className="flex items-center gap-4 mb-4">
               <div>
-                <label className="text-sm font-semibold text-gray-900 block mb-1.5">
+                <label className="text-dash-body font-semibold text-gray-900 block mb-1.5">
                   Brand Color
                 </label>
                 <div className="flex items-center gap-3">
@@ -1605,14 +1619,14 @@ function InvoiceReceiptPanel() {
                     }
                     className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer"
                   />
-                  <span className="text-sm text-gray-500 font-mono">
+                  <span className="text-dash-body text-gray-500 font-mono">
                     {invoiceConfig.primaryColor}
                   </span>
                 </div>
               </div>
             </div>
             <div>
-              <label className="text-sm font-semibold text-gray-900 block mb-1">
+              <label className="text-dash-body font-semibold text-gray-900 block mb-1">
                 Footer Note
               </label>
               <textarea
@@ -1625,7 +1639,7 @@ function InvoiceReceiptPanel() {
                 }
                 rows={2}
                 placeholder="Thank you for your business!"
-                className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
               />
             </div>
           </div>
@@ -1637,18 +1651,18 @@ function InvoiceReceiptPanel() {
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-[13px] font-bold text-gray-900">
+                <h3 className="text-dash-heading font-bold text-gray-900">
                   Receipt Preview
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-dash-secondary text-gray-400 mt-0.5">
                   Updates live as you edit below
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
+                <button className="flex items-center gap-1.5 text-dash-secondary font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
                   <Printer size={12} /> Print
                 </button>
-                <button className="flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 bg-orange-50 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
+                <button className="flex items-center gap-1.5 text-dash-secondary font-medium text-orange-600 hover:text-orange-700 border border-orange-200 bg-orange-50 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer">
                   <Download size={12} /> Export PDF
                 </button>
               </div>
@@ -1657,7 +1671,7 @@ function InvoiceReceiptPanel() {
           </div>
 
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
-            <h3 className="text-[13px] font-bold text-gray-800 mb-5">
+            <h3 className="text-dash-heading font-bold text-gray-800 mb-5">
               Business Information
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1686,12 +1700,12 @@ function InvoiceReceiptPanel() {
             </div>
 
             <div className="h-px bg-gray-100 my-5" />
-            <h3 className="text-[13px] font-bold text-gray-800 mb-4">
+            <h3 className="text-dash-heading font-bold text-gray-800 mb-4">
               Receipt Content
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-semibold text-gray-900 block mb-1">
+                <label className="text-dash-body font-semibold text-gray-900 block mb-1">
                   Thank You Message
                 </label>
                 <input
@@ -1704,11 +1718,11 @@ function InvoiceReceiptPanel() {
                     }))
                   }
                   placeholder="Thank you for your purchase!"
-                  className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                  className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
                 />
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-900 block mb-1">
+                <label className="text-dash-body font-semibold text-gray-900 block mb-1">
                   Return Policy
                 </label>
                 <textarea
@@ -1721,18 +1735,18 @@ function InvoiceReceiptPanel() {
                   }
                   rows={2}
                   placeholder="Items can be returned within 7 days..."
-                  className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                  className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
                 />
               </div>
             </div>
 
             <div className="h-px bg-gray-100 my-5" />
-            <h3 className="text-[13px] font-bold text-gray-800 mb-4">
+            <h3 className="text-dash-heading font-bold text-gray-800 mb-4">
               Appearance
             </h3>
             <div className="flex items-center gap-6">
               <div>
-                <label className="text-sm font-semibold text-gray-900 block mb-1.5">
+                <label className="text-dash-body font-semibold text-gray-900 block mb-1.5">
                   Brand Color
                 </label>
                 <div className="flex items-center gap-3">
@@ -1747,13 +1761,13 @@ function InvoiceReceiptPanel() {
                     }
                     className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer"
                   />
-                  <span className="text-sm text-gray-500 font-mono">
+                  <span className="text-dash-body text-gray-500 font-mono">
                     {receiptConfig.primaryColor}
                   </span>
                 </div>
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-900 block mb-1.5">
+                <label className="text-dash-body font-semibold text-gray-900 block mb-1.5">
                   Show Barcode
                 </label>
                 <Toggle
@@ -1821,7 +1835,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-gray-500 px-5 sm:px-0">
+      <p className="text-dash-body text-gray-500 px-5 sm:px-0">
         Manage your profile, order rules, AI behaviour, and document templates
       </p>
 
@@ -1846,7 +1860,7 @@ export default function SettingsPage() {
             <div className="text-center sm:text-left">
               <p
                 className={cn(
-                  "text-xs font-semibold leading-none",
+                  "text-dash-secondary font-semibold leading-none",
                   activeTab === id ? "text-white" : "text-gray-800",
                 )}
               >
@@ -1854,7 +1868,7 @@ export default function SettingsPage() {
               </p>
               <p
                 className={cn(
-                  "text-[10px] sm:text-xs mt-0.5 hidden sm:block",
+                  "text-dash-caption sm:text-dash-secondary mt-0.5 hidden sm:block",
                   activeTab === id ? "text-orange-100" : "text-gray-400",
                 )}
               >

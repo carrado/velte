@@ -153,7 +153,7 @@ function StatusBadge({ status }: { status: CustomerStatus }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
-      <span className={`text-sm ${text}`}>{status}</span>
+      <span className={`text-dash-body ${text}`}>{status}</span>
     </span>
   );
 }
@@ -346,28 +346,28 @@ export default function CustomerManagement() {
               className="bg-white sm:rounded-lg shadow-sm p-5"
             >
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-700">
+                <h3 className="text-dash-body font-medium text-gray-700">
                   {card.title}
                 </h3>
                 <MoreVertical size={15} className="text-gray-400" />
               </div>
               <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-2xl font-bold text-[#023337]">
+                <span className="text-dash-display font-bold text-[#023337]">
                   {card.value}
                 </span>
-                <span className="flex items-center gap-0.5 text-sm font-medium text-orange-500">
+                <span className="flex items-center gap-0.5 text-dash-body font-medium text-orange-500">
                   <ArrowUp size={13} />
                   {card.pct}
                 </span>
               </div>
-              <p className="text-xs text-gray-400">Last 7 days</p>
+              <p className="text-dash-secondary text-gray-400">Last 7 days</p>
             </div>
           ))}
         </div>
 
         <div className="flex-1 bg-white sm:rounded-lg shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-5 pt-5">
-            <h3 className="flex-1 text-sm font-medium text-gray-800">
+            <h3 className="flex-1 text-dash-body font-medium text-gray-800">
               Customer overview
             </h3>
             <div className="flex items-center bg-orange-50 rounded-xl p-1 flex-shrink-0">
@@ -375,7 +375,7 @@ export default function CustomerManagement() {
                 <button
                   key={w}
                   onClick={() => setWeekFilter(w)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-dash-secondary font-medium transition-colors cursor-pointer ${
                     weekFilter === w
                       ? "bg-white text-orange-500 shadow-sm"
                       : "text-gray-500 hover:text-gray-700"
@@ -399,10 +399,10 @@ export default function CustomerManagement() {
                     : "border-gray-200 hover:border-gray-300"
                 }`}
               >
-                <span className="text-lg font-bold text-gray-800">
+                <span className="text-dash-heading font-bold text-gray-800">
                   {m.value}
                 </span>
-                <span className="text-xs text-gray-400 whitespace-nowrap">
+                <span className="text-dash-secondary text-gray-400 whitespace-nowrap">
                   {m.label}
                 </span>
               </button>
@@ -552,7 +552,7 @@ export default function CustomerManagement() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search customers"
-                className="pl-3 pr-9 py-2 text-sm bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
+                className="pl-3 pr-9 py-2 text-dash-body bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
               />
               <Search
                 size={16}
@@ -599,7 +599,7 @@ export default function CustomerManagement() {
                 { label: "Total spend", value: `$${customer.spend}` },
               ]}
               footer={
-                <button className="flex items-center gap-1.5 py-2 px-3 rounded-lg border border-gray-200 text-xs text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">
+                <button className="flex items-center gap-1.5 py-2 px-3 rounded-lg border border-gray-200 text-dash-secondary text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">
                   <MessageSquare size={14} />
                   Message
                 </button>

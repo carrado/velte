@@ -71,7 +71,7 @@ export default function DashboardRootLayout({
             ref={mainRef}
             className="flex-1 overflow-y-auto pb-16 sm:pb-0 min-w-0"
           >
-            <div className="py-4 md:p-6 space-y-6">
+            <div className="py-4 md:p-6 space-y-6 text-dash-body antialiased">
               <Header
                 title={getTitle(pathname)}
                 onMenuClick={() => setSidebarOpen(true)}

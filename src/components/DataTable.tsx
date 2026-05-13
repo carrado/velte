@@ -29,14 +29,14 @@ export default function DataTable<T>({
     <>
       {/* Desktop Table */}
       <div className={cn("hidden md:block p-4 overflow-x-auto", className)}>
-        <table className="w-full text-sm">
+        <table className="w-full text-dash-body">
           <thead>
             <tr className="bg-orange-50">
               {columns.map((col) => (
                 <th
                   key={col.key}
                   className={cn(
-                    "text-left px-3 py-3 text-xs font-medium text-[#023337] whitespace-nowrap",
+                    "text-left px-3 py-3 text-dash-caption font-medium text-[#023337] whitespace-nowrap",
                     col.headerClassName,
                   )}
                 >
@@ -60,7 +60,7 @@ export default function DataTable<T>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-12 text-center text-sm text-[#6a717f]"
+                  className="py-12 text-center text-dash-body text-[#6a717f]"
                 >
                   {emptyMessage}
                 </td>
@@ -74,7 +74,7 @@ export default function DataTable<T>({
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      className={cn("px-3 py-3 text-sm", col.className)}
+                      className={cn("px-3 py-3 text-dash-body", col.className)}
                     >
                       {col.cell(row, index)}
                     </td>
@@ -96,7 +96,7 @@ export default function DataTable<T>({
             />
           ))
         ) : data.length === 0 ? (
-          <div className="py-10 text-center text-sm text-gray-400">
+          <div className="py-10 text-center text-dash-body text-gray-400">
             {emptyMessage}
           </div>
         ) : (

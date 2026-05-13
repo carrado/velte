@@ -44,7 +44,7 @@ function NavLink({
         onClick?.();
         navigate(item.href);
       }}
-      className={`w-full flex items-center gap-3 py-2 px-3 rounded-lg text-sm cursor-pointer transition-colors ${
+      className={`w-full flex items-center gap-3 py-2 px-3 rounded-lg text-dash-body cursor-pointer transition-colors ${
         active ? "bg-orange-500 text-white" : "text-gray-600 hover:bg-gray-100"
       } ${item.mobile ? "" : "hidden sm:flex"}`}
     >
@@ -250,7 +250,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <nav className="flex-1 flex-col px-3 py-4 space-y-5">
           {sections.map((section) => (
             <div key={section.title}>
-              <p className="text-[10px] font-semibold uppercase text-gray-400 px-3 mb-2 tracking-wider">
+              <p className="text-dash-micro font-semibold uppercase text-gray-400 px-3 mb-2 tracking-wider">
                 {section.title}
               </p>
               <div className="space-y-0.5">
@@ -269,21 +269,21 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         <div className="px-3 py-4 border-t border-gray-200 space-y-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-secondary font-bold flex-shrink-0">
               {getInitial(userDetails?.company?.name)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 leading-tight">
+              <p className="text-dash-body font-semibold text-gray-900 leading-tight">
                 {userDetails?.company?.name}
               </p>
-              <p className="text-xs text-gray-400 truncate">
+              <p className="text-dash-caption text-gray-400 truncate">
                 @{userDetails?.username}
               </p>
             </div>
           </div>
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center px-3 justify-center gap-2 text-sm text-red-500 hover:text-red-600 transition-colors cursor-pointer"
+            className="flex items-center px-3 justify-center gap-2 text-dash-body text-red-500 hover:text-red-600 transition-colors cursor-pointer"
           >
             <LogOut size={18} />
             <span>Logout</span>

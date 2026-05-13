@@ -56,11 +56,11 @@ export default function FilterPopover({
         <Filter size={18} className="text-[#6a717f]" />
       </button>
       {open && (
-        <div className="absolute -right-10 top-10 z-40 sm:w-80 w-[340px] bg-white rounded-lg shadow-lg border border-[#e5e7eb] p-4 text-sm">
+        <div className="absolute -right-10 top-10 z-40 sm:w-80 w-[340px] bg-white rounded-lg shadow-lg border border-[#e5e7eb] p-4 text-dash-body">
           <div className="space-y-4">
             {showDateRange && (
               <div>
-                <label className="block text-xs font-semibold text-[#023337] mb-1">
+                <label className="block text-dash-secondary font-semibold text-[#023337] mb-1">
                   Date Range
                 </label>
                 <div className="flex gap-2">
@@ -70,7 +70,7 @@ export default function FilterPopover({
                     onChange={(e) =>
                       setLocal({ ...local, startDate: e.target.value })
                     }
-                    className="flex-1 px-2 py-1.5 border border-[#e5e7eb] rounded text-sm"
+                    className="flex-1 px-2 py-1.5 border border-[#e5e7eb] rounded text-dash-body"
                   />
                   <input
                     type="date"
@@ -78,14 +78,14 @@ export default function FilterPopover({
                     onChange={(e) =>
                       setLocal({ ...local, endDate: e.target.value })
                     }
-                    className="flex-1 px-2 py-1.5 border border-[#e5e7eb] rounded text-sm"
+                    className="flex-1 px-2 py-1.5 border border-[#e5e7eb] rounded text-dash-body"
                   />
                 </div>
               </div>
             )}
             {fields.map((field) => (
               <div key={field.key}>
-                <label className="block text-xs font-semibold text-[#023337] mb-1">
+                <label className="block text-dash-secondary font-semibold text-[#023337] mb-1">
                   {field.label}
                 </label>
                 <Select
@@ -97,7 +97,7 @@ export default function FilterPopover({
                     }))
                   }
                 >
-                  <SelectTrigger className="w-full text-sm h-8">
+                  <SelectTrigger className="w-full text-dash-body h-8">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -117,7 +117,7 @@ export default function FilterPopover({
                   onReset();
                   setOpen(false);
                 }}
-                className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                className="flex-1 px-3 py-1.5 text-dash-body border border-gray-300 rounded hover:bg-gray-50"
               >
                 Reset
               </button>
@@ -126,7 +126,7 @@ export default function FilterPopover({
                   onApply(local);
                   setOpen(false);
                 }}
-                className="flex-1 px-3 py-1.5 text-sm bg-orange-500 text-white rounded hover:bg-orange-600"
+                className="flex-1 px-3 py-1.5 text-dash-body bg-orange-500 text-white rounded hover:bg-orange-600"
               >
                 Apply
               </button>

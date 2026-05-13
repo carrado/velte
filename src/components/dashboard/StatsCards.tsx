@@ -39,29 +39,33 @@ export default function StatsCards() {
       <div className="bg-white sm:rounded-2xl shadow-sm p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-sm font-semibold text-[#111827]">Total Sales</p>
-            <p className="text-[11px] text-[#9CA3AF]">Last 7 days</p>
+            <p className="text-dash-body font-semibold text-[#111827]">
+              Total Sales
+            </p>
+            <p className="text-dash-caption text-[#9CA3AF]">Last 7 days</p>
           </div>
           <MoreVertical size={16} className="text-[#9CA3AF]" />
         </div>
         <div className="flex items-end gap-2 mb-1">
-          <span className="text-2xl font-bold text-[#111827]">$350K</span>
-          <span className="text-sm text-[#6B7280] mb-0.5">Sales</span>
+          <span className="text-dash-display font-bold text-[#111827]">
+            $350K
+          </span>
+          <span className="text-dash-body text-[#6B7280] mb-0.5">Sales</span>
         </div>
         <div className="flex items-center gap-1 mb-3">
           <TrendingUp size={13} className="text-orange-500" />
-          <span className="text-xs font-semibold text-orange-500">
+          <span className="text-dash-secondary font-semibold text-orange-500">
             +{totalSales.growth}%
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <div className="text-xs text-[#6B7280]">
+          <div className="text-dash-secondary text-[#6B7280]">
             Previous 7days{" "}
             <span className="text-orange-500 font-medium">
               ${totalSales.previous}
             </span>
           </div>
-          <button className="text-xs border border-[#E5E7EB] rounded-full px-3 py-1 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
+          <button className="text-dash-secondary border border-[#E5E7EB] rounded-full px-3 py-1 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
             Details
           </button>
         </div>
@@ -71,29 +75,33 @@ export default function StatsCards() {
       <div className="bg-white sm:rounded-2xl shadow-sm p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-sm font-semibold text-[#111827]">Total Orders</p>
-            <p className="text-[11px] text-[#9CA3AF]">Last 7 days</p>
+            <p className="text-dash-body font-semibold text-[#111827]">
+              Total Orders
+            </p>
+            <p className="text-dash-caption text-[#9CA3AF]">Last 7 days</p>
           </div>
           <MoreVertical size={16} className="text-[#9CA3AF]" />
         </div>
         <div className="flex items-end gap-2 mb-1">
-          <span className="text-2xl font-bold text-[#111827]">10.7K</span>
-          <span className="text-sm text-[#6B7280] mb-0.5">order</span>
+          <span className="text-dash-display font-bold text-[#111827]">
+            10.7K
+          </span>
+          <span className="text-dash-body text-[#6B7280] mb-0.5">order</span>
         </div>
         <div className="flex items-center gap-1 mb-3">
           <TrendingUp size={13} className="text-orange-500" />
-          <span className="text-xs font-semibold text-orange-500">
+          <span className="text-dash-secondary font-semibold text-orange-500">
             +{totalOrders.growth}%
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <div className="text-xs text-[#6B7280]">
+          <div className="text-dash-secondary text-[#6B7280]">
             Previous 7days{" "}
             <span className="text-blue-500 font-medium">
               ({(totalOrders.previous / 1000).toFixed(1)}k)
             </span>
           </div>
-          <button className="text-xs border border-[#E5E7EB] rounded-full px-3 py-1 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
+          <button className="text-dash-secondary border border-[#E5E7EB] rounded-full px-3 py-1 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
             Details
           </button>
         </div>
@@ -103,10 +111,10 @@ export default function StatsCards() {
       <div className="bg-white sm:rounded-2xl shadow-sm p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex gap-6">
-            <span className="text-sm font-semibold text-[#111827]">
+            <span className="text-dash-body font-semibold text-[#111827]">
               Pending
             </span>
-            <span className="text-sm font-semibold text-[#EF4444]">
+            <span className="text-dash-body font-semibold text-[#EF4444]">
               Canceled
             </span>
           </div>
@@ -114,25 +122,27 @@ export default function StatsCards() {
         </div>
         <div className="flex gap-6 mb-1">
           <div>
-            <span className="text-2xl font-bold text-[#111827]">
+            <span className="text-dash-display font-bold text-[#111827]">
               {pending.orders}
             </span>
-            <p className="text-xs text-[#9CA3AF]">user {pending.users}</p>
+            <p className="text-dash-secondary text-[#9CA3AF]">
+              user {pending.users}
+            </p>
           </div>
           <div className="border-l border-[#E5E7EB] pl-6">
-            <span className="text-2xl font-bold text-[#EF4444]">
+            <span className="text-dash-display font-bold text-[#EF4444]">
               {canceled.value}
             </span>
             <div className="flex items-center gap-1">
               <TrendingDown size={11} className="text-[#EF4444]" />
-              <span className="text-xs font-semibold text-[#EF4444]">
+              <span className="text-dash-secondary font-semibold text-[#EF4444]">
                 {canceled.growth}%
               </span>
             </div>
           </div>
         </div>
         <div className="flex justify-end mt-3">
-          <button className="text-xs border border-[#E5E7EB] rounded-full px-3 py-1 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
+          <button className="text-dash-secondary border border-[#E5E7EB] rounded-full px-3 py-1 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
             Details
           </button>
         </div>

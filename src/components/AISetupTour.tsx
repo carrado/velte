@@ -81,23 +81,23 @@ export default function AISetupTour({ onDismiss }: AISetupTourProps) {
               <Sparkles size={30} className="text-orange-500" />
             </div>
 
-            <h2 className="text-[17px] font-bold text-[#023337] mb-2">
+            <h2 className="text-dash-title font-bold text-[#023337] mb-2">
               Set up your AI assistant
             </h2>
-            <p className="text-sm text-gray-500 leading-relaxed mb-7">
+            <p className="text-dash-body text-gray-500 leading-relaxed mb-7">
               Connect an AI model to unlock smart features across your dashboard
               — from real-time insights to intelligent automation.
             </p>
 
             <button
               onClick={handleSetupNow}
-              className="w-full py-3 bg-orange-500 text-white text-sm font-semibold rounded-xl hover:bg-orange-600 transition-colors cursor-pointer mb-3"
+              className="w-full py-3 bg-orange-500 text-white text-dash-body font-semibold rounded-xl hover:bg-orange-600 transition-colors cursor-pointer mb-3"
             >
               Set up now
             </button>
             <button
               onClick={handleSkip}
-              className="w-full py-3 text-gray-500 text-sm font-medium hover:text-gray-700 transition-colors cursor-pointer"
+              className="w-full py-3 text-gray-500 text-dash-body font-medium hover:text-gray-700 transition-colors cursor-pointer"
             >
               Remind me later
             </button>
@@ -193,16 +193,16 @@ export default function AISetupTour({ onDismiss }: AISetupTourProps) {
             <Sparkles size={17} className="text-orange-500" />
           </div>
           <div>
-            <p className="text-[10px] font-semibold text-orange-500 uppercase tracking-wide mb-0.5">
+            <p className="text-dash-micro font-semibold text-orange-500 uppercase tracking-wide mb-0.5">
               Setup required
             </p>
-            <h3 className="text-sm font-bold text-[#023337] leading-snug">
+            <h3 className="text-dash-body font-bold text-[#023337] leading-snug">
               Set up your AI assistant
             </h3>
           </div>
         </div>
 
-        <p className="text-xs text-gray-500 leading-relaxed mb-4">
+        <p className="text-dash-secondary text-gray-500 leading-relaxed mb-4">
           Connect an AI model to unlock smart features — from real-time insights
           to intelligent automation across your dashboard.
         </p>
@@ -210,13 +210,13 @@ export default function AISetupTour({ onDismiss }: AISetupTourProps) {
         <div className="flex gap-2">
           <button
             onClick={handleSetupNow}
-            className="flex-1 py-2 bg-orange-500 text-white text-xs font-semibold rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
+            className="flex-1 py-2 bg-orange-500 text-white text-dash-secondary font-semibold rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
           >
             Set up now
           </button>
           <button
             onClick={handleSkip}
-            className="flex-1 py-2 text-gray-500 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            className="flex-1 py-2 text-gray-500 text-dash-secondary font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
           >
             Skip for now
           </button>

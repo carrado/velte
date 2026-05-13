@@ -79,7 +79,7 @@ export function Pagination({
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+        className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 bg-white rounded-lg border border-gray-200 text-dash-body text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
       >
         <ChevronLeft size={16} />
         <span className="hidden sm:inline">Previous</span>
@@ -92,7 +92,7 @@ export function Pagination({
           page === "..." ? (
             <span
               key={`dots-${idx}`}
-              className="w-6 sm:w-8 h-8 flex items-center justify-center text-sm font-medium text-[#023337]"
+              className="w-6 sm:w-8 h-8 flex items-center justify-center text-dash-body font-medium text-[#023337]"
             >
               …
             </span>
@@ -101,7 +101,7 @@ export function Pagination({
               key={page}
               onClick={() => onPageChange(page as number)}
               className={cn(
-                "w-6 sm:w-8 h-8 flex items-center justify-center rounded text-sm transition-colors cursor-pointer",
+                "w-6 sm:w-8 h-8 flex items-center justify-center rounded text-dash-body transition-colors cursor-pointer",
                 currentPage === page
                   ? "bg-orange-200 text-[#023337] font-medium"
                   : "border border-gray-200 text-[#023337] hover:bg-gray-50",
@@ -117,7 +117,7 @@ export function Pagination({
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+        className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 bg-white rounded-lg border border-gray-200 text-dash-body text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
       >
         <span className="hidden sm:inline">Next</span>
         <span className="sm:hidden">Next</span>

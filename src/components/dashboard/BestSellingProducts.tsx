@@ -19,14 +19,18 @@ function StatusBadge({ status }: { status: BestSellingProduct["status"] }) {
     return (
       <div className="flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] inline-block" />
-        <span className="text-xs text-[#22C55E] font-medium">Stock</span>
+        <span className="text-dash-caption text-[#22C55E] font-medium">
+          Stock
+        </span>
       </div>
     );
   }
   return (
     <div className="flex items-center gap-1.5">
       <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] inline-block" />
-      <span className="text-xs text-[#EF4444] font-medium">Stock out</span>
+      <span className="text-dash-caption text-[#EF4444] font-medium">
+        Stock out
+      </span>
     </div>
   );
 }
@@ -40,13 +44,13 @@ export default function BestSellingProducts() {
   return (
     <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 py-5 px-3">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#111827]">
+        <h3 className="text-dash-heading font-semibold text-[#111827]">
           Best selling product
         </h3>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-dash-caption">
           <thead>
             <tr className="bg-orange-50 rounded-lg">
               <th className="text-left py-2.5 px-3 text-orange-700 font-semibold rounded-l-lg">
@@ -118,7 +122,7 @@ export default function BestSellingProducts() {
       </div>
 
       <div className="flex justify-end mt-4">
-        <button className="text-xs border border-[#E5E7EB] rounded-full px-4 py-1.5 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
+        <button className="text-dash-caption border border-[#E5E7EB] rounded-full px-4 py-1.5 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
           Details
         </button>
       </div>

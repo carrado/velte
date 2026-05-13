@@ -17,7 +17,7 @@ export default function DeleteProductModal({
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-red-600">
+          <h2 className="text-dash-heading font-semibold text-red-600">
             Delete Product
           </h2>
           <button
@@ -28,12 +28,12 @@ export default function DeleteProductModal({
           </button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          <p className="text-sm text-gray-700">
+          <p className="text-dash-body text-gray-700">
             Are you sure you want to delete{" "}
             <span className="font-semibold">{product.name}</span>?
           </p>
           {!canDelete && (
-            <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded">
+            <p className="text-dash-body text-amber-600 bg-amber-50 p-2 rounded">
               ⚠️ This product is still in stock. Only out-of-stock products can
               be deleted.
             </p>
@@ -41,14 +41,14 @@ export default function DeleteProductModal({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
+              className="flex-1 py-2.5 text-dash-body font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
             >
               Cancel
             </button>
             <button
               onClick={() => canDelete && onConfirm(product.id)}
               disabled={!canDelete}
-              className="flex-1 py-2.5 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-2.5 text-dash-body font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Delete
             </button>

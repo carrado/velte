@@ -220,10 +220,10 @@ export default function AddProductPage() {
 
   const actionButtons = (
     <div className="flex justify-end gap-3 pt-2 border-t border-gray-100 mt-6">
-      <button className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold px-4 h-10 rounded-lg whitespace-nowrap transition-colors">
+      <button className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-4 h-10 rounded-lg whitespace-nowrap transition-colors">
         Publish Product
       </button>
-      <button className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-sm font-bold px-3 h-10 rounded-lg whitespace-nowrap hover:bg-gray-50 transition-colors">
+      <button className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-3 h-10 rounded-lg whitespace-nowrap hover:bg-gray-50 transition-colors">
         <Save size={14} />
         Save to draft
       </button>
@@ -237,22 +237,24 @@ export default function AddProductPage() {
         {/* ── Left column: Basic Details + Pricing + Inventory ── */}
         <div className="bg-white sm:rounded-lg shadow-sm flex-1 lg:min-w-0 w-full p-4 sm:p-6 space-y-6">
           {/* Basic Details */}
-          <h3 className="text-xl font-bold text-[#23272e]">Basic Details</h3>
+          <h3 className="text-dash-title font-bold text-[#23272e]">
+            Basic Details
+          </h3>
 
           <div className="space-y-3">
-            <label className="block text-sm font-bold text-[#023337]">
+            <label className="block text-dash-body font-bold text-[#023337]">
               Product Name
             </label>
             <Input
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
               placeholder="Enter product name"
-              className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="block text-sm font-bold text-[#023337]">
+            <label className="block text-dash-body font-bold text-[#023337]">
               Product Description
             </label>
             <textarea
@@ -260,16 +262,16 @@ export default function AddProductPage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Enter product description"
               rows={5}
-              className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
+              className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
             />
           </div>
 
           {/* Pricing */}
-          <h3 className="text-xl font-bold text-[#23272e]">Pricing</h3>
+          <h3 className="text-dash-title font-bold text-[#23272e]">Pricing</h3>
 
           {/* Product Price with custom currency dropdown */}
           <div className="space-y-3">
-            <label className="block text-sm font-bold text-[#023337]">
+            <label className="block text-dash-body font-bold text-[#023337]">
               Product Price
             </label>
             <div className="flex h-12 bg-gray-50 border border-gray-200 rounded-lg">
@@ -279,13 +281,13 @@ export default function AddProductPage() {
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder="0.00"
-                className="flex-1 min-w-0 px-3 text-sm font-bold mt-1.5 text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                className="flex-1 min-w-0 px-3 text-dash-body font-bold mt-1.5 text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
               />
               <div className="relative">
                 <button
                   ref={currencyButtonRef}
                   onClick={() => setCurrencyPopoverOpen(!currencyPopoverOpen)}
-                  className="h-full pl-3 pr-8 text-sm bg-transparent border-l border-gray-200 flex items-center gap-1.5 cursor-pointer"
+                  className="h-full pl-3 pr-8 text-dash-body bg-transparent border-l border-gray-200 flex items-center gap-1.5 cursor-pointer"
                 >
                   {currency === "NGN" ? "₦" : "$"}
                   <ChevronDown size={14} className="text-gray-400" />
@@ -300,7 +302,7 @@ export default function AddProductPage() {
                         setCurrency("NGN");
                         setCurrencyPopoverOpen(false);
                       }}
-                      className="w-full px-4 py-2 text-left text-sm hover:bg-orange-50 transition-colors"
+                      className="w-full px-4 py-2 text-left text-dash-body hover:bg-orange-50 transition-colors"
                     >
                       ₦ NGN
                     </button>
@@ -309,7 +311,7 @@ export default function AddProductPage() {
                         setCurrency("USD");
                         setCurrencyPopoverOpen(false);
                       }}
-                      className="w-full px-4 py-2 text-left text-sm hover:bg-orange-50 transition-colors"
+                      className="w-full px-4 py-2 text-left text-dash-body hover:bg-orange-50 transition-colors"
                     >
                       $ USD
                     </button>
@@ -322,13 +324,13 @@ export default function AddProductPage() {
           {/* Negotiable toggle + Minimum Price */}
           <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-1 min-w-0 space-y-2">
-              <label className="block text-sm font-bold text-[#023337]">
+              <label className="block text-dash-body font-bold text-[#023337]">
                 Negotiable
               </label>
               <div className="flex items-center gap-3 h-12">
                 <span
                   className={cn(
-                    "text-sm font-medium transition-colors",
+                    "text-dash-body font-medium transition-colors",
                     !isNegotiable ? "text-[#023337]" : "text-gray-400",
                   )}
                 >
@@ -350,7 +352,7 @@ export default function AddProductPage() {
                 </button>
                 <span
                   className={cn(
-                    "text-sm font-medium transition-colors",
+                    "text-dash-body font-medium transition-colors",
                     isNegotiable ? "text-[#023337]" : "text-gray-400",
                   )}
                 >
@@ -364,12 +366,12 @@ export default function AddProductPage() {
           <div className="flex flex-col sm:flex-row gap-5">
             {!isNegotiable ? (
               <div className="flex-1 min-w-0 space-y-3">
-                <label className="block text-sm font-bold text-[#023337]">
+                <label className="block text-dash-body font-bold text-[#023337]">
                   Discounted Price{" "}
                   <span className="font-normal text-gray-500">(Optional)</span>
                 </label>
                 <div className="flex h-12 items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 overflow-hidden">
-                  <div className="bg-orange-50 rounded px-2 py-1 text-sm font-bold text-black flex-shrink-0">
+                  <div className="bg-orange-50 rounded px-2 py-1 text-dash-body font-bold text-black flex-shrink-0">
                     {currency === "NGN" ? "₦" : "$"}
                   </div>
                   <Input
@@ -378,17 +380,17 @@ export default function AddProductPage() {
                     value={discountedPrice}
                     onChange={(e) => setDiscountedPrice(e.target.value)}
                     placeholder="0.00"
-                    className="flex-1 min-w-0 text-sm font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                    className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
                   />
                 </div>
               </div>
             ) : (
               <div className="flex-1 min-w-0 space-y-3">
-                <label className="block text-sm font-bold text-[#023337]">
+                <label className="block text-dash-body font-bold text-[#023337]">
                   Minimum Price
                 </label>
                 <div className="flex h-12 items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 overflow-hidden">
-                  <div className="bg-orange-50 rounded px-2 py-1 text-sm font-bold text-black flex-shrink-0">
+                  <div className="bg-orange-50 rounded px-2 py-1 text-dash-body font-bold text-black flex-shrink-0">
                     {currency === "NGN" ? "₦" : "$"}
                   </div>
                   <Input
@@ -397,10 +399,10 @@ export default function AddProductPage() {
                     value={minimumPrice}
                     onChange={(e) => setMinimumPrice(e.target.value)}
                     placeholder="0.00"
-                    className="flex-1 min-w-0 text-sm font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                    className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-dash-secondary text-gray-500 mt-1">
                   The lowest price you&apos;re willing to accept for this
                   product.
                 </p>
@@ -408,13 +410,13 @@ export default function AddProductPage() {
             )}
 
             <div className="flex-1 min-w-0 space-y-3">
-              <label className="block text-sm font-bold text-[#023337]">
+              <label className="block text-dash-body font-bold text-[#023337]">
                 Tax Included
               </label>
               <div className="flex items-center gap-3 h-12">
                 <span
                   className={cn(
-                    "text-sm font-medium transition-colors",
+                    "text-dash-body font-medium transition-colors",
                     taxIncluded === "no" ? "text-[#023337]" : "text-gray-400",
                   )}
                 >
@@ -438,7 +440,7 @@ export default function AddProductPage() {
                 </button>
                 <span
                   className={cn(
-                    "text-sm font-medium transition-colors",
+                    "text-dash-body font-medium transition-colors",
                     taxIncluded === "yes" ? "text-[#023337]" : "text-gray-400",
                   )}
                 >
@@ -452,7 +454,7 @@ export default function AddProductPage() {
           {taxIncluded === "yes" && (
             <div className="flex flex-col sm:flex-row gap-4 items-end">
               <div className="flex-1 space-y-2 w-full">
-                <label className="block text-sm font-bold text-[#023337]">
+                <label className="block text-dash-body font-bold text-[#023337]">
                   Tax Amount
                 </label>
                 <div className="flex h-12 bg-gray-50 pt-1.5 border border-gray-200 rounded-lg overflow-hidden">
@@ -462,7 +464,7 @@ export default function AddProductPage() {
                     value={taxValue}
                     onChange={(e) => setTaxValue(e.target.value)}
                     placeholder="0.00"
-                    className="flex-1 px-3 text-sm text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                    className="flex-1 px-3 text-dash-body text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
                   />
                 </div>
               </div>
@@ -470,7 +472,7 @@ export default function AddProductPage() {
                 <button
                   onClick={() => setTaxType("percentage")}
                   className={cn(
-                    "px-3 py-1.5 text-sm rounded-md transition-colors",
+                    "px-3 py-1.5 text-dash-body rounded-md transition-colors",
                     taxType === "percentage"
                       ? "bg-orange-500 text-white"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200",
@@ -481,7 +483,7 @@ export default function AddProductPage() {
                 <button
                   onClick={() => setTaxType("fixed")}
                   className={cn(
-                    "px-3 py-1.5 text-sm rounded-md transition-colors",
+                    "px-3 py-1.5 text-dash-body rounded-md transition-colors",
                     taxType === "fixed"
                       ? "bg-orange-500 text-white"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200",
@@ -495,10 +497,10 @@ export default function AddProductPage() {
           )}
 
           {/* Dates */}
-          <h3 className="text-xl font-bold text-[#23272e]">Dates</h3>
+          <h3 className="text-dash-title font-bold text-[#23272e]">Dates</h3>
           <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-1 relative space-y-2">
-              <label className="block text-sm font-bold text-[#023337]">
+              <label className="block text-dash-body font-bold text-[#023337]">
                 Manufacturing Date{" "}
                 <span className="font-normal text-gray-500">(Optional)</span>
               </label>
@@ -510,7 +512,7 @@ export default function AddProductPage() {
                   onClick={() => openDatePicker(manufacturingDateRef)}
                   onChange={(e) => setManufacturingDate(e.target.value)}
                   placeholder="Manufacturing date"
-                  className="w-full h-12 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
+                  className="w-full h-12 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
                 />
                 <Calendar
                   size={18}
@@ -520,7 +522,7 @@ export default function AddProductPage() {
               </div>
             </div>
             <div className="flex-1 relative space-y-2">
-              <label className="block text-sm font-bold text-[#023337]">
+              <label className="block text-dash-body font-bold text-[#023337]">
                 Expiration Date
               </label>
               <div className="relative">
@@ -531,7 +533,7 @@ export default function AddProductPage() {
                   onClick={() => openDatePicker(expirationDateRef)}
                   onChange={(e) => setExpirationDate(e.target.value)}
                   placeholder="Expiration date"
-                  className="w-full h-12 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
+                  className="w-full h-12 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
                 />
                 <Calendar
                   size={18}
@@ -543,11 +545,13 @@ export default function AddProductPage() {
           </div>
 
           {/* Inventory */}
-          <h3 className="text-xl font-bold text-[#23272e]">Inventory</h3>
+          <h3 className="text-dash-title font-bold text-[#23272e]">
+            Inventory
+          </h3>
 
           <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-1 min-w-0 space-y-3">
-              <label className="block text-sm font-bold text-[#023337]">
+              <label className="block text-dash-body font-bold text-[#023337]">
                 Stock Quantity
               </label>
               <Input
@@ -557,11 +561,11 @@ export default function AddProductPage() {
                 value={stockQuantity}
                 onChange={(e) => setStockQuantity(e.target.value)}
                 placeholder="Enter quantity"
-                className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
             </div>
             <div className="flex-1 min-w-0 space-y-3">
-              <label className="block text-sm font-bold text-[#023337]">
+              <label className="block text-dash-body font-bold text-[#023337]">
                 Low Stock Threshold
               </label>
               <Input
@@ -571,9 +575,9 @@ export default function AddProductPage() {
                 value={threshold}
                 onChange={(e) => setThreshold(e.target.value)}
                 placeholder="e.g., 10"
-                className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-dash-secondary text-gray-500 mt-1">
                 When stock quantity reaches this number, you&apos;ll be notified
                 to restock.
               </p>
@@ -605,7 +609,7 @@ export default function AddProductPage() {
                 </svg>
               )}
             </div>
-            <span className="text-sm text-gray-500">
+            <span className="text-dash-body text-gray-500">
               Highlight this product in a featured section.
             </span>
           </button>
@@ -618,14 +622,14 @@ export default function AddProductPage() {
         <div className="bg-white sm:rounded-lg shadow-sm w-full lg:w-[485px] flex-shrink-0 p-4 sm:p-6 space-y-6">
           {/* Media Upload Section */}
           <div>
-            <h3 className="text-xl font-bold text-[#23272e] mb-4">
+            <h3 className="text-dash-title font-bold text-[#23272e] mb-4">
               Upload Media
             </h3>
             <div className="flex gap-3 mb-4">
               <button
                 onClick={() => setMediaType("image")}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-dash-body font-medium transition-colors",
                   mediaType === "image"
                     ? "bg-orange-500 text-white"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200",
@@ -637,7 +641,7 @@ export default function AddProductPage() {
               <button
                 onClick={() => setMediaType("video")}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-dash-body font-medium transition-colors",
                   mediaType === "video"
                     ? "bg-orange-500 text-white"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200",
@@ -651,7 +655,7 @@ export default function AddProductPage() {
             {mediaType === "image" ? (
               <>
                 <div className="space-y-3">
-                  <label className="block text-sm font-bold text-[#023337]">
+                  <label className="block text-dash-body font-bold text-[#023337]">
                     Product Image
                   </label>
                   <div className="relative border border-gray-200 rounded-lg overflow-hidden h-[266px] bg-gray-50 flex items-center justify-center">
@@ -664,14 +668,14 @@ export default function AddProductPage() {
                     ) : (
                       <div className="flex flex-col items-center gap-2 text-gray-300">
                         <ImageIcon size={48} />
-                        <span className="text-sm text-gray-400">
+                        <span className="text-dash-body text-gray-400">
                           No image selected
                         </span>
                       </div>
                     )}
                     <button
                       onClick={() => mainImageRef.current?.click()}
-                      className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-9 border border-gray-200 rounded-lg bg-white text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+                      className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-9 border border-gray-200 rounded-lg bg-white text-dash-body text-gray-500 hover:bg-gray-50 transition-colors"
                     >
                       <ImageIcon size={16} />
                       Browse
@@ -680,14 +684,14 @@ export default function AddProductPage() {
                       <>
                         <button
                           onClick={clearMainImage}
-                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-9 bg-white rounded-lg shadow text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-9 bg-white rounded-lg shadow text-dash-body text-red-600 hover:bg-red-50 transition-colors"
                         >
                           <Trash2 size={14} />
                           Clear
                         </button>
                         <button
                           onClick={() => mainImageRef.current?.click()}
-                          className="absolute bottom-3 right-24 flex items-center gap-1.5 px-3 h-9 bg-white rounded-lg shadow text-sm text-black hover:bg-gray-50 transition-colors"
+                          className="absolute bottom-3 right-24 flex items-center gap-1.5 px-3 h-9 bg-white rounded-lg shadow text-dash-body text-black hover:bg-gray-50 transition-colors"
                         >
                           <RefreshCcw size={14} />
                           Replace
@@ -730,7 +734,9 @@ export default function AddProductPage() {
                       className="w-[201px] h-[99px] border border-dashed border-gray-400 rounded-lg flex flex-col items-center justify-center gap-1 hover:bg-gray-50 transition-colors"
                     >
                       <PlusCircle size={22} className="text-orange-500" />
-                      <span className="text-sm text-orange-500">Add Image</span>
+                      <span className="text-dash-body text-orange-500">
+                        Add Image
+                      </span>
                     </button>
                   )}
                   <input
@@ -745,7 +751,7 @@ export default function AddProductPage() {
               </>
             ) : (
               <div className="space-y-3">
-                <label className="block text-sm font-bold text-[#023337]">
+                <label className="block text-dash-body font-bold text-[#023337]">
                   Product Video
                 </label>
                 <div className="relative border border-gray-200 rounded-lg overflow-hidden h-[266px] bg-gray-50 flex items-center justify-center">
@@ -758,14 +764,14 @@ export default function AddProductPage() {
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-gray-300">
                       <Video size={48} />
-                      <span className="text-sm text-gray-400">
+                      <span className="text-dash-body text-gray-400">
                         No video selected
                       </span>
                     </div>
                   )}
                   <button
                     onClick={() => videoRef.current?.click()}
-                    className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-9 border border-gray-200 rounded-lg bg-white text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+                    className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-9 border border-gray-200 rounded-lg bg-white text-dash-body text-gray-500 hover:bg-gray-50 transition-colors"
                   >
                     <Video size={16} />
                     Browse
@@ -773,7 +779,7 @@ export default function AddProductPage() {
                   {videoFile && (
                     <button
                       onClick={clearVideo}
-                      className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-9 bg-white rounded-lg shadow text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-9 bg-white rounded-lg shadow text-dash-body text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <Trash2 size={14} />
                       Clear
@@ -792,16 +798,18 @@ export default function AddProductPage() {
           </div>
 
           {/* Categories */}
-          <h3 className="text-xl font-bold text-[#23272e]">Categories</h3>
+          <h3 className="text-dash-title font-bold text-[#23272e]">
+            Categories
+          </h3>
           <div className="space-y-3">
-            <label className="block text-sm font-bold text-[#023337]">
+            <label className="block text-dash-body font-bold text-[#023337]">
               Product Categories
             </label>
             <Select
               value={selectedCategory}
               onValueChange={(v) => setSelectedCategory(v ?? "")}
             >
-              <SelectTrigger className="w-full h-11 bg-white shadow-[0px_1px_1.5px_rgba(0,0,0,0.2)] border-0 rounded-lg text-sm text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
+              <SelectTrigger className="w-full h-11 bg-white shadow-[0px_1px_1.5px_rgba(0,0,0,0.2)] border-0 rounded-lg text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
                 <SelectValue placeholder="Select your product" />
               </SelectTrigger>
               <SelectContent>
@@ -814,14 +822,14 @@ export default function AddProductPage() {
 
           {/* Product Tags (chips input) – Enter or Space adds tag */}
           <div className="space-y-3">
-            <label className="block text-sm font-bold text-[#023337]">
+            <label className="block text-dash-body font-bold text-[#023337]">
               Product Tags
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-md text-sm"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-md text-dash-body"
                 >
                   {tag}
                   <button
@@ -839,9 +847,9 @@ export default function AddProductPage() {
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={handleTagKeyDown}
               placeholder="Type a tag and press Enter or Space"
-              className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
             />
-            <p className="text-xs text-gray-500">
+            <p className="text-dash-secondary text-gray-500">
               Press <kbd className="px-1 border rounded">Enter</kbd> or{" "}
               <kbd className="px-1 border rounded">Space</kbd> to add a tag.
             </p>
@@ -849,21 +857,23 @@ export default function AddProductPage() {
 
           {/* Add Attributes - with inline error message */}
           <div className="space-y-3">
-            <h3 className="text-xl font-bold text-[#23272e]">Add Attributes</h3>
+            <h3 className="text-dash-title font-bold text-[#23272e]">
+              Add Attributes
+            </h3>
             <div className="flex gap-2">
               <Input
                 type="text"
                 value={attributeNameInput}
                 onChange={handleAttributeNameChange}
                 placeholder="Attribute name (e.g., Size)"
-                className="flex-1 h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                className="flex-1 h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
               <Input
                 type="text"
                 value={attributeValueInput}
                 onChange={handleAttributeValueChange}
                 placeholder="Value (e.g., Large)"
-                className="flex-1 h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                className="flex-1 h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
               <button
                 onClick={addAttribute}
@@ -873,7 +883,9 @@ export default function AddProductPage() {
               </button>
             </div>
             {attributeError && (
-              <div className="text-red-500 text-sm mt-1">{attributeError}</div>
+              <div className="text-red-500 text-dash-body mt-1">
+                {attributeError}
+              </div>
             )}
             {attributes.length > 0 && (
               <div className="mt-3 space-y-2">
@@ -883,8 +895,10 @@ export default function AddProductPage() {
                     className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
                   >
                     <div>
-                      <span className="font-medium text-sm">{attr.name}:</span>{" "}
-                      <span className="text-sm text-gray-600">
+                      <span className="font-medium text-dash-body">
+                        {attr.name}:
+                      </span>{" "}
+                      <span className="text-dash-body text-gray-600">
                         {attr.value}
                       </span>
                     </div>

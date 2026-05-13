@@ -80,7 +80,7 @@ function StatusBadge({ status }: { status: "trial" | "active" | "expired" }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border",
+        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-dash-secondary font-bold border",
         s.bg,
         s.text,
         s.border,
@@ -139,18 +139,18 @@ function CountdownRing({
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
             className={cn(
-              "text-xl font-black leading-none",
+              "text-dash-title font-black leading-none",
               urgent ? "text-red-500" : "text-gray-900",
             )}
           >
             {days}
           </span>
-          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mt-0.5">
+          <span className="text-dash-micro font-semibold text-gray-400 uppercase tracking-wide mt-0.5">
             days
           </span>
         </div>
       </div>
-      <p className="text-[11px] text-gray-500 font-medium">{label}</p>
+      <p className="text-dash-caption text-gray-500 font-medium">{label}</p>
     </div>
   );
 }
@@ -184,7 +184,7 @@ function PlanCard({
       <div className="p-5 sm:p-6">
         {/* Corner ribbon */}
         <div className="absolute top-1.5 right-0">
-          <div className="bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wide">
+          <div className="bg-orange-500 text-white text-dash-micro font-black px-3 py-1 rounded-bl-xl uppercase tracking-wide">
             MVP Plan
           </div>
         </div>
@@ -194,10 +194,10 @@ function PlanCard({
             <Sparkles size={18} className="text-white" />
           </div>
           <div>
-            <h3 className="text-[13px] font-bold text-gray-900">
+            <h3 className="text-dash-heading font-bold text-gray-900">
               Velte AI PRO
             </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-dash-secondary text-gray-400 mt-0.5">
               Everything you need to run AI sales
             </p>
           </div>
@@ -205,14 +205,16 @@ function PlanCard({
 
         <div className="flex items-baseline gap-1.5 mb-5">
           <span className="text-3xl font-black text-gray-900">₦8,500</span>
-          <span className="text-sm text-gray-400 font-medium">/ month</span>
+          <span className="text-dash-body text-gray-400 font-medium">
+            / month
+          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4 mb-6">
           {perks.map((p) => (
             <div
               key={p}
-              className="flex items-center gap-2 text-xs text-gray-700"
+              className="flex items-center gap-2 text-dash-secondary text-gray-700"
             >
               <CheckCircle2
                 size={13}
@@ -227,7 +229,7 @@ function PlanCard({
           onClick={onSubscribe}
           disabled={loading}
           className={cn(
-            "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.98] cursor-pointer",
+            "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-dash-body font-bold transition-all active:scale-[0.98] cursor-pointer",
             "bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-200",
             "disabled:opacity-60 disabled:cursor-not-allowed",
           )}
@@ -245,7 +247,7 @@ function PlanCard({
           )}
         </button>
 
-        <p className="text-[10px] text-gray-400 text-center mt-2">
+        <p className="text-dash-micro text-gray-400 text-center mt-2">
           One-time monthly payment · No automatic charges
         </p>
       </div>
@@ -271,18 +273,20 @@ function PaymentRow({ item }: { item: PaymentHistoryItem }) {
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900">
+        <p className="text-dash-body font-semibold text-gray-900">
           {fmtAmount(item.amount)}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5 truncate">
+        <p className="text-dash-secondary text-gray-400 mt-0.5 truncate">
           Ref: {item.reference}
         </p>
       </div>
       <div className="text-right flex-shrink-0">
-        <p className="text-xs text-gray-500">{fmtDate(item.date)}</p>
+        <p className="text-dash-secondary text-gray-500">
+          {fmtDate(item.date)}
+        </p>
         <span
           className={cn(
-            "text-[10px] font-bold uppercase tracking-wide",
+            "text-dash-micro font-bold uppercase tracking-wide",
             item.status === "success" ? "text-emerald-500" : "text-red-400",
           )}
         >
@@ -388,7 +392,7 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-gray-500 px-5 sm:px-0">
+      <p className="text-dash-body text-gray-500 px-5 sm:px-0">
         Manage your subscription and payment history
       </p>
 
@@ -432,17 +436,17 @@ export default function BillingPage() {
               />
             </div>
             <div>
-              <h3 className="text-[13px] font-bold text-gray-900">
+              <h3 className="text-dash-heading font-bold text-gray-900">
                 Subscription Status
               </h3>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-dash-secondary text-gray-400 mt-0.5">
                 Your current plan and access details
               </p>
             </div>
 
             {/* Live badge — only for active */}
             {status === "active" && (
-              <div className="ml-auto flex items-center gap-1.5 text-sm font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full flex-shrink-0">
+              <div className="ml-auto flex items-center gap-1.5 text-dash-body font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full flex-shrink-0">
                 <Wifi size={11} />
                 Live
               </div>
@@ -454,14 +458,14 @@ export default function BillingPage() {
             <div className="flex-1 space-y-3">
               <div className="flex items-center gap-2.5">
                 <StatusBadge status={status} />
-                <span className="text-sm font-bold text-gray-900">
+                <span className="text-dash-body font-bold text-gray-900">
                   Velte AI Pro
                 </span>
               </div>
 
               {status === "trial" && trialRemaining && (
                 <div className="space-y-1">
-                  <p className="text-xs text-gray-500">
+                  <p className="text-dash-secondary text-gray-500">
                     Trial access until{" "}
                     <span className="font-semibold text-gray-800">
                       {trialEndsAt ? fmtDate(trialEndsAt) : "—"}
@@ -470,7 +474,7 @@ export default function BillingPage() {
                   {isUrgent && (
                     <div className="flex items-center gap-1.5 text-red-500">
                       <AlertTriangle size={11} />
-                      <span className="text-xs font-semibold">
+                      <span className="text-dash-secondary font-semibold">
                         Trial ends in{" "}
                         {trialDaysLeft === 0
                           ? `${trialRemaining.hours}h`
@@ -482,7 +486,7 @@ export default function BillingPage() {
               )}
 
               {status === "active" && accessEndDate && (
-                <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="flex items-center gap-2 text-dash-secondary text-gray-500">
                   <Calendar size={12} className="text-gray-400" />
                   <span>
                     Access until{" "}
@@ -494,7 +498,7 @@ export default function BillingPage() {
               )}
 
               {status === "expired" && (
-                <div className="flex items-center gap-2 text-xs text-red-500 font-medium">
+                <div className="flex items-center gap-2 text-dash-secondary text-red-500 font-medium">
                   <XCircle size={12} />
                   <span>Your access has expired. Renew to continue.</span>
                 </div>
@@ -502,11 +506,11 @@ export default function BillingPage() {
 
               {/* Quick stats row */}
               <div className="flex flex-wrap items-center gap-4 pt-1">
-                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="flex items-center gap-1.5 text-dash-secondary text-gray-500">
                   <Zap size={11} className="text-orange-400" />
                   <span>Unlimited conversations / mo</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="flex items-center gap-1.5 text-dash-secondary text-gray-500">
                   <Receipt size={11} className="text-orange-400" />
                   <span>₦8,500 / month</span>
                 </div>
@@ -544,10 +548,10 @@ export default function BillingPage() {
         <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
           <div className="flex sm:items-center sm:justify-between sm:flex-row flex-col gap-3">
             <div>
-              <h3 className="text-[13px] font-bold text-gray-900">
+              <h3 className="text-dash-heading font-bold text-gray-900">
                 Renew Early
               </h3>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-dash-secondary text-gray-400 mt-0.5">
                 Extend your access before it expires
               </p>
             </div>
@@ -556,7 +560,7 @@ export default function BillingPage() {
                 onClick={handleSubscribe}
                 disabled={loadingPay}
                 className={cn(
-                  "flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-semibold transition-all cursor-pointer",
+                  "flex items-center gap-2 py-2 px-4 rounded-xl text-dash-body font-semibold transition-all cursor-pointer",
                   "bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200",
                   "disabled:opacity-60 disabled:cursor-not-allowed",
                 )}
@@ -583,10 +587,10 @@ export default function BillingPage() {
             <Clock size={17} className="text-orange-500" />
           </div>
           <div>
-            <h3 className="text-[13px] font-bold text-gray-900">
+            <h3 className="text-dash-heading font-bold text-gray-900">
               Payment History
             </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-dash-secondary text-gray-400 mt-0.5">
               All past transactions on your account
             </p>
           </div>
@@ -595,8 +599,10 @@ export default function BillingPage() {
         {history.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-400">
             <Receipt size={28} className="opacity-30" />
-            <p className="text-sm font-medium">No payments yet</p>
-            <p className="text-xs">Your transaction history will appear here</p>
+            <p className="text-dash-body font-medium">No payments yet</p>
+            <p className="text-dash-secondary">
+              Your transaction history will appear here
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">

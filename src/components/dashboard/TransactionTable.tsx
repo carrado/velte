@@ -9,14 +9,18 @@ function StatusBadge({ status }: { status: Transaction["status"] }) {
     return (
       <div className="flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] inline-block" />
-        <span className="text-xs text-[#22C55E] font-medium">Paid</span>
+        <span className="text-dash-caption text-[#22C55E] font-medium">
+          Paid
+        </span>
       </div>
     );
   }
   return (
     <div className="flex items-center gap-1.5">
       <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] inline-block" />
-      <span className="text-xs text-[#F59E0B] font-medium">Pending</span>
+      <span className="text-dash-caption text-[#F59E0B] font-medium">
+        Pending
+      </span>
     </div>
   );
 }
@@ -30,15 +34,17 @@ export default function TransactionTable() {
   return (
     <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 py-5 px-3">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#111827]">Transaction</h3>
-        <button className="flex items-center gap-2 bg-orange-500 text-white rounded-lg px-4 py-2 text-xs font-medium hover:bg-orange-600 transition-colors cursor-pointer">
+        <h3 className="text-dash-heading font-semibold text-[#111827]">
+          Transaction
+        </h3>
+        <button className="flex items-center gap-2 bg-orange-500 text-white rounded-lg px-4 py-2 text-dash-caption font-medium hover:bg-orange-600 transition-colors cursor-pointer">
           <SlidersHorizontal size={13} />
           Filter
         </button>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-dash-caption">
           <thead>
             <tr className="border-b border-[#E5E7EB]">
               <th className="text-left pb-3 text-[#9CA3AF] font-medium">No</th>
@@ -101,7 +107,7 @@ export default function TransactionTable() {
       </div>
 
       <div className="flex justify-end mt-4">
-        <button className="text-xs border border-[#E5E7EB] rounded-full px-4 py-1.5 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
+        <button className="text-dash-caption border border-[#E5E7EB] rounded-full px-4 py-1.5 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
           Details
         </button>
       </div>

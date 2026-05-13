@@ -29,7 +29,7 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
   return (
     <div className="flex items-center px-5 sm:px-0 justify-between gap-4">
       <div className="flex items-center gap-3">
-        <h1 className="font-semibold text-xl text-[#111827] whitespace-nowrap">
+        <h1 className="font-semibold text-dash-title text-[#111827] whitespace-nowrap">
           {title}
         </h1>
       </div>
@@ -44,7 +44,7 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
           onChange={handleChange}
           name="search_query"
           placeholder="Search data, users, or reports"
-          className="w-full pl-6 pr-4 py-2 rounded-full border border-[#E5E7EB] bg-white text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          className="w-full pl-6 pr-4 py-2 rounded-full border border-[#E5E7EB] bg-white text-dash-body text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
         />
         <Search
           size={15}
@@ -62,7 +62,7 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
         </button>
 
-        <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-sm font-bold cursor-pointer flex-shrink-0">
+        <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold cursor-pointer flex-shrink-0">
           {getInitial(userDetails?.company?.name)}
         </div>
       </div>

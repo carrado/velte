@@ -13,10 +13,10 @@ function ProductRow({ product }: { product: AddableProduct }) {
         <div className="w-5 h-5 bg-gray-300 rounded" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-[#111827] truncate">
+        <p className="text-dash-secondary font-semibold text-[#111827] truncate">
           {product.name}
         </p>
-        <p className="text-[11px] text-[#9CA3AF]">
+        <p className="text-dash-caption text-[#9CA3AF]">
           ${product.price.toFixed(2)}
         </p>
       </div>
@@ -35,16 +35,16 @@ export default function AddNewProduct() {
   return (
     <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 px-3 py-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#111827]">
+        <h3 className="text-dash-heading font-semibold text-[#111827]">
           Add New Product
         </h3>
-        <button className="text-xs text-orange-500 hover:underline cursor-pointer font-medium">
+        <button className="text-dash-secondary text-orange-500 hover:underline cursor-pointer font-medium">
           + Add New
         </button>
       </div>
 
       {/* Products */}
-      <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-2">
+      <p className="text-dash-secondary font-semibold text-[#6B7280] uppercase tracking-wide mb-2">
         Product
       </p>
 
@@ -62,7 +62,7 @@ export default function AddNewProduct() {
         </div>
       )}
 
-      <button className="text-xs text-blue-500 hover:underline cursor-pointer">
+      <button className="text-dash-secondary text-blue-500 hover:underline cursor-pointer">
         See more
       </button>
     </div>

@@ -26,7 +26,7 @@ interface CustomTooltipProps {
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#111827] text-white text-xs rounded-lg px-3 py-2 shadow-lg">
+      <div className="bg-[#111827] text-white text-dash-secondary rounded-lg px-3 py-2 shadow-lg">
         <p className="font-semibold">{label}</p>
         <p>${(payload[0].value / 1000).toFixed(1)}k</p>
       </div>
@@ -70,7 +70,7 @@ export default function WeeklyReport() {
         x={x}
         y={y + 12}
         textAnchor="middle"
-        fontSize={11}
+        fontSize={12}
         fontWeight={isWed ? 700 : 400}
         fill={isWed ? "#F97316" : "#9CA3AF"}
       >
@@ -83,11 +83,11 @@ export default function WeeklyReport() {
     <div className="bg-white sm:rounded-2xl shadow-sm p-5">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#111827]">
+        <h3 className="text-dash-heading font-semibold text-[#111827]">
           Report for this week
         </h3>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-[#E5E7EB] overflow-hidden text-xs">
+          <div className="flex rounded-lg border border-[#E5E7EB] overflow-hidden text-dash-secondary">
             <button
               onClick={() => setPeriod("this_week")}
               className={`px-3 py-1.5 font-medium transition-colors cursor-pointer ${
@@ -117,8 +117,10 @@ export default function WeeklyReport() {
       <div className="flex flex-wrap gap-x-6 gap-y-3 mb-5 border-b border-[#E5E7EB] pb-4">
         {stats.map((stat) => (
           <div key={stat.label} className="relative pb-2">
-            <p className="text-sm font-bold text-[#111827]">{stat.value}</p>
-            <p className="text-[11px] text-[#9CA3AF]">{stat.label}</p>
+            <p className="text-dash-body font-bold text-[#111827]">
+              {stat.value}
+            </p>
+            <p className="text-dash-caption text-[#9CA3AF]">{stat.label}</p>
             {stat.active && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500 rounded-full" />
             )}
@@ -159,7 +161,7 @@ export default function WeeklyReport() {
               axisLine={false}
               tickLine={false}
               tickFormatter={formatYAxis}
-              tick={{ fontSize: 11, fill: "#9CA3AF" }}
+              tick={{ fontSize: 12, fill: "#9CA3AF" }}
               ticks={[0, 10000, 20000, 30000, 40000, 50000]}
             />
             <Tooltip content={<CustomTooltip />} />

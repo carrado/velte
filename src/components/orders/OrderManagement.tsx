@@ -44,13 +44,13 @@ function StatCard({
   return (
     <div className="bg-white sm:rounded-xl shadow-sm p-5 flex-1 min-w-[200px]">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-semibold text-[#23272e]">{title}</p>
+        <p className="text-dash-body font-semibold text-[#23272e]">{title}</p>
         <MoreHorizontal size={16} className="text-[#6a717f]" />
       </div>
-      <p className="text-2xl font-bold text-[#023337] mb-1">
+      <p className="text-dash-display font-bold text-[#023337] mb-1">
         {value.toLocaleString()}
       </p>
-      <div className="text-xs text-[#6a717f] flex items-center gap-1">
+      <div className="text-dash-secondary text-[#6a717f] flex items-center gap-1">
         {meta}
       </div>
     </div>
@@ -63,28 +63,36 @@ function StatusBadge({ status }: { status: OrderStatus }) {
       return (
         <div className="flex items-center gap-1.5">
           <CheckCircle2 size={15} className="text-[#21c45d]" />
-          <span className="text-sm text-[#21c45d] font-medium">Delivered</span>
+          <span className="text-dash-body text-[#21c45d] font-medium">
+            Delivered
+          </span>
         </div>
       );
     case "Pending":
       return (
         <div className="flex items-center gap-1.5">
           <Clock size={15} className="text-[#f59f0a]" />
-          <span className="text-sm text-[#f59f0a] font-medium">Pending</span>
+          <span className="text-dash-body text-[#f59f0a] font-medium">
+            Pending
+          </span>
         </div>
       );
     case "Shipped":
       return (
         <div className="flex items-center gap-1.5">
           <Truck size={15} className="text-[#374151]" />
-          <span className="text-sm text-[#374151] font-medium">Shipped</span>
+          <span className="text-dash-body text-[#374151] font-medium">
+            Shipped
+          </span>
         </div>
       );
     case "Cancelled":
       return (
         <div className="flex items-center gap-1.5">
           <XCircle size={15} className="text-[#ef4343]" />
-          <span className="text-sm text-[#ef4343] font-medium">Cancelled</span>
+          <span className="text-dash-body text-[#ef4343] font-medium">
+            Cancelled
+          </span>
         </div>
       );
   }
@@ -96,7 +104,7 @@ function PaymentBadge({ status }: { status: "Paid" | "Unpaid" }) {
       <span
         className={`w-2 h-2 rounded-full ${status === "Paid" ? "bg-[#21c45d]" : "bg-[#f59f0a]"}`}
       />
-      <span className="text-sm text-[#111827]">{status}</span>
+      <span className="text-dash-body text-[#111827]">{status}</span>
     </div>
   );
 }
@@ -165,7 +173,7 @@ function RowActions({
         <MoreHorizontal size={18} />
       </button>
       {open && (
-        <div className="absolute right-0 top-8 z-30 w-48 bg-white rounded-lg shadow-lg border border-[#e5e7eb] py-1 text-sm">
+        <div className="absolute right-0 top-8 z-30 w-48 bg-white rounded-lg shadow-lg border border-[#e5e7eb] py-1 text-dash-body">
           {actions.map((action) => (
             <button
               key={action.label}
@@ -199,12 +207,12 @@ function ShippedConfirmationModal({
     <div className="fixed inset-0 z-50 flex items-center h-full justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
         <div className="px-6 py-4 border-b border-[#E5E7EB]">
-          <h3 className="text-lg font-semibold text-[#111827]">
+          <h3 className="text-dash-heading font-semibold text-[#111827]">
             Confirm Shipment
           </h3>
         </div>
         <div className="px-6 py-4">
-          <p className="text-gray-600">
+          <p className="text-dash-body text-gray-600">
             Once marked as <strong>Shipped</strong>, this order cannot be
             cancelled. Are you sure you want to continue?
           </p>
@@ -212,13 +220,13 @@ function ShippedConfirmationModal({
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] bg-gray-50">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            className="px-4 py-2 text-dash-body font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600"
+            className="px-4 py-2 text-dash-body font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600"
           >
             Yes, Mark as Shipped
           </button>
@@ -397,7 +405,7 @@ export default function OrderManagement() {
       cell: (o) => (
         <div className="flex items-center gap-2.5">
           <div
-            className={`w-9 h-9 rounded border flex items-center justify-center text-xs font-bold ${o.product.color}`}
+            className={`w-9 h-9 rounded border flex items-center justify-center text-dash-caption font-bold ${o.product.color}`}
           >
             {o.product.initials}
           </div>
@@ -536,7 +544,7 @@ export default function OrderManagement() {
                   setPage(1);
                 }}
                 placeholder="Search order report"
-                className="pl-3 pr-9 py-2 text-sm bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
+                className="pl-3 pr-9 py-2 text-dash-body bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
               />
               <Search
                 size={16}

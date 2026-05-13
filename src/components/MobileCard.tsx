@@ -36,7 +36,7 @@ export default function MobileCard({
           {initials && (
             <div
               className={cn(
-                "w-10 h-10 rounded border flex items-center justify-center text-xs font-bold flex-shrink-0",
+                "w-10 h-10 rounded border flex items-center justify-center text-dash-caption font-bold flex-shrink-0",
                 initials.className,
               )}
             >
@@ -44,9 +44,13 @@ export default function MobileCard({
             </div>
           )}
           <div>
-            <p className="text-sm font-semibold text-gray-800">{title}</p>
+            <p className="text-dash-body font-semibold text-gray-800">
+              {title}
+            </p>
             {subtitle && (
-              <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+              <p className="text-dash-secondary text-gray-400 mt-0.5">
+                {subtitle}
+              </p>
             )}
           </div>
         </div>
@@ -59,7 +63,7 @@ export default function MobileCard({
       </div>
       <div
         className={cn(
-          "grid gap-3 text-xs",
+          "grid gap-3 text-dash-secondary",
           gridCols === 3 ? "grid-cols-3" : "grid-cols-2",
         )}
       >

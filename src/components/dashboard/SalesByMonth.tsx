@@ -13,16 +13,16 @@ function MonthRow({ item }: { item: MonthlySale }) {
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-[#111827] font-medium">
+          <span className="text-dash-body text-[#111827] font-medium">
             {item.month}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[#111827]">
+          <span className="text-dash-body font-semibold text-[#111827]">
             ${(item.sales / 1000).toFixed(0)}k
           </span>
           <div
-            className={`flex items-center gap-0.5 text-xs font-medium ${
+            className={`flex items-center gap-0.5 text-dash-secondary font-medium ${
               item.positive ? "text-orange-500" : "text-[#EF4444]"
             }`}
           >
@@ -61,10 +61,10 @@ export default function SalesByMonth() {
     <div className="bg-white sm:rounded-2xl shadow-sm p-5 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-[#111827]">
+          <h3 className="text-dash-heading font-semibold text-[#111827]">
             Sales – Last 3 Months
           </h3>
-          <span className="text-[10px] bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+          <span className="text-dash-micro bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full font-medium">
             Sales
           </span>
         </div>
@@ -88,7 +88,7 @@ export default function SalesByMonth() {
         </div>
       )}
 
-      <button className="mt-4 w-full text-sm border border-[#E5E7EB] rounded-full py-2 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
+      <button className="mt-4 w-full text-dash-body border border-[#E5E7EB] rounded-full py-2 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
         View More
       </button>
     </div>
