@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Link2,
   MoreVertical,
@@ -11,7 +11,11 @@ import {
 } from "lucide-react";
 import { Pagination } from "@/components/Pagination";
 import { cn } from "@/lib/utils";
-import type { Transaction, TransactionTabFilter } from "@/types/transaction";
+import type {
+  PaymentLinkData,
+  Transaction,
+  TransactionTabFilter,
+} from "@/types/transaction";
 import type { ColumnDef, FilterField } from "@/types/common";
 import FilterPopover from "../FilterPopover";
 import SortMenu from "../SortMenu";
@@ -19,144 +23,9 @@ import TabBar from "../TabBar";
 import DataTable from "../DataTable";
 import MobileCard from "../MobileCard";
 import { Input } from "../ui/input";
-
-const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: "1",
-    customerId: "#CUST001",
-    name: "John Doe",
-    date: "01-01-2025",
-    total: "$2,904",
-    method: "CC",
-    status: "Complete",
-  },
-  {
-    id: "2",
-    customerId: "#CUST002",
-    name: "John Doe",
-    date: "01-01-2025",
-    total: "$1,750",
-    method: "PayPal",
-    status: "Complete",
-  },
-  {
-    id: "3",
-    customerId: "#CUST003",
-    name: "John Doe",
-    date: "01-01-2025",
-    total: "$3,410",
-    method: "CC",
-    status: "Complete",
-  },
-  {
-    id: "4",
-    customerId: "#CUST004",
-    name: "John Doe",
-    date: "01-01-2025",
-    total: "$2,904",
-    method: "Bank",
-    status: "Complete",
-  },
-  {
-    id: "5",
-    customerId: "#CUST005",
-    name: "Jane Smith",
-    date: "01-01-2025",
-    total: "$980",
-    method: "CC",
-    status: "Canceled",
-  },
-  {
-    id: "6",
-    customerId: "#CUST006",
-    name: "Emily Davis",
-    date: "01-01-2025",
-    total: "$2,904",
-    method: "PayPal",
-    status: "Pending",
-  },
-  {
-    id: "7",
-    customerId: "#CUST007",
-    name: "Jane Smith",
-    date: "01-01-2025",
-    total: "$1,320",
-    method: "Bank",
-    status: "Canceled",
-  },
-  {
-    id: "8",
-    customerId: "#CUST008",
-    name: "John Doe",
-    date: "01-01-2025",
-    total: "$2,904",
-    method: "CC",
-    status: "Complete",
-  },
-  {
-    id: "9",
-    customerId: "#CUST009",
-    name: "Emily Davis",
-    date: "01-01-2025",
-    total: "$2,904",
-    method: "PayPal",
-    status: "Pending",
-  },
-  {
-    id: "10",
-    customerId: "#CUST010",
-    name: "Jane Smith",
-    date: "01-01-2025",
-    total: "$2,904",
-    method: "Bank",
-    status: "Canceled",
-  },
-  {
-    id: "11",
-    customerId: "#CUST011",
-    name: "Robert Brown",
-    date: "02-01-2025",
-    total: "$1,520",
-    method: "CC",
-    status: "Complete",
-  },
-  {
-    id: "12",
-    customerId: "#CUST012",
-    name: "Emily Davis",
-    date: "02-01-2025",
-    total: "$3,200",
-    method: "PayPal",
-    status: "Pending",
-  },
-  {
-    id: "13",
-    customerId: "#CUST013",
-    name: "John Doe",
-    date: "03-01-2025",
-    total: "$875",
-    method: "Bank",
-    status: "Complete",
-  },
-  {
-    id: "14",
-    customerId: "#CUST014",
-    name: "Jane Smith",
-    date: "03-01-2025",
-    total: "$4,100",
-    method: "CC",
-    status: "Canceled",
-  },
-  {
-    id: "15",
-    customerId: "#CUST015",
-    name: "Robert Brown",
-    date: "04-01-2025",
-    total: "$2,250",
-    method: "PayPal",
-    status: "Complete",
-  },
-];
+import GeneratePaymentLinkModal from "./GeneratePaymentLinkModal";
+import { transactionService } from "@/services/transactions";
+import { toast } from "sonner";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -214,16 +83,20 @@ const TABS: { key: TransactionTabFilter; label: string }[] = [
   { key: "canceled", label: "Canceled" },
 ];
 
+// ── Stat card (unchanged design) ─────────────────────────────────────────────
+
 function StatCard({
   title,
   value,
   change,
   positive = true,
+  loading = false,
 }: {
   title: string;
   value: string;
   change: string;
   positive?: boolean;
+  loading?: boolean;
 }) {
   return (
     <div className="bg-white sm:rounded-lg shadow-sm p-4 flex flex-col gap-2">
@@ -234,21 +107,31 @@ function StatCard({
         </button>
       </div>
       <div className="flex items-end gap-2 flex-wrap">
-        <p className="text-dash-display font-bold text-[#023337]">{value}</p>
-        <div
-          className={cn(
-            "flex items-center text-dash-body font-medium mb-1",
-            positive ? "text-green-500" : "text-red-500",
-          )}
-        >
-          {positive ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-          {change}
-        </div>
+        {loading ? (
+          <div className="h-8 w-24 bg-gray-100 animate-pulse rounded" />
+        ) : (
+          <>
+            <p className="text-dash-display font-bold text-[#023337]">
+              {value}
+            </p>
+            <div
+              className={cn(
+                "flex items-center text-dash-body font-medium mb-1",
+                positive ? "text-green-500" : "text-red-500",
+              )}
+            >
+              {positive ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+              {change}
+            </div>
+          </>
+        )}
       </div>
       <p className="text-dash-body text-gray-500">Last 7 days</p>
     </div>
   );
 }
+
+// ── Status badge (unchanged design) ──────────────────────────────────────────
 
 function TxStatusBadge({ status }: { status: Transaction["status"] }) {
   const s = STATUS_CONFIG[status];
@@ -260,6 +143,8 @@ function TxStatusBadge({ status }: { status: Transaction["status"] }) {
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function TransactionsPage() {
   const [activeTab, setActiveTab] = useState<TransactionTabFilter>("all");
   const [search, setSearch] = useState("");
@@ -268,38 +153,92 @@ export default function TransactionsPage() {
   const [filters, setFilters] =
     useState<Record<string, string>>(DEFAULT_FILTERS);
 
-  const filtered = MOCK_TRANSACTIONS.filter((t) => {
-    const matchesTab =
-      activeTab === "all" ||
-      (activeTab === "completed" && t.status === "Complete") ||
-      (activeTab === "pending" && t.status === "Pending") ||
-      (activeTab === "canceled" && t.status === "Canceled");
-    const q = search.toLowerCase();
-    const matchesSearch =
-      !q ||
-      t.name.toLowerCase().includes(q) ||
-      t.customerId.toLowerCase().includes(q);
-    const matchesMethod =
-      filters["paymentMethod"] === "all" ||
-      t.method === filters["paymentMethod"];
-    const matchesTxStatus =
-      filters["txStatus"] === "all" || t.status === filters["txStatus"];
-    return matchesTab && matchesSearch && matchesMethod && matchesTxStatus;
+  // Data state
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [paymentLink, setPaymentLink] = useState<PaymentLinkData | null>(null);
+  const [paymentLinkLoading, setPaymentLinkLoading] = useState(true);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({
+    totalRevenue: "$0",
+    completedTransactions: 0,
+    pendingTransactions: 0,
+    failedTransactions: 0,
+    revenueChange: "0%",
+    completedChange: "0%",
+    pendingChange: "0%",
+    failedChange: "0%",
   });
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginated = filtered.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE,
-  );
+  // Modal
+  const [showPaymentLinkModal, setShowPaymentLinkModal] = useState(false);
+
+  // Map tab → status param
+  const tabToStatus = {
+    all: undefined,
+    completed: "Complete" as const,
+    pending: "Pending" as const,
+    canceled: "Canceled" as const,
+  };
+
+  // Map sort option → sortBy + sortOrder
+  const sortMap: Record<
+    TxSortOption,
+    { sortBy: string; sortOrder: "asc" | "desc" }
+  > = {
+    newest: { sortBy: "date", sortOrder: "desc" },
+    oldest: { sortBy: "date", sortOrder: "asc" },
+    amount_asc: { sortBy: "total", sortOrder: "asc" },
+    amount_desc: { sortBy: "total", sortOrder: "desc" },
+  };
+
+  const fetchTransactions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { sortBy: sortField, sortOrder } = sortMap[sortBy];
+      const res = await transactionService.getTransactions({
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+        status: tabToStatus[activeTab],
+        search: search || undefined,
+        sortBy: sortField,
+        sortOrder,
+        paymentMethod:
+          filters.paymentMethod !== "all"
+            ? (filters.paymentMethod as Transaction["method"])
+            : undefined,
+        startDate: filters.startDate || undefined,
+        endDate: filters.endDate || undefined,
+      });
+
+      if (res.success) {
+        setTransactions(res.data.transactions);
+        setTotalPages(res.data.pagination.totalPages);
+        setTotalCount(res.data.pagination.total);
+        if (res.data.stats) setStats(res.data.stats);
+        setPaymentLink(res.data.paymentLink || null);
+        setPaymentLinkLoading(false);
+      }
+    } catch {
+      toast.error("Failed to load transactions");
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, search, currentPage, sortBy, filters]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   const handleTabChange = (tab: TransactionTabFilter) => {
     setActiveTab(tab);
     setCurrentPage(1);
   };
 
-  const tabCounts = {
-    all: MOCK_TRANSACTIONS.length,
+  const refreshPage = () => {
+    setShowPaymentLinkModal(false);
+    fetchTransactions();
   };
 
   const columns: ColumnDef<Transaction>[] = [
@@ -365,27 +304,31 @@ export default function TransactionsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <StatCard
               title="Total Revenue"
-              value="$15,045"
-              change="14.4%"
+              value={stats.totalRevenue}
+              change={stats.revenueChange}
               positive
+              loading={loading}
             />
             <StatCard
               title="Completed Transactions"
-              value="3,150"
-              change="20%"
+              value={String(stats.completedTransactions)}
+              change={stats.completedChange}
               positive
+              loading={loading}
             />
             <StatCard
               title="Pending Transactions"
-              value="150"
-              change="85%"
+              value={String(stats.pendingTransactions)}
+              change={stats.pendingChange}
               positive
+              loading={loading}
             />
             <StatCard
               title="Failed Transactions"
-              value="75"
-              change="15%"
+              value={String(stats.failedTransactions)}
+              change={stats.failedChange}
               positive={false}
+              loading={loading}
             />
           </div>
         </div>
@@ -401,52 +344,102 @@ export default function TransactionsPage() {
               </button>
             </div>
 
+            {/* Card visual */}
             <div className="relative rounded-xl p-4 text-white h-36 flex flex-col justify-between overflow-hidden bg-gradient-to-br from-orange-500 to-orange-700">
               <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
               <div className="absolute -right-2 bottom-2 w-20 h-20 rounded-full bg-white/10" />
               <div className="flex items-center justify-between relative z-10">
                 <p className="text-dash-body font-semibold tracking-wide">
-                  Finaci
+                  Payment Link
                 </p>
                 <CreditCard size={20} className="opacity-80" />
               </div>
               <div className="relative z-10">
-                <p className="text-dash-body tracking-[0.18em] font-mono opacity-80">
-                  •••• •••• •••• 2345
-                </p>
+                {paymentLinkLoading ? (
+                  <div className="h-4 w-40 bg-white/20 animate-pulse rounded mb-2" />
+                ) : paymentLink ? (
+                  <p className="text-dash-body font-mono opacity-90 break-all leading-snug">
+                    {paymentLink.url}
+                  </p>
+                ) : (
+                  <p className="text-dash-body tracking-[0.18em] font-mono opacity-60">
+                    •••• •••• •••• ••••
+                  </p>
+                )}
                 <div className="flex justify-between mt-1 text-dash-caption opacity-70">
-                  <span>Naman Manzoor</span>
-                  <span>02/30</span>
+                  <span>
+                    {paymentLink
+                      ? paymentLink.accountName
+                      : "No link generated"}
+                  </span>
                 </div>
               </div>
             </div>
 
+            {/* Details */}
             <div className="space-y-1.5 text-dash-body">
               <p>
                 <span className="text-gray-500">Status: </span>
-                <span className="text-green-500 font-medium">Active</span>
+                {paymentLinkLoading ? (
+                  <span className="inline-block h-3 w-12 bg-gray-100 animate-pulse rounded align-middle" />
+                ) : paymentLink ? (
+                  <span className="text-green-500 font-medium">Active</span>
+                ) : (
+                  <span className="text-gray-400 font-medium">Inactive</span>
+                )}
               </p>
               <p>
-                <span className="text-gray-500">Transactions: </span>
-                <span className="text-[#023337]">1,250</span>
+                <span className="text-gray-500">Bank: </span>
+                {paymentLinkLoading ? (
+                  <span className="inline-block h-3 w-24 bg-gray-100 animate-pulse rounded align-middle" />
+                ) : (
+                  <span className="text-[#023337]">
+                    {paymentLink ? paymentLink.bankName : "—"}
+                  </span>
+                )}
               </p>
               <p>
-                <span className="text-gray-500">Revenue: </span>
-                <span className="text-[#023337] font-bold">$50,000</span>
+                <span className="text-gray-500">Account No: </span>
+                {paymentLinkLoading ? (
+                  <span className="inline-block h-3 w-24 bg-gray-100 animate-pulse rounded align-middle" />
+                ) : (
+                  <span className="text-[#023337]">
+                    {paymentLink ? paymentLink.accountNumber : "—"}
+                  </span>
+                )}
               </p>
-              <button className="text-indigo-500 hover:underline cursor-pointer text-left">
-                View Transactions
-              </button>
+              {paymentLink && (
+                <button
+                  onClick={() =>
+                    navigator.clipboard
+                      .writeText(paymentLink.url)
+                      .then(() => toast.success("Link copied!"))
+                  }
+                  className="text-indigo-500 hover:underline cursor-pointer text-left"
+                >
+                  Copy Link
+                </button>
+              )}
             </div>
 
+            {/* Actions */}
             <div className="flex gap-2 mt-auto pt-1">
-              <button className="flex-1 flex items-center justify-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2 text-dash-body text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
-                <Link2 size={15} />
-                Generate Link
-              </button>
-              <button className="border border-red-200 bg-red-50 text-red-500 rounded-lg px-3 py-2 text-dash-body hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap">
-                Deactivate
-              </button>
+              {!paymentLink && (
+                <button
+                  onClick={() => setShowPaymentLinkModal(true)}
+                  className="flex-1 flex items-center justify-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2 text-dash-body text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <Link2 size={15} />
+                  Generate Link
+                </button>
+              )}
+              {paymentLink && (
+                <>
+                  <button className="border border-red-200 w-full bg-red-50 text-red-500 rounded-lg px-3 py-2 text-dash-body hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap">
+                    Deactivate
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -457,7 +450,7 @@ export default function TransactionsPage() {
           <TabBar
             tabs={TABS.map((t) => ({
               ...t,
-              count: t.key === "all" ? tabCounts.all : undefined,
+              count: t.key === "all" ? totalCount : undefined,
             }))}
             activeTab={activeTab}
             onChange={handleTabChange}
@@ -506,9 +499,9 @@ export default function TransactionsPage() {
 
         <DataTable
           columns={columns}
-          data={paginated}
+          data={transactions}
           keyExtractor={(t) => t.id}
-          emptyMessage="No transactions found."
+          emptyMessage={loading ? "Loading…" : "No transactions found."}
           mobileCard={(tx) => {
             const s = STATUS_CONFIG[tx.status];
             return (
@@ -551,6 +544,12 @@ export default function TransactionsPage() {
           </div>
         )}
       </div>
+
+      {/* Generate Payment Link Modal */}
+      <GeneratePaymentLinkModal
+        open={showPaymentLinkModal}
+        onClose={() => refreshPage()}
+      />
     </div>
   );
 }

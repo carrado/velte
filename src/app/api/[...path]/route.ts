@@ -8,7 +8,7 @@ async function proxyRequest(
   pathSegments: string[],
   method: string,
 ) {
-  const backendUrl = `${API_BASE}/${pathSegments.join("/")}`;
+  const backendUrl = `${API_BASE}/${pathSegments.join("/")}${req.nextUrl.search}`;
   const body =
     method !== "GET" ? await req.json().catch(() => ({})) : undefined;
 
