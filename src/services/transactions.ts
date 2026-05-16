@@ -4,6 +4,7 @@ import type {
   FetchTransactionsResponse,
   GeneratePaymentLinkPayload,
   GeneratePaymentLinkResponse,
+  PaymentLinkActionResponse,
   ResolveAccountResponse,
   BankOption,
 } from "@/types/transaction";
@@ -65,6 +66,29 @@ export const transactionService = {
   async getBanks(): Promise<{ success: boolean; data: BankOption[] }> {
     return apiClient<{ success: boolean; data: BankOption[] }>(
       "/transactions/banks",
+    );
+  },
+
+  async deactivatePaymentLink(id: string): Promise<PaymentLinkActionResponse> {
+    return apiClient<PaymentLinkActionResponse>(
+      `/transactions/payment-link/${id}/deactivate`,
+      { method: "PATCH" },
+    );
+  },
+
+  async reactivatePaymentLink(id: string): Promise<PaymentLinkActionResponse> {
+    return apiClient<PaymentLinkActionResponse>(
+      `/transactions/payment-link/${id}/reactivate`,
+      { method: "PATCH" },
+    );
+  },
+
+  async deletePaymentLink(
+    id: string,
+  ): Promise<{ success: boolean; message?: string }> {
+    return apiClient<{ success: boolean; message?: string }>(
+      `/transactions/payment-link/${id}`,
+      { method: "DELETE" },
     );
   },
 };

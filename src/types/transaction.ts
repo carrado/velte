@@ -106,3 +106,19 @@ export interface PaymentLinkData {
   isActive: boolean;
   createdAt: string;
 }
+
+export type PaymentLinkWarningVariant = "deactivate" | "delete";
+
+export interface PaymentLinkWarningModalProps {
+  open: boolean;
+  variant: PaymentLinkWarningVariant;
+  loading?: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+export interface PaymentLinkActionResponse {
+  success: boolean;
+  data?: PaymentLinkData;
+  message?: string;
+}

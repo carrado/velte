@@ -214,8 +214,6 @@ export default function GeneratePaymentLinkModal({
       bankCode,
       accountNumber,
       accountName,
-      ...(amount ? { amount: parseFloat(amount) } : {}),
-      ...(description ? { description } : {}),
     };
 
     setSubmitting(true);
@@ -284,7 +282,8 @@ export default function GeneratePaymentLinkModal({
                   Link ready to share!
                 </p>
                 <p className="text-xs text-gray-400 text-center">
-                  Share this link with your customer to receive payment.
+                  This link will be shared with your customers to receive
+                  payment.
                 </p>
               </div>
 
@@ -292,33 +291,7 @@ export default function GeneratePaymentLinkModal({
                 <span className="flex-1 text-xs text-gray-600 truncate font-mono">
                   {generatedLink}
                 </span>
-                <button
-                  onClick={handleCopy}
-                  className={cn(
-                    "flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer",
-                    copied
-                      ? "bg-green-100 text-green-600"
-                      : "bg-orange-50 text-orange-600 hover:bg-orange-100",
-                  )}
-                >
-                  {copied ? (
-                    <>
-                      <CheckCircle2 size={12} /> Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={12} /> Copy
-                    </>
-                  )}
-                </button>
               </div>
-
-              <button
-                onClick={reset}
-                className="w-full text-sm font-semibold text-gray-500 hover:text-gray-700 py-2 transition-colors cursor-pointer"
-              >
-                Generate another link
-              </button>
             </div>
           ) : (
             /* ── Form ── */
@@ -413,38 +386,8 @@ export default function GeneratePaymentLinkModal({
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
                   placeholder="Auto-filled after account resolution"
-                  readOnly={!!resolved}
+                  readOnly
                   className={cn(resolved && "bg-gray-50 text-gray-500")}
-                />
-              </div>
-
-              {/* Optional: Amount */}
-              <div>
-                <label className="text-sm font-semibold text-gray-900 block mb-1.5">
-                  Amount{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="Leave blank for open amount"
-                />
-              </div>
-
-              {/* Optional: Description */}
-              <div>
-                <label className="text-sm font-semibold text-gray-900 block mb-1.5">
-                  Description{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <Input
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. Payment for order #1234"
                 />
               </div>
 

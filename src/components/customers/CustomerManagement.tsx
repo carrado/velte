@@ -162,7 +162,6 @@ const TABS: { key: CustomerFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
   { key: "inactive", label: "Inactive" },
-  { key: "vip", label: "VIP" },
 ];
 
 const SORT_OPTIONS: { value: CustomerSort; label: string }[] = [
@@ -187,7 +186,6 @@ const CUSTOMER_FILTER_FIELDS: FilterField[] = [
       { value: "all", label: "All" },
       { value: "Active", label: "Active" },
       { value: "Inactive", label: "Inactive" },
-      { value: "VIP", label: "VIP" },
     ],
   },
 ];
@@ -314,20 +312,6 @@ export default function CustomerManagement() {
         <div className="flex justify-center">
           <StatusBadge status={c.status} />
         </div>
-      ),
-    },
-    {
-      key: "action",
-      header: "Action",
-      headerClassName: "text-center",
-      className: "text-center",
-      cell: () => (
-        <button
-          className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
-          aria-label="Message customer"
-        >
-          <MessageSquare size={16} />
-        </button>
       ),
     },
   ];
@@ -598,12 +582,6 @@ export default function CustomerManagement() {
                 { label: "Orders", value: customer.orders },
                 { label: "Total spend", value: `$${customer.spend}` },
               ]}
-              footer={
-                <button className="flex items-center gap-1.5 py-2 px-3 rounded-lg border border-gray-200 text-dash-secondary text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">
-                  <MessageSquare size={14} />
-                  Message
-                </button>
-              }
             />
           )}
         />

@@ -24,7 +24,9 @@ import DataTable from "../DataTable";
 import MobileCard from "../MobileCard";
 import { Input } from "../ui/input";
 import GeneratePaymentLinkModal from "./GeneratePaymentLinkModal";
+import PaymentLinkWarningModal from "./PaymentLinkWarningModal";
 import { transactionService } from "@/services/transactions";
+import type { PaymentLinkWarningVariant } from "@/types/transaction";
 import { toast } from "sonner";
 
 const ITEMS_PER_PAGE = 10;
@@ -171,8 +173,11 @@ export default function TransactionsPage() {
     failedChange: "0%",
   });
 
-  // Modal
+  // Modals
   const [showPaymentLinkModal, setShowPaymentLinkModal] = useState(false);
+  const [warningModal, setWarningModal] =
+    useState<PaymentLinkWarningVariant | null>(null);
+  const [linkActionLoading, setLinkActionLoading] = useState(false);
 
   // Map tab → status param
   const tabToStatus = {
@@ -239,6 +244,51 @@ export default function TransactionsPage() {
   const refreshPage = () => {
     setShowPaymentLinkModal(false);
     fetchTransactions();
+  };
+
+  const handlePaymentLinkWarningConfirm = async () => {
+    if (!paymentLink || !warningModal) return;
+
+    setLinkActionLoading(true);
+    try {
+      if (warningModal === "deactivate") {
+        const res = await transactionService.deactivatePaymentLink(
+          paymentLink.id,
+        );
+        if (res.data) setPaymentLink(res.data);
+        toast.success("Payment link deactivated");
+      } else {
+        await transactionService.deletePaymentLink(paymentLink.id);
+        setPaymentLink(null);
+        toast.success("Payment link deleted");
+      }
+      setWarningModal(null);
+    } catch {
+      toast.error(
+        warningModal === "deactivate"
+          ? "Failed to deactivate payment link"
+          : "Failed to delete payment link",
+      );
+    } finally {
+      setLinkActionLoading(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (!paymentLink) return;
+
+    setLinkActionLoading(true);
+    try {
+      const res = await transactionService.reactivatePaymentLink(
+        paymentLink.id,
+      );
+      if (res.data) setPaymentLink(res.data);
+      toast.success("Payment link reactivated");
+    } catch {
+      toast.error("Failed to reactivate payment link");
+    } finally {
+      setLinkActionLoading(false);
+    }
   };
 
   const columns: ColumnDef<Transaction>[] = [
@@ -383,7 +433,16 @@ export default function TransactionsPage() {
                 {paymentLinkLoading ? (
                   <span className="inline-block h-3 w-12 bg-gray-100 animate-pulse rounded align-middle" />
                 ) : paymentLink ? (
-                  <span className="text-green-500 font-medium">Active</span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      paymentLink.isActive
+                        ? "text-green-500"
+                        : "text-amber-600",
+                    )}
+                  >
+                    {paymentLink.isActive ? "Active" : "Inactive"}
+                  </span>
                 ) : (
                   <span className="text-gray-400 font-medium">Inactive</span>
                 )}
@@ -433,10 +492,43 @@ export default function TransactionsPage() {
                   Generate Link
                 </button>
               )}
-              {paymentLink && (
+              {paymentLink && paymentLink.isActive && (
                 <>
-                  <button className="border border-red-200 w-full bg-red-50 text-red-500 rounded-lg px-3 py-2 text-dash-body hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap">
+                  <button
+                    type="button"
+                    disabled={linkActionLoading}
+                    onClick={() => setWarningModal("deactivate")}
+                    className="flex-1 border border-red-200 bg-red-50 text-red-500 rounded-lg px-3 py-2 text-dash-body hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+                  >
                     Deactivate
+                  </button>
+                  <button
+                    type="button"
+                    disabled={linkActionLoading}
+                    onClick={() => setWarningModal("delete")}
+                    className="flex-1 border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-dash-body hover:bg-gray-50 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+              {paymentLink && !paymentLink.isActive && (
+                <>
+                  <button
+                    type="button"
+                    disabled={linkActionLoading}
+                    onClick={handleReactivate}
+                    className="flex-1 border border-green-200 bg-green-50 text-green-600 rounded-lg px-3 py-2 text-dash-body hover:bg-green-100 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+                  >
+                    Reactivate
+                  </button>
+                  <button
+                    type="button"
+                    disabled={linkActionLoading}
+                    onClick={() => setWarningModal("delete")}
+                    className="flex-1 border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-dash-body hover:bg-gray-50 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+                  >
+                    Delete
                   </button>
                 </>
               )}
@@ -545,10 +637,17 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* Generate Payment Link Modal */}
       <GeneratePaymentLinkModal
         open={showPaymentLinkModal}
         onClose={() => refreshPage()}
+      />
+
+      <PaymentLinkWarningModal
+        open={warningModal !== null}
+        variant={warningModal ?? "deactivate"}
+        loading={linkActionLoading}
+        onClose={() => !linkActionLoading && setWarningModal(null)}
+        onConfirm={handlePaymentLinkWarningConfirm}
       />
     </div>
   );
