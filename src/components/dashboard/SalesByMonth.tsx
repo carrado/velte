@@ -1,8 +1,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { MoreVertical, TrendingUp, TrendingDown } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Info, TrendingUp, TrendingDown } from "lucide-react";
 import { fetchSalesByMonths, MonthlySale } from "@/services/dashboard";
+
+// ── Month Row ─────────────────────────────────────────────────────────────────
 
 const maxSales = 30000;
 
@@ -12,11 +19,9 @@ function MonthRow({ item }: { item: MonthlySale }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-dash-body text-[#111827] font-medium">
-            {item.month}
-          </span>
-        </div>
+        <span className="text-dash-body text-[#111827] font-medium">
+          {item.month}
+        </span>
         <div className="flex items-center gap-2">
           <span className="text-dash-body font-semibold text-[#111827]">
             ${(item.sales / 1000).toFixed(0)}k
@@ -41,15 +46,14 @@ function MonthRow({ item }: { item: MonthlySale }) {
       <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
         <div
           className="h-full rounded-full"
-          style={{
-            width: `${widthPercent}%`,
-            backgroundColor: "#8B5CF6",
-          }}
+          style={{ width: `${widthPercent}%`, backgroundColor: "#8B5CF6" }}
         />
       </div>
     </div>
   );
 }
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SalesByMonth() {
   const { data, isLoading } = useQuery<MonthlySale[]>({
@@ -68,7 +72,20 @@ export default function SalesByMonth() {
             Sales
           </span>
         </div>
-        <MoreVertical size={16} className="text-[#9CA3AF]" />
+        <Tooltip>
+          <TooltipTrigger>
+            <Info
+              size={15}
+              className="text-[#9CA3AF] cursor-pointer hover:text-orange-400 transition-colors"
+            />
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[200px] text-center">
+            <p>
+              A month-by-month breakdown of your total sales revenue over the
+              last 3 months, with percentage change vs. the prior month.
+            </p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {isLoading ? (

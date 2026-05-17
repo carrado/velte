@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { SlidersHorizontal } from "lucide-react";
 import { fetchTransactions, type Transaction } from "@/services/dashboard";
 
 function StatusBadge({ status }: { status: Transaction["status"] }) {
@@ -37,10 +36,6 @@ export default function TransactionTable() {
         <h3 className="text-dash-heading font-semibold text-[#111827]">
           Transaction
         </h3>
-        <button className="flex items-center gap-2 bg-orange-500 text-white rounded-lg px-4 py-2 text-dash-caption font-medium hover:bg-orange-600 transition-colors cursor-pointer">
-          <SlidersHorizontal size={13} />
-          Filter
-        </button>
       </div>
 
       <div className="overflow-x-auto">
@@ -104,12 +99,6 @@ export default function TransactionTable() {
                 ))}
           </tbody>
         </table>
-      </div>
-
-      <div className="flex justify-end mt-4">
-        <button className="text-dash-caption border border-[#E5E7EB] rounded-full px-4 py-1.5 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
-          Details
-        </button>
       </div>
     </div>
   );

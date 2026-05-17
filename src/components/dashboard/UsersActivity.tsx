@@ -1,12 +1,19 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { MoreVertical } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 import { BarChart, Bar, ResponsiveContainer, Cell } from "recharts";
 import {
   fetchUsersActivity,
   type UsersActivity as UsersActivityData,
 } from "@/services/dashboard";
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function UsersActivity() {
   const { data, isLoading } = useQuery<UsersActivityData>({
@@ -26,7 +33,20 @@ export default function UsersActivity() {
         <p className="text-dash-secondary text-orange-500 font-medium">
           Today&apos;s User Activity
         </p>
-        <MoreVertical size={16} className="text-[#9CA3AF]" />
+        <Tooltip>
+          <TooltipTrigger>
+            <Info
+              size={15}
+              className="text-[#9CA3AF] cursor-pointer hover:text-orange-400 transition-colors"
+            />
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[200px] text-center">
+            <p>
+              The number of unique users active on your platform today, sampled
+              per hour.
+            </p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {isLoading ? (

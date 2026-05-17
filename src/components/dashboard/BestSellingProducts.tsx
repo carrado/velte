@@ -120,12 +120,6 @@ export default function BestSellingProducts() {
           </tbody>
         </table>
       </div>
-
-      <div className="flex justify-end mt-4">
-        <button className="text-dash-caption border border-[#E5E7EB] rounded-full px-4 py-1.5 text-[#6B7280] hover:border-orange-500 hover:text-orange-500 transition-colors cursor-pointer">
-          Details
-        </button>
-      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { NavigationProgressProvider } from "@/components/NavigationProgressConte
 import AISetupTour from "@/components/AISetupTour";
 import TrialGate from "@/components/TrialGate";
 import { checkAISetup, hasDismissedTourThisSession } from "@/services/aiSetup";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const PATH_TITLES: Record<string, string> = {
   dashboard: "Dashboard",
@@ -76,7 +77,7 @@ export default function DashboardRootLayout({
                 title={getTitle(pathname)}
                 onMenuClick={() => setSidebarOpen(true)}
               />
-              {children}
+              <TooltipProvider>{children}</TooltipProvider>
             </div>
           </main>
 

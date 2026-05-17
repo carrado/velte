@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MoreVertical } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -42,10 +41,10 @@ const formatYAxis = (value: number) => {
 
 const stats = [
   { label: "Customers", value: "52k", active: true },
-  { label: "Total Products", value: "3.5k", active: false },
-  { label: "Stock Products", value: "2.5k", active: false },
-  { label: "Out of Stock", value: "0.5k", active: false },
-  { label: "Revenue", value: "250k", active: false },
+  { label: "Total Number of Products", value: "3.5k", active: false },
+  { label: "Products in Stock", value: "2.5k", active: false },
+  { label: "Products Out of Stock", value: "0.5k", active: false },
+  { label: "Revenue Generated", value: "250k", active: false },
 ];
 
 export default function WeeklyReport() {
@@ -109,7 +108,6 @@ export default function WeeklyReport() {
               Last week
             </button>
           </div>
-          <MoreVertical size={16} className="text-[#9CA3AF]" />
         </div>
       </div>
 

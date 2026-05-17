@@ -3,14 +3,21 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Search,
   ArrowUp,
   ArrowDown,
-  MoreHorizontal,
   Truck,
+  Info,
   Clock,
   XCircle,
   CheckCircle2,
+  MoreHorizontal,
 } from "lucide-react";
 import { Pagination } from "@/components/Pagination";
 import {
@@ -32,6 +39,17 @@ import DataTable from "../DataTable";
 import MobileCard from "../MobileCard";
 import { Input } from "../ui/input";
 
+const STAT_TOOLTIPS: Record<string, string> = {
+  "Total Orders":
+    "The total number of orders placed by customers across all statuses in the last 7 days.",
+  "New Orders":
+    "Orders that were newly placed in the last 7 days and are yet to be processed.",
+  "Completed Orders":
+    "Orders that have been successfully delivered to customers in the last 7 days.",
+  "Canceled Orders":
+    "Orders that were canceled by customers or your team before fulfillment in the last 7 days.",
+};
+
 function StatCard({
   title,
   value,
@@ -45,7 +63,17 @@ function StatCard({
     <div className="bg-white sm:rounded-xl shadow-sm p-5 flex-1 min-w-[200px]">
       <div className="flex items-center justify-between mb-3">
         <p className="text-dash-body font-semibold text-[#23272e]">{title}</p>
-        <MoreHorizontal size={16} className="text-[#6a717f]" />
+        <Tooltip>
+          <TooltipTrigger>
+            <Info
+              size={15}
+              className="text-[#9CA3AF] cursor-pointer hover:text-orange-400 transition-colors"
+            />
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[200px] text-center">
+            <p>{STAT_TOOLTIPS[title]}</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
       <p className="text-dash-display font-bold text-[#023337] mb-1">
         {value.toLocaleString()}

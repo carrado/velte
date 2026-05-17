@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MessageSquare, ArrowUp, MoreVertical, Search } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Info, ArrowUp, Search } from "lucide-react";
 import { Pagination } from "../Pagination";
 import type {
   Customer,
@@ -102,7 +108,7 @@ const customers: Customer[] = [
 
 const overviewMetrics = [
   { label: "Active customers", value: "25k" },
-  { label: "Repeat customers", value: "5.6k" },
+  { label: "New customers", value: "5.6k" },
   { label: "Shop visitors", value: "250k" },
   { label: "Conversion rate", value: "5.5%" },
 ];
@@ -316,6 +322,15 @@ export default function CustomerManagement() {
     },
   ];
 
+  const CUSTOMER_STAT_TOOLTIPS: Record<string, string> = {
+    "Total customers":
+      "The total number of unique customers who have interacted with your store to date.",
+    "New customers":
+      "Customers who made their first purchase in the last 7 days.",
+    Visitors:
+      "Total number of unique visitors who landed on your store in the last 7 days, regardless of whether they made a purchase.",
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col lg:flex-row gap-4">
@@ -333,7 +348,20 @@ export default function CustomerManagement() {
                 <h3 className="text-dash-body font-medium text-gray-700">
                   {card.title}
                 </h3>
-                <MoreVertical size={15} className="text-gray-400" />
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Info
+                      size={15}
+                      className="text-[#9CA3AF] cursor-pointer hover:text-orange-400 transition-colors"
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    className="max-w-[200px] text-center"
+                  >
+                    <p>{CUSTOMER_STAT_TOOLTIPS[card.title]}</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-dash-display font-bold text-[#023337]">
@@ -369,7 +397,20 @@ export default function CustomerManagement() {
                 </button>
               ))}
             </div>
-            <MoreVertical size={15} className="text-gray-400 flex-shrink-0" />
+            <Tooltip>
+              <TooltipTrigger>
+                <Info
+                  size={15}
+                  className="text-[#9CA3AF] cursor-pointer hover:text-orange-400 transition-colors flex-shrink-0"
+                />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[220px] text-center">
+                <p>
+                  A weekly trend of customer activity including visits and
+                  conversions across the selected period.
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <div className="flex overflow-x-auto mt-3 px-5 gap-1">

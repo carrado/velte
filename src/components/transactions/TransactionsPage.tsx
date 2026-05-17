@@ -2,12 +2,19 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Link2,
-  MoreVertical,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Info,
   ArrowUp,
+  MoreVertical,
+  Search,
+  Link2,
   ArrowDown,
   CreditCard,
-  Search,
 } from "lucide-react";
 import { Pagination } from "@/components/Pagination";
 import { cn } from "@/lib/utils";
@@ -87,6 +94,17 @@ const TABS: { key: TransactionTabFilter; label: string }[] = [
 
 // ── Stat card (unchanged design) ─────────────────────────────────────────────
 
+const STAT_TOOLTIPS: Record<string, string> = {
+  "Total Revenue":
+    "The total revenue collected from all completed transactions in the last 7 days.",
+  "Completed Transactions":
+    "The number of transactions that were successfully processed and completed in the last 7 days.",
+  "Pending Transactions":
+    "Transactions that have been initiated but are still awaiting confirmation or processing.",
+  "Failed Transactions":
+    "Transactions that were attempted but failed or were canceled before completion.",
+};
+
 function StatCard({
   title,
   value,
@@ -104,9 +122,17 @@ function StatCard({
     <div className="bg-white sm:rounded-lg shadow-sm p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <p className="text-dash-heading font-bold text-[#23272e]">{title}</p>
-        <button className="text-gray-400 hover:text-gray-600 cursor-pointer">
-          <MoreVertical size={18} />
-        </button>
+        <Tooltip>
+          <TooltipTrigger>
+            <Info
+              size={15}
+              className="text-[#9CA3AF] cursor-pointer hover:text-orange-400 transition-colors"
+            />
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[200px] text-center">
+            <p>{STAT_TOOLTIPS[title]}</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
       <div className="flex items-end gap-2 flex-wrap">
         {loading ? (
@@ -389,9 +415,23 @@ export default function TransactionsPage() {
               <p className="text-dash-heading font-bold text-[#23272e]">
                 Payment Method
               </p>
-              <button className="text-gray-400 hover:text-gray-600 cursor-pointer">
-                <MoreVertical size={18} />
-              </button>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info
+                    size={15}
+                    className="text-[#9CA3AF] cursor-pointer hover:text-orange-400 transition-colors"
+                  />
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  className="max-w-[210px] text-center"
+                >
+                  <p>
+                    Your active payment link and linked bank account used to
+                    receive payments from customers.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
             </div>
 
             {/* Card visual */}

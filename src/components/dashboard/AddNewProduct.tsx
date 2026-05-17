@@ -61,10 +61,6 @@ export default function AddNewProduct() {
           ))}
         </div>
       )}
-
-      <button className="text-dash-secondary text-blue-500 hover:underline cursor-pointer">
-        See more
-      </button>
     </div>
   );
 }
