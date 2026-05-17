@@ -20,6 +20,17 @@ export interface CategoryProduct {
   onSale: boolean;
   inStock: number;
   colorClass: string;
+  lowStockThreshold?: number;
+  manufacturingDate?: string;
+  expirationDate?: string;
+  attributes?: ProductAttribute[];
+  tags?: string[];
+}
+
+export interface ProductAttribute {
+  id: string;
+  name: string;
+  value: string;
 }
 
 export interface CategoryCardProps {

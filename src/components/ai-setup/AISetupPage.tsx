@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import {
   CheckCircle2,
   RefreshCw,
@@ -31,6 +33,7 @@ import type {
   AIConfig,
   SetupStep,
   BusinessTone,
+  AISetupStatus,
 } from "@/types/ai-setup";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -93,6 +96,7 @@ function Toggle({
 // ── Root page component ───────────────────────────────────────────────────────
 
 export default function AISetupPage() {
+  const queryClient = useQueryClient();
   const mainRef = useRef<HTMLDivElement>(null);
   const [currentStep, setCurrentStep] = useState<SetupStep>(1);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
@@ -138,10 +142,13 @@ export default function AISetupPage() {
         await useAISetupStore.persist.rehydrate();
         const store = useAISetupStore.getState();
 
-        console.log(store);
-
-        // Fetch latest status from server
-        const status = await getAISetupStatus();
+        let status = queryClient.getQueryData<AISetupStatus>(
+          queryKeys.aiSetup.status,
+        );
+        if (!status) {
+          status = await getAISetupStatus();
+          queryClient.setQueryData(queryKeys.aiSetup.status, status);
+        }
 
         if (status.isComplete) {
           setIsSetupComplete(true);
@@ -184,7 +191,7 @@ export default function AISetupPage() {
       }
     }
     restoreStatus();
-  }, [markComplete, clearSetup, setConfig]);
+  }, [markComplete, clearSetup, setConfig, queryClient]);
 
   // ── Step handlers ────────────────────────────────────────────────────────────
 
@@ -726,10 +733,10 @@ function SelectNumberStep({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-dash-body font-semibold text-gray-900">
-                    {number.phoneNumber}
+                    {number?.phoneNumber}
                   </p>
                   <p className="text-dash-body text-gray-500">
-                    {number.businessName}
+                    {number?.businessName}
                   </p>
                 </div>
                 <span
@@ -1011,7 +1018,7 @@ function ManagementView({
               </h2>
             </div>
             <p className="text-dash-body text-gray-500">
-              {selectedNumber.phoneNumber} · {selectedNumber.businessName}
+              {selectedNumber?.phoneNumber} · {selectedNumber?.businessName}
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-dash-body font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full flex-shrink-0">

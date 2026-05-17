@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, MoreHorizontal, Search, Pencil, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CATEGORIES_DATA, PRODUCTS_DATA } from "@/services/products";
+import { categoriesApi } from "@/services/products";
+import { queryKeys } from "@/lib/query-keys";
 import type {
   Category,
   ProductTab,
@@ -455,8 +458,18 @@ function CategoryCard({
 }
 
 export default function ProductsPage() {
-  const [categories, setCategories] = useState<Category[]>(CATEGORIES_DATA);
-  const [products, setProducts] = useState<CategoryProduct[]>(PRODUCTS_DATA);
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
+  const userId = pathname.split("/").filter(Boolean)[0];
+
+  const { data: categories = [] } = useQuery({
+    queryKey: queryKeys.products.categories,
+    queryFn: categoriesApi.getCategories,
+  });
+  const { data: products = [] } = useQuery({
+    queryKey: queryKeys.products.list,
+    queryFn: categoriesApi.getProducts,
+  });
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
@@ -549,7 +562,10 @@ export default function ProductsPage() {
       bgColor: data.bgColor,
       description: data.description,
     };
-    setCategories((prev) => [...prev, newCat]);
+    queryClient.setQueryData<Category[]>(
+      queryKeys.products.categories,
+      (prev) => [...(prev ?? []), newCat],
+    );
     setModalOpen(false);
   };
 
@@ -560,48 +576,62 @@ export default function ProductsPage() {
     bgColor: string;
   }) => {
     if (!editingCategory) return;
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id === editingCategory.id
-          ? {
-              ...c,
-              name: data.name,
-              emoji: data.emoji,
-              bgColor: data.bgColor,
-              description: data.description,
-            }
-          : c,
-      ),
+    queryClient.setQueryData<Category[]>(
+      queryKeys.products.categories,
+      (prev) =>
+        (prev ?? []).map((c) =>
+          c.id === editingCategory.id
+            ? {
+                ...c,
+                name: data.name,
+                emoji: data.emoji,
+                bgColor: data.bgColor,
+                description: data.description,
+              }
+            : c,
+        ),
     );
     setEditingCategory(null);
     setModalOpen(false);
   };
 
   const handleDeleteCategory = (id: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== id));
+    queryClient.setQueryData<Category[]>(
+      queryKeys.products.categories,
+      (prev) => (prev ?? []).filter((c) => c.id !== id),
+    );
     if (selectedCategoryId === id) setSelectedCategoryId(null);
   };
 
   const handleRestock = (productId: string, quantity: number) => {
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id !== productId) return p;
-        return {
-          ...p,
-          totalQuantity: p.inStock ? p.totalQuantity + quantity : quantity,
-        };
-      }),
+    queryClient.setQueryData<CategoryProduct[]>(
+      queryKeys.products.list,
+      (prev) =>
+        (prev ?? []).map((p) => {
+          if (p.id !== productId) return p;
+          return {
+            ...p,
+            totalQuantity: p.inStock ? p.totalQuantity + quantity : quantity,
+          };
+        }),
     );
   };
 
   const handlePriceChange = (productId: string, newPrice: number) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, price: newPrice } : p)),
+    queryClient.setQueryData<CategoryProduct[]>(
+      queryKeys.products.list,
+      (prev) =>
+        (prev ?? []).map((p) =>
+          p.id === productId ? { ...p, price: newPrice } : p,
+        ),
     );
   };
 
   const handleDeleteProduct = (productId: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    queryClient.setQueryData<CategoryProduct[]>(
+      queryKeys.products.list,
+      (prev) => (prev ?? []).filter((p) => p.id !== productId),
+    );
   };
 
   const tabs: { key: ProductTab; label: string }[] = [
@@ -620,7 +650,7 @@ export default function ProductsPage() {
 
         <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto px-5 sm:items-center">
           <button
-            onClick={() => navigate("products/add")}
+            onClick={() => navigate(`/${userId}/products/add`)}
             className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 text-dash-body font-bold text-white transition-colors hover:bg-orange-600 sm:w-auto"
           >
             <Plus size={18} />

@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
+import { queryKeys } from "@/lib/query-keys";
+import { useNavigation } from "@/components/NavigationProgressContext";
 import {
   Tooltip,
   TooltipContent,
@@ -18,6 +21,7 @@ import {
   XCircle,
   CheckCircle2,
   MoreHorizontal,
+  Eye,
 } from "lucide-react";
 import { Pagination } from "@/components/Pagination";
 import {
@@ -28,6 +32,7 @@ import {
 import type {
   Order,
   OrderFilter,
+  OrderRowMenuAction,
   OrderStatus,
   SortOption,
 } from "@/types/order";
@@ -138,12 +143,16 @@ function PaymentBadge({ status }: { status: "Paid" | "Unpaid" }) {
 }
 
 function RowActions({
+  orderId,
   status,
+  onView,
   onMarkShipped,
   onMarkDelivered,
   onMarkCancelled,
 }: {
+  orderId: string;
   status: OrderStatus;
+  onView: () => void;
   onMarkShipped: () => void;
   onMarkDelivered: () => void;
   onMarkCancelled: () => void;
@@ -160,9 +169,7 @@ function RowActions({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  if (status === "Delivered") return null;
-
-  const getActions = () => {
+  const statusActions: OrderRowMenuAction[] = (() => {
     if (status === "Pending") {
       return [
         {
@@ -187,10 +194,17 @@ function RowActions({
       ];
     }
     return [];
-  };
+  })();
 
-  const actions = getActions();
-  if (actions.length === 0) return null;
+  const allActions: OrderRowMenuAction[] = [
+    {
+      label: "View Order",
+      icon: <Eye size={15} />,
+      onClick: onView,
+      highlight: false,
+    },
+    ...statusActions,
+  ];
 
   return (
     <div ref={ref} className="relative flex justify-center">
@@ -201,15 +215,19 @@ function RowActions({
         <MoreHorizontal size={18} />
       </button>
       {open && (
-        <div className="absolute right-0 top-8 z-30 w-48 bg-white rounded-lg shadow-lg border border-[#e5e7eb] py-1 text-dash-body">
-          {actions.map((action) => (
+        <div className="absolute right-0 top-8 z-30 w-52 bg-white rounded-lg shadow-lg border border-[#e5e7eb] py-1 text-dash-body">
+          {allActions.map((action, i) => (
             <button
               key={action.label}
               onClick={() => {
                 action.onClick();
                 setOpen(false);
               }}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-[#111827] hover:bg-orange-50 hover:text-orange-600 transition-colors cursor-pointer"
+              className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors cursor-pointer ${
+                action.highlight === true
+                  ? "text-orange-600 hover:bg-orange-50 font-medium"
+                  : "text-[#111827] hover:bg-orange-50 hover:text-orange-600"
+              } ${i > 0 && i === 1 && statusActions.length > 0 ? "border-t border-gray-100 mt-1 pt-2.5" : ""}`}
             >
               {action.icon}
               {action.label}
@@ -312,7 +330,11 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 ];
 
 export default function OrderManagement() {
+  const pathname = usePathname();
+  const userId = pathname.split("/").filter(Boolean)[0];
+  const { navigate } = useNavigation();
   const queryClient = useQueryClient();
+
   const [activeTab, setActiveTab] = useState<OrderFilter>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -325,11 +347,11 @@ export default function OrderManagement() {
   >(null);
 
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["orderStats"],
+    queryKey: queryKeys.orders.stats,
     queryFn: fetchOrderStats,
   });
   const { data: orders = [], isLoading: ordersLoading } = useQuery({
-    queryKey: ["orders", activeTab],
+    queryKey: queryKeys.orders.list(activeTab),
     queryFn: () => fetchOrders(activeTab),
   });
   const mutation = useMutation({
@@ -420,6 +442,8 @@ export default function OrderManagement() {
     mutation.mutate({ id: orderId, status: "Delivered" });
   const handleMarkCancelled = (orderId: string) =>
     mutation.mutate({ id: orderId, status: "Cancelled" });
+  const handleViewOrder = (orderId: string) =>
+    navigate(`/${userId}/orders/${orderId}`);
 
   const columns: ColumnDef<Order>[] = [
     {
@@ -444,11 +468,7 @@ export default function OrderManagement() {
       ),
     },
     { key: "date", header: "Date", cell: (o) => o.date },
-    {
-      key: "price",
-      header: "Price",
-      cell: (o) => `$${o.price.toFixed(2)}`,
-    },
+    { key: "price", header: "Price", cell: (o) => `$${o.price.toFixed(2)}` },
     {
       key: "payment",
       header: "Payment",
@@ -466,7 +486,9 @@ export default function OrderManagement() {
       className: "text-center",
       cell: (o) => (
         <RowActions
+          orderId={o.id}
           status={o.status}
+          onView={() => handleViewOrder(o.id)}
           onMarkShipped={() => handleMarkShipped(o.id)}
           onMarkDelivered={() => handleMarkDelivered(o.id)}
           onMarkCancelled={() => handleMarkCancelled(o.id)}
@@ -619,7 +641,9 @@ export default function OrderManagement() {
               }}
               action={
                 <RowActions
+                  orderId={order.id}
                   status={order.status}
+                  onView={() => handleViewOrder(order.id)}
                   onMarkShipped={() => handleMarkShipped(order.id)}
                   onMarkDelivered={() => handleMarkDelivered(order.id)}
                   onMarkCancelled={() => handleMarkCancelled(order.id)}

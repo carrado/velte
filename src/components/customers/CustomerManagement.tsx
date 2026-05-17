@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCustomers } from "@/services/customers";
+import { queryKeys } from "@/lib/query-keys";
 import {
   Tooltip,
   TooltipContent,
@@ -22,89 +25,6 @@ import MobileCard from "../MobileCard";
 import FilterPopover from "../FilterPopover";
 import SortMenu from "../SortMenu";
 import { Input } from "../ui/input";
-
-const customers: Customer[] = [
-  {
-    id: "#CUST001",
-    name: "John Doe",
-    phone: "+1234567890",
-    orders: 25,
-    spend: "3,450.00",
-    status: "Active",
-  },
-  {
-    id: "#CUST002",
-    name: "John Doe",
-    phone: "+1234567890",
-    orders: 25,
-    spend: "3,450.00",
-    status: "Active",
-  },
-  {
-    id: "#CUST003",
-    name: "John Doe",
-    phone: "+1234567890",
-    orders: 25,
-    spend: "3,450.00",
-    status: "Active",
-  },
-  {
-    id: "#CUST004",
-    name: "John Doe",
-    phone: "+1234567890",
-    orders: 25,
-    spend: "3,450.00",
-    status: "Active",
-  },
-  {
-    id: "#CUST005",
-    name: "Jane Smith",
-    phone: "+1234567890",
-    orders: 5,
-    spend: "250.00",
-    status: "Inactive",
-  },
-  {
-    id: "#CUST006",
-    name: "Emily Davis",
-    phone: "+1234567890",
-    orders: 30,
-    spend: "4,600.00",
-    status: "VIP",
-  },
-  {
-    id: "#CUST007",
-    name: "Jane Smith",
-    phone: "+1234567890",
-    orders: 5,
-    spend: "250.00",
-    status: "Inactive",
-  },
-  {
-    id: "#CUST008",
-    name: "John Doe",
-    phone: "+1234567890",
-    orders: 25,
-    spend: "3,450.00",
-    status: "Active",
-  },
-  {
-    id: "#CUST009",
-    name: "Emily Davis",
-    phone: "+1234567890",
-    orders: 30,
-    spend: "4,600.00",
-    status: "VIP",
-  },
-  {
-    id: "#CUST010",
-    name: "Jane Smith",
-    phone: "+1234567890",
-    orders: 5,
-    spend: "250.00",
-    status: "Inactive",
-  },
-];
 
 const overviewMetrics = [
   { label: "Active customers", value: "25k" },
@@ -199,6 +119,11 @@ const CUSTOMER_FILTER_FIELDS: FilterField[] = [
 const ITEMS_PER_PAGE = 10;
 
 export default function CustomerManagement() {
+  const { data: customers = [] } = useQuery({
+    queryKey: queryKeys.customers.list,
+    queryFn: fetchCustomers,
+  });
+
   const [activeMetric, setActiveMetric] = useState(0);
   const [weekFilter, setWeekFilter] = useState<"this" | "last">("this");
   const [activeTab, setActiveTab] = useState<CustomerFilter>("all");

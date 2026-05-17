@@ -7,75 +7,17 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  fetchDashboardStats,
-  fetchWeeklyReport,
-  fetchUsersActivity,
-  fetchSalesByMonths,
-  fetchTransactions,
-  fetchTopProducts,
-  fetchBestSelling,
-  fetchAddableProducts,
-} from "@/services/dashboard";
-import { fetchOrders, fetchOrderStats } from "@/services/orders";
-
-type RoutePrefetcher = (qc: QueryClient) => Promise<void>;
-
-const ROUTE_PREFETCHES: Record<string, RoutePrefetcher> = {
-  dashboard: (qc) =>
-    Promise.all([
-      qc.prefetchQuery({
-        queryKey: ["dashboardStats"],
-        queryFn: fetchDashboardStats,
-      }),
-      qc.prefetchQuery({
-        queryKey: ["bestSelling"],
-        queryFn: fetchBestSelling,
-      }),
-      qc.prefetchQuery({
-        queryKey: ["monthlySales"],
-        queryFn: fetchSalesByMonths,
-      }),
-      qc.prefetchQuery({
-        queryKey: ["topProducts"],
-        queryFn: fetchTopProducts,
-      }),
-      qc.prefetchQuery({
-        queryKey: ["transactions"],
-        queryFn: fetchTransactions,
-      }),
-      qc.prefetchQuery({
-        queryKey: ["usersActivity"],
-        queryFn: fetchUsersActivity,
-      }),
-      qc.prefetchQuery({
-        queryKey: ["weeklyReport", "this_week"],
-        queryFn: () => fetchWeeklyReport("this_week"),
-      }),
-      qc.prefetchQuery({
-        queryKey: ["addableProducts"],
-        queryFn: fetchAddableProducts,
-      }),
-    ]).then(() => {}),
-
-  orders: (qc) =>
-    Promise.all([
-      qc.prefetchQuery({
-        queryKey: ["orders", "all"],
-        queryFn: () => fetchOrders("all"),
-      }),
-      qc.prefetchQuery({
-        queryKey: ["orderStats"],
-        queryFn: fetchOrderStats,
-      }),
-    ]).then(() => {}),
-};
-
-const MIN_DISPLAY_MS = 400;
+  getPrefetchFailureMessage,
+  getPrefetchTasks,
+  getRouteKey,
+  normalizeDashboardHref,
+  runPrefetchTasks,
+} from "@/lib/prefetch-routes";
 
 type NavigationContextValue = { navigate: (href: string) => void };
 
@@ -93,68 +35,71 @@ export function NavigationProgressProvider({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
 
   const [progress, setProgress] = useState(0);
   const [visible, setVisible] = useState(false);
   const [completing, setCompleting] = useState(false);
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navIdRef = useRef(0);
 
   function clearTimers() {
-    if (intervalRef.current) clearInterval(intervalRef.current);
     if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
   }
 
+  const resetProgressBar = useCallback((navId: number) => {
+    if (navId !== navIdRef.current) return;
+    setVisible(false);
+    setCompleting(false);
+    setProgress(0);
+  }, []);
+
   const navigate = useCallback(
     async (href: string) => {
       const navId = ++navIdRef.current;
+      const targetHref = normalizeDashboardHref(href, pathname);
+
+      if (targetHref === pathname) {
+        return;
+      }
+
+      const routeKey = getRouteKey(targetHref);
+      const tasks = getPrefetchTasks(routeKey);
 
       clearTimers();
       setCompleting(false);
       setVisible(true);
-      setProgress(12);
+      setProgress(4);
 
-      intervalRef.current = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 72) {
-            clearInterval(intervalRef.current!);
-            return 72;
-          }
-          return prev + (72 - prev) * 0.12;
+      try {
+        await runPrefetchTasks(queryClient, tasks, (pct) => {
+          if (navId !== navIdRef.current) return;
+          setProgress(pct);
         });
-      }, 120);
-
-      const segments = href.split("/").filter(Boolean);
-      const routeKey = segments[1] ?? "";
-      const prefetcher = ROUTE_PREFETCHES[routeKey];
-
-      await Promise.all([
-        prefetcher ? prefetcher(queryClient) : Promise.resolve(),
-        new Promise<void>((resolve) => setTimeout(resolve, MIN_DISPLAY_MS)),
-      ]);
+      } catch (error) {
+        if (navId !== navIdRef.current) return;
+        toast.error(getPrefetchFailureMessage(error));
+        resetProgressBar(navId);
+        return;
+      }
 
       if (navId !== navIdRef.current) return;
 
-      clearTimers();
       setCompleting(true);
       setProgress(100);
 
       completeTimerRef.current = setTimeout(() => {
-        router.push(href);
+        router.push(targetHref);
         hideTimerRef.current = setTimeout(() => {
-          if (navId !== navIdRef.current) return;
-          setVisible(false);
-          setCompleting(false);
-          setProgress(0);
+          resetProgressBar(navId);
         }, 200);
-      }, 280);
+      }, 120);
     },
-    [router, queryClient],
+    [router, pathname, queryClient, resetProgressBar],
   );
 
   return (
@@ -165,8 +110,8 @@ export function NavigationProgressProvider({
             className={cn(
               "h-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.55)]",
               completing
-                ? "transition-[width] duration-300 ease-out"
-                : "transition-[width] duration-150 ease-linear",
+                ? "transition-[width] duration-200 ease-out"
+                : "transition-[width] duration-100 ease-out",
             )}
             style={{ width: `${progress}%` }}
           />

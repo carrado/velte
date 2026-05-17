@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { transactionsListParamsFromUi } from "@/lib/transaction-list-params";
 import {
   Tooltip,
   TooltipContent,
@@ -181,23 +184,7 @@ export default function TransactionsPage() {
   const [filters, setFilters] =
     useState<Record<string, string>>(DEFAULT_FILTERS);
 
-  // Data state
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [paymentLink, setPaymentLink] = useState<PaymentLinkData | null>(null);
-  const [paymentLinkLoading, setPaymentLinkLoading] = useState(true);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({
-    totalRevenue: "$0",
-    completedTransactions: 0,
-    pendingTransactions: 0,
-    failedTransactions: 0,
-    revenueChange: "0%",
-    completedChange: "0%",
-    pendingChange: "0%",
-    failedChange: "0%",
-  });
+  const queryClient = useQueryClient();
 
   // Modals
   const [showPaymentLinkModal, setShowPaymentLinkModal] = useState(false);
@@ -205,15 +192,6 @@ export default function TransactionsPage() {
     useState<PaymentLinkWarningVariant | null>(null);
   const [linkActionLoading, setLinkActionLoading] = useState(false);
 
-  // Map tab → status param
-  const tabToStatus = {
-    all: undefined,
-    completed: "Complete" as const,
-    pending: "Pending" as const,
-    canceled: "Canceled" as const,
-  };
-
-  // Map sort option → sortBy + sortOrder
   const sortMap: Record<
     TxSortOption,
     { sortBy: string; sortOrder: "asc" | "desc" }
@@ -224,43 +202,64 @@ export default function TransactionsPage() {
     amount_desc: { sortBy: "total", sortOrder: "desc" },
   };
 
-  const fetchTransactions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { sortBy: sortField, sortOrder } = sortMap[sortBy];
-      const res = await transactionService.getTransactions({
-        page: currentPage,
-        limit: ITEMS_PER_PAGE,
-        status: tabToStatus[activeTab],
-        search: search || undefined,
-        sortBy: sortField,
-        sortOrder,
-        paymentMethod:
-          filters.paymentMethod !== "all"
-            ? (filters.paymentMethod as Transaction["method"])
-            : undefined,
-        startDate: filters.startDate || undefined,
-        endDate: filters.endDate || undefined,
-      });
-
-      if (res.success) {
-        setTransactions(res.data.transactions);
-        setTotalPages(res.data.pagination.totalPages);
-        setTotalCount(res.data.pagination.total);
-        if (res.data.stats) setStats(res.data.stats);
-        setPaymentLink(res.data.paymentLink || null);
-        setPaymentLinkLoading(false);
-      }
-    } catch {
-      toast.error("Failed to load transactions");
-    } finally {
-      setLoading(false);
-    }
+  const listParams = useMemo(() => {
+    const { sortBy: sortField, sortOrder } = sortMap[sortBy];
+    return transactionsListParamsFromUi({
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+      activeTab,
+      search,
+      sortBy: sortField,
+      sortOrder,
+      paymentMethod:
+        filters.paymentMethod !== "all"
+          ? (filters.paymentMethod as Transaction["method"])
+          : undefined,
+      startDate: filters.startDate || undefined,
+      endDate: filters.endDate || undefined,
+    });
   }, [activeTab, search, currentPage, sortBy, filters]);
 
+  const {
+    data: listResponse,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: queryKeys.transactions.list(listParams),
+    queryFn: () => transactionService.getTransactions(listParams),
+    placeholderData: (previous) => previous,
+  });
+
   useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
+    if (isError) toast.error("Failed to load transactions");
+  }, [isError]);
+
+  const transactions = listResponse?.success
+    ? listResponse.data.transactions
+    : [];
+  const totalPages = listResponse?.success
+    ? listResponse.data.pagination.totalPages
+    : 1;
+  const totalCount = listResponse?.success
+    ? listResponse.data.pagination.total
+    : 0;
+  const stats = listResponse?.success
+    ? listResponse.data.stats
+    : {
+        totalRevenue: "$0",
+        completedTransactions: 0,
+        pendingTransactions: 0,
+        failedTransactions: 0,
+        revenueChange: "0%",
+        completedChange: "0%",
+        pendingChange: "0%",
+        failedChange: "0%",
+      };
+  const paymentLink = listResponse?.success
+    ? listResponse.data.paymentLink
+    : null;
+  const paymentLinkLoading = isLoading && !listResponse;
+  const loading = isLoading && !listResponse;
 
   const handleTabChange = (tab: TransactionTabFilter) => {
     setActiveTab(tab);
@@ -269,7 +268,7 @@ export default function TransactionsPage() {
 
   const refreshPage = () => {
     setShowPaymentLinkModal(false);
-    fetchTransactions();
+    queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all });
   };
 
   const handlePaymentLinkWarningConfirm = async () => {
@@ -281,14 +280,13 @@ export default function TransactionsPage() {
         const res = await transactionService.deactivatePaymentLink(
           paymentLink.id,
         );
-        if (res.data) setPaymentLink(res.data);
         toast.success("Payment link deactivated");
       } else {
         await transactionService.deletePaymentLink(paymentLink.id);
-        setPaymentLink(null);
         toast.success("Payment link deleted");
       }
       setWarningModal(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all });
     } catch {
       toast.error(
         warningModal === "deactivate"
@@ -308,8 +306,8 @@ export default function TransactionsPage() {
       const res = await transactionService.reactivatePaymentLink(
         paymentLink.id,
       );
-      if (res.data) setPaymentLink(res.data);
       toast.success("Payment link reactivated");
+      queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all });
     } catch {
       toast.error("Failed to reactivate payment link");
     } finally {

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export type OrderStatus = "Delivered" | "Pending" | "Shipped" | "Cancelled";
 export type PaymentStatus = "Paid" | "Unpaid";
 export type OrderFilter = "all" | "completed" | "pending" | "cancelled";
@@ -27,6 +29,13 @@ export interface FilterState {
 }
 
 export type SortOption = "newest" | "oldest" | "price_asc" | "price_desc";
+
+export interface OrderRowMenuAction {
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+  highlight?: boolean;
+}
 
 export interface SettingsData {
   minDurationDays: number;

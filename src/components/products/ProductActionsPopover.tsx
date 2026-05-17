@@ -1,6 +1,16 @@
+"use client";
+
 import type { ProductActionsPopoverProps } from "@/types/product";
-import { DollarSign, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
+import {
+  DollarSign,
+  MoreHorizontal,
+  RefreshCw,
+  Trash2,
+  Eye,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useNavigation } from "../NavigationProgressContext";
 
 export default function ProductActionsPopover({
   product,
@@ -12,6 +22,10 @@ export default function ProductActionsPopover({
   const popoverRef = useRef<HTMLDivElement>(null);
   const inStock = product.inStock;
   const canDelete = !inStock;
+
+  const pathname = usePathname();
+  const userId = pathname.split("/").filter(Boolean)[0];
+  const { navigate } = useNavigation();
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -36,6 +50,16 @@ export default function ProductActionsPopover({
       </button>
       {popoverOpen && (
         <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-20">
+          <button
+            onClick={() => {
+              setPopoverOpen(false);
+              navigate(`/${userId}/products/${product.id}`);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
+          >
+            <Eye size={14} className="text-orange-500" />
+            View Product
+          </button>
           <button
             onClick={() => {
               setPopoverOpen(false);

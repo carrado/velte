@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import {
   CreditCard,
   Clock,
@@ -303,7 +305,10 @@ function PaymentRow({ item }: { item: PaymentHistoryItem }) {
 
 export default function BillingPage() {
   const subscription = useSubscriptionStore((s) => s.subscription);
-  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+  const { isLoading: isLoadingStatus } = useQuery({
+    queryKey: queryKeys.subscription.status,
+    queryFn: getSubscriptionStatus,
+  });
   const [loadingPay, setLoadingPay] = useState(false);
 
   const history: PaymentHistoryItem[] =
@@ -314,14 +319,6 @@ export default function BillingPage() {
       reference: item.reference,
       status: item.status === "pending" ? "failed" : item.status,
     })) ?? [];
-
-  // Only fetch if store has no data (layout didn't pre-populate)
-  useEffect(() => {
-    if (!subscription) {
-      setIsLoadingStatus(true);
-      getSubscriptionStatus().finally(() => setIsLoadingStatus(false));
-    }
-  }, [subscription]);
 
   // ── Derive status ────────────────────────────────────────────────────────────
   const isSubscribed = subscription?.isSubscribed ?? false;
@@ -380,7 +377,7 @@ export default function BillingPage() {
 
   // ── Loading skeleton (only on first fetch, mirrors AISetupPage skeleton) ────
 
-  if (isLoadingStatus) {
+  if (isLoadingStatus && !subscription) {
     return (
       <div className="space-y-5 animate-pulse">
         <div className="h-4 w-48 bg-gray-200 rounded" />
