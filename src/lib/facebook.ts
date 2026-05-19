@@ -200,7 +200,7 @@ export async function launchWhatsAppEmbeddedSignup(): Promise<WhatsAppSignupResu
       },
       {
         scope:
-          "business_management,whatsapp_business_management,whatsapp_business_messaging",
+          "business_management,whatsapp_business_management,whatsapp_business_messaging,catalog_management",
         response_type: "token",
         override_default_response_type: true,
       },

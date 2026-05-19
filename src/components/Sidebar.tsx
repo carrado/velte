@@ -58,7 +58,6 @@ function NavLink({
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const [userDetails, setUserDetails] = useState<Record<string, any>>({});
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [btnDisabled, setBtnDisabled] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -76,11 +75,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
   useEffect(() => {
     useUserStore.persist.rehydrate();
-    const user = useUserStore.getState().user;
-    setUserDetails(user ?? {});
   }, []);
+
+  const userDetails = useUserStore((state) => state.user);
 
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -269,8 +269,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         <div className="px-3 py-4 border-t border-gray-200 space-y-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-secondary font-bold flex-shrink-0">
-              {getInitial(userDetails?.company?.name)}
+            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-secondary font-bold flex-shrink-0 overflow-hidden">
+              {userDetails?.avatar ? (
+                <img
+                  src={userDetails.avatar}
+                  alt="avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                getInitial(userDetails?.company?.name ?? "")
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-dash-body font-semibold text-gray-900 leading-tight">
@@ -283,7 +291,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center px-3 justify-center gap-2 text-dash-body text-red-500 hover:text-red-600 transition-colors cursor-pointer"
+            className="lg:hidden flex items-center px-3 justify-center gap-2 text-dash-body text-red-500 hover:text-red-600 transition-colors cursor-pointer"
           >
             <LogOut size={18} />
             <span>Logout</span>

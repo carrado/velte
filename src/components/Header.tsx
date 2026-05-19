@@ -1,30 +1,51 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
-import { Search, Bell } from "lucide-react";
+/* eslint-disable @next/next/no-img-element */
+
+import { Bell, LogOut, Search } from "lucide-react";
 import { useUserStore } from "@/store/userStore";
+import { useMutation } from "@tanstack/react-query";
+import { usersApi } from "@/services/users";
+import { toast } from "sonner";
 import { getInitial } from "@/lib/initials";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { HeaderProps } from "@/types/common";
+import SearchBar from "@/components/SearchBar";
+import { useNavigation } from "@/components/NavigationProgressContext";
+import { usePathname } from "next/navigation";
 
 export default function Header({ title, onMenuClick }: HeaderProps) {
   void onMenuClick;
   const userDetails = useUserStore((state) => state.user);
-  const [isReadOnly, setIsReadOnly] = useState(true);
-  const [value, setValue] = useState("");
+  const { navigate } = useNavigation();
+  const pathname = usePathname();
 
-  const handleFocus = () => {
-    setIsReadOnly(false);
-  };
+  const userId = pathname.split("/")[1];
 
-  const handleBlur = () => {
-    if (value.trim() === "") {
-      setIsReadOnly(true);
-    }
-  };
+  const logoutMutation = useMutation({
+    mutationFn: () => usersApi.logout(),
+    onSuccess: () => {
+      window.location.href = "/";
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Logout failed";
+      toast.error(message);
+    },
+  });
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setValue(e.target.value);
-  };
+  const avatarInner = userDetails?.avatar ? (
+    <img
+      src={userDetails.avatar}
+      alt="avatar"
+      className="w-full h-full object-cover"
+    />
+  ) : (
+    <span>{getInitial(userDetails?.company?.name ?? "")}</span>
+  );
 
   return (
     <div className="flex items-center px-5 sm:px-0 justify-between gap-4">
@@ -34,26 +55,16 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
         </h1>
       </div>
 
-      <div className="relative w-96 hidden md:block flex-shrink-0">
-        <input
-          type="text"
-          autoComplete="new-password"
-          readOnly={isReadOnly}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          onChange={handleChange}
-          name="search_query"
-          placeholder="Search data, users, or reports"
-          className="w-full pl-6 pr-4 py-2 rounded-full border border-[#E5E7EB] bg-white text-dash-body text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-        />
-        <Search
-          size={15}
-          className="absolute right-5 top-1/2 -translate-y-1/2 text-[#9CA3AF]"
-        />
-      </div>
+      {/* Desktop search — full-featured dropdown with backdrop */}
+      <SearchBar />
 
       <div className="flex items-center gap-3 md:gap-4">
-        <button className="md:hidden text-[#6B7280] hover:text-[#111827] cursor-pointer">
+        {/* Mobile: tap to go to dedicated search page */}
+        <button
+          className="md:hidden text-[#6B7280] hover:text-[#111827] cursor-pointer"
+          onClick={() => navigate(`/${userId}/search`)}
+          aria-label="Search"
+        >
           <Search size={20} />
         </button>
 
@@ -62,8 +73,43 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
         </button>
 
-        <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold cursor-pointer flex-shrink-0">
-          {getInitial(userDetails?.company?.name)}
+        {/* Mobile avatar — plain, no popover */}
+        <div className="md:hidden w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold flex-shrink-0 overflow-hidden">
+          {avatarInner}
+        </div>
+
+        {/* Desktop avatar with shadcn Popover */}
+        <div className="hidden md:block">
+          <Popover>
+            <PopoverTrigger className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold cursor-pointer flex-shrink-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-1">
+              {avatarInner}
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              side="bottom"
+              sideOffset={8}
+              className="w-48 p-0 rounded-xl border border-gray-200 shadow-lg overflow-hidden"
+            >
+              <div className="px-3 py-2.5 border-b border-gray-100">
+                <p className="text-dash-body font-semibold text-gray-900 truncate">
+                  {userDetails?.company?.name ?? userDetails?.name}
+                </p>
+                <p className="text-dash-caption text-gray-400 truncate">
+                  @{userDetails?.username}
+                </p>
+              </div>
+              <button
+                onClick={() => logoutMutation.mutate()}
+                disabled={logoutMutation.isPending}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-dash-body text-red-500 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-60"
+              >
+                <LogOut size={15} />
+                <span>
+                  {logoutMutation.isPending ? "Logging out…" : "Logout"}
+                </span>
+              </button>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </div>

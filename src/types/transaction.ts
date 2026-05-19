@@ -122,3 +122,22 @@ export interface PaymentLinkActionResponse {
   data?: PaymentLinkData;
   message?: string;
 }
+
+export interface InitiateOrderRefundPayload {
+  /** Internal order ID (not the display orderId like "#ORD0001") */
+  orderId: string;
+  /** Refund amount in NGN (naira, not kobo — backend converts) */
+  amount: number;
+  reason: string;
+}
+
+export interface InitiateOrderRefundResponse {
+  success: boolean;
+  message: string;
+  data: {
+    transferCode: string; // Paystack transfer code e.g. "TRF_xxxx"
+    transferReference: string; // Internal idempotency reference
+    amount: number; // Amount in NGN (as sent)
+    status: "pending" | "success" | "failed";
+  };
+}

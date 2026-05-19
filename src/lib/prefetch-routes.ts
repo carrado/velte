@@ -15,6 +15,8 @@ import { fetchCustomers } from "@/services/customers";
 import { transactionService } from "@/services/transactions";
 import { getAISetupStatus } from "@/services/aiSetup";
 import { getSubscriptionStatus } from "@/services/subscription";
+import { settingsApi } from "@/services/settings";
+import { fetchWhatsAppProfile } from "@/services/whatsappProfile";
 import { DEFAULT_TRANSACTIONS_LIST_PARAMS, queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
 
@@ -118,6 +120,21 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
         {
           queryKey: queryKeys.subscription.status,
           queryFn: getSubscriptionStatus,
+        },
+      ];
+    case "settings":
+      return [
+        {
+          queryKey: queryKeys.settings.profile,
+          queryFn: settingsApi.fetchProfile,
+        },
+        {
+          queryKey: queryKeys.settings.notifications,
+          queryFn: settingsApi.getNotificationSettings,
+        },
+        {
+          queryKey: queryKeys.settings.whatsappProfile,
+          queryFn: fetchWhatsAppProfile,
         },
       ];
     default:

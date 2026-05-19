@@ -7,6 +7,8 @@ import type {
   PaymentLinkActionResponse,
   ResolveAccountResponse,
   BankOption,
+  InitiateOrderRefundPayload,
+  InitiateOrderRefundResponse,
 } from "@/types/transaction";
 
 export const transactionService = {
@@ -89,6 +91,24 @@ export const transactionService = {
     return apiClient<{ success: boolean; message?: string }>(
       `/transactions/payment-link/${id}`,
       { method: "DELETE" },
+    );
+  },
+
+  /**
+   * Initiate a refund transfer for a cancelled order.
+   * The backend resolves the customer's bank details from the PaymentLink
+   * associated with the order, creates a Paystack transfer recipient,
+   * and initiates the transfer from the merchant's Paystack balance.
+   */
+  async initiateOrderRefund(
+    payload: InitiateOrderRefundPayload,
+  ): Promise<InitiateOrderRefundResponse> {
+    return apiClient<InitiateOrderRefundResponse>(
+      "/transactions/order-refund",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
     );
   },
 };

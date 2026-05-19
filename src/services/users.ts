@@ -41,6 +41,19 @@ export const usersApi = {
     return response;
   },
 
+  updateProfile: async (data: {
+    services?: string[];
+    businessName?: string;
+    address?: string;
+  }) => {
+    const response = await apiClient<{ success: boolean; user: Partial<User> }>(
+      "/auth/profile",
+      { method: "PUT", data },
+    );
+    useUserStore.getState().updateUser(response.user);
+    return response;
+  },
+
   // PATCH (update) – API call, then update store
   update: async (id: string, data: Record<string, unknown>) => {
     const response = await apiClient<{ user: Partial<User> }>(`/users/${id}`, {

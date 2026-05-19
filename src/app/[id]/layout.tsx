@@ -20,6 +20,7 @@ const PATH_TITLES: Record<string, string> = {
   "products/reviews": "Product Reviews",
   products: "Product List",
   "ai-setup": "AI Settings",
+  search: "Search",
 };
 
 function getTitle(pathname: string): string {

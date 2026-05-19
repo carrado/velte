@@ -36,4 +36,12 @@ export const queryKeys = {
   aiSetup: {
     status: ["aiSetup", "status"] as const,
   },
+  settings: {
+    profile: ["settings", "profile"] as const,
+    notifications: ["settings", "notifications"] as const,
+    whatsappProfile: ["settings", "whatsappProfile"] as const,
+  },
+  search: {
+    results: (q: string) => ["search", "results", q] as const,
+  },
 };
