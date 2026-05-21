@@ -63,3 +63,7 @@ export interface LogoutModalProps {
   onClose: () => void;
   onConfirm: () => void;
 }
+
+export interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<{ outcome: "accepted" | "dismissed" }>;
+}

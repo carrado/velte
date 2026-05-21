@@ -1,9 +1,37 @@
 {
-    "name": "Velte",
-    "short_name": "Velte",
-    "start_url": "/",
-    "display": "standalone",
-    "theme_color": "#f97316",
-    "background_color": "#ffffff",
-    "icons": []
-  }
+  "name": "Velte",
+  "short_name": "Velte",
+  "description": "Deploy an intelligent AI agent on your WhatsApp Business number that answers product questions, negotiates prices, checks inventory, and closes sales — 24/7.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#f97316",
+  "background_color": "#ffffff",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/velte_manifest.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/velte_manifest.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Go to your sales dashboard"
+    },
+    {
+      "name": "Orders",
+      "url": "/orders",
+      "description": "View your orders"
+    }
+  ]
+}

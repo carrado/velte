@@ -131,7 +131,7 @@ export default function SearchBar() {
       <input
         type="text"
         readOnly={isReadOnly}
-        autoComplete="off"
+        autoComplete="new-password"
         name="noSearch"
         value={inputValue}
         onFocus={handleFocus}

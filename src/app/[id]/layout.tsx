@@ -2,12 +2,18 @@
 
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
 import { NavigationProgressProvider } from "@/components/NavigationProgressContext";
 import AISetupTour from "@/components/AISetupTour";
 import TrialGate from "@/components/TrialGate";
+
+const PushNotificationManager = dynamic(
+  () => import("@/components/PushNotificationManager"),
+  { ssr: false },
+);
 import { checkAISetup, hasDismissedTourThisSession } from "@/services/aiSetup";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -78,6 +84,7 @@ export default function DashboardRootLayout({
                 title={getTitle(pathname)}
                 onMenuClick={() => setSidebarOpen(true)}
               />
+              <PushNotificationManager />
               <TooltipProvider>{children}</TooltipProvider>
             </div>
           </main>

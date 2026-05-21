@@ -230,7 +230,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="flex items-center justify-between px-4 py-2 h-[70px] border-b border-gray-200">
           <div className="flex gap-1.5 -ml-4">
             <img
-              src="https://res.cloudinary.com/dbhpul04t/image/upload/q_auto/f_auto/v1775263781/velte_logo_esn5dj_kzprnp.png"
+              src="https://res.cloudinary.com/dbhpul04t/image/upload/v1779377619/velte_logo_esn5dj_tbfllz.png"
               alt="Velte logo"
               width={100}
               height={20}
