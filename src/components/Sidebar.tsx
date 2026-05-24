@@ -76,10 +76,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  useEffect(() => {
-    useUserStore.persist.rehydrate();
-  }, []);
-
   const userDetails = useUserStore((state) => state.user);
 
   const handleLogout = () => {
@@ -126,6 +122,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           icon: <CreditCard size={16} />,
           href: "transactions",
           mobile: true,
+          id: "transaction-nav",
         },
       ],
     },
@@ -161,6 +158,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           icon: <Settings size={16} />,
           href: "settings",
           mobile: true,
+          id: "settings-nav",
         },
         {
           label: "Billing",

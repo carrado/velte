@@ -1,4 +1,6 @@
 // lib/api.ts
+import { useUserStore } from "@/store/userStore";
+
 const API_BASE = "/api"; // Proxy through Next.js
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -9,6 +11,16 @@ interface ApiOptions extends RequestInit {
 }
 
 type ApiClientError = Error & { status?: number; data?: unknown };
+
+function handleUnauthenticated() {
+  useUserStore.getState().clearUser();
+  if (typeof window !== "undefined") {
+    const isAuthPage = window.location.pathname.startsWith("/auth");
+    if (!isAuthPage) {
+      window.location.href = "/auth/login";
+    }
+  }
+}
 
 export async function apiClient<TResponse = unknown>(
   endpoint: string,
@@ -39,6 +51,11 @@ export async function apiClient<TResponse = unknown>(
     ) as ApiClientError;
     err.status = res.status;
     err.data = error;
+
+    if (res.status === 401) {
+      handleUnauthenticated();
+    }
+
     throw err;
   }
   return (await res.json()) as TResponse;

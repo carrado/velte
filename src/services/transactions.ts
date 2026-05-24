@@ -5,6 +5,7 @@ import type {
   GeneratePaymentLinkPayload,
   GeneratePaymentLinkResponse,
   PaymentLinkActionResponse,
+  PaymentLinkData,
   ResolveAccountResponse,
   BankOption,
   InitiateOrderRefundPayload,
@@ -92,6 +93,18 @@ export const transactionService = {
       `/transactions/payment-link/${id}`,
       { method: "DELETE" },
     );
+  },
+
+  async getPaymentLink(): Promise<PaymentLinkData | null> {
+    try {
+      // Payment link is returned as part of the transactions list response
+      const res = await apiClient<FetchTransactionsResponse>(
+        "/transactions?limit=1&page=1",
+      );
+      return res.success ? (res.data.paymentLink ?? null) : null;
+    } catch {
+      return null;
+    }
   },
 
   /**

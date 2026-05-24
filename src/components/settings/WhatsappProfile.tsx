@@ -41,6 +41,7 @@ import {
   saveWhatsAppProfile,
 } from "@/services/whatsappProfile";
 import type { CategoryProduct } from "@/types/product";
+import { useOnboardingStore } from "@/store/onboardingStore";
 
 interface WhatsAppProfile {
   displayName: string;
@@ -786,8 +787,9 @@ export function WhatsAppProfileSection() {
   const user = useUserStore((s) => s.user);
   const products = useProductsStore((s) => s.products);
   const setProducts = useProductsStore((s) => s.setProducts);
+  const { currentStep: onboardingStep, isComplete: onboardingComplete } =
+    useOnboardingStore();
   const queryClient = useQueryClient();
-
   const [profile, setProfile] = useState<WhatsAppProfile>(buildDefaultProfile);
   const [services, setServices] = useState<string[]>(getUserServices);
   const [featuredProductIds, setFeaturedProductIds] = useState<string[]>([]);
@@ -897,6 +899,7 @@ export function WhatsAppProfileSection() {
         queryKey: queryKeys.settings.whatsappProfile,
       });
       toast.success("WhatsApp profile saved");
+      useOnboardingStore.getState().completeStep(3);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to save profile";
@@ -913,7 +916,13 @@ export function WhatsAppProfileSection() {
   }, [featuredProductIds, metaConnected, products, profile, services]);
 
   return (
-    <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
+    <div
+      id="whatsapp-profile-section"
+      className={cn(
+        "space-y-5 scroll-mt-3 bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6",
+        onboardingStep === 3 && !onboardingComplete && "relative z-[55]",
+      )}
+    >
       <div className="flex items-center gap-3 mb-5">
         <div className="w-9 h-9 bg-orange-50 rounded-xl flex items-center justify-center flex-shrink-0">
           <MessageCircle size={17} className="text-orange-600" />

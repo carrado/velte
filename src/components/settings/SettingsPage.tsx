@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUserStore } from "@/store/userStore";
+import { useOnboardingStore } from "@/store/onboardingStore";
 import { settingsApi } from "@/services/settings";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
@@ -2052,6 +2053,13 @@ function InvoiceReceiptPanel() {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("account");
+  const { currentStep: onboardingStep, isComplete: onboardingComplete } =
+    useOnboardingStore();
+
+  // Force the account tab during step 3 so #whatsapp-profile-section is in
+  // the DOM on first paint — OnboardingTour needs it mounted immediately.
+  const forceAccountTab = !onboardingComplete && onboardingStep === 3;
+  const effectiveTab: SettingsTab = forceAccountTab ? "account" : activeTab;
 
   const tabs: {
     id: SettingsTab;
@@ -2096,24 +2104,31 @@ export default function SettingsPage() {
         {tabs.map(({ id, label, icon: Icon, description }) => (
           <button
             key={id}
-            onClick={() => setActiveTab(id)}
+            onClick={() => {
+              if (!forceAccountTab) setActiveTab(id);
+            }}
             className={cn(
               "flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2.5 py-3 px-3 rounded-xl transition-all cursor-pointer",
-              activeTab === id ? "bg-orange-500 shadow-sm" : "hover:bg-gray-50",
+              effectiveTab === id
+                ? "bg-orange-500 shadow-sm"
+                : "hover:bg-gray-50",
+              forceAccountTab &&
+                id !== "account" &&
+                "opacity-50 cursor-not-allowed",
             )}
           >
             <Icon
               size={15}
               className={cn(
                 "flex-shrink-0 sm:mt-0.5",
-                activeTab === id ? "text-white" : "text-gray-400",
+                effectiveTab === id ? "text-white" : "text-gray-400",
               )}
             />
             <div className="text-center sm:text-left">
               <p
                 className={cn(
                   "text-dash-secondary font-semibold leading-none",
-                  activeTab === id ? "text-white" : "text-gray-800",
+                  effectiveTab === id ? "text-white" : "text-gray-800",
                 )}
               >
                 {label}
@@ -2121,7 +2136,7 @@ export default function SettingsPage() {
               <p
                 className={cn(
                   "text-dash-caption sm:text-dash-secondary mt-0.5 hidden sm:block",
-                  activeTab === id ? "text-orange-100" : "text-gray-400",
+                  effectiveTab === id ? "text-orange-100" : "text-gray-400",
                 )}
               >
                 {description}
@@ -2131,10 +2146,10 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {activeTab === "account" && <AccountSettingsPanel />}
-      {activeTab === "orders" && <OrderSettingsPanel />}
-      {activeTab === "ai" && <AISettingsPanel />}
-      {activeTab === "invoice" && <InvoiceReceiptPanel />}
+      {effectiveTab === "account" && <AccountSettingsPanel />}
+      {effectiveTab === "orders" && <OrderSettingsPanel />}
+      {effectiveTab === "ai" && <AISettingsPanel />}
+      {effectiveTab === "invoice" && <InvoiceReceiptPanel />}
     </div>
   );
 }

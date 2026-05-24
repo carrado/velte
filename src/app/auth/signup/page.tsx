@@ -288,9 +288,9 @@ export default function Signup() {
   const signupMutation = useMutation({
     mutationFn: (data: Omit<SignupForm, "confirmPassword">) =>
       usersApi.create(data),
-    onSuccess: (response: any) => {
+    onSuccess: (_response, variables) => {
       toast.success("Account created! Welcome to Velte.");
-      router.push(`/auth/verify?email=${response.user.email}`);
+      router.push(`/auth/verify?email=${variables.email}`);
     },
     onError: (error: Error) => {
       toast.error(error.message);

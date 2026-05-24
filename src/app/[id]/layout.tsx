@@ -7,15 +7,20 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
 import { NavigationProgressProvider } from "@/components/NavigationProgressContext";
-import AISetupTour from "@/components/AISetupTour";
+import OnboardingTour from "@/components/OnboardingTour";
 import TrialGate from "@/components/TrialGate";
 
 const PushNotificationManager = dynamic(
   () => import("@/components/PushNotificationManager"),
   { ssr: false },
 );
-import { checkAISetup, hasDismissedTourThisSession } from "@/services/aiSetup";
+import { checkAISetup } from "@/services/aiSetup";
+import { useOnboardingStore } from "@/store/onboardingStore";
+import { usersApi } from "@/services/users";
+import { transactionService } from "@/services/transactions";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useNotificationSeeder } from "@/hooks/useNotificationSeeder";
+import { useUserStore } from "@/store/userStore";
 
 const PATH_TITLES: Record<string, string> = {
   dashboard: "Dashboard",
@@ -27,6 +32,7 @@ const PATH_TITLES: Record<string, string> = {
   products: "Product List",
   "ai-setup": "AI Settings",
   search: "Search",
+  notifications: "Notifications",
 };
 
 function getTitle(pathname: string): string {
@@ -48,24 +54,61 @@ export default function DashboardRootLayout({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showTour, setShowTour] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
+
+  const userId = pathname.split("/")[1];
+  useNotificationSeeder(userId);
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });
   }, [pathname]);
 
+  // Fetch current user on mount, then determine which onboarding step to resume.
+  // markInitialized() is called on every exit path so the tour never flashes
+  // the wrong step while the API calls are in flight.
   useEffect(() => {
-    if (hasDismissedTourThisSession()) return;
-    checkAISetup()
-      .then(({ isSetup }) => {
-        if (!isSetup) setShowTour(true);
-      })
-      .catch(() => {
-        // Status couldn't be confirmed (no setup record yet, transient error,
-        // etc.) — default to showing the tour so first-time users get prompted.
-        setShowTour(true);
-      });
+    async function init() {
+      const store = useOnboardingStore.getState();
+
+      // Fast path: if the persisted store already has the user, skip the getMe()
+      // round-trip — the onboarding field is kept in sync by updateOnboarding().
+      // Only fetch from the server on first load (no persisted user).
+      let user = useUserStore.getState().user;
+      console.log(useUserStore.getState());
+      if (!user) {
+        try {
+          user = await usersApi.getMe();
+        } catch {
+          store.markInitialized();
+          return;
+        }
+      }
+
+      if (!user?.onboarding) {
+        store.markInitialized();
+        return;
+      }
+
+      const [paymentLinkResult, aiSetupResult] = await Promise.allSettled([
+        transactionService.getPaymentLink(),
+        checkAISetup(),
+      ]);
+      const hasPaymentLink =
+        paymentLinkResult.status === "fulfilled" && !!paymentLinkResult.value;
+      const hasAISetup =
+        aiSetupResult.status === "fulfilled" && aiSetupResult.value.isSetup;
+
+      if (hasAISetup) {
+        store.skipToStep(3);
+      } else if (hasPaymentLink) {
+        store.skipToStep(2);
+      }
+      store.markInitialized();
+    }
+
+    init().catch(() => {
+      useOnboardingStore.getState().markInitialized();
+    });
   }, []);
 
   return (
@@ -93,7 +136,7 @@ export default function DashboardRootLayout({
         </div>
       </div>
 
-      {showTour && <AISetupTour onDismiss={() => setShowTour(false)} />}
+      <OnboardingTour />
     </NavigationProgressProvider>
   );
 }

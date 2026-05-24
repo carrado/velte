@@ -38,6 +38,7 @@ import PaymentLinkWarningModal from "./PaymentLinkWarningModal";
 import { transactionService } from "@/services/transactions";
 import type { PaymentLinkWarningVariant } from "@/types/transaction";
 import { toast } from "sonner";
+import { useOnboardingStore } from "@/store/onboardingStore";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -177,6 +178,7 @@ function TxStatusBadge({ status }: { status: Transaction["status"] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TransactionsPage() {
+  const { currentStep, overlayPaused } = useOnboardingStore();
   const [activeTab, setActiveTab] = useState<TransactionTabFilter>("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -188,6 +190,18 @@ export default function TransactionsPage() {
 
   // Modals
   const [showPaymentLinkModal, setShowPaymentLinkModal] = useState(false);
+
+  // Pause the onboarding overlay while the payment link modal is open so it
+  // doesn't interfere with the modal. Resume when it closes (whether or not a
+  // link was generated — completeStep(1) handles the step advance separately).
+  useEffect(() => {
+    const store = useOnboardingStore.getState();
+    if (showPaymentLinkModal) {
+      if (store.currentStep === 1) store.pauseOverlay();
+    } else {
+      store.resumeOverlay();
+    }
+  }, [showPaymentLinkModal]);
   const [warningModal, setWarningModal] =
     useState<PaymentLinkWarningVariant | null>(null);
   const [linkActionLoading, setLinkActionLoading] = useState(false);
@@ -407,7 +421,13 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        <div className="lg:w-[360px] w-full flex-shrink-0">
+        <div
+          id="generate-link-section"
+          className={cn(
+            "lg:w-[360px] w-full flex-shrink-0",
+            currentStep === 1 && !overlayPaused && "relative z-[55]",
+          )}
+        >
           <div className="bg-white sm:rounded-lg shadow-sm p-5 flex flex-col gap-4 h-full">
             <div className="flex items-center justify-between">
               <p className="text-dash-heading font-bold text-[#23272e]">

@@ -31,4 +31,5 @@ export interface User {
   services?: string[];
   company?: UserCompany;
   preferences?: UserPreferences;
+  onboarding: boolean;
 }

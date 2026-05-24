@@ -71,8 +71,19 @@ export const usersApi = {
     if (user?.id === id) clearUser();
   },
 
-  test: async () => {
-    const response = await apiClient("/auth/me");
-    return response;
+  getMe: async () => {
+    const response = await apiClient<{ user: User }>("/auth/me");
+    useUserStore.getState().setUser(response.user);
+    return response.user;
+  },
+
+  updateOnboarding: async () => {
+    const user = useUserStore.getState().user;
+    if (!user) return;
+    await apiClient(`/users/${user.id}`, {
+      method: "PATCH",
+      data: { onboarding: false },
+    });
+    useUserStore.getState().updateUser({ onboarding: false });
   },
 };

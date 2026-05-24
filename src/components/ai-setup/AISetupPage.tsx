@@ -28,6 +28,7 @@ import {
 } from "@/services/aiSetup";
 import { launchWhatsAppEmbeddedSignup, disconnectMeta } from "@/lib/facebook";
 import { useAISetupStore } from "@/store/aiSetupStore";
+import { useOnboardingStore } from "@/store/onboardingStore";
 import type {
   WhatsAppNumber,
   AIConfig,
@@ -98,6 +99,8 @@ function Toggle({
 export default function AISetupPage() {
   const queryClient = useQueryClient();
   const mainRef = useRef<HTMLDivElement>(null);
+  const { currentStep: onboardingStep, isComplete: onboardingComplete } =
+    useOnboardingStore();
   const [currentStep, setCurrentStep] = useState<SetupStep>(1);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
 
@@ -121,7 +124,7 @@ export default function AISetupPage() {
   });
 
   // Get store actions (we won't read store directly for UI state, only for persistence & sync)
-  const { markComplete, clearSetup, setConfig } = useAISetupStore();
+  const { markComplete, setConfig } = useAISetupStore();
 
   // Scroll to top on step change
   useEffect(() => {
@@ -133,15 +136,11 @@ export default function AISetupPage() {
     }
   }, [currentStep]);
 
-  // Restore state on mount — rehydrate store, then fetch server status
+  // Restore state on mount — fetch server status
   useEffect(() => {
     async function restoreStatus() {
       setIsLoadingStatus(true);
       try {
-        // Manually rehydrate store from localStorage (skipHydration: true)
-        await useAISetupStore.persist.rehydrate();
-        const store = useAISetupStore.getState();
-
         let status = queryClient.getQueryData<AISetupStatus>(
           queryKeys.aiSetup.status,
         );
@@ -158,9 +157,9 @@ export default function AISetupPage() {
             setAIConfig(status.aiConfig);
             setConfig(status.aiConfig);
           }
-          markComplete(); // sync store with server
+          markComplete();
+          useOnboardingStore.getState().completeStep(2);
         } else {
-          // Partial progress – use server data if available
           if (status.wabaConfigured) {
             setWabaConfigured(true);
             setCurrentStep(2);
@@ -170,28 +169,15 @@ export default function AISetupPage() {
             setSelectedNumber(status.selectedNumber);
             setCurrentStep(3);
           }
-          // Fallback to stored config from store (if any)
-          if (store.aiConfig && !status.aiConfig) {
-            setAIConfig(store.aiConfig);
-          }
-          // Clear store if server says not complete (prev stale)
-          if (!status.isComplete && store.isComplete) {
-            clearSetup();
-          }
         }
-      } catch (error) {
-        // API unreachable – fall back to store (localStorage)
-        const store = useAISetupStore.getState();
-        if (store.isComplete) {
-          setIsSetupComplete(true);
-          if (store.aiConfig) setAIConfig(store.aiConfig);
-        }
+      } catch {
+        // API unreachable — nothing to fall back to
       } finally {
         setIsLoadingStatus(false);
       }
     }
     restoreStatus();
-  }, [markComplete, clearSetup, setConfig, queryClient]);
+  }, [markComplete, setConfig, queryClient]);
 
   // ── Step handlers ────────────────────────────────────────────────────────────
 
@@ -251,6 +237,7 @@ export default function AISetupPage() {
       await activateAI();
       setIsSetupComplete(true);
       toast.success("AI assistant activated 🎉");
+      useOnboardingStore.getState().completeStep(2);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Activation failed";
       toast.error(message);
@@ -316,8 +303,22 @@ export default function AISetupPage() {
   // ── Setup wizard ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-5" ref={mainRef}>
-      <p className="text-dash-body text-gray-500 px-5">
+    <div
+      id="ai-setup-content"
+      className={cn(
+        "space-y-5",
+        onboardingStep === 2 && !onboardingComplete && "relative z-[55]",
+      )}
+      ref={mainRef}
+    >
+      <p
+        className={cn(
+          "text-dash-body px-5",
+          onboardingStep === 2 && !onboardingComplete
+            ? "text-white"
+            : "text-gray-400",
+        )}
+      >
         Connect WhatsApp and configure your AI assistant
       </p>
 
@@ -418,10 +419,14 @@ function WABASetupStep({
 }) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  const handleLaunchClick = () => setShowConfirmModal(true);
+  const setModal = (open: boolean) => {
+    setShowConfirmModal(open);
+  };
+
+  const handleLaunchClick = () => setModal(true);
 
   const handleConfirm = () => {
-    setShowConfirmModal(false);
+    setModal(false);
     onLaunch();
   };
 
@@ -490,11 +495,11 @@ function WABASetupStep({
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-0 sm:px-4">
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center px-0 sm:px-4">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/40"
-            onClick={() => setShowConfirmModal(false)}
+            onClick={() => setModal(false)}
           />
 
           {/* Modal */}
@@ -517,7 +522,7 @@ function WABASetupStep({
                 </h3>
               </div>
               <button
-                onClick={() => setShowConfirmModal(false)}
+                onClick={() => setModal(false)}
                 className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
               >
                 <X size={15} />
@@ -623,7 +628,7 @@ function WABASetupStep({
             {/* Footer */}
             <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
               <button
-                onClick={() => setShowConfirmModal(false)}
+                onClick={() => setModal(false)}
                 className="flex-1 py-2.5 border border-gray-200 text-gray-600 text-dash-body font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 Cancel

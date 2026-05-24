@@ -17,12 +17,17 @@ import type { HeaderProps } from "@/types/common";
 import SearchBar from "@/components/SearchBar";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { usePathname } from "next/navigation";
+import { useNotificationsStore } from "@/store/notificationsStore";
+import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 
 export default function Header({ title, onMenuClick }: HeaderProps) {
   void onMenuClick;
   const userDetails = useUserStore((state) => state.user);
   const { navigate } = useNavigation();
   const pathname = usePathname();
+  const hasUnread = useNotificationsStore((s) =>
+    s.notifications.some((n) => !n.read),
+  );
 
   const userId = pathname.split("/")[1];
 
@@ -68,10 +73,22 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
           <Search size={20} />
         </button>
 
-        <button className="relative text-[#6B7280] hover:text-[#111827] cursor-pointer">
+        {/* Mobile: navigate to notifications page */}
+        <button
+          className="relative md:hidden text-[#6B7280] hover:text-[#111827] cursor-pointer"
+          onClick={() => navigate(`/${userId}/notifications`)}
+          aria-label="Notifications"
+        >
           <Bell size={20} />
-          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
+          {hasUnread && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
+          )}
         </button>
+
+        {/* Desktop: dropdown popover */}
+        <div className="hidden md:block">
+          <NotificationDropdown />
+        </div>
 
         {/* Mobile avatar — plain, no popover */}
         <div className="md:hidden w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold flex-shrink-0 overflow-hidden">

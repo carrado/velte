@@ -20,6 +20,7 @@ import type {
   GeneratePaymentLinkPayload,
 } from "@/types/transaction";
 import { toast } from "sonner";
+import { useOnboardingStore } from "@/store/onboardingStore";
 
 // ── Bank Dropdown ─────────────────────────────────────────────────────────────
 
@@ -221,6 +222,7 @@ export default function GeneratePaymentLinkModal({
       const res = await transactionService.generatePaymentLink(payload);
       setGeneratedLink(res.data.url);
       toast.success("Payment link generated!");
+      useOnboardingStore.getState().completeStep(1);
     } catch {
       toast.error("Failed to generate payment link. Please try again.");
     } finally {
