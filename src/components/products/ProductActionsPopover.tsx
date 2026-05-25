@@ -3,6 +3,7 @@
 import type { ProductActionsPopoverProps } from "@/types/product";
 import {
   DollarSign,
+  Edit2,
   MoreHorizontal,
   RefreshCw,
   Trash2,
@@ -59,6 +60,16 @@ export default function ProductActionsPopover({
           >
             <Eye size={14} className="text-orange-500" />
             View Product
+          </button>
+          <button
+            onClick={() => {
+              setPopoverOpen(false);
+              navigate(`/${userId}/products/${product.id}/edit`);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
+          >
+            <Edit2 size={14} className="text-blue-500" />
+            Edit Product
           </button>
           <button
             onClick={() => {

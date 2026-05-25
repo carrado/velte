@@ -25,9 +25,14 @@ import {
   Info,
   Clock,
   Fingerprint,
+  Leaf,
+  Flame,
+  Timer,
+  ChefHat,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CategoryProduct, Category } from "@/types/product";
+import { useIsFood } from "@/hooks/useBusinessType";
 
 // ── Carousel placeholder images (swap for real product images when available) ─
 
@@ -267,6 +272,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
   const pathname = usePathname();
   const userId = pathname.split("/").filter(Boolean)[0];
   const { navigate } = useNavigation();
+  const isFood = useIsFood();
 
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: queryKeys.products.list,
@@ -631,6 +637,135 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                         <Tag size={10} />
                         {tag}
                       </span>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Food-specific fields ── */}
+            {isFood &&
+              (product.estimatedPrepMins !== undefined ||
+                product.isVeg !== undefined ||
+                product.isSpicy !== undefined) && (
+                <>
+                  <div className="my-5 border-t border-gray-100" />
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <ChefHat size={13} className="text-orange-500" />
+                      <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
+                        Food Details
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {product.estimatedPrepMins !== undefined && (
+                        <div className="flex items-center gap-2 bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-2.5">
+                          <Timer size={14} className="text-orange-500" />
+                          <span className="text-dash-body font-semibold text-[#023337]">
+                            ~{product.estimatedPrepMins} min prep
+                          </span>
+                        </div>
+                      )}
+                      {product.isVeg && (
+                        <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3.5 py-2.5">
+                          <Leaf size={14} className="text-green-500" />
+                          <span className="text-dash-body font-semibold text-green-700">
+                            Vegetarian
+                          </span>
+                        </div>
+                      )}
+                      {product.isSpicy && (
+                        <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">
+                          <Flame size={14} className="text-red-500" />
+                          <span className="text-dash-body font-semibold text-red-700">
+                            Spicy
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+            {/* ── Availability ── */}
+            {isFood && product.availability && (
+              <>
+                <div className="my-5 border-t border-gray-100" />
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock size={13} className="text-orange-500" />
+                    <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
+                      Availability
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {product.availability.days.map((day) => (
+                      <span
+                        key={day}
+                        className="px-2.5 py-1 bg-orange-500 text-white text-dash-caption font-semibold rounded-lg"
+                      >
+                        {day.charAt(0).toUpperCase() + day.slice(1)}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-dash-caption text-gray-500 font-medium">
+                    {product.availability.startTime} –{" "}
+                    {product.availability.endTime}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* ── Modifiers ── */}
+            {isFood && product.modifiers && product.modifiers.length > 0 && (
+              <>
+                <div className="my-5 border-t border-gray-100" />
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Hash size={13} className="text-orange-500" />
+                    <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
+                      Modifiers
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {product.modifiers.map((group) => (
+                      <div
+                        key={group.id}
+                        className="border border-gray-100 rounded-xl overflow-hidden"
+                      >
+                        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
+                          <span className="text-dash-body font-semibold text-[#023337]">
+                            {group.name}
+                          </span>
+                          {group.required && (
+                            <span className="text-dash-micro bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">
+                              Required
+                            </span>
+                          )}
+                          {group.multiSelect && (
+                            <span className="text-dash-micro bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">
+                              Multi-select
+                            </span>
+                          )}
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                          {group.options.map((opt) => (
+                            <div
+                              key={opt.id}
+                              className="flex items-center justify-between px-3 py-2"
+                            >
+                              <span className="text-dash-body text-gray-700">
+                                {opt.name}
+                              </span>
+                              {opt.additionalPrice > 0 && (
+                                <span className="text-dash-caption text-green-600 font-semibold">
+                                  +₦{opt.additionalPrice.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { queryKeys } from "@/lib/query-keys";
@@ -20,29 +20,39 @@ import {
   Clock,
   XCircle,
   CheckCircle2,
-  MoreHorizontal,
   Eye,
+  ChefHat,
+  BellRing,
+  Bike,
+  Package,
+  RefreshCw,
+  AlertTriangle,
+  Banknote,
+  Loader2,
 } from "lucide-react";
+import { useIsFood } from "@/hooks/useBusinessType";
 import { Pagination } from "@/components/Pagination";
 import {
   fetchOrders,
   fetchOrderStats,
   updateOrderStatus,
 } from "@/services/orders";
+import { transactionService } from "@/services/transactions";
 import type {
   Order,
   OrderFilter,
-  OrderRowMenuAction,
   OrderStatus,
   SortOption,
 } from "@/types/order";
-import type { ColumnDef, FilterField } from "@/types/common";
+import type { FilterField } from "@/types/common";
 import FilterPopover from "../FilterPopover";
 import SortMenu from "../SortMenu";
 import TabBar from "../TabBar";
-import DataTable from "../DataTable";
-import MobileCard from "../MobileCard";
 import { Input } from "../ui/input";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+// ── Stat cards ────────────────────────────────────────────────────────────────
 
 const STAT_TOOLTIPS: Record<string, string> = {
   "Total Orders":
@@ -90,6 +100,8 @@ function StatCard({
   );
 }
 
+// ── Status + payment badges ───────────────────────────────────────────────────
+
 function StatusBadge({ status }: { status: OrderStatus }) {
   switch (status) {
     case "Delivered":
@@ -128,6 +140,33 @@ function StatusBadge({ status }: { status: OrderStatus }) {
           </span>
         </div>
       );
+    case "Preparing":
+      return (
+        <div className="flex items-center gap-1.5">
+          <ChefHat size={15} className="text-[#f97316]" />
+          <span className="text-dash-body text-[#f97316] font-medium">
+            Preparing
+          </span>
+        </div>
+      );
+    case "Ready":
+      return (
+        <div className="flex items-center gap-1.5">
+          <BellRing size={15} className="text-[#0891b2]" />
+          <span className="text-dash-body text-[#0891b2] font-medium">
+            Ready
+          </span>
+        </div>
+      );
+    case "OnTheWay":
+      return (
+        <div className="flex items-center gap-1.5">
+          <Bike size={15} className="text-[#7c3aed]" />
+          <span className="text-dash-body text-[#7c3aed] font-medium">
+            On the Way
+          </span>
+        </div>
+      );
   }
 }
 
@@ -142,102 +181,234 @@ function PaymentBadge({ status }: { status: "Paid" | "Unpaid" }) {
   );
 }
 
-function RowActions({
-  orderId,
-  status,
-  onView,
-  onMarkShipped,
-  onMarkDelivered,
-  onMarkCancelled,
-}: {
-  orderId: string;
-  status: OrderStatus;
-  onView: () => void;
-  onMarkShipped: () => void;
-  onMarkDelivered: () => void;
-  onMarkCancelled: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+// ── Action lookup tables ──────────────────────────────────────────────────────
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  const statusActions: OrderRowMenuAction[] = (() => {
-    if (status === "Pending") {
-      return [
-        {
-          label: "Mark as Shipped",
-          icon: <Truck size={15} />,
-          onClick: onMarkShipped,
-        },
-        {
-          label: "Mark as Cancelled",
-          icon: <XCircle size={15} />,
-          onClick: onMarkCancelled,
-        },
-      ];
-    }
-    if (status === "Shipped") {
-      return [
-        {
-          label: "Mark as Delivered",
-          icon: <CheckCircle2 size={15} />,
-          onClick: onMarkDelivered,
-        },
-      ];
-    }
-    return [];
-  })();
-
-  const allActions: OrderRowMenuAction[] = [
+const FOOD_NEXT_ACTION: Partial<
+  Record<
+    OrderStatus,
     {
-      label: "View Order",
-      icon: <Eye size={15} />,
-      onClick: onView,
-      highlight: false,
-    },
-    ...statusActions,
-  ];
+      status: OrderStatus;
+      label: string;
+      icon: React.ElementType;
+      className: string;
+    }
+  >
+> = {
+  Pending: {
+    status: "Preparing",
+    label: "Start Preparing",
+    icon: ChefHat,
+    className: "bg-orange-500 hover:bg-orange-600 text-white",
+  },
+  Preparing: {
+    status: "Ready",
+    label: "Mark as Ready",
+    icon: BellRing,
+    className: "bg-cyan-500 hover:bg-cyan-600 text-white",
+  },
+  Ready: {
+    status: "OnTheWay",
+    label: "Out for Delivery",
+    icon: Bike,
+    className: "bg-purple-500 hover:bg-purple-600 text-white",
+  },
+  OnTheWay: {
+    status: "Delivered",
+    label: "Mark as Delivered",
+    icon: CheckCircle2,
+    className: "bg-green-500 hover:bg-green-600 text-white",
+  },
+};
+
+const RETAIL_NEXT_ACTION: Partial<
+  Record<
+    OrderStatus,
+    {
+      label: string;
+      icon: React.ElementType;
+      className: string;
+      shipModal?: true;
+    }
+  >
+> = {
+  Pending: {
+    label: "Mark as Shipped",
+    icon: Truck,
+    className: "bg-orange-500 hover:bg-orange-600 text-white",
+    shipModal: true,
+  },
+  Shipped: {
+    label: "Mark as Delivered",
+    icon: CheckCircle2,
+    className: "bg-green-500 hover:bg-green-600 text-white",
+  },
+};
+
+// ── Unified order card ────────────────────────────────────────────────────────
+
+function OrderCard({
+  order,
+  isFood,
+  mutating,
+  onView,
+  onDirectAction,
+  onShipClick,
+  onCancelClick,
+}: {
+  order: Order;
+  isFood: boolean;
+  mutating: boolean;
+  onView: () => void;
+  onDirectAction: (status: OrderStatus) => void;
+  onShipClick: () => void;
+  onCancelClick: () => void;
+}) {
+  const actionCfg = isFood
+    ? (FOOD_NEXT_ACTION[order.status] ?? null)
+    : (RETAIL_NEXT_ACTION[order.status] ?? null);
+
+  const handlePrimaryClick = () => {
+    if (!actionCfg) return;
+    if (!isFood && "shipModal" in actionCfg && actionCfg.shipModal) {
+      onShipClick();
+    } else if (isFood) {
+      const fa = FOOD_NEXT_ACTION[order.status];
+      if (fa) onDirectAction(fa.status);
+    } else {
+      const ra = RETAIL_NEXT_ACTION[order.status];
+      if (ra && !("shipModal" in ra)) onDirectAction("Delivered");
+    }
+  };
 
   return (
-    <div ref={ref} className="relative flex justify-center">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="p-1.5 rounded-md hover:bg-orange-50 text-[#6a717f] hover:text-orange-500 transition-colors cursor-pointer"
-      >
-        <MoreHorizontal size={18} />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-8 z-30 w-52 bg-white rounded-lg shadow-lg border border-[#e5e7eb] py-1 text-dash-body">
-          {allActions.map((action, i) => (
-            <button
-              key={action.label}
-              onClick={() => {
-                action.onClick();
-                setOpen(false);
-              }}
-              className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors cursor-pointer ${
-                action.highlight === true
-                  ? "text-orange-600 hover:bg-orange-50 font-medium"
-                  : "text-[#111827] hover:bg-orange-50 hover:text-orange-600"
-              } ${i > 0 && i === 1 && statusActions.length > 0 ? "border-t border-gray-100 mt-1 pt-2.5" : ""}`}
-            >
-              {action.icon}
-              {action.label}
-            </button>
-          ))}
+    <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3.5">
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            "w-11 h-11 rounded-xl flex items-center justify-center font-bold text-dash-body flex-shrink-0 border",
+            order.product.color,
+          )}
+        >
+          {order.product.initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-dash-body font-bold text-[#023337] leading-tight truncate">
+            {order.product.name}
+          </p>
+          <p className="text-dash-caption text-gray-400 font-medium mt-0.5">
+            {order.orderId}
+          </p>
+        </div>
+        <button
+          onClick={onView}
+          title="View order"
+          className="p-1.5 rounded-lg hover:bg-orange-50 text-gray-400 hover:text-orange-500 transition-colors cursor-pointer flex-shrink-0"
+        >
+          <Eye size={15} />
+        </button>
+      </div>
+
+      {/* Date + price */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1 text-dash-caption text-gray-400">
+          <Clock size={11} />
+          <span>{order.date}</span>
+        </div>
+        <span className="text-dash-body font-bold text-orange-500">
+          ₦{order.price.toFixed(2)}
+        </span>
+      </div>
+
+      {/* Badges */}
+      <div className="flex items-center gap-3">
+        <PaymentBadge status={order.payment} />
+        <span className="w-px h-3.5 bg-gray-200" />
+        <StatusBadge status={order.status} />
+      </div>
+
+      {/* Primary action */}
+      {actionCfg && (
+        <button
+          onClick={handlePrimaryClick}
+          disabled={mutating}
+          className={cn(
+            "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-dash-body font-semibold transition-colors disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed",
+            actionCfg.className,
+          )}
+        >
+          {mutating ? (
+            <RefreshCw size={14} className="animate-spin" />
+          ) : (
+            <actionCfg.icon size={15} />
+          )}
+          {actionCfg.label}
+        </button>
+      )}
+
+      {/* Cancel — Pending only, both types */}
+      {order.status === "Pending" && (
+        <button
+          onClick={onCancelClick}
+          disabled={mutating}
+          className="w-full text-dash-caption text-red-400 hover:text-red-600 font-medium transition-colors disabled:opacity-50 cursor-pointer"
+        >
+          Cancel order
+        </button>
+      )}
+
+      {/* Terminal state pills */}
+      {order.status === "Delivered" && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-100 rounded-xl">
+          <CheckCircle2 size={13} className="text-green-500 flex-shrink-0" />
+          <p className="text-dash-caption text-green-700 font-medium">
+            Order fulfilled
+          </p>
+        </div>
+      )}
+      {order.status === "Cancelled" && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-100 rounded-xl">
+          <XCircle size={13} className="text-red-400 flex-shrink-0" />
+          <p className="text-dash-caption text-red-600 font-medium">
+            Order cancelled
+          </p>
         </div>
       )}
     </div>
   );
 }
+
+function OrderSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3.5 animate-pulse"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 bg-gray-200 rounded-xl flex-shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3.5 bg-gray-200 rounded w-3/4" />
+              <div className="h-2.5 bg-gray-100 rounded w-1/2" />
+            </div>
+          </div>
+          <div className="flex justify-between">
+            <div className="h-2.5 bg-gray-100 rounded w-24" />
+            <div className="h-3 bg-gray-200 rounded w-16" />
+          </div>
+          <div className="flex gap-3">
+            <div className="h-3 bg-gray-100 rounded w-16" />
+            <div className="h-3 bg-gray-100 rounded w-20" />
+          </div>
+          <div className="h-10 bg-gray-100 rounded-xl" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Modals ────────────────────────────────────────────────────────────────────
 
 function ShippedConfirmationModal({
   isOpen,
@@ -250,31 +421,44 @@ function ShippedConfirmationModal({
 }) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center h-full justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
-        <div className="px-6 py-4 border-b border-[#E5E7EB]">
-          <h3 className="text-dash-heading font-semibold text-[#111827]">
+    <div className="fixed inset-0 z-50 flex h-full items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center">
+            <Truck size={18} className="text-white" />
+          </div>
+          <h3 className="text-dash-heading font-bold text-[#023337]">
             Confirm Shipment
           </h3>
         </div>
-        <div className="px-6 py-4">
+        <div className="px-6 py-5">
           <p className="text-dash-body text-gray-600">
             Once marked as <strong>Shipped</strong>, this order cannot be
             cancelled. Are you sure you want to continue?
           </p>
+          <div className="flex items-start gap-2 mt-3 p-3 bg-orange-50 border border-orange-200 rounded-xl">
+            <AlertTriangle
+              size={14}
+              className="text-orange-500 mt-0.5 flex-shrink-0"
+            />
+            <p className="text-dash-caption text-orange-700">
+              Make sure the order details are correct before dispatching to the
+              carrier. This step cannot be reversed.
+            </p>
+          </div>
         </div>
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] bg-gray-50">
+        <div className="flex gap-3 px-6 pb-5">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-dash-body font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 text-dash-body font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600"
+            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors cursor-pointer"
           >
-            Yes, Mark as Shipped
+            Yes, Ship It
           </button>
         </div>
       </div>
@@ -282,10 +466,213 @@ function ShippedConfirmationModal({
   );
 }
 
-const TABS: { key: OrderFilter; label: string }[] = [
-  { key: "all", label: "All order" },
+function CancelConfirmModal({
+  isOpen,
+  isPaid,
+  onClose,
+  onConfirm,
+}: {
+  isOpen: boolean;
+  isPaid: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex h-full items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-red-500 flex items-center justify-center">
+            <XCircle size={18} className="text-white" />
+          </div>
+          <h3 className="text-dash-heading font-bold text-[#023337]">
+            Cancel Order
+          </h3>
+        </div>
+        <div className="px-6 py-5">
+          <p className="text-dash-body text-gray-600">
+            Are you sure you want to cancel this order? This action cannot be
+            undone.
+          </p>
+          {isPaid && (
+            <div className="flex items-start gap-2 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <AlertTriangle
+                size={14}
+                className="text-amber-500 mt-0.5 flex-shrink-0"
+              />
+              <p className="text-dash-caption text-amber-700">
+                This order has already been paid. You will be prompted to
+                initiate a refund on the next step.
+              </p>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-3 px-6 pb-5">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            Go Back
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors cursor-pointer"
+          >
+            Yes, Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RefundTransferModal({
+  isOpen,
+  order,
+  onSkipAndCancel,
+  onTransferSuccess,
+}: {
+  isOpen: boolean;
+  order: Order | null;
+  onSkipAndCancel: () => void;
+  onTransferSuccess: () => void;
+}) {
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  if (!isOpen || !order) return null;
+
+  const handleTransfer = async () => {
+    setIsTransferring(true);
+    try {
+      await transactionService.initiateOrderRefund({
+        orderId: order.id,
+        amount: order.price,
+        reason: `Refund for cancelled order ${order.orderId} — ${order.product.name}`,
+      });
+      toast.success(
+        `₦${order.price.toFixed(2)} refund queued successfully. Processing in 1–3 business days.`,
+      );
+      setTimeout(() => onTransferSuccess(), 600);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Transfer failed. Please try again.";
+      toast.error(message);
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex h-full items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center">
+            <Banknote size={18} className="text-white" />
+          </div>
+          <div>
+            <h3 className="text-dash-heading font-bold text-[#023337]">
+              Refund Transfer
+            </h3>
+            <p className="text-dash-caption text-gray-400">{order.orderId}</p>
+          </div>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div className="bg-orange-50 border border-orange-100 rounded-2xl px-5 py-4 text-center">
+            <p className="text-dash-caption text-orange-400 uppercase tracking-wide font-semibold mb-1">
+              Refund Amount
+            </p>
+            <p className="text-[2rem] font-black text-orange-600 leading-none">
+              ₦{order.price.toFixed(2)}
+            </p>
+            <p className="text-dash-caption text-orange-400 mt-1">
+              Full order value will be refunded
+            </p>
+          </div>
+
+          <div className="bg-gray-50 rounded-xl border border-gray-100 divide-y divide-gray-100">
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-dash-caption text-gray-400 font-medium">
+                Item
+              </span>
+              <span className="text-dash-caption font-semibold text-[#023337] max-w-[160px] text-right truncate">
+                {order.product.name}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-dash-caption text-gray-400 font-medium">
+                Order ID
+              </span>
+              <span className="text-dash-caption font-semibold text-[#023337]">
+                {order.orderId}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-dash-caption text-gray-400 font-medium">
+                Reason
+              </span>
+              <span className="text-dash-caption font-semibold text-[#023337]">
+                Order Cancelled
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+            <AlertTriangle
+              size={13}
+              className="text-blue-400 mt-0.5 flex-shrink-0"
+            />
+            <p className="text-dash-caption text-blue-600">
+              The order will be cancelled after the refund is initiated.
+              Skipping will cancel the order without a refund.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-3 px-6 pb-5">
+          <button
+            onClick={onSkipAndCancel}
+            disabled={isTransferring}
+            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            Skip & Cancel
+          </button>
+          <button
+            onClick={handleTransfer}
+            disabled={isTransferring}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {isTransferring ? (
+              <>
+                <Loader2 size={15} className="animate-spin" /> Sending…
+              </>
+            ) : (
+              <>
+                <Banknote size={15} /> Transfer ₦{order.price.toFixed(2)}
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tabs + filter config ──────────────────────────────────────────────────────
+
+const RETAIL_TABS: { key: OrderFilter; label: string }[] = [
+  { key: "all", label: "All orders" },
   { key: "completed", label: "Completed" },
   { key: "pending", label: "Pending" },
+  { key: "cancelled", label: "Cancelled" },
+];
+
+const FOOD_TABS: { key: OrderFilter; label: string }[] = [
+  { key: "all", label: "All orders" },
+  { key: "completed", label: "Delivered" },
+  { key: "pending", label: "In Progress" },
   { key: "cancelled", label: "Cancelled" },
 ];
 
@@ -298,29 +685,16 @@ const DEFAULT_FILTERS: Record<string, string> = {
   orderStatus: "all",
 };
 
-const ORDERS_FILTER_FIELDS: FilterField[] = [
-  {
-    type: "select",
-    key: "paymentStatus",
-    label: "Payment Status",
-    options: [
-      { value: "all", label: "All" },
-      { value: "Paid", label: "Paid" },
-      { value: "Unpaid", label: "Unpaid" },
-    ],
-  },
-  {
-    type: "select",
-    key: "orderStatus",
-    label: "Order Status",
-    options: [
-      { value: "all", label: "All" },
-      { value: "pending", label: "Pending" },
-      { value: "completed", label: "Completed" },
-      { value: "cancelled", label: "Cancelled" },
-    ],
-  },
-];
+const PAYMENT_STATUS_FIELD: FilterField = {
+  type: "select",
+  key: "paymentStatus",
+  label: "Payment Status",
+  options: [
+    { value: "all", label: "All" },
+    { value: "Paid", label: "Paid" },
+    { value: "Unpaid", label: "Unpaid" },
+  ],
+};
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "newest", label: "Newest first" },
@@ -329,11 +703,38 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "price_desc", label: "Price high to low" },
 ];
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function OrderManagement() {
   const pathname = usePathname();
   const userId = pathname.split("/").filter(Boolean)[0];
   const { navigate } = useNavigation();
   const queryClient = useQueryClient();
+  const isFood = useIsFood();
+
+  const TABS = isFood ? FOOD_TABS : RETAIL_TABS;
+
+  const ordersFilterFields: FilterField[] = [
+    PAYMENT_STATUS_FIELD,
+    {
+      type: "select",
+      key: "orderStatus",
+      label: "Order Status",
+      options: isFood
+        ? [
+            { value: "all", label: "All" },
+            { value: "pending", label: "In Progress" },
+            { value: "completed", label: "Delivered" },
+            { value: "cancelled", label: "Cancelled" },
+          ]
+        : [
+            { value: "all", label: "All" },
+            { value: "pending", label: "Pending" },
+            { value: "completed", label: "Completed" },
+            { value: "cancelled", label: "Cancelled" },
+          ],
+    },
+  ];
 
   const [activeTab, setActiveTab] = useState<OrderFilter>("all");
   const [search, setSearch] = useState("");
@@ -341,9 +742,17 @@ export default function OrderManagement() {
   const [filters, setFilters] =
     useState<Record<string, string>>(DEFAULT_FILTERS);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
+
+  // Ship confirmation modal state
   const [shippedModalOpen, setShippedModalOpen] = useState(false);
   const [pendingShippedOrderId, setPendingShippedOrderId] = useState<
     string | null
+  >(null);
+
+  // Cancel + refund modal state
+  const [cancelingOrder, setCancelingOrder] = useState<Order | null>(null);
+  const [cancelModalStep, setCancelModalStep] = useState<
+    "confirm" | "refund" | null
   >(null);
 
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -359,6 +768,15 @@ export default function OrderManagement() {
       updateOrderStatus(id, status),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
   });
+
+  // ── filtering + sorting ──────────────────────────────────────────────────
+
+  const foodInProgress = (s: string) =>
+    ["Pending", "Preparing", "Ready", "OnTheWay"].includes(s);
+  const isCompleted = (s: string) =>
+    isFood ? s === "Delivered" : s === "Delivered" || s === "Shipped";
+  const isPending = (s: string) =>
+    isFood ? foodInProgress(s) : s === "Pending";
 
   let filtered = orders.filter((o) => {
     const matchesSearch =
@@ -378,22 +796,15 @@ export default function OrderManagement() {
     )
       return false;
     if (filters["orderStatus"] !== "all") {
-      if (
-        filters["orderStatus"] === "completed" &&
-        !(o.status === "Delivered" || o.status === "Shipped")
-      )
+      if (filters["orderStatus"] === "completed" && !isCompleted(o.status))
         return false;
-      if (filters["orderStatus"] === "pending" && o.status !== "Pending")
+      if (filters["orderStatus"] === "pending" && !isPending(o.status))
         return false;
       if (filters["orderStatus"] === "cancelled" && o.status !== "Cancelled")
         return false;
     } else if (activeTab !== "all") {
-      if (
-        activeTab === "completed" &&
-        !(o.status === "Delivered" || o.status === "Shipped")
-      )
-        return false;
-      if (activeTab === "pending" && o.status !== "Pending") return false;
+      if (activeTab === "completed" && !isCompleted(o.status)) return false;
+      if (activeTab === "pending" && !isPending(o.status)) return false;
       if (activeTab === "cancelled" && o.status !== "Cancelled") return false;
     }
     return true;
@@ -412,6 +823,8 @@ export default function OrderManagement() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // ── handlers ─────────────────────────────────────────────────────────────
+
   function handleTabChange(tab: OrderFilter) {
     setActiveTab(tab);
     setPage(1);
@@ -420,17 +833,11 @@ export default function OrderManagement() {
 
   const tabCounts: Record<OrderFilter, number> = {
     all: orders.length,
-    completed: orders.filter(
-      (o) => o.status === "Delivered" || o.status === "Shipped",
-    ).length,
-    pending: orders.filter((o) => o.status === "Pending").length,
+    completed: orders.filter((o) => isCompleted(o.status)).length,
+    pending: orders.filter((o) => isPending(o.status)).length,
     cancelled: orders.filter((o) => o.status === "Cancelled").length,
   };
 
-  const handleMarkShipped = (orderId: string) => {
-    setPendingShippedOrderId(orderId);
-    setShippedModalOpen(true);
-  };
   const confirmMarkShipped = () => {
     if (pendingShippedOrderId) {
       mutation.mutate({ id: pendingShippedOrderId, status: "Shipped" });
@@ -438,73 +845,65 @@ export default function OrderManagement() {
       setPendingShippedOrderId(null);
     }
   };
-  const handleMarkDelivered = (orderId: string) =>
-    mutation.mutate({ id: orderId, status: "Delivered" });
-  const handleMarkCancelled = (orderId: string) =>
-    mutation.mutate({ id: orderId, status: "Cancelled" });
+
+  const handleCancelClick = (order: Order) => {
+    setCancelingOrder(order);
+    setCancelModalStep("confirm");
+  };
+
+  const handleCancelConfirm = () => {
+    if (!cancelingOrder) return;
+    if (cancelingOrder.payment === "Paid") {
+      setCancelModalStep("refund");
+    } else {
+      mutation.mutate({ id: cancelingOrder.id, status: "Cancelled" });
+      setCancelModalStep(null);
+      setCancelingOrder(null);
+    }
+  };
+
+  const handleSkipAndCancel = () => {
+    if (cancelingOrder)
+      mutation.mutate({ id: cancelingOrder.id, status: "Cancelled" });
+    setCancelModalStep(null);
+    setCancelingOrder(null);
+  };
+
+  const handleTransferSuccess = () => {
+    if (cancelingOrder)
+      mutation.mutate({ id: cancelingOrder.id, status: "Cancelled" });
+    setCancelModalStep(null);
+    setCancelingOrder(null);
+  };
+
   const handleViewOrder = (orderId: string) =>
     navigate(`/${userId}/orders/${orderId}`);
 
-  const columns: ColumnDef<Order>[] = [
-    {
-      key: "orderId",
-      header: "Order Id",
-      cell: (o) => <span className="font-medium">{o.orderId}</span>,
-    },
-    {
-      key: "product",
-      header: "Product",
-      cell: (o) => (
-        <div className="flex items-center gap-2.5">
-          <div
-            className={`w-9 h-9 rounded border flex items-center justify-center text-dash-caption font-bold ${o.product.color}`}
-          >
-            {o.product.initials}
-          </div>
-          <span className="leading-tight line-clamp-2 max-w-[160px]">
-            {o.product.name}
-          </span>
-        </div>
-      ),
-    },
-    { key: "date", header: "Date", cell: (o) => o.date },
-    { key: "price", header: "Price", cell: (o) => `$${o.price.toFixed(2)}` },
-    {
-      key: "payment",
-      header: "Payment",
-      cell: (o) => <PaymentBadge status={o.payment} />,
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (o) => <StatusBadge status={o.status} />,
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      headerClassName: "text-center",
-      className: "text-center",
-      cell: (o) => (
-        <RowActions
-          orderId={o.id}
-          status={o.status}
-          onView={() => handleViewOrder(o.id)}
-          onMarkShipped={() => handleMarkShipped(o.id)}
-          onMarkDelivered={() => handleMarkDelivered(o.id)}
-          onMarkCancelled={() => handleMarkCancelled(o.id)}
-        />
-      ),
-    },
-  ];
-
   return (
     <div className="space-y-5">
+      {/* Modals */}
       <ShippedConfirmationModal
         isOpen={shippedModalOpen}
         onClose={() => setShippedModalOpen(false)}
         onConfirm={confirmMarkShipped}
       />
+      <CancelConfirmModal
+        isOpen={cancelModalStep === "confirm"}
+        isPaid={cancelingOrder?.payment === "Paid"}
+        onClose={() => {
+          setCancelModalStep(null);
+          setCancelingOrder(null);
+        }}
+        onConfirm={handleCancelConfirm}
+      />
+      <RefundTransferModal
+        isOpen={cancelModalStep === "refund"}
+        order={cancelingOrder}
+        onSkipAndCancel={handleSkipAndCancel}
+        onTransferSuccess={handleTransferSuccess}
+      />
 
+      {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statsLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
@@ -574,6 +973,7 @@ export default function OrderManagement() {
         )}
       </div>
 
+      {/* Filter bar */}
       <div className="bg-white sm:rounded-xl shadow-sm overflow-hidden">
         <div className="flex items-center justify-between gap-3 sm:p-4 py-4 px-3 flex-wrap border-b border-gray-100">
           <TabBar
@@ -593,7 +993,7 @@ export default function OrderManagement() {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Search order report"
+                placeholder={isFood ? "Search orders" : "Search order report"}
                 className="pl-3 pr-9 py-2 text-dash-body bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
               />
               <Search
@@ -604,7 +1004,7 @@ export default function OrderManagement() {
             <FilterPopover
               values={filters}
               defaultValues={DEFAULT_FILTERS}
-              fields={ORDERS_FILTER_FIELDS}
+              fields={ordersFilterFields}
               onApply={(newFilters) => {
                 setFilters(newFilters);
                 setPage(1);
@@ -624,53 +1024,55 @@ export default function OrderManagement() {
             />
           </div>
         </div>
-
-        <DataTable
-          columns={columns}
-          data={paginated}
-          keyExtractor={(o) => o.id}
-          isLoading={ordersLoading}
-          emptyMessage="No orders found."
-          mobileCard={(order) => (
-            <MobileCard
-              title={order.product.name}
-              subtitle={order.orderId}
-              initials={{
-                text: order.product.initials,
-                className: order.product.color,
-              }}
-              action={
-                <RowActions
-                  orderId={order.id}
-                  status={order.status}
-                  onView={() => handleViewOrder(order.id)}
-                  onMarkShipped={() => handleMarkShipped(order.id)}
-                  onMarkDelivered={() => handleMarkDelivered(order.id)}
-                  onMarkCancelled={() => handleMarkCancelled(order.id)}
-                />
-              }
-              fields={[
-                { label: "Date", value: order.date },
-                { label: "Price", value: `$${order.price.toFixed(2)}` },
-                {
-                  label: "Payment",
-                  value: <PaymentBadge status={order.payment} />,
-                },
-                {
-                  label: "Status",
-                  value: <StatusBadge status={order.status} />,
-                },
-              ]}
-            />
-          )}
-        />
-
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-        />
       </div>
+
+      {/* Order cards */}
+      {ordersLoading ? (
+        <OrderSkeleton />
+      ) : paginated.length === 0 ? (
+        <div className="bg-white sm:rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+          <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Package size={24} className="text-orange-300" />
+          </div>
+          <p className="text-dash-heading font-bold text-gray-700">
+            No orders found
+          </p>
+          <p className="text-dash-body text-gray-400 mt-1">
+            Orders matching your filters will appear here
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {paginated.map((order) => (
+            <OrderCard
+              key={order.id}
+              order={order}
+              isFood={isFood}
+              mutating={mutation.isPending}
+              onView={() => handleViewOrder(order.id)}
+              onDirectAction={(status) =>
+                mutation.mutate({ id: order.id, status })
+              }
+              onShipClick={() => {
+                setPendingShippedOrderId(order.id);
+                setShippedModalOpen(true);
+              }}
+              onCancelClick={() => handleCancelClick(order)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!ordersLoading && paginated.length > 0 && (
+        <div className="bg-white sm:rounded-xl shadow-sm">
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
+        </div>
+      )}
     </div>
   );
 }

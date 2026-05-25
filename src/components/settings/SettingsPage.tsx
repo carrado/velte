@@ -32,6 +32,9 @@ import {
   RefreshCw,
   Shield,
   KeyRound,
+  ChefHat,
+  Store,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -39,6 +42,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUserStore } from "@/store/userStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { settingsApi } from "@/services/settings";
+import { useBusinessType, useIsFood } from "@/hooks/useBusinessType";
+import type { BusinessType } from "@/types/user";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
 import { WhatsAppProfileSection } from "./WhatsappProfile";
@@ -304,6 +309,7 @@ function BottomSaveButton({
 function AccountSettingsPanel() {
   const storeUser = useUserStore((s) => s.user);
   const queryClient = useQueryClient();
+  const currentBusinessType = useBusinessType();
 
   // ── Profile ──────────────────────────────────────────────────────────────────
   const { data: profileData } = useQuery({
@@ -381,6 +387,12 @@ function AccountSettingsPanel() {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.profile });
       toast.success("Profile updated");
     },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const businessTypeMutation = useMutation({
+    mutationFn: settingsApi.updateBusinessType,
+    onSuccess: () => toast.success("Business type updated"),
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -648,6 +660,86 @@ function AccountSettingsPanel() {
         />
       </SectionCard>
 
+      {/* Business Type */}
+      <SectionCard
+        icon={Store}
+        title="Business Type"
+        description="Tell us how your business operates"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {(
+            [
+              {
+                type: "retail" as BusinessType,
+                label: "Retail Store",
+                desc: "Sell physical products and track inventory",
+                icon: ShoppingCart,
+              },
+              {
+                type: "food" as BusinessType,
+                label: "Food Vendor",
+                desc: "Manage a menu, prep times, and food orders",
+                icon: ChefHat,
+              },
+            ] as const
+          ).map(({ type, label, desc, icon: Icon }) => {
+            const active = currentBusinessType === type;
+            return (
+              <button
+                key={type}
+                onClick={() => !active && businessTypeMutation.mutate(type)}
+                disabled={businessTypeMutation.isPending}
+                className={cn(
+                  "flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all cursor-pointer disabled:opacity-60",
+                  active
+                    ? "border-orange-500 bg-orange-50"
+                    : "border-gray-200 hover:border-orange-200 hover:bg-orange-50/40",
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5",
+                    active ? "bg-orange-500" : "bg-gray-100",
+                  )}
+                >
+                  <Icon
+                    size={17}
+                    className={active ? "text-white" : "text-gray-400"}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p
+                      className={cn(
+                        "text-dash-body font-semibold",
+                        active ? "text-orange-600" : "text-gray-800",
+                      )}
+                    >
+                      {label}
+                    </p>
+                    {active && (
+                      <span className="text-dash-micro bg-orange-500 text-white px-1.5 py-0.5 rounded-full leading-none">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-dash-secondary text-gray-500 mt-0.5 leading-relaxed">
+                    {desc}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-200 rounded-xl mt-4">
+          <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <p className="text-dash-secondary text-blue-700 leading-relaxed">
+            Changing your business type updates the order flow, status labels,
+            and AI responses for your customers.
+          </p>
+        </div>
+      </SectionCard>
+
       {/* Password */}
       <SectionCard
         icon={Lock}
@@ -835,12 +927,15 @@ function AccountSettingsPanel() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function OrderSettingsPanel() {
+  const isFood = useIsFood();
   const [settings, setSettings] = useState<OrderSettings>({
     minDeliveryDays: 1,
     maxDeliveryDays: 5,
     deliveryNote: "",
     allowSameDay: false,
   });
+  const [prepMins, setPrepMins] = useState(20);
+  const [autoAccept, setAutoAccept] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   const hasError = settings.minDeliveryDays >= settings.maxDeliveryDays;
@@ -877,221 +972,312 @@ function OrderSettingsPanel() {
 
   return (
     <div className="space-y-5">
-      <SectionCard
-        icon={Truck}
-        title="Delivery Time Settings"
-        description="Set the expected delivery window communicated to customers"
-      >
-        {/* Visual range display */}
-        <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 rounded-2xl p-4 mb-6">
-          <p className="text-dash-secondary font-semibold text-orange-600 uppercase tracking-wide mb-3">
-            Delivery Window Preview
-          </p>
-          <div className="flex items-center gap-3">
-            <div className="text-center">
-              <div className="w-14 h-14 rounded-xl bg-white border-2 border-orange-300 flex items-center justify-center shadow-sm">
-                <span className="text-dash-display font-black text-orange-500">
-                  {settings.allowSameDay && settings.minDeliveryDays === 0
-                    ? 0
-                    : settings.minDeliveryDays}
-                </span>
-              </div>
-              <p className="text-dash-micro text-orange-500 font-bold mt-1.5 uppercase tracking-wide">
-                Min
-              </p>
-            </div>
-
-            <div className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full relative h-2 bg-orange-100 rounded-full overflow-hidden">
-                <div className="absolute left-0 top-0 h-full bg-orange-400 rounded-full w-full" />
-              </div>
-              <p className="text-dash-micro text-orange-400 font-medium">to</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-14 h-14 rounded-xl bg-orange-500 flex items-center justify-center shadow-sm">
-                <span className="text-dash-display font-black text-white">
-                  {settings.maxDeliveryDays}
-                </span>
-              </div>
-              <p className="text-dash-micro text-orange-500 font-bold mt-1.5 uppercase tracking-wide">
-                Max
-              </p>
-            </div>
-          </div>
-
-          <p className="text-dash-secondary text-orange-700 text-center mt-3 font-medium">
-            Customers will be told:{" "}
-            <span className="font-black">
-              {settings.allowSameDay && settings.minDeliveryDays === 0
-                ? "0"
-                : settings.minDeliveryDays}
-              –{settings.maxDeliveryDays} business day
-              {settings.maxDeliveryDays !== 1 ? "s" : ""}
-            </span>
-          </p>
-        </div>
-
-        {/* Same-day toggle */}
-        <div className="flex items-center justify-between py-3.5 border-b border-gray-100 mb-5">
-          <div>
-            <p className="text-dash-body font-semibold text-gray-900">
-              Allow Same-Day Delivery
+      {isFood ? (
+        <SectionCard
+          icon={Timer}
+          title="Order Preparation Settings"
+          description="Set the expected prep time communicated to customers"
+        >
+          <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 rounded-2xl p-4 mb-6">
+            <p className="text-dash-secondary font-semibold text-orange-600 uppercase tracking-wide mb-3">
+              Prep Time Preview
             </p>
-            <p className="text-dash-secondary text-gray-500 mt-0.5">
-              Sets minimum delivery time to 0 days (today)
+            <div className="flex items-center justify-center gap-4">
+              <div className="text-center">
+                <div className="w-20 h-20 rounded-2xl bg-orange-500 flex items-center justify-center shadow-sm">
+                  <span className="text-3xl font-black text-white">
+                    {prepMins}
+                  </span>
+                </div>
+                <p className="text-dash-secondary text-orange-600 font-bold mt-2 uppercase tracking-wide">
+                  minutes
+                </p>
+              </div>
+            </div>
+            <p className="text-dash-secondary text-orange-700 text-center mt-3 font-medium">
+              Customers will be told:{" "}
+              <span className="font-black">
+                Ready in ~{prepMins} min{prepMins !== 1 ? "s" : ""}
+              </span>
             </p>
           </div>
-          <Toggle
-            enabled={settings.allowSameDay}
-            onChange={() =>
-              setSettings((p) => ({
-                ...p,
-                allowSameDay: !p.allowSameDay,
-                minDeliveryDays: !p.allowSameDay ? 0 : 1,
-              }))
-            }
-          />
-        </div>
 
-        {/* Day pickers */}
-        <div className="grid sm:grid-cols-2 grid-cols-1 gap-5 mb-5">
-          {/* Min */}
-          <div>
+          <div className="mb-5">
             <label className="text-dash-body font-semibold text-gray-900 block mb-1">
-              Minimum Delivery Days
+              Estimated Preparation Time
             </label>
             <p className="text-dash-secondary text-gray-500 mb-3">
-              Earliest a customer can expect their order
+              Average time to prepare an order from receipt to ready
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 max-w-[200px]">
               <button
-                onClick={() => nudge("minDeliveryDays", -1)}
+                onClick={() => setPrepMins((p) => Math.max(5, p - 5))}
                 className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
               >
                 −
               </button>
               <input
                 type="number"
-                min={settings.allowSameDay ? 0 : 1}
-                max={settings.maxDeliveryDays - 1}
-                value={settings.minDeliveryDays}
+                min={5}
+                step={5}
+                value={prepMins}
                 onChange={(e) =>
-                  setSettings((p) => ({
-                    ...p,
-                    minDeliveryDays: Math.max(
-                      settings.allowSameDay ? 0 : 1,
-                      Math.min(
-                        parseInt(e.target.value) || 0,
-                        p.maxDeliveryDays - 1,
-                      ),
-                    ),
-                  }))
+                  setPrepMins(Math.max(5, parseInt(e.target.value) || 5))
                 }
                 className="flex-1 text-center text-dash-body font-black text-gray-800 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
               />
               <button
-                onClick={() => nudge("minDeliveryDays", 1)}
+                onClick={() => setPrepMins((p) => p + 5)}
                 className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
               >
                 +
               </button>
             </div>
-            <p className="text-dash-caption text-gray-400 mt-1.5 text-center">
-              {settings.minDeliveryDays === 0
-                ? "Same day"
-                : `${settings.minDeliveryDays} day${settings.minDeliveryDays !== 1 ? "s" : ""}`}
-            </p>
           </div>
 
-          {/* Max */}
-          <div>
-            <label className="text-dash-body font-semibold text-gray-900 block mb-1">
-              Maximum Delivery Days
-            </label>
-            <p className="text-dash-secondary text-gray-500 mb-3">
-              Latest a customer should receive their order
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => nudge("maxDeliveryDays", -1)}
-                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
-              >
-                −
-              </button>
-              <input
-                type="number"
-                min={settings.minDeliveryDays + 1}
-                value={settings.maxDeliveryDays}
-                onChange={(e) =>
-                  setSettings((p) => ({
-                    ...p,
-                    maxDeliveryDays: Math.max(
-                      p.minDeliveryDays + 1,
-                      parseInt(e.target.value) || p.minDeliveryDays + 1,
-                    ),
-                  }))
-                }
-                className="flex-1 text-center text-dash-body font-black text-gray-800 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
-              />
-              <button
-                onClick={() => nudge("maxDeliveryDays", 1)}
-                className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
-              >
-                +
-              </button>
+          <div className="flex items-center justify-between py-3.5 border-b border-gray-100 mb-5">
+            <div>
+              <p className="text-dash-body font-semibold text-gray-900">
+                Auto-accept Orders
+              </p>
+              <p className="text-dash-secondary text-gray-500 mt-0.5">
+                Automatically accept incoming orders without manual confirmation
+              </p>
             </div>
-            <p className="text-dash-caption text-gray-400 mt-1.5 text-center">
-              {settings.maxDeliveryDays} day
-              {settings.maxDeliveryDays !== 1 ? "s" : ""}
-            </p>
-          </div>
-        </div>
-
-        {/* Validation warning */}
-        {hasError && (
-          <div className="flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl mb-4">
-            <AlertCircle
-              size={13}
-              className="text-red-500 flex-shrink-0 mt-0.5"
+            <Toggle
+              enabled={autoAccept}
+              onChange={() => setAutoAccept((p) => !p)}
             />
-            <p className="text-dash-secondary text-red-600 font-medium">
-              Maximum delivery days must be greater than minimum delivery days.
+          </div>
+
+          <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
+            <p className="text-dash-secondary text-blue-700 leading-relaxed">
+              The AI uses this prep time when customers ask how long their order
+              will take. Actual times may vary based on order complexity.
             </p>
           </div>
-        )}
+        </SectionCard>
+      ) : (
+        <SectionCard
+          icon={Truck}
+          title="Delivery Time Settings"
+          description="Set the expected delivery window communicated to customers"
+        >
+          {/* Visual range display */}
+          <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 rounded-2xl p-4 mb-6">
+            <p className="text-dash-secondary font-semibold text-orange-600 uppercase tracking-wide mb-3">
+              Delivery Window Preview
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-xl bg-white border-2 border-orange-300 flex items-center justify-center shadow-sm">
+                  <span className="text-dash-display font-black text-orange-500">
+                    {settings.allowSameDay && settings.minDeliveryDays === 0
+                      ? 0
+                      : settings.minDeliveryDays}
+                  </span>
+                </div>
+                <p className="text-dash-micro text-orange-500 font-bold mt-1.5 uppercase tracking-wide">
+                  Min
+                </p>
+              </div>
 
-        {/* Delivery note */}
-        <div className="mb-4">
-          <label className="text-dash-body font-semibold text-gray-900 block mb-1">
-            Delivery Note{" "}
-            <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <p className="text-dash-secondary text-gray-500 mb-2">
-            Additional context shown to customers, e.g. exclusions for weekends
-            or holidays.
-          </p>
-          <textarea
-            value={settings.deliveryNote}
-            onChange={(e) =>
-              setSettings((p) => ({ ...p, deliveryNote: e.target.value }))
-            }
-            rows={2}
-            placeholder="e.g. Delivery days exclude Sundays and public holidays."
-            className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
-          />
-        </div>
+              <div className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full relative h-2 bg-orange-100 rounded-full overflow-hidden">
+                  <div className="absolute left-0 top-0 h-full bg-orange-400 rounded-full w-full" />
+                </div>
+                <p className="text-dash-micro text-orange-400 font-medium">
+                  to
+                </p>
+              </div>
 
-        {/* Info */}
-        <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-          <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
-          <p className="text-dash-secondary text-blue-700 leading-relaxed">
-            These estimates are communicated by the AI when customers ask about
-            shipping times. They don't automatically trigger any logistics
-            workflow.
-          </p>
-        </div>
-      </SectionCard>
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-xl bg-orange-500 flex items-center justify-center shadow-sm">
+                  <span className="text-dash-display font-black text-white">
+                    {settings.maxDeliveryDays}
+                  </span>
+                </div>
+                <p className="text-dash-micro text-orange-500 font-bold mt-1.5 uppercase tracking-wide">
+                  Max
+                </p>
+              </div>
+            </div>
+
+            <p className="text-dash-secondary text-orange-700 text-center mt-3 font-medium">
+              Customers will be told:{" "}
+              <span className="font-black">
+                {settings.allowSameDay && settings.minDeliveryDays === 0
+                  ? "0"
+                  : settings.minDeliveryDays}
+                –{settings.maxDeliveryDays} business day
+                {settings.maxDeliveryDays !== 1 ? "s" : ""}
+              </span>
+            </p>
+          </div>
+
+          {/* Same-day toggle */}
+          <div className="flex items-center justify-between py-3.5 border-b border-gray-100 mb-5">
+            <div>
+              <p className="text-dash-body font-semibold text-gray-900">
+                Allow Same-Day Delivery
+              </p>
+              <p className="text-dash-secondary text-gray-500 mt-0.5">
+                Sets minimum delivery time to 0 days (today)
+              </p>
+            </div>
+            <Toggle
+              enabled={settings.allowSameDay}
+              onChange={() =>
+                setSettings((p) => ({
+                  ...p,
+                  allowSameDay: !p.allowSameDay,
+                  minDeliveryDays: !p.allowSameDay ? 0 : 1,
+                }))
+              }
+            />
+          </div>
+
+          {/* Day pickers */}
+          <div className="grid sm:grid-cols-2 grid-cols-1 gap-5 mb-5">
+            {/* Min */}
+            <div>
+              <label className="text-dash-body font-semibold text-gray-900 block mb-1">
+                Minimum Delivery Days
+              </label>
+              <p className="text-dash-secondary text-gray-500 mb-3">
+                Earliest a customer can expect their order
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => nudge("minDeliveryDays", -1)}
+                  className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min={settings.allowSameDay ? 0 : 1}
+                  max={settings.maxDeliveryDays - 1}
+                  value={settings.minDeliveryDays}
+                  onChange={(e) =>
+                    setSettings((p) => ({
+                      ...p,
+                      minDeliveryDays: Math.max(
+                        settings.allowSameDay ? 0 : 1,
+                        Math.min(
+                          parseInt(e.target.value) || 0,
+                          p.maxDeliveryDays - 1,
+                        ),
+                      ),
+                    }))
+                  }
+                  className="flex-1 text-center text-dash-body font-black text-gray-800 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                />
+                <button
+                  onClick={() => nudge("minDeliveryDays", 1)}
+                  className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
+                >
+                  +
+                </button>
+              </div>
+              <p className="text-dash-caption text-gray-400 mt-1.5 text-center">
+                {settings.minDeliveryDays === 0
+                  ? "Same day"
+                  : `${settings.minDeliveryDays} day${settings.minDeliveryDays !== 1 ? "s" : ""}`}
+              </p>
+            </div>
+
+            {/* Max */}
+            <div>
+              <label className="text-dash-body font-semibold text-gray-900 block mb-1">
+                Maximum Delivery Days
+              </label>
+              <p className="text-dash-secondary text-gray-500 mb-3">
+                Latest a customer should receive their order
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => nudge("maxDeliveryDays", -1)}
+                  className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min={settings.minDeliveryDays + 1}
+                  value={settings.maxDeliveryDays}
+                  onChange={(e) =>
+                    setSettings((p) => ({
+                      ...p,
+                      maxDeliveryDays: Math.max(
+                        p.minDeliveryDays + 1,
+                        parseInt(e.target.value) || p.minDeliveryDays + 1,
+                      ),
+                    }))
+                  }
+                  className="flex-1 text-center text-dash-body font-black text-gray-800 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                />
+                <button
+                  onClick={() => nudge("maxDeliveryDays", 1)}
+                  className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-title font-bold flex-shrink-0"
+                >
+                  +
+                </button>
+              </div>
+              <p className="text-dash-caption text-gray-400 mt-1.5 text-center">
+                {settings.maxDeliveryDays} day
+                {settings.maxDeliveryDays !== 1 ? "s" : ""}
+              </p>
+            </div>
+          </div>
+
+          {/* Validation warning */}
+          {hasError && (
+            <div className="flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl mb-4">
+              <AlertCircle
+                size={13}
+                className="text-red-500 flex-shrink-0 mt-0.5"
+              />
+              <p className="text-dash-secondary text-red-600 font-medium">
+                Maximum delivery days must be greater than minimum delivery
+                days.
+              </p>
+            </div>
+          )}
+
+          {/* Delivery note */}
+          <div className="mb-4">
+            <label className="text-dash-body font-semibold text-gray-900 block mb-1">
+              Delivery Note{" "}
+              <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <p className="text-dash-secondary text-gray-500 mb-2">
+              Additional context shown to customers, e.g. exclusions for
+              weekends or holidays.
+            </p>
+            <textarea
+              value={settings.deliveryNote}
+              onChange={(e) =>
+                setSettings((p) => ({ ...p, deliveryNote: e.target.value }))
+              }
+              rows={2}
+              placeholder="e.g. Delivery days exclude Sundays and public holidays."
+              className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+            />
+          </div>
+
+          {/* Info */}
+          <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
+            <p className="text-dash-secondary text-blue-700 leading-relaxed">
+              These estimates are communicated by the AI when customers ask
+              about shipping times. They don't automatically trigger any
+              logistics workflow.
+            </p>
+          </div>
+        </SectionCard>
+      )}
 
       <BottomSaveButton
         onClick={handleSave}

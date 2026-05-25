@@ -3,20 +3,32 @@
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, MoreHorizontal, Search, Pencil, Trash2, X } from "lucide-react";
+import {
+  Plus,
+  Search,
+  X,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Package,
+  ChefHat,
+  Star,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categoriesApi } from "@/services/products";
 import { queryKeys } from "@/lib/query-keys";
 import type {
   Category,
   ProductTab,
-  CategoryCardProps,
   CategoryProduct,
   CategoryModalProps,
   RestockModalProps,
   PriceModalProps,
 } from "@/types/product";
 import type { FilterField } from "@/types/common";
+import { useIsFood } from "@/hooks/useBusinessType";
 import DeleteProductModal from "./DeleteProductModal";
 import ProductsTable from "./ProductsTable";
 import { Pagination } from "../Pagination";
@@ -25,6 +37,8 @@ import TabBar from "../TabBar";
 import FilterPopover from "../FilterPopover";
 import SortMenu from "../SortMenu";
 import { Input } from "../ui/input";
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const EMOJI_OPTIONS = [
   "🛒",
@@ -80,6 +94,8 @@ const PRODUCT_FILTER_FIELDS: FilterField[] = [
     ],
   },
 ];
+
+// ── Category modal (unchanged) ────────────────────────────────────────────────
 
 function CategoryModal({
   open,
@@ -237,6 +253,8 @@ function CategoryModal({
   );
 }
 
+// ── Restock modal (unchanged) ─────────────────────────────────────────────────
+
 function RestockModal({
   open,
   product,
@@ -268,7 +286,7 @@ function RestockModal({
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -309,6 +327,8 @@ function RestockModal({
   );
 }
 
+// ── Price modal (unchanged) ───────────────────────────────────────────────────
+
 function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
   const [price, setPrice] = useState("");
   useEffect(() => {
@@ -335,7 +355,7 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -347,7 +367,7 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
           </p>
           <div>
             <label className="block text-dash-body font-medium text-gray-700 mb-1">
-              New Price ($)
+              New Price (₦)
             </label>
             <input
               type="number"
@@ -370,97 +390,145 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
   );
 }
 
-function CategoryCard({
-  category,
-  selected,
-  onClick,
+// ── Category strip ────────────────────────────────────────────────────────────
+
+function CategoryStrip({
+  categories,
+  selectedId,
+  onSelect,
   onEdit,
   onDelete,
-}: CategoryCardProps) {
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
+  onAdd,
+  isFood,
+}: {
+  categories: Category[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  onEdit: (cat: Category) => void;
+  onDelete: (id: string) => void;
+  onAdd: () => void;
+  isFood: boolean;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
+    function handler(e: MouseEvent) {
       if (
-        popoverRef.current &&
-        !popoverRef.current.contains(e.target as Node)
+        openId &&
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
       ) {
-        setPopoverOpen(false);
+        setOpenId(null);
       }
     }
-    if (popoverOpen) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [popoverOpen]);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openId]);
 
   return (
     <div
-      className={cn(
-        "relative bg-white sm:rounded-lg shadow-sm p-3 flex items-center gap-3 cursor-pointer transition-all border-2",
-        selected
-          ? "border-[#4ea674] shadow-md"
-          : "border-transparent hover:border-gray-200",
-      )}
-      onClick={onClick}
+      ref={containerRef}
+      className="flex gap-2 overflow-x-auto pb-0.5"
+      style={{ scrollbarWidth: "none" }}
     >
-      <div
+      {/* All chip */}
+      <button
+        onClick={() => onSelect(null)}
         className={cn(
-          "w-16 h-16 rounded flex items-center justify-center text-dash-display flex-shrink-0 border border-gray-200",
-          category.bgColor,
+          "flex-shrink-0 h-9 px-4 rounded-xl text-dash-body font-semibold border transition-colors cursor-pointer",
+          selectedId === null
+            ? "bg-orange-500 text-white border-orange-500"
+            : "bg-white text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600",
         )}
       >
-        {category.emoji}
-      </div>
+        All {isFood ? "Dishes" : "Products"}
+      </button>
 
-      <p className="flex-1 min-w-0 text-dash-body font-medium text-black leading-tight">
-        {category.name}
-      </p>
-
-      <div
-        ref={popoverRef}
-        className="relative flex-shrink-0"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          onClick={() => setPopoverOpen((v) => !v)}
-          className="w-7 h-7 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
-        >
-          <MoreHorizontal size={16} />
-        </button>
-
-        {popoverOpen && (
-          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-20">
+      {/* Category chips */}
+      {categories.map((cat) => (
+        <div key={cat.id} className="relative flex-shrink-0">
+          <div
+            className={cn(
+              "flex items-center h-9 rounded-xl border transition-colors overflow-hidden",
+              selectedId === cat.id
+                ? "border-orange-400 bg-orange-50"
+                : "border-gray-200 bg-white hover:border-orange-200",
+            )}
+          >
             <button
-              onClick={() => {
-                setPopoverOpen(false);
-                onEdit();
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+              onClick={() => onSelect(selectedId === cat.id ? null : cat.id)}
+              className="flex items-center gap-1.5 pl-3 pr-2 h-full cursor-pointer"
             >
-              <Pencil size={13} className="text-gray-400" />
-              Edit
+              <span className="text-[15px] leading-none">{cat.emoji}</span>
+              <span
+                className={cn(
+                  "text-dash-body font-medium whitespace-nowrap",
+                  selectedId === cat.id ? "text-orange-600" : "text-gray-700",
+                )}
+              >
+                {cat.name}
+              </span>
             </button>
             <button
-              onClick={() => {
-                setPopoverOpen(false);
-                onDelete();
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenId(openId === cat.id ? null : cat.id);
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              className={cn(
+                "px-1.5 h-full flex items-center border-l transition-colors cursor-pointer",
+                selectedId === cat.id
+                  ? "border-orange-200 text-orange-300 hover:text-orange-500"
+                  : "border-gray-100 text-gray-300 hover:text-gray-500",
+              )}
             >
-              <Trash2 size={13} className="text-red-400" />
-              Delete
+              <MoreHorizontal size={13} />
             </button>
           </div>
-        )}
-      </div>
+
+          {openId === cat.id && (
+            <div className="absolute left-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-20">
+              <button
+                onClick={() => {
+                  setOpenId(null);
+                  onEdit(cat);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                <Pencil size={12} className="text-gray-400" /> Edit
+              </button>
+              <button
+                onClick={() => {
+                  setOpenId(null);
+                  onDelete(cat.id);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              >
+                <Trash2 size={12} className="text-red-400" /> Delete
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Add chip */}
+      <button
+        onClick={onAdd}
+        className="flex-shrink-0 h-9 px-3.5 rounded-xl border border-dashed border-gray-300 text-gray-400 hover:border-orange-300 hover:text-orange-500 flex items-center gap-1.5 text-dash-body transition-colors cursor-pointer"
+      >
+        <Plus size={13} /> Add
+      </button>
     </div>
   );
 }
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ProductsPage() {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const userId = pathname.split("/").filter(Boolean)[0];
+  const isFood = useIsFood();
 
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.products.categories,
@@ -470,6 +538,7 @@ export default function ProductsPage() {
     queryKey: queryKeys.products.list,
     queryFn: categoriesApi.getProducts,
   });
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
@@ -483,12 +552,10 @@ export default function ProductsPage() {
     open: boolean;
     product: CategoryProduct | null;
   }>({ open: false, product: null });
-
   const [priceModal, setPriceModal] = useState<{
     open: boolean;
     product: CategoryProduct | null;
   }>({ open: false, product: null });
-
   const [deleteModal, setDeleteModal] = useState<{
     open: boolean;
     product: CategoryProduct | null;
@@ -498,6 +565,8 @@ export default function ProductsPage() {
     DEFAULT_PRODUCT_FILTERS,
   );
   const [productSort, setProductSort] = useState<ProductSort>("newest");
+
+  // ── Filtering & sorting ──────────────────────────────────────────────────
 
   let filteredProducts = products.filter((p) => {
     if (selectedCategoryId && p.categoryId !== selectedCategoryId) return false;
@@ -538,16 +607,17 @@ export default function ProductsPage() {
     (p) => !selectedCategoryId || p.categoryId === selectedCategoryId,
   ).length;
 
+  // Quick stats
+  const inStockCount = products.filter((p) => !!p.inStock).length;
+  const outOfStockCount = products.filter((p) => !p.inStock).length;
+  const featuredCount = products.filter((p) => p.featured).length;
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
   }, [selectedCategoryId, activeTab, searchQuery]);
 
-  const handleCategoryClick = (id: string) => {
-    setSelectedCategoryId((prev) => (prev === id ? null : id));
-    setActiveTab("all");
-    setSearchQuery("");
-  };
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
   const handleAddCategory = (data: {
     name: string;
@@ -634,60 +704,145 @@ export default function ProductsPage() {
     );
   };
 
-  const tabs: { key: ProductTab; label: string }[] = [
-    { key: "all", label: "All Product" },
-    { key: "featured", label: "Featured Products" },
-    { key: "on-sale", label: "On Sale" },
-    { key: "out-of-stock", label: "Out of Stock" },
-  ];
-
   const { navigate } = useNavigation();
 
-  return (
-    <div className="w-full space-y-4 sm:px-0 lg:pb-0">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-dash-title font-bold tracking-wide text-[#023337]"></h1>
+  const tabs: { key: ProductTab; label: string }[] = isFood
+    ? [
+        { key: "all", label: "All Dishes" },
+        { key: "featured", label: "Featured" },
+        { key: "on-sale", label: "On Sale" },
+        { key: "out-of-stock", label: "Not Available" },
+      ]
+    : [
+        { key: "all", label: "All Products" },
+        { key: "featured", label: "Featured" },
+        { key: "on-sale", label: "On Sale" },
+        { key: "out-of-stock", label: "Out of Stock" },
+      ];
 
-        <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto px-5 sm:items-center">
+  const stats = [
+    {
+      label: isFood ? "Total Dishes" : "Total Products",
+      value: products.length,
+      icon: isFood ? ChefHat : Package,
+      color: "text-blue-500",
+      bg: "bg-blue-50",
+    },
+    {
+      label: isFood ? "Available" : "In Stock",
+      value: inStockCount,
+      icon: CheckCircle2,
+      color: "text-green-500",
+      bg: "bg-green-50",
+    },
+    {
+      label: isFood ? "Not Available" : "Out of Stock",
+      value: outOfStockCount,
+      icon: AlertCircle,
+      color: "text-red-500",
+      bg: "bg-red-50",
+    },
+    {
+      label: "Featured",
+      value: featuredCount,
+      icon: Star,
+      color: "text-amber-500",
+      bg: "bg-amber-50",
+    },
+  ];
+
+  return (
+    <div className="w-full space-y-5">
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-dash-title font-black text-[#023337]">
+            {isFood ? "My Menu" : "My Products"}
+          </h2>
+          <p className="text-dash-body text-gray-400 mt-0.5">
+            {isFood
+              ? "Manage your dishes, drinks and menu items"
+              : "Manage and track your product catalogue"}
+          </p>
+        </div>
+        <div className="flex gap-2">
           <button
             onClick={() => navigate(`/${userId}/products/add`)}
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 text-dash-body font-bold text-white transition-colors hover:bg-orange-600 sm:w-auto"
+            className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
           >
-            <Plus size={18} />
-            <span className="truncate">Add Product</span>
+            <Plus size={16} />
+            {isFood ? "Add Dish" : "Add Product"}
           </button>
-
           <button
             onClick={() => {
               setEditingCategory(null);
               setModalOpen(true);
             }}
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-dash-body font-bold text-[#023337] transition-colors hover:bg-gray-50 sm:w-auto"
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
           >
-            <Plus size={16} className="text-orange-500" />
-            <span className="truncate">Add Categories</span>
+            <Plus size={15} className="text-orange-500" />
+            Category
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
-        {categories.map((cat) => (
-          <CategoryCard
-            key={cat.id}
-            category={cat}
-            selected={selectedCategoryId === cat.id}
-            onClick={() => handleCategoryClick(cat.id)}
-            onEdit={() => {
-              setEditingCategory(cat);
-              setModalOpen(true);
-            }}
-            onDelete={() => handleDeleteCategory(cat.id)}
-          />
+      {/* ── Stats strip ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className="bg-white sm:rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-3"
+          >
+            <div
+              className={cn(
+                "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
+                stat.bg,
+              )}
+            >
+              <stat.icon size={16} className={stat.color} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[1.4rem] font-black leading-none text-[#023337]">
+                {stat.value}
+              </p>
+              <p className="text-dash-caption text-gray-400 mt-0.5 truncate">
+                {stat.label}
+              </p>
+            </div>
+          </div>
         ))}
       </div>
 
-      <div className="overflow-hidden sm:rounded-lg bg-white shadow-sm">
-        <div className="flex flex-col gap-3 px-3 pb-4 pt-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between border-b border-gray-100">
+      {/* ── Category strip ───────────────────────────────────────────────── */}
+      <div className="bg-white sm:rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+        <p className="text-dash-caption font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          {isFood ? "Menu Sections" : "Categories"}
+        </p>
+        <CategoryStrip
+          categories={categories}
+          selectedId={selectedCategoryId}
+          onSelect={(id) => {
+            setSelectedCategoryId(id);
+            setActiveTab("all");
+            setSearchQuery("");
+          }}
+          onEdit={(cat) => {
+            setEditingCategory(cat);
+            setModalOpen(true);
+          }}
+          onDelete={handleDeleteCategory}
+          onAdd={() => {
+            setEditingCategory(null);
+            setModalOpen(true);
+          }}
+          isFood={isFood}
+        />
+      </div>
+
+      {/* ── Products panel ───────────────────────────────────────────────── */}
+      <div className="bg-white sm:rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* Toolbar */}
+        <div className="flex flex-col gap-3 px-4 pt-4 pb-3 sm:px-5 border-b border-gray-100 lg:flex-row lg:items-center lg:justify-between">
           <TabBar
             tabs={tabs.map((t) => ({
               ...t,
@@ -698,21 +853,20 @@ export default function ProductsPage() {
               setActiveTab(tab);
               setCurrentPage(1);
             }}
-            className="sm:grid-cols-4"
           />
 
-          <div className="flex w-full items-center gap-2 lg:w-auto">
-            <div className="relative flex-1">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 lg:w-52 lg:flex-none">
               <Input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search order report"
-                className="pl-3 pr-9 py-2 text-dash-body bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
+                placeholder={isFood ? "Search dishes…" : "Search products…"}
+                className="pl-3 pr-9 h-9 text-dash-body bg-gray-50 border border-gray-200 rounded-lg w-full"
               />
               <Search
-                size={16}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6a717f]"
+                size={14}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400"
               />
             </div>
 
@@ -720,8 +874,8 @@ export default function ProductsPage() {
               values={productFilters}
               defaultValues={DEFAULT_PRODUCT_FILTERS}
               fields={PRODUCT_FILTER_FIELDS}
-              onApply={(newFilters) => {
-                setProductFilters(newFilters);
+              onApply={(f) => {
+                setProductFilters(f);
                 setCurrentPage(1);
               }}
               onReset={() => {
@@ -732,8 +886,8 @@ export default function ProductsPage() {
 
             <SortMenu
               currentSort={productSort}
-              onSort={(option) => {
-                setProductSort(option);
+              onSort={(o) => {
+                setProductSort(o);
                 setCurrentPage(1);
               }}
               options={PRODUCT_SORT_OPTIONS}
@@ -741,21 +895,15 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        <div className="w-full overflow-x-auto">
-          <ProductsTable
-            products={paginatedProducts}
-            rowOffset={startIndex}
-            onRestock={(product: CategoryProduct) =>
-              setRestockModal({ open: true, product })
-            }
-            onChangePrice={(product: CategoryProduct) =>
-              setPriceModal({ open: true, product })
-            }
-            onDelete={(product: CategoryProduct) =>
-              setDeleteModal({ open: true, product })
-            }
-          />
-        </div>
+        {/* Product list */}
+        <ProductsTable
+          products={paginatedProducts}
+          rowOffset={startIndex}
+          onRestock={(p) => setRestockModal({ open: true, product: p })}
+          onChangePrice={(p) => setPriceModal({ open: true, product: p })}
+          onDelete={(p) => setDeleteModal({ open: true, product: p })}
+          isFood={isFood}
+        />
 
         <Pagination
           currentPage={currentPage}
@@ -764,6 +912,7 @@ export default function ProductsPage() {
         />
       </div>
 
+      {/* ── Modals (unchanged) ───────────────────────────────────────────── */}
       <CategoryModal
         open={modalOpen}
         editing={editingCategory}

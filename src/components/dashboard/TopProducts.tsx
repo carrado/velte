@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { fetchTopProducts, type TopProduct } from "@/services/dashboard";
+import { useIsFood } from "@/hooks/useBusinessType";
 
 function ProductImage() {
   return (
@@ -14,6 +15,7 @@ function ProductImage() {
 }
 
 export default function TopProducts() {
+  const isFood = useIsFood();
   const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery<TopProduct[]>({
@@ -29,10 +31,10 @@ export default function TopProducts() {
     <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 py-5 px-3">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-dash-heading font-semibold text-[#111827]">
-          Top Products
+          {isFood ? "Top Menu Items" : "Top Products"}
         </h3>
         <button className="text-dash-secondary text-orange-500 hover:underline cursor-pointer">
-          All product
+          {isFood ? "All menu items" : "All product"}
         </button>
       </div>
 
@@ -46,7 +48,7 @@ export default function TopProducts() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search products..."
+          placeholder={isFood ? "Search menu items..." : "Search products..."}
           className="w-full pl-8 pr-3 py-1.5 text-dash-secondary rounded-lg border border-[#E5E7EB] bg-gray-50 text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-1 focus:ring-orange-500"
         />
       </div>
@@ -75,7 +77,7 @@ export default function TopProducts() {
                     {product.name}
                   </p>
                   <p className="text-dash-caption text-[#9CA3AF]">
-                    Item: {product.sku}
+                    {isFood ? "Code" : "Item"}: {product.sku}
                   </p>
                 </div>
                 <span className="text-dash-secondary font-bold text-[#111827] flex-shrink-0">

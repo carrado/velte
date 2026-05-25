@@ -5,6 +5,7 @@ import {
   fetchBestSelling,
   type BestSellingProduct,
 } from "@/services/dashboard";
+import { useIsFood } from "@/hooks/useBusinessType";
 
 function ProductImage() {
   return (
@@ -14,13 +15,19 @@ function ProductImage() {
   );
 }
 
-function StatusBadge({ status }: { status: BestSellingProduct["status"] }) {
+function StatusBadge({
+  status,
+  isFood,
+}: {
+  status: BestSellingProduct["status"];
+  isFood: boolean;
+}) {
   if (status === "Stock") {
     return (
       <div className="flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] inline-block" />
         <span className="text-dash-caption text-[#22C55E] font-medium">
-          Stock
+          {isFood ? "Available" : "Stock"}
         </span>
       </div>
     );
@@ -29,13 +36,14 @@ function StatusBadge({ status }: { status: BestSellingProduct["status"] }) {
     <div className="flex items-center gap-1.5">
       <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] inline-block" />
       <span className="text-dash-caption text-[#EF4444] font-medium">
-        Stock out
+        {isFood ? "Unavailable" : "Stock out"}
       </span>
     </div>
   );
 }
 
 export default function BestSellingProducts() {
+  const isFood = useIsFood();
   const { data, isLoading } = useQuery<BestSellingProduct[]>({
     queryKey: ["bestSelling"],
     queryFn: fetchBestSelling,
@@ -45,7 +53,7 @@ export default function BestSellingProducts() {
     <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 py-5 px-3">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-dash-heading font-semibold text-[#111827]">
-          Best selling product
+          {isFood ? "Most Ordered Dishes" : "Best selling product"}
         </h3>
       </div>
 
@@ -54,13 +62,13 @@ export default function BestSellingProducts() {
           <thead>
             <tr className="bg-orange-50 rounded-lg">
               <th className="text-left py-2.5 px-3 text-orange-700 font-semibold rounded-l-lg">
-                PRODUCT
+                {isFood ? "MENU ITEM" : "PRODUCT"}
               </th>
               <th className="text-left py-2.5 px-3 text-orange-700 font-semibold">
-                TOTAL ORDER
+                TOTAL ORDERS
               </th>
               <th className="text-left py-2.5 px-3 text-orange-700 font-semibold">
-                STATUS
+                {isFood ? "AVAILABILITY" : "STATUS"}
               </th>
               <th className="text-right py-2.5 px-3 text-orange-700 font-semibold rounded-r-lg">
                 PRICE
@@ -110,7 +118,7 @@ export default function BestSellingProducts() {
                       {product.totalOrder}
                     </td>
                     <td className="py-3 px-3">
-                      <StatusBadge status={product.status} />
+                      <StatusBadge status={product.status} isFood={isFood} />
                     </td>
                     <td className="py-3 px-3 text-right font-semibold text-[#111827]">
                       ${product.price}

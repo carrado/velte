@@ -73,3 +73,16 @@ export interface AddableProduct {
   price: number;
   image: string;
 }
+
+export interface FoodDashboardStats {
+  avgPrepMins: { value: number; change: number };
+  ordersToday: { value: number; growth: number };
+  ordersInPrep: { value: number };
+  completionRate: { percentage: number };
+}
+
+export interface PopularByHourPoint {
+  hour: string;
+  count: number;
+  label?: string;
+}

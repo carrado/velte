@@ -1,6 +1,18 @@
 import type { ReactNode } from "react";
 
-export type OrderStatus = "Delivered" | "Pending" | "Shipped" | "Cancelled";
+export type RetailOrderStatus =
+  | "Delivered"
+  | "Pending"
+  | "Shipped"
+  | "Cancelled";
+export type FoodOrderStatus =
+  | "Pending"
+  | "Preparing"
+  | "Ready"
+  | "OnTheWay"
+  | "Delivered"
+  | "Cancelled";
+export type OrderStatus = RetailOrderStatus | FoodOrderStatus;
 export type PaymentStatus = "Paid" | "Unpaid";
 export type OrderFilter = "all" | "completed" | "pending" | "cancelled";
 

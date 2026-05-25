@@ -9,6 +9,7 @@ import BottomNav from "@/components/BottomNav";
 import { NavigationProgressProvider } from "@/components/NavigationProgressContext";
 import OnboardingTour from "@/components/OnboardingTour";
 import TrialGate from "@/components/TrialGate";
+import AppInitOverlay from "@/components/AppInitOverlay";
 
 const PushNotificationManager = dynamic(
   () => import("@/components/PushNotificationManager"),
@@ -21,6 +22,7 @@ import { transactionService } from "@/services/transactions";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useNotificationSeeder } from "@/hooks/useNotificationSeeder";
 import { useUserStore } from "@/store/userStore";
+import { useIsFood } from "@/hooks/useBusinessType";
 
 const PATH_TITLES: Record<string, string> = {
   dashboard: "Dashboard",
@@ -39,12 +41,13 @@ function getTitle(pathname: string): string {
   const segments = pathname.split("/").filter(Boolean);
   // segments[0] is the [id] param; everything after is the sub-path
   const subPath = segments.slice(1).join("/");
-  return (
-    PATH_TITLES[subPath] ??
-    (segments.at(-1)
-      ? segments.at(-1)!.charAt(0).toUpperCase() + segments.at(-1)!.slice(1)
-      : "")
-  );
+  if (PATH_TITLES[subPath]) return PATH_TITLES[subPath];
+  // Handle dynamic sub-paths: /products/[id]/edit → "Edit Product"
+  if (segments.at(-1) === "edit" && segments.at(-3) === "products")
+    return "Edit Product";
+  return segments.at(-1)
+    ? segments.at(-1)!.charAt(0).toUpperCase() + segments.at(-1)!.slice(1)
+    : "";
 }
 
 export default function DashboardRootLayout({
@@ -53,7 +56,11 @@ export default function DashboardRootLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const isFood = useIsFood();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [meStatus, setMeStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
   const mainRef = useRef<HTMLElement>(null);
 
   const userId = pathname.split("/")[1];
@@ -70,18 +77,18 @@ export default function DashboardRootLayout({
     async function init() {
       const store = useOnboardingStore.getState();
 
-      // Fast path: if the persisted store already has the user, skip the getMe()
-      // round-trip — the onboarding field is kept in sync by updateOnboarding().
-      // Only fetch from the server on first load (no persisted user).
       let user = useUserStore.getState().user;
-      console.log(useUserStore.getState());
       if (!user) {
         try {
           user = await usersApi.getMe();
+          setMeStatus("ready");
         } catch {
+          setMeStatus("error");
           store.markInitialized();
           return;
         }
+      } else {
+        setMeStatus("ready");
       }
 
       if (!user?.onboarding) {
@@ -107,12 +114,14 @@ export default function DashboardRootLayout({
     }
 
     init().catch(() => {
+      setMeStatus("error");
       useOnboardingStore.getState().markInitialized();
     });
   }, []);
 
   return (
     <NavigationProgressProvider>
+      {meStatus !== "ready" && <AppInitOverlay status={meStatus} />}
       <div className="flex flex-col h-screen bg-[#F1F5F9] overflow-hidden">
         <TrialGate />
         <div className="flex flex-1 min-h-0">
@@ -124,7 +133,16 @@ export default function DashboardRootLayout({
           >
             <div className="py-4 md:p-6 space-y-6 text-dash-body antialiased">
               <Header
-                title={getTitle(pathname)}
+                title={(() => {
+                  const t = getTitle(pathname);
+                  if (!isFood) return t;
+                  const foodMap: Record<string, string> = {
+                    "Product List": "My Menu",
+                    "Add Products": "Add Dish",
+                    "Edit Product": "Edit Dish",
+                  };
+                  return foodMap[t] ?? t;
+                })()}
                 onMenuClick={() => setSidebarOpen(true)}
               />
               <PushNotificationManager />

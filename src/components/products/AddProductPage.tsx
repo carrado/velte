@@ -2,6 +2,11 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
+import { useNavigation } from "@/components/NavigationProgressContext";
+import { queryKeys } from "@/lib/query-keys";
+import { categoriesApi } from "@/services/products";
 import {
   Save,
   ChevronDown,
@@ -13,9 +18,28 @@ import {
   Trash2,
   Video,
   Plus,
+  ChevronUp,
+  Upload,
+  FileSpreadsheet,
+  Download,
+  Package,
+  ChefHat,
+  Tag,
+  Layers,
+  Clock,
+  BarChart3,
+  AlertCircle,
+  CheckCircle2,
+  ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { AddProductTaxOption } from "@/types/product";
+import type {
+  AddProductTaxOption,
+  DayOfWeek,
+  ProductModifier,
+  ModifierOption,
+} from "@/types/product";
+import { useIsFood } from "@/hooks/useBusinessType";
 import { Input } from "../ui/input";
 import {
   Select,
@@ -24,9 +48,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
 type TaxType = "percentage" | "fixed";
 type MediaType = "image" | "video";
+type ImportTab = "file" | "crm";
 
 interface ProductAttribute {
   id: string;
@@ -34,10 +60,868 @@ interface ProductAttribute {
   value: string;
 }
 
-export default function AddProductPage() {
-  // Basic Details
+interface ImportedRow {
+  [key: string]: string;
+}
+
+// ── CSV utilities ─────────────────────────────────────────────────────────────
+
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') {
+      inQuotes = !inQuotes;
+    } else if (line[i] === "," && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += line[i];
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function parseCSV(text: string): ImportedRow[] {
+  const lines = text.split("\n").filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCSVLine(lines[0]);
+  return lines.slice(1).map((line) => {
+    const values = parseCSVLine(line);
+    const row: ImportedRow = {};
+    headers.forEach((h, i) => {
+      row[h] = values[i] ?? "";
+    });
+    return row;
+  });
+}
+
+function downloadTemplate(isFood: boolean) {
+  const retailHeaders = [
+    "Name",
+    "Description",
+    "Price",
+    "Discounted Price",
+    "Category",
+    "Tags",
+    "Stock Quantity",
+    "SKU",
+    "Manufacturing Date",
+    "Expiration Date",
+  ];
+  const retailExample = [
+    '"Wireless Headphones"',
+    '"Premium wireless audio with noise cancellation"',
+    "15000",
+    "12000",
+    "Electronics",
+    '"bluetooth,audio,headphones"',
+    "50",
+    "WH-001",
+    "2024-01-01",
+    "2026-12-31",
+  ];
+
+  const foodHeaders = [
+    "Name",
+    "Description",
+    "Price",
+    "Category",
+    "Prep Time (mins)",
+    "Vegetarian",
+    "Spicy",
+    "Halal",
+  ];
+  const foodExamples = [
+    [
+      '"Jollof Rice"',
+      '"Smoky party jollof rice served with your choice of protein"',
+      "2500",
+      '"Rice Dishes"',
+      "20",
+      "no",
+      "no",
+      "no",
+    ],
+    [
+      '"Egusi Soup"',
+      '"Rich egusi soup cooked with assorted meat and stockfish"',
+      "3500",
+      '"Soups & Stews"',
+      "35",
+      "no",
+      "no",
+      "yes",
+    ],
+    [
+      '"Pounded Yam"',
+      '"Smooth pounded yam — pairs with any soup"',
+      "500",
+      '"Swallows"',
+      "10",
+      "yes",
+      "no",
+      "yes",
+    ],
+    [
+      '"Suya (Full Stick)"',
+      '"Spiced beef suya grilled over open flame"',
+      "1500",
+      '"Grilled & BBQ"',
+      "15",
+      "no",
+      "yes",
+      "yes",
+    ],
+    [
+      '"Chin Chin (Pack)"',
+      '"Crunchy homemade chin chin — sweet or plain"',
+      "800",
+      '"Snacks & Street"',
+      "0",
+      "yes",
+      "no",
+      "yes",
+    ],
+  ];
+
+  const headers = isFood ? foodHeaders : retailHeaders;
+  const rows = isFood ? foodExamples : [retailExample];
+  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = isFood ? "menu_items_template.csv" : "products_template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Nigerian food add-on templates ───────────────────────────────────────────
+
+interface NigerianTemplate {
+  id: string;
+  name: string;
+  required: boolean;
+  multiSelect: boolean;
+  options: Array<{ name: string; additionalPrice: number }>;
+}
+
+const NIGERIAN_TEMPLATES: NigerianTemplate[] = [
+  {
+    id: "protein",
+    name: "Protein Choice",
+    required: true,
+    multiSelect: false,
+    options: [
+      { name: "Chicken", additionalPrice: 0 },
+      { name: "Beef", additionalPrice: 0 },
+      { name: "Fish", additionalPrice: 0 },
+      { name: "Goat Meat", additionalPrice: 0 },
+      { name: "Turkey", additionalPrice: 0 },
+      { name: "Ponmo", additionalPrice: 0 },
+      { name: "Gizzard", additionalPrice: 0 },
+      { name: "Assorted", additionalPrice: 0 },
+    ],
+  },
+  {
+    id: "portion",
+    name: "Portion Size",
+    required: true,
+    multiSelect: false,
+    options: [
+      { name: "Small", additionalPrice: 0 },
+      { name: "Medium", additionalPrice: 0 },
+      { name: "Large", additionalPrice: 0 },
+      { name: "Party Size", additionalPrice: 0 },
+    ],
+  },
+  {
+    id: "sides",
+    name: "Add a Side",
+    required: false,
+    multiSelect: true,
+    options: [
+      { name: "Fried Plantain", additionalPrice: 0 },
+      { name: "Coleslaw", additionalPrice: 0 },
+      { name: "Moi Moi", additionalPrice: 0 },
+      { name: "Garden Egg Salad", additionalPrice: 0 },
+      { name: "Extra Sauce / Stew", additionalPrice: 0 },
+    ],
+  },
+];
+
+// ── CRM platform config ───────────────────────────────────────────────────────
+
+const RETAIL_PLATFORMS = [
+  {
+    id: "shopify",
+    name: "Shopify",
+    desc: "Import your Shopify catalogue",
+    color: "bg-green-500",
+    initial: "S",
+  },
+  {
+    id: "woocommerce",
+    name: "WooCommerce",
+    desc: "Sync from your WooCommerce store",
+    color: "bg-purple-600",
+    initial: "W",
+  },
+  {
+    id: "wix",
+    name: "Wix Commerce",
+    desc: "Connect your Wix online store",
+    color: "bg-black",
+    initial: "W",
+  },
+  {
+    id: "squarespace",
+    name: "Squarespace",
+    desc: "Import from Squarespace Commerce",
+    color: "bg-gray-800",
+    initial: "SQ",
+  },
+  {
+    id: "etsy",
+    name: "Etsy",
+    desc: "Sync your Etsy product listings",
+    color: "bg-orange-500",
+    initial: "E",
+  },
+  {
+    id: "gsheets",
+    name: "Google Sheets",
+    desc: "Import directly from Google Sheets",
+    color: "bg-emerald-500",
+    initial: "GS",
+  },
+];
+
+const FOOD_PLATFORMS = [
+  {
+    id: "chowdeck",
+    name: "Chowdeck",
+    desc: "Import your Chowdeck restaurant menu",
+    color: "bg-orange-500",
+    initial: "CD",
+  },
+  {
+    id: "glovo",
+    name: "Glovo",
+    desc: "Sync your Glovo restaurant menu",
+    color: "bg-yellow-500",
+    initial: "G",
+  },
+  {
+    id: "bolt",
+    name: "Bolt Food",
+    desc: "Import from your Bolt Food account",
+    color: "bg-green-600",
+    initial: "BF",
+  },
+  {
+    id: "ordernow",
+    name: "OrderNow.ng",
+    desc: "Sync menu from OrderNow Nigeria",
+    color: "bg-blue-600",
+    initial: "ON",
+  },
+  {
+    id: "gsheets",
+    name: "Google Sheets",
+    desc: "Import directly from Google Sheets",
+    color: "bg-emerald-500",
+    initial: "GS",
+  },
+  {
+    id: "jumia",
+    name: "Jumia Food",
+    desc: "Import your saved Jumia Food menu export",
+    color: "bg-red-500",
+    initial: "JF",
+  },
+];
+
+// ── Nigerian food constants ───────────────────────────────────────────────────
+
+const NIGERIAN_FOOD_CATEGORIES = [
+  { id: "rice", label: "Rice Dishes", emoji: "🍚" },
+  { id: "soups", label: "Soups & Stews", emoji: "🍲" },
+  { id: "swallow", label: "Swallows", emoji: "🫙" },
+  { id: "grilled", label: "Grilled & BBQ", emoji: "🔥" },
+  { id: "protein", label: "Proteins", emoji: "🍗" },
+  { id: "snacks", label: "Snacks & Street", emoji: "🥘" },
+  { id: "drinks", label: "Drinks", emoji: "🥤" },
+  { id: "breakfast", label: "Breakfast", emoji: "🌅" },
+  { id: "desserts", label: "Desserts & Sweets", emoji: "🍨" },
+  { id: "party", label: "Party Packs", emoji: "🎉" },
+];
+
+const POPULAR_FOOD_TAGS = [
+  "popular",
+  "spicy",
+  "local",
+  "continental",
+  "quick meal",
+  "family size",
+  "party",
+  "healthy",
+  "street food",
+  "no pepper",
+  "with protein",
+  "soup base",
+  "light",
+  "vegan",
+];
+
+// ── Shared UI helpers ─────────────────────────────────────────────────────────
+
+function FormSection({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex items-center gap-2.5 px-5 py-4 border-b border-gray-100">
+        <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
+          <Icon size={13} className="text-orange-500" />
+        </div>
+        <h3 className="text-dash-heading font-bold text-[#023337]">{title}</h3>
+      </div>
+      <div className="px-5 py-5 space-y-5">{children}</div>
+    </div>
+  );
+}
+
+function FieldLabel({
+  children,
+  optional,
+}: {
+  children: React.ReactNode;
+  optional?: boolean;
+}) {
+  return (
+    <label className="block text-dash-body font-bold text-[#023337] mb-2">
+      {children}
+      {optional && (
+        <span className="font-normal text-gray-400 ml-1">(Optional)</span>
+      )}
+    </label>
+  );
+}
+
+function Toggle({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className={cn(
+        "relative w-11 h-6 rounded-full transition-colors focus:outline-none cursor-pointer flex-shrink-0",
+        value ? "bg-orange-500" : "bg-gray-200",
+      )}
+    >
+      <div
+        className={cn(
+          "absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform",
+          value ? "translate-x-6" : "translate-x-1",
+        )}
+      />
+    </button>
+  );
+}
+
+function CheckboxField({
+  checked,
+  onChange,
+  label,
+  color = "orange",
+  icon: Icon,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  color?: "orange" | "green" | "red";
+  icon?: React.ElementType;
+}) {
+  const bg = {
+    orange: "bg-orange-500",
+    green: "bg-green-500",
+    red: "bg-red-500",
+  }[color];
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex items-center gap-2.5 cursor-pointer"
+    >
+      <div
+        className={cn(
+          "w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors border",
+          checked ? `${bg} border-transparent` : "border-gray-300 bg-white",
+        )}
+      >
+        {checked && (
+          <svg
+            viewBox="0 0 12 9"
+            className="w-3 h-2.5 fill-none"
+            stroke="white"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M1 4l3.5 3.5L11 1" />
+          </svg>
+        )}
+      </div>
+      <span className="flex items-center gap-1.5 text-dash-body text-gray-600">
+        {Icon && (
+          <Icon
+            size={14}
+            className={
+              checked
+                ? color === "green"
+                  ? "text-green-500"
+                  : color === "red"
+                    ? "text-red-500"
+                    : "text-orange-500"
+                : "text-gray-400"
+            }
+          />
+        )}
+        {label}
+      </span>
+    </button>
+  );
+}
+
+// ── Import modal ──────────────────────────────────────────────────────────────
+
+function ImportProductsModal({
+  isOpen,
+  onClose,
+  isFood,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  isFood: boolean;
+}) {
+  const [tab, setTab] = useState<ImportTab>("file");
+  const [dragOver, setDragOver] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [previewRows, setPreviewRows] = useState<ImportedRow[]>([]);
+  const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const platforms = isFood ? FOOD_PLATFORMS : RETAIL_PLATFORMS;
+
+  const resetFile = () => {
+    setFileName(null);
+    setPreviewRows([]);
+    setPreviewHeaders([]);
+    setParseError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleFile = (file: File) => {
+    setParseError(null);
+    if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+      setParseError(
+        "Excel files (.xlsx/.xls) are not directly supported. Please save the file as CSV from Excel (File → Save As → CSV) and re-upload.",
+      );
+      return;
+    }
+    if (!file.name.endsWith(".csv")) {
+      setParseError("Please upload a CSV file (.csv).");
+      return;
+    }
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const rows = parseCSV(text);
+      if (rows.length === 0) {
+        setParseError(
+          "No valid data found. Make sure the file matches the template format.",
+        );
+        return;
+      }
+      setPreviewHeaders(Object.keys(rows[0]));
+      setPreviewRows(rows.slice(0, 5));
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  };
+
+  const handleImport = () => {
+    toast.success(
+      `${previewRows.length}+ ${isFood ? "menu items" : "products"} queued for import. Processing now…`,
+    );
+    onClose();
+    resetFile();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start h-full justify-center bg-black/50 backdrop-blur-sm px-4 pt-12 pb-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center flex-shrink-0">
+              <Upload size={18} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-dash-heading font-bold text-[#023337]">
+                Import {isFood ? "Menu Items" : "Products"}
+              </h3>
+              <p className="text-dash-caption text-gray-400">
+                Bulk-add from a spreadsheet or connect a platform
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              onClose();
+              resetFile();
+            }}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100">
+          {[
+            {
+              key: "file" as const,
+              label: "Upload File",
+              icon: FileSpreadsheet,
+            },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={cn(
+                "flex items-center gap-2 px-6 py-3.5 text-dash-body font-medium border-b-2 transition-colors cursor-pointer",
+                tab === key
+                  ? "border-orange-500 text-orange-500"
+                  : "border-transparent text-gray-500 hover:text-gray-700",
+              )}
+            >
+              <Icon size={15} />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* File import tab */}
+        {tab === "file" && (
+          <div className="px-6 py-5 space-y-4">
+            {/* Step 1 — template */}
+            <div className="flex items-center justify-between p-3.5 bg-blue-50 border border-blue-100 rounded-xl">
+              <div className="flex items-center gap-2.5">
+                <FileSpreadsheet
+                  size={16}
+                  className="text-blue-500 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-dash-body font-semibold text-blue-700">
+                    Step 1 — Download our template
+                  </p>
+                  <p className="text-dash-caption text-blue-500">
+                    {isFood
+                      ? "Fill in your dishes — we included 5 examples to guide you"
+                      : "Fill in the CSV template, then upload it below"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => downloadTemplate(isFood)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0"
+              >
+                <Download size={13} />
+                Template
+              </button>
+            </div>
+
+            {/* Step 2 — drop zone */}
+            {!previewRows.length && !parseError && (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  "border-2 border-dashed rounded-2xl h-40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors",
+                  dragOver
+                    ? "border-orange-400 bg-orange-50"
+                    : "border-gray-200 bg-gray-50 hover:border-orange-300 hover:bg-orange-50/50",
+                )}
+              >
+                <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200 flex items-center justify-center shadow-sm">
+                  <Upload size={20} className="text-gray-400" />
+                </div>
+                <p className="text-dash-body font-semibold text-gray-600">
+                  {isFood
+                    ? "Drop your menu CSV here, or "
+                    : "Drop your CSV here, or "}
+                  <span className="text-orange-500">browse</span>
+                </p>
+                <p className="text-dash-caption text-gray-400">
+                  {isFood
+                    ? "Step 2 — upload your filled template"
+                    : "Supports .csv files · Excel → save as CSV"}
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFile(f);
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Error */}
+            {parseError && (
+              <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-xl">
+                <AlertCircle
+                  size={15}
+                  className="text-red-500 mt-0.5 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-dash-body font-semibold text-red-700">
+                    Import failed
+                  </p>
+                  <p className="text-dash-caption text-red-600 mt-0.5">
+                    {parseError}
+                  </p>
+                  <button
+                    onClick={resetFile}
+                    className="text-dash-caption text-red-500 underline mt-1 cursor-pointer"
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Preview */}
+            {previewRows.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={15} className="text-green-500" />
+                    <p className="text-dash-body font-semibold text-gray-700">
+                      {fileName} — {previewRows.length}+{" "}
+                      {isFood ? "dishes" : "products"} ready to import
+                    </p>
+                  </div>
+                  <button
+                    onClick={resetFile}
+                    className="text-dash-caption text-gray-400 hover:text-red-500 cursor-pointer"
+                  >
+                    Change file
+                  </button>
+                </div>
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-dash-caption">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          {previewHeaders.map((h) => (
+                            <th
+                              key={h}
+                              className="text-left px-3 py-2.5 font-semibold text-gray-500 whitespace-nowrap"
+                            >
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {previewRows.map((row, i) => (
+                          <tr
+                            key={i}
+                            className="hover:bg-gray-50 transition-colors"
+                          >
+                            {previewHeaders.map((h) => (
+                              <td
+                                key={h}
+                                className="px-3 py-2.5 text-gray-700 max-w-[140px] truncate"
+                              >
+                                {row[h] || "—"}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-dash-caption text-gray-400 px-3 py-2 border-t border-gray-100">
+                    Showing first {previewRows.length} rows · check they look
+                    right before importing
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CRM platforms tab */}
+        {tab === "crm" && (
+          <div className="px-6 py-5 space-y-3">
+            {isFood ? (
+              <p className="text-dash-body text-gray-500">
+                Already selling on one of these platforms? Connect it to sync
+                your menu automatically — no manual entry needed.
+              </p>
+            ) : (
+              <p className="text-dash-body text-gray-500">
+                Connect your existing platform to sync products automatically.
+              </p>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {platforms.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 p-3.5 border border-gray-100 rounded-xl hover:border-orange-200 hover:bg-orange-50/30 transition-colors"
+                >
+                  <div
+                    className={cn(
+                      "w-10 h-10 rounded-xl flex items-center justify-center text-white text-dash-caption font-black flex-shrink-0",
+                      p.color,
+                    )}
+                  >
+                    {p.initial}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-dash-body font-semibold text-[#023337]">
+                      {p.name}
+                    </p>
+                    <p className="text-dash-caption text-gray-400 truncate">
+                      {p.desc}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      toast.info(
+                        `${p.name} integration coming soon — we're actively building it!`,
+                      )
+                    }
+                    className="px-3 py-1.5 text-dash-caption font-semibold text-orange-600 border border-orange-200 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors cursor-pointer flex-shrink-0"
+                  >
+                    Connect
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="text-dash-caption text-gray-400 text-center pt-1">
+              All integrations use OAuth — your credentials are never stored on
+              our servers.
+            </p>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+          <button
+            onClick={() => {
+              onClose();
+              resetFile();
+            }}
+            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          {tab === "file" && previewRows.length > 0 && (
+            <button
+              onClick={handleImport}
+              className="flex-1 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors cursor-pointer"
+            >
+              Import {previewRows.length}+ {isFood ? "Items" : "Products"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit skeleton ─────────────────────────────────────────────────────────────
+
+function EditProductSkeleton() {
+  return (
+    <div className="space-y-5 animate-pulse">
+      <div className="h-8 w-48 bg-gray-200 rounded-xl" />
+      <div className="flex flex-col lg:flex-row gap-5">
+        <div className="flex-1 space-y-5">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4"
+            >
+              <div className="h-5 w-32 bg-gray-200 rounded-lg" />
+              <div className="h-11 bg-gray-100 rounded-xl" />
+              <div className="h-24 bg-gray-100 rounded-xl" />
+            </div>
+          ))}
+        </div>
+        <div className="w-full lg:w-[440px] space-y-5">
+          {[1, 2].map((i) => (
+            <div
+              key={i}
+              className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4"
+            >
+              <div className="h-5 w-24 bg-gray-200 rounded-lg" />
+              <div className="h-56 bg-gray-100 rounded-xl" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export default function AddProductPage({ productId }: { productId?: string }) {
+  const isEditMode = !!productId;
+  const isFood = useIsFood();
+
+  // Basic
   const [productName, setProductName] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
 
   // Pricing
   const [price, setPrice] = useState("");
@@ -46,20 +930,14 @@ export default function AddProductPage() {
   const [taxIncluded, setTaxIncluded] = useState<AddProductTaxOption>("yes");
   const [taxType, setTaxType] = useState<TaxType>("percentage");
   const [taxValue, setTaxValue] = useState("");
-
-  // Negotiable
   const [isNegotiable, setIsNegotiable] = useState(false);
   const [minimumPrice, setMinimumPrice] = useState("");
 
-  // Dates
-  const [manufacturingDate, setManufacturingDate] = useState("");
-  const [expirationDate, setExpirationDate] = useState("");
-
-  // Inventory
+  // Inventory (retail)
   const [stockQuantity, setStockQuantity] = useState("");
   const [threshold, setThreshold] = useState("");
-
-  // Featured flag
+  const [manufacturingDate, setManufacturingDate] = useState("");
+  const [expirationDate, setExpirationDate] = useState("");
   const [isFeatured, setIsFeatured] = useState(false);
 
   // Media
@@ -68,8 +946,7 @@ export default function AddProductPage() {
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [videoFile, setVideoFile] = useState<string | null>(null);
 
-  // Categories & tags & attributes
-  const [selectedCategory, setSelectedCategory] = useState("");
+  // Tags + attributes
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
@@ -77,19 +954,103 @@ export default function AddProductPage() {
   const [attributeValueInput, setAttributeValueInput] = useState("");
   const [attributeError, setAttributeError] = useState("");
 
-  // UI state for currency popover
+  // Food-specific
+  const [estimatedPrepMins, setEstimatedPrepMins] = useState(20);
+  const [availabilityDays, setAvailabilityDays] = useState<DayOfWeek[]>([
+    "mon",
+    "tue",
+    "wed",
+    "thu",
+    "fri",
+    "sat",
+    "sun",
+  ]);
+  const [availabilityStartTime, setAvailabilityStartTime] = useState("08:00");
+  const [availabilityEndTime, setAvailabilityEndTime] = useState("22:00");
+  const [modifiers, setModifiers] = useState<ProductModifier[]>([]);
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [optionName, setOptionName] = useState("");
+  const [optionPrice, setOptionPrice] = useState("");
+
+  // Persisted modifier prices (carried across products)
+  const [savedTemplatePrices, setSavedTemplatePrices] = useState<
+    Record<string, Record<string, number>>
+  >({});
+
+  // UI state
   const [currencyPopoverOpen, setCurrencyPopoverOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+
   const currencyButtonRef = useRef<HTMLButtonElement>(null);
   const currencyDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Refs for date pickers and file inputs
   const manufacturingDateRef = useRef<HTMLInputElement>(null);
   const expirationDateRef = useRef<HTMLInputElement>(null);
   const mainImageRef = useRef<HTMLInputElement>(null);
   const thumbRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
 
-  // Close dropdown when clicking outside
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("velte_modifier_prices");
+      if (raw) setSavedTemplatePrices(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  const saveTemplatePrice = (
+    templateId: string,
+    optionName: string,
+    price: number,
+  ) => {
+    setSavedTemplatePrices((prev) => {
+      const next = {
+        ...prev,
+        [templateId]: { ...(prev[templateId] ?? {}), [optionName]: price },
+      };
+      try {
+        localStorage.setItem("velte_modifier_prices", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Edit mode: fetch existing product list
+  const pathname = usePathname();
+  const userId = pathname.split("/").filter(Boolean)[0];
+  const { navigate } = useNavigation();
+
+  const { data: allProducts = [], isLoading: productLoading } = useQuery({
+    queryKey: queryKeys.products.list,
+    queryFn: categoriesApi.getProducts,
+    enabled: isEditMode,
+  });
+  const existingProduct = isEditMode
+    ? allProducts.find((p) => p.id === productId)
+    : undefined;
+
+  // Pre-fill state once the product is loaded
+  useEffect(() => {
+    if (!existingProduct) return;
+    setProductName(existingProduct.name);
+    setSelectedCategory(existingProduct.categoryId ?? "");
+    setPrice(String(existingProduct.price));
+    setStockQuantity(String(existingProduct.totalQuantity ?? ""));
+    setThreshold(String(existingProduct.lowStockThreshold ?? ""));
+    setManufacturingDate(existingProduct.manufacturingDate ?? "");
+    setExpirationDate(existingProduct.expirationDate ?? "");
+    setIsFeatured(existingProduct.featured ?? false);
+    setTags(existingProduct.tags ?? []);
+    setAttributes(existingProduct.attributes ?? []);
+    setModifiers(existingProduct.modifiers ?? []);
+    if (existingProduct.availability) {
+      setAvailabilityDays(existingProduct.availability.days);
+      setAvailabilityStartTime(existingProduct.availability.startTime);
+      setAvailabilityEndTime(existingProduct.availability.endTime);
+    }
+    if (existingProduct.estimatedPrepMins) {
+      setEstimatedPrepMins(existingProduct.estimatedPrepMins);
+    }
+  }, [existingProduct]);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -105,79 +1066,43 @@ export default function AddProductPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle negotiable toggle — mutually exclusive with discounted price
-  const handleNegotiableToggle = () => {
-    const next = !isNegotiable;
-    setIsNegotiable(next);
-    if (next) {
-      // Turning ON negotiable: clear discounted price
-      setDiscountedPrice("");
-    } else {
-      // Turning OFF negotiable: clear minimum price
-      setMinimumPrice("");
-    }
+  // ── handlers ──────────────────────────────────────────────────────────────
+
+  const handleNegotiableToggle = (v: boolean) => {
+    setIsNegotiable(v);
+    if (v) setDiscountedPrice("");
+    else setMinimumPrice("");
   };
 
-  // Date picker helpers
   const openDatePicker = (ref: React.RefObject<HTMLInputElement | null>) => {
-    if (ref.current) {
-      if (typeof ref.current.showPicker === "function") {
-        ref.current.showPicker();
-      } else {
-        ref.current.click();
-      }
-    }
+    if (!ref.current) return;
+    if (typeof ref.current.showPicker === "function") ref.current.showPicker();
+    else ref.current.click();
   };
 
-  // Image handlers
   const handleMainImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) setMainImage(URL.createObjectURL(file));
   };
-
   const clearMainImage = () => {
     setMainImage(null);
     if (mainImageRef.current) mainImageRef.current.value = "";
   };
-
   const handleThumbUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    const urls = files.map((f) => URL.createObjectURL(f));
+    const urls = Array.from(e.target.files ?? []).map((f) =>
+      URL.createObjectURL(f),
+    );
     setThumbnails((prev) => [...prev, ...urls].slice(0, 4));
   };
 
-  const removeThumb = (index: number) =>
-    setThumbnails((prev) => prev.filter((_, i) => i !== index));
-
-  // Video handler
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setVideoFile(URL.createObjectURL(file));
-  };
-
-  const clearVideo = () => {
-    setVideoFile(null);
-    if (videoRef.current) videoRef.current.value = "";
-  };
-
-  // Tag handling – supports Enter and Space (for mobile)
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const isEnter = e.key === "Enter";
-    const isSpace = e.key === " " || e.key === "Space";
-    if ((isEnter || isSpace) && tagInput.trim()) {
+    if ((e.key === "Enter" || e.key === " ") && tagInput.trim()) {
       e.preventDefault();
-      if (!tags.includes(tagInput.trim())) {
-        setTags([...tags, tagInput.trim()]);
-      }
+      if (!tags.includes(tagInput.trim())) setTags([...tags, tagInput.trim()]);
       setTagInput("");
     }
   };
 
-  const removeTag = (tag: string) => {
-    setTags(tags.filter((t) => t !== tag));
-  };
-
-  // Attributes handling – with validation and prepending
   const addAttribute = () => {
     const name = attributeNameInput.trim();
     const value = attributeValueInput.trim();
@@ -186,488 +1111,631 @@ export default function AddProductPage() {
       return;
     }
     setAttributeError("");
-    // Prepend so most recent appears first
-    setAttributes([
-      {
-        id: Date.now().toString(),
-        name: name,
-        value: value,
-      },
-      ...attributes,
-    ]);
+    setAttributes([{ id: Date.now().toString(), name, value }, ...attributes]);
     setAttributeNameInput("");
     setAttributeValueInput("");
   };
 
-  const removeAttribute = (id: string) => {
-    setAttributes(attributes.filter((attr) => attr.id !== id));
+  const toggleDay = (day: DayOfWeek) =>
+    setAvailabilityDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    );
+
+  const addTemplateGroup = (tpl: NigerianTemplate) => {
+    if (modifiers.some((m) => m.name === tpl.name)) return;
+    const saved = savedTemplatePrices[tpl.id] ?? {};
+    const group: ProductModifier = {
+      // eslint-disable-next-line react-hooks/purity
+      id: Date.now().toString(),
+      name: tpl.name,
+      required: tpl.required,
+      multiSelect: tpl.multiSelect,
+      options: tpl.options.map((o) => ({
+        id: Math.random().toString(36).slice(2),
+        name: o.name,
+        additionalPrice: saved[o.name] ?? o.additionalPrice,
+      })),
+    };
+    setModifiers((prev) => [...prev, group]);
+    setExpandedGroupId(group.id);
   };
 
-  // Clear error when user starts typing again
-  const handleAttributeNameChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    setAttributeNameInput(e.target.value);
-    if (attributeError) setAttributeError("");
+  const addModifierOption = (groupId: string) => {
+    if (!optionName.trim()) return;
+    const opt: ModifierOption = {
+      // eslint-disable-next-line react-hooks/purity
+      id: Date.now().toString(),
+      name: optionName.trim(),
+      additionalPrice: parseFloat(optionPrice) || 0,
+    };
+    setModifiers((prev) =>
+      prev.map((g) =>
+        g.id === groupId ? { ...g, options: [...g.options, opt] } : g,
+      ),
+    );
+    setOptionName("");
+    setOptionPrice("");
   };
 
-  const handleAttributeValueChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    setAttributeValueInput(e.target.value);
-    if (attributeError) setAttributeError("");
-  };
+  const currSymbol = currency === "NGN" ? "₦" : "$";
 
-  const actionButtons = (
-    <div className="flex justify-end gap-3 pt-2 border-t border-gray-100 mt-6">
-      <button className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-4 h-10 rounded-lg whitespace-nowrap transition-colors">
-        Publish Product
-      </button>
-      <button className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-3 h-10 rounded-lg whitespace-nowrap hover:bg-gray-50 transition-colors">
-        <Save size={14} />
-        Save to draft
-      </button>
-    </div>
-  );
+  if (isEditMode && productLoading) return <EditProductSkeleton />;
+
+  if (isEditMode && !productLoading && !existingProduct) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center">
+          <Package size={28} className="text-gray-300" />
+        </div>
+        <div>
+          <p className="text-dash-heading font-bold text-[#023337]">
+            Product not found
+          </p>
+          <p className="text-dash-body text-gray-400 mt-1">
+            This product no longer exists or was deleted.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate(`/${userId}/products`)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
+        >
+          <ArrowLeft size={15} />
+          Back to Products
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      {/* Two-column layout */}
-      <div className="flex flex-col lg:flex-row gap-4 items-start">
-        {/* ── Left column: Basic Details + Pricing + Inventory ── */}
-        <div className="bg-white sm:rounded-lg shadow-sm flex-1 lg:min-w-0 w-full p-4 sm:p-6 space-y-6">
-          {/* Basic Details */}
-          <h3 className="text-dash-title font-bold text-[#23272e]">
-            Basic Details
-          </h3>
+    <>
+      <ImportProductsModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        isFood={isFood}
+      />
 
-          <div className="space-y-3">
-            <label className="block text-dash-body font-bold text-[#023337]">
-              Product Name
-            </label>
-            <Input
-              value={productName}
-              onChange={(e) => setProductName(e.target.value)}
-              placeholder="Enter product name"
-              className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-            />
-          </div>
-
-          <div className="space-y-3">
-            <label className="block text-dash-body font-bold text-[#023337]">
-              Product Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter product description"
-              rows={5}
-              className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
-            />
-          </div>
-
-          {/* Pricing */}
-          <h3 className="text-dash-title font-bold text-[#23272e]">Pricing</h3>
-
-          {/* Product Price with custom currency dropdown */}
-          <div className="space-y-3">
-            <label className="block text-dash-body font-bold text-[#023337]">
-              Product Price
-            </label>
-            <div className="flex h-12 bg-gray-50 border border-gray-200 rounded-lg">
-              <Input
-                type="number"
-                step="any"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="0.00"
-                className="flex-1 min-w-0 px-3 text-dash-body font-bold mt-1.5 text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
-              />
-              <div className="relative">
-                <button
-                  ref={currencyButtonRef}
-                  onClick={() => setCurrencyPopoverOpen(!currencyPopoverOpen)}
-                  className="h-full pl-3 pr-8 text-dash-body bg-transparent border-l border-gray-200 flex items-center gap-1.5 cursor-pointer"
-                >
-                  {currency === "NGN" ? "₦" : "$"}
-                  <ChevronDown size={14} className="text-gray-400" />
-                </button>
-                {currencyPopoverOpen && (
-                  <div
-                    ref={currencyDropdownRef}
-                    className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[100px]"
-                  >
-                    <button
-                      onClick={() => {
-                        setCurrency("NGN");
-                        setCurrencyPopoverOpen(false);
-                      }}
-                      className="w-full px-4 py-2 text-left text-dash-body hover:bg-orange-50 transition-colors"
-                    >
-                      ₦ NGN
-                    </button>
-                    <button
-                      onClick={() => {
-                        setCurrency("USD");
-                        setCurrencyPopoverOpen(false);
-                      }}
-                      className="w-full px-4 py-2 text-left text-dash-body hover:bg-orange-50 transition-colors"
-                    >
-                      $ USD
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Negotiable toggle + Minimum Price */}
-          <div className="flex flex-col sm:flex-row gap-5">
-            <div className="flex-1 min-w-0 space-y-2">
-              <label className="block text-dash-body font-bold text-[#023337]">
-                Negotiable
-              </label>
-              <div className="flex items-center gap-3 h-12">
-                <span
-                  className={cn(
-                    "text-dash-body font-medium transition-colors",
-                    !isNegotiable ? "text-[#023337]" : "text-gray-400",
-                  )}
-                >
-                  NO
-                </span>
-                <button
-                  onClick={handleNegotiableToggle}
-                  className={cn(
-                    "relative w-12 h-6 rounded-full transition-colors focus:outline-none",
-                    isNegotiable ? "bg-orange-500" : "bg-gray-300",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform",
-                      isNegotiable ? "translate-x-7" : "translate-x-1",
-                    )}
-                  />
-                </button>
-                <span
-                  className={cn(
-                    "text-dash-body font-medium transition-colors",
-                    isNegotiable ? "text-[#023337]" : "text-gray-400",
-                  )}
-                >
-                  YES
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Discounted Price + Tax Included row — Discounted Price hidden when negotiable is on */}
-          <div className="flex flex-col sm:flex-row gap-5">
-            {!isNegotiable ? (
-              <div className="flex-1 min-w-0 space-y-3">
-                <label className="block text-dash-body font-bold text-[#023337]">
-                  Discounted Price{" "}
-                  <span className="font-normal text-gray-500">(Optional)</span>
-                </label>
-                <div className="flex h-12 items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 overflow-hidden">
-                  <div className="bg-orange-50 rounded px-2 py-1 text-dash-body font-bold text-black flex-shrink-0">
-                    {currency === "NGN" ? "₦" : "$"}
-                  </div>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={discountedPrice}
-                    onChange={(e) => setDiscountedPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 min-w-0 space-y-3">
-                <label className="block text-dash-body font-bold text-[#023337]">
-                  Minimum Price
-                </label>
-                <div className="flex h-12 items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 overflow-hidden">
-                  <div className="bg-orange-50 rounded px-2 py-1 text-dash-body font-bold text-black flex-shrink-0">
-                    {currency === "NGN" ? "₦" : "$"}
-                  </div>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={minimumPrice}
-                    onChange={(e) => setMinimumPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
-                  />
-                </div>
-                <p className="text-dash-secondary text-gray-500 mt-1">
-                  The lowest price you&apos;re willing to accept for this
-                  product.
-                </p>
-              </div>
-            )}
-
-            <div className="flex-1 min-w-0 space-y-3">
-              <label className="block text-dash-body font-bold text-[#023337]">
-                Tax Included
-              </label>
-              <div className="flex items-center gap-3 h-12">
-                <span
-                  className={cn(
-                    "text-dash-body font-medium transition-colors",
-                    taxIncluded === "no" ? "text-[#023337]" : "text-gray-400",
-                  )}
-                >
-                  NO
-                </span>
-                <button
-                  onClick={() =>
-                    setTaxIncluded(taxIncluded === "yes" ? "no" : "yes")
-                  }
-                  className={cn(
-                    "relative w-12 h-6 rounded-full transition-colors focus:outline-none",
-                    taxIncluded === "yes" ? "bg-orange-500" : "bg-gray-300",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform",
-                      taxIncluded === "yes" ? "translate-x-7" : "translate-x-1",
-                    )}
-                  />
-                </button>
-                <span
-                  className={cn(
-                    "text-dash-body font-medium transition-colors",
-                    taxIncluded === "yes" ? "text-[#023337]" : "text-gray-400",
-                  )}
-                >
-                  YES
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Tax value input (only when tax included) */}
-          {taxIncluded === "yes" && (
-            <div className="flex flex-col sm:flex-row gap-4 items-end">
-              <div className="flex-1 space-y-2 w-full">
-                <label className="block text-dash-body font-bold text-[#023337]">
-                  Tax Amount
-                </label>
-                <div className="flex h-12 bg-gray-50 pt-1.5 border border-gray-200 rounded-lg overflow-hidden">
-                  <Input
-                    type="number"
-                    step="any"
-                    value={taxValue}
-                    onChange={(e) => setTaxValue(e.target.value)}
-                    placeholder="0.00"
-                    className="flex-1 px-3 text-dash-body text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 pb-1">
-                <button
-                  onClick={() => setTaxType("percentage")}
-                  className={cn(
-                    "px-3 py-1.5 text-dash-body rounded-md transition-colors",
-                    taxType === "percentage"
-                      ? "bg-orange-500 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200",
-                  )}
-                >
-                  %
-                </button>
-                <button
-                  onClick={() => setTaxType("fixed")}
-                  className={cn(
-                    "px-3 py-1.5 text-dash-body rounded-md transition-colors",
-                    taxType === "fixed"
-                      ? "bg-orange-500 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200",
-                  )}
-                >
-                  Fixed{" "}
-                  {taxType === "fixed" && (currency === "NGN" ? "₦" : "$")}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Dates */}
-          <h3 className="text-dash-title font-bold text-[#23272e]">Dates</h3>
-          <div className="flex flex-col sm:flex-row gap-5">
-            <div className="flex-1 relative space-y-2">
-              <label className="block text-dash-body font-bold text-[#023337]">
-                Manufacturing Date{" "}
-                <span className="font-normal text-gray-500">(Optional)</span>
-              </label>
-              <div className="relative">
-                <Input
-                  ref={manufacturingDateRef}
-                  type="date"
-                  value={manufacturingDate}
-                  onClick={() => openDatePicker(manufacturingDateRef)}
-                  onChange={(e) => setManufacturingDate(e.target.value)}
-                  placeholder="Manufacturing date"
-                  className="w-full h-12 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
-                />
-                <Calendar
-                  size={18}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer"
-                  onClick={() => openDatePicker(manufacturingDateRef)}
-                />
-              </div>
-            </div>
-            <div className="flex-1 relative space-y-2">
-              <label className="block text-dash-body font-bold text-[#023337]">
-                Expiration Date
-              </label>
-              <div className="relative">
-                <Input
-                  ref={expirationDateRef}
-                  type="date"
-                  value={expirationDate}
-                  onClick={() => openDatePicker(expirationDateRef)}
-                  onChange={(e) => setExpirationDate(e.target.value)}
-                  placeholder="Expiration date"
-                  className="w-full h-12 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
-                />
-                <Calendar
-                  size={18}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer"
-                  onClick={() => openDatePicker(expirationDateRef)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Inventory */}
-          <h3 className="text-dash-title font-bold text-[#23272e]">
-            Inventory
-          </h3>
-
-          <div className="flex flex-col sm:flex-row gap-5">
-            <div className="flex-1 min-w-0 space-y-3">
-              <label className="block text-dash-body font-bold text-[#023337]">
-                Stock Quantity
-              </label>
-              <Input
-                type="number"
-                step="1"
-                min="0"
-                value={stockQuantity}
-                onChange={(e) => setStockQuantity(e.target.value)}
-                placeholder="Enter quantity"
-                className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-              />
-            </div>
-            <div className="flex-1 min-w-0 space-y-3">
-              <label className="block text-dash-body font-bold text-[#023337]">
-                Low Stock Threshold
-              </label>
-              <Input
-                type="number"
-                step="1"
-                min="0"
-                value={threshold}
-                onChange={(e) => setThreshold(e.target.value)}
-                placeholder="e.g., 10"
-                className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-              />
-              <p className="text-dash-secondary text-gray-500 mt-1">
-                When stock quantity reaches this number, you&apos;ll be notified
-                to restock.
+      <div className="space-y-5">
+        {/* Page header */}
+        <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div>
+              <h2 className="text-dash-title font-black text-[#023337]">
+                {isEditMode
+                  ? isFood
+                    ? "Edit Dish"
+                    : "Edit Product"
+                  : isFood
+                    ? "Add a Dish"
+                    : "Add Product"}
+              </h2>
+              <p className="text-dash-body text-gray-400 mt-0.5">
+                {isEditMode
+                  ? isFood
+                    ? `Editing: ${existingProduct?.name ?? ""}`
+                    : `Editing: ${existingProduct?.name ?? ""}`
+                  : isFood
+                    ? "Add a new dish, drink or snack to your menu"
+                    : "Create a new product for your store"}
               </p>
             </div>
           </div>
-
-          <button
-            onClick={() => setIsFeatured((v) => !v)}
-            className="flex items-center gap-2"
-          >
-            <div
-              className={cn(
-                "w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors",
-                isFeatured
-                  ? "bg-orange-500"
-                  : "border border-gray-300 bg-white",
-              )}
+          {!isEditMode && (
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-600 text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
             >
-              {isFeatured && (
-                <svg
-                  viewBox="0 0 12 9"
-                  className="w-3 h-2.5 fill-none"
-                  stroke="white"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M1 4l3.5 3.5L11 1" />
-                </svg>
-              )}
-            </div>
-            <span className="text-dash-body text-gray-500">
-              Highlight this product in a featured section.
-            </span>
-          </button>
-
-          {/* Bottom action buttons - visible on desktop */}
-          <div className="hidden lg:block">{actionButtons}</div>
+              <Upload size={15} />
+              {isFood ? "Bulk Upload Dishes" : "Import from CSV / CRM"}
+            </button>
+          )}
         </div>
 
-        {/* ── Right column: Upload + Categories + Tags + Attributes ── */}
-        <div className="bg-white sm:rounded-lg shadow-sm w-full lg:w-[485px] flex-shrink-0 p-4 sm:p-6 space-y-6">
-          {/* Media Upload Section */}
-          <div>
-            <h3 className="text-dash-title font-bold text-[#23272e] mb-4">
-              Upload Media
-            </h3>
-            <div className="flex gap-3 mb-4">
-              <button
-                onClick={() => setMediaType("image")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-dash-body font-medium transition-colors",
-                  mediaType === "image"
-                    ? "bg-orange-500 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200",
+        {/* Two-column grid */}
+        <div className="flex flex-col lg:flex-row gap-5 items-start">
+          {/* ── Left column ── */}
+          <div className="flex-1 lg:min-w-0 w-full space-y-5">
+            {/* Basic Details */}
+            <FormSection
+              title="Basic Details"
+              icon={isFood ? ChefHat : Package}
+            >
+              <div>
+                <FieldLabel>{isFood ? "Dish Name" : "Product Name"}</FieldLabel>
+                <Input
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder={
+                    isFood
+                      ? "e.g., Jollof Rice, Egusi Soup, Suya…"
+                      : "e.g., Wireless Headphones"
+                  }
+                  className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                />
+                {isFood && (
+                  <p className="text-dash-caption text-gray-400 mt-1.5">
+                    Write it exactly as you call it on your menu
+                  </p>
                 )}
-              >
-                <ImageIcon size={16} />
-                Images
-              </button>
-              <button
-                onClick={() => setMediaType("video")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-dash-body font-medium transition-colors",
-                  mediaType === "video"
-                    ? "bg-orange-500 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200",
-                )}
-              >
-                <Video size={16} />
-                Video
-              </button>
-            </div>
+              </div>
 
-            {mediaType === "image" ? (
-              <>
-                <div className="space-y-3">
-                  <label className="block text-dash-body font-bold text-[#023337]">
-                    Product Image
-                  </label>
-                  <div className="relative border border-gray-200 rounded-lg overflow-hidden h-[266px] bg-gray-50 flex items-center justify-center">
+              <div>
+                <FieldLabel>Description</FieldLabel>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder={
+                    isFood
+                      ? "e.g., Smoky party jollof rice served with fried plantain and your choice of protein. Contains tomatoes and peppers."
+                      : "Describe the product features and benefits…"
+                  }
+                  rows={4}
+                  className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
+                />
+              </div>
+
+              <div>
+                <FieldLabel>
+                  {isFood ? "What type of dish is this?" : "Product Category"}
+                </FieldLabel>
+                {isFood ? (
+                  <div className="flex flex-wrap gap-2">
+                    {NIGERIAN_FOOD_CATEGORIES.map((cat) => {
+                      const active = selectedCategory === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedCategory(active ? "" : cat.id)
+                          }
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-2 rounded-xl text-dash-body font-medium border transition-colors cursor-pointer",
+                            active
+                              ? "bg-orange-500 text-white border-orange-500"
+                              : "bg-white text-gray-700 border-gray-200 hover:border-orange-300 hover:bg-orange-50",
+                          )}
+                        >
+                          <span>{cat.emoji}</span>
+                          {cat.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <Select
+                    value={selectedCategory}
+                    onValueChange={(v) => setSelectedCategory(v ?? "")}
+                  >
+                    <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="" disabled>
+                        Select a category
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </FormSection>
+
+            {/* Pricing */}
+            <FormSection title="Pricing" icon={BarChart3}>
+              {/* Base price */}
+              <div>
+                <FieldLabel>
+                  {isFood ? "Dish Price" : "Product Price"}
+                </FieldLabel>
+                <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
+                  <Input
+                    type="number"
+                    step="any"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="flex-1 min-w-0 px-3 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                  />
+                  <div className="relative">
+                    <button
+                      ref={currencyButtonRef}
+                      type="button"
+                      onClick={() =>
+                        setCurrencyPopoverOpen(!currencyPopoverOpen)
+                      }
+                      className="h-full pl-3 pr-8 text-dash-body bg-transparent border-l border-gray-200 flex items-center gap-1.5 cursor-pointer text-gray-600 font-medium"
+                    >
+                      {currSymbol}
+                      <ChevronDown size={13} className="text-gray-400" />
+                    </button>
+                    {currencyPopoverOpen && (
+                      <div
+                        ref={currencyDropdownRef}
+                        className="absolute right-0 top-full mt-1 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 min-w-[100px]"
+                      >
+                        {[
+                          ["NGN", "₦ NGN"],
+                          ["USD", "$ USD"],
+                        ].map(([code, label]) => (
+                          <button
+                            key={code}
+                            type="button"
+                            onClick={() => {
+                              setCurrency(code as "NGN" | "USD");
+                              setCurrencyPopoverOpen(false);
+                            }}
+                            className="w-full px-4 py-2 text-left text-dash-body hover:bg-orange-50 transition-colors cursor-pointer"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Negotiable Price */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-dash-body font-bold text-[#023337]">
+                      Negotiable Price
+                    </p>
+                    <p className="text-dash-caption text-gray-400 mt-0.5">
+                      Allow customers to negotiate the price
+                    </p>
+                  </div>
+                  <Toggle
+                    value={isNegotiable}
+                    onChange={handleNegotiableToggle}
+                  />
+                </div>
+                {isNegotiable && (
+                  <div>
+                    <FieldLabel>Minimum Price</FieldLabel>
+                    <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3">
+                      <span className="bg-orange-50 rounded-lg px-2 py-1 text-dash-caption font-bold text-orange-600 flex-shrink-0">
+                        {currSymbol}
+                      </span>
+                      <Input
+                        type="number"
+                        step="any"
+                        value={minimumPrice}
+                        onChange={(e) => setMinimumPrice(e.target.value)}
+                        placeholder="0.00"
+                        className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                      />
+                    </div>
+                    <p className="text-dash-caption text-gray-400 mt-1.5">
+                      Lowest price you&apos;re willing to accept
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Discounted Price — full width, hidden when negotiable is on */}
+              {!isNegotiable && (
+                <div>
+                  <FieldLabel optional>Discounted Price</FieldLabel>
+                  <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3">
+                    <span className="bg-orange-50 rounded-lg px-2 py-1 text-dash-caption font-bold text-orange-600 flex-shrink-0">
+                      {currSymbol}
+                    </span>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={discountedPrice}
+                      onChange={(e) => setDiscountedPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Tax */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-dash-body font-bold text-[#023337]">
+                      Tax Included
+                    </p>
+                    <p className="text-dash-caption text-gray-400 mt-0.5">
+                      Is tax included in the listed price?
+                    </p>
+                  </div>
+                  <Toggle
+                    value={taxIncluded === "yes"}
+                    onChange={(v) => setTaxIncluded(v ? "yes" : "no")}
+                  />
+                </div>
+                {taxIncluded === "yes" && (
+                  <div>
+                    <FieldLabel>Tax Amount</FieldLabel>
+                    <div className="flex gap-2">
+                      <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden flex-1">
+                        <Input
+                          type="number"
+                          step="any"
+                          value={taxValue}
+                          onChange={(e) => setTaxValue(e.target.value)}
+                          placeholder="0.00"
+                          className="flex-1 px-3 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                        />
+                      </div>
+                      <div className="flex gap-1.5">
+                        {(["percentage", "fixed"] as const).map((type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setTaxType(type)}
+                            className={cn(
+                              "px-3.5 h-11 text-dash-body rounded-xl transition-colors cursor-pointer font-medium",
+                              taxType === type
+                                ? "bg-orange-500 text-white"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200",
+                            )}
+                          >
+                            {type === "percentage" ? "%" : "Fixed"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Total Price summary */}
+              {(() => {
+                const baseAmt = parseFloat(price) || 0;
+                const discAmt = parseFloat(discountedPrice) || 0;
+                const minAmt = parseFloat(minimumPrice) || 0;
+                const taxAmt = parseFloat(taxValue) || 0;
+                const hasDiscount =
+                  !isNegotiable && discAmt > 0 && discAmt < baseAmt;
+                const effectiveAmt = hasDiscount ? discAmt : baseAmt;
+                const fmt = (n: number) =>
+                  n.toLocaleString("en-NG", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  });
+                const taxLabel =
+                  taxIncluded === "yes" && taxAmt > 0
+                    ? taxType === "percentage"
+                      ? `${taxAmt}% included`
+                      : `${currSymbol}${fmt(taxAmt)} included`
+                    : "Not specified";
+                return (
+                  <div className="bg-orange-50/70 border border-orange-100 rounded-2xl p-4">
+                    <p className="text-dash-caption font-semibold text-orange-500 uppercase tracking-wider mb-3">
+                      Total Price
+                    </p>
+                    {isNegotiable ? (
+                      <div className="flex items-baseline gap-2 mb-3">
+                        <span className="text-[1.6rem] font-black text-[#023337] leading-none">
+                          {currSymbol}
+                          {minAmt > 0 ? fmt(minAmt) : "—"}
+                        </span>
+                        <span className="text-dash-body text-gray-400 font-medium">
+                          to
+                        </span>
+                        <span className="text-dash-heading font-bold text-gray-500">
+                          {currSymbol}
+                          {baseAmt > 0 ? fmt(baseAmt) : "—"}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-[1.6rem] font-black text-[#023337] leading-none mb-3">
+                        {currSymbol}
+                        {effectiveAmt > 0 ? fmt(effectiveAmt) : "—"}
+                      </p>
+                    )}
+                    <div className="space-y-1.5 pt-3 border-t border-orange-100">
+                      {hasDiscount && (
+                        <>
+                          <div className="flex justify-between text-dash-caption">
+                            <span className="text-gray-500">
+                              Original price
+                            </span>
+                            <span className="text-gray-400 line-through">
+                              {currSymbol}
+                              {fmt(baseAmt)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-dash-caption">
+                            <span className="text-gray-500">Saving</span>
+                            <span className="text-green-600 font-semibold">
+                              −{currSymbol}
+                              {fmt(baseAmt - discAmt)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex justify-between text-dash-caption">
+                        <span className="text-gray-500">Tax</span>
+                        <span className="text-gray-500">{taxLabel}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </FormSection>
+
+            {/* Inventory — retail only */}
+            {!isFood && (
+              <FormSection title="Inventory" icon={Layers}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <FieldLabel>Stock Quantity</FieldLabel>
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={stockQuantity}
+                      onChange={(e) => setStockQuantity(e.target.value)}
+                      placeholder="e.g., 100"
+                      className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Low Stock Threshold</FieldLabel>
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={threshold}
+                      onChange={(e) => setThreshold(e.target.value)}
+                      placeholder="e.g., 10"
+                      className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                    />
+                    <p className="text-dash-caption text-gray-400 mt-1.5">
+                      Notify me when stock drops to this level
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {[
+                    {
+                      label: "Manufacturing Date",
+                      optional: true,
+                      ref: manufacturingDateRef,
+                      value: manufacturingDate,
+                      onChange: setManufacturingDate,
+                    },
+                    {
+                      label: "Expiration Date",
+                      optional: false,
+                      ref: expirationDateRef,
+                      value: expirationDate,
+                      onChange: setExpirationDate,
+                    },
+                  ].map(({ label, optional, ref, value, onChange }) => (
+                    <div key={label}>
+                      <FieldLabel optional={optional}>{label}</FieldLabel>
+                      <div className="relative">
+                        <Input
+                          ref={ref}
+                          type="date"
+                          value={value}
+                          onClick={() => openDatePicker(ref)}
+                          onChange={(e) => onChange(e.target.value)}
+                          className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
+                        />
+                        <Calendar
+                          size={16}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer"
+                          onClick={() => openDatePicker(ref)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <CheckboxField
+                  checked={isFeatured}
+                  onChange={setIsFeatured}
+                  label="Feature this product in a highlighted section"
+                />
+              </FormSection>
+            )}
+
+            {/* Preparation — food only */}
+            {isFood && (
+              <FormSection title="Preparation" icon={Clock}>
+                <div>
+                  <FieldLabel>How long does it take to prepare?</FieldLabel>
+                  {/* Quick presets */}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {[5, 10, 15, 20, 30, 45, 60].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setEstimatedPrepMins(mins)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-xl text-dash-body font-medium border transition-colors cursor-pointer",
+                          estimatedPrepMins === mins
+                            ? "bg-orange-500 text-white border-orange-500"
+                            : "bg-white text-gray-600 border-gray-200 hover:border-orange-300",
+                        )}
+                      >
+                        {mins >= 60 ? "1 hr" : `${mins} min`}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Fine-tune stepper */}
+                  <div className="flex items-center gap-3 max-w-[200px]">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEstimatedPrepMins((p) => Math.max(5, p - 5))
+                      }
+                      className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-heading font-bold flex-shrink-0"
+                    >
+                      −
+                    </button>
+                    <div className="flex-1 h-10 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center">
+                      <span className="text-dash-body font-black text-gray-800">
+                        {estimatedPrepMins} min
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEstimatedPrepMins((p) => p + 5)}
+                      className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-heading font-bold flex-shrink-0"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <p className="text-dash-caption text-gray-400 mt-1.5">
+                    Customers will see this as estimated wait time
+                  </p>
+                </div>
+              </FormSection>
+            )}
+          </div>
+
+          {/* ── Right column ── */}
+          <div className="w-full lg:w-[440px] flex-shrink-0 space-y-5">
+            {/* Media */}
+            <FormSection title="Media" icon={ImageIcon}>
+              <div className="flex gap-2 mb-1">
+                {[
+                  { key: "image" as const, icon: ImageIcon, label: "Images" },
+                  { key: "video" as const, icon: Video, label: "Video" },
+                ].map(({ key, icon: Icon, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setMediaType(key)}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl text-dash-body font-medium transition-colors cursor-pointer",
+                      mediaType === key
+                        ? "bg-orange-500 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+                    )}
+                  >
+                    <Icon size={14} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {mediaType === "image" ? (
+                <>
+                  {/* Main image */}
+                  <div className="relative border border-gray-200 rounded-xl overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
                     {mainImage ? (
                       <img
                         src={mainImage}
-                        alt="Main product"
+                        alt="Product"
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="flex flex-col items-center gap-2 text-gray-300">
-                        <ImageIcon size={48} />
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                          <ImageIcon size={20} className="text-gray-300" />
+                        </div>
                         <span className="text-dash-body text-gray-400">
                           No image selected
                         </span>
@@ -675,26 +1743,23 @@ export default function AddProductPage() {
                     )}
                     <button
                       onClick={() => mainImageRef.current?.click()}
-                      className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-9 border border-gray-200 rounded-lg bg-white text-dash-body text-gray-500 hover:bg-gray-50 transition-colors"
+                      className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
                     >
-                      <ImageIcon size={16} />
-                      Browse
+                      <ImageIcon size={13} /> Browse
                     </button>
                     {mainImage && (
                       <>
                         <button
-                          onClick={clearMainImage}
-                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-9 bg-white rounded-lg shadow text-dash-body text-red-600 hover:bg-red-50 transition-colors"
+                          onClick={() => mainImageRef.current?.click()}
+                          className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                         >
-                          <Trash2 size={14} />
-                          Clear
+                          <RefreshCcw size={12} /> Replace
                         </button>
                         <button
-                          onClick={() => mainImageRef.current?.click()}
-                          className="absolute bottom-3 right-24 flex items-center gap-1.5 px-3 h-9 bg-white rounded-lg shadow text-dash-body text-black hover:bg-gray-50 transition-colors"
+                          onClick={clearMainImage}
+                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                         >
-                          <RefreshCcw size={14} />
-                          Replace
+                          <Trash2 size={12} /> Clear
                         </button>
                       </>
                     )}
@@ -706,55 +1771,52 @@ export default function AddProductPage() {
                       onChange={handleMainImage}
                     />
                   </div>
-                </div>
 
-                {/* Thumbnail row */}
-                <div className="flex gap-3 flex-wrap mt-4">
-                  {thumbnails.map((url, i) => (
-                    <div
-                      key={i}
-                      className="relative w-[98px] h-[99px] border border-gray-200 rounded-lg overflow-hidden flex-shrink-0 group"
-                    >
-                      <img
-                        src={url}
-                        alt={`Thumbnail ${i + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        onClick={() => removeThumb(i)}
-                        className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  {/* Thumbnails */}
+                  <div className="flex gap-2.5 flex-wrap">
+                    {thumbnails.map((url, i) => (
+                      <div
+                        key={i}
+                        className="relative w-20 h-20 border border-gray-200 rounded-xl overflow-hidden flex-shrink-0 group"
                       >
-                        <X size={14} />
+                        <img
+                          src={url}
+                          alt={`Thumb ${i + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          onClick={() =>
+                            setThumbnails((p) => p.filter((_, j) => j !== i))
+                          }
+                          className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    ))}
+                    {thumbnails.length < 4 && (
+                      <button
+                        onClick={() => thumbRef.current?.click()}
+                        className="w-20 h-20 border border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
+                      >
+                        <PlusCircle size={18} className="text-orange-400" />
+                        <span className="text-dash-caption text-orange-400">
+                          Add
+                        </span>
                       </button>
-                    </div>
-                  ))}
-                  {thumbnails.length < 4 && (
-                    <button
-                      onClick={() => thumbRef.current?.click()}
-                      className="w-[201px] h-[99px] border border-dashed border-gray-400 rounded-lg flex flex-col items-center justify-center gap-1 hover:bg-gray-50 transition-colors"
-                    >
-                      <PlusCircle size={22} className="text-orange-500" />
-                      <span className="text-dash-body text-orange-500">
-                        Add Image
-                      </span>
-                    </button>
-                  )}
-                  <input
-                    ref={thumbRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleThumbUpload}
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="space-y-3">
-                <label className="block text-dash-body font-bold text-[#023337]">
-                  Product Video
-                </label>
-                <div className="relative border border-gray-200 rounded-lg overflow-hidden h-[266px] bg-gray-50 flex items-center justify-center">
+                    )}
+                    <input
+                      ref={thumbRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleThumbUpload}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="relative border border-gray-200 rounded-xl overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
                   {videoFile ? (
                     <video
                       src={videoFile}
@@ -762,8 +1824,10 @@ export default function AddProductPage() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="flex flex-col items-center gap-2 text-gray-300">
-                      <Video size={48} />
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                        <Video size={20} className="text-gray-300" />
+                      </div>
                       <span className="text-dash-body text-gray-400">
                         No video selected
                       </span>
@@ -771,18 +1835,19 @@ export default function AddProductPage() {
                   )}
                   <button
                     onClick={() => videoRef.current?.click()}
-                    className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-9 border border-gray-200 rounded-lg bg-white text-dash-body text-gray-500 hover:bg-gray-50 transition-colors"
+                    className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
                   >
-                    <Video size={16} />
-                    Browse
+                    <Video size={13} /> Browse
                   </button>
                   {videoFile && (
                     <button
-                      onClick={clearVideo}
-                      className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-9 bg-white rounded-lg shadow text-dash-body text-red-600 hover:bg-red-50 transition-colors"
+                      onClick={() => {
+                        setVideoFile(null);
+                        if (videoRef.current) videoRef.current.value = "";
+                      }}
+                      className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                     >
-                      <Trash2 size={14} />
-                      Clear
+                      <Trash2 size={12} /> Clear
                     </button>
                   )}
                   <input
@@ -790,134 +1855,491 @@ export default function AddProductPage() {
                     type="file"
                     accept="video/*"
                     className="hidden"
-                    onChange={handleVideoUpload}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) setVideoFile(URL.createObjectURL(f));
+                    }}
                   />
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </FormSection>
 
-          {/* Categories */}
-          <h3 className="text-dash-title font-bold text-[#23272e]">
-            Categories
-          </h3>
-          <div className="space-y-3">
-            <label className="block text-dash-body font-bold text-[#023337]">
-              Product Categories
-            </label>
-            <Select
-              value={selectedCategory}
-              onValueChange={(v) => setSelectedCategory(v ?? "")}
-            >
-              <SelectTrigger className="w-full h-11 bg-white shadow-[0px_1px_1.5px_rgba(0,0,0,0.2)] border-0 rounded-lg text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
-                <SelectValue placeholder="Select your product" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="" disabled>
-                  Select your product
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            {/* Tags + attributes — retail only */}
+            {!isFood && (
+              <FormSection title="Tags & Attributes" icon={Tag}>
+                <div>
+                  <FieldLabel>Tags</FieldLabel>
 
-          {/* Product Tags (chips input) – Enter or Space adds tag */}
-          <div className="space-y-3">
-            <label className="block text-dash-body font-bold text-[#023337]">
-              Product Tags
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-md text-dash-body"
-                >
-                  {tag}
-                  <button
-                    onClick={() => removeTag(tag)}
-                    className="hover:text-red-600"
-                  >
-                    <X size={14} />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <Input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={handleTagKeyDown}
-              placeholder="Type a tag and press Enter or Space"
-              className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-            />
-            <p className="text-dash-secondary text-gray-500">
-              Press <kbd className="px-1 border rounded">Enter</kbd> or{" "}
-              <kbd className="px-1 border rounded">Space</kbd> to add a tag.
-            </p>
-          </div>
-
-          {/* Add Attributes - with inline error message */}
-          <div className="space-y-3">
-            <h3 className="text-dash-title font-bold text-[#23272e]">
-              Add Attributes
-            </h3>
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                value={attributeNameInput}
-                onChange={handleAttributeNameChange}
-                placeholder="Attribute name (e.g., Size)"
-                className="flex-1 h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-              />
-              <Input
-                type="text"
-                value={attributeValueInput}
-                onChange={handleAttributeValueChange}
-                placeholder="Value (e.g., Large)"
-                className="flex-1 h-12 px-3 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-              />
-              <button
-                onClick={addAttribute}
-                className="px-2 sm:px-4 w-8 sm:w-12 sm:h-12 h-8 mt-2 sm:mt-0 bg-orange-500 text-white sm:rounded-lg rounded-sm hover:bg-orange-600 transition-colors flex items-center justify-center"
-              >
-                <Plus size={20} className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-            </div>
-            {attributeError && (
-              <div className="text-red-500 text-dash-body mt-1">
-                {attributeError}
-              </div>
-            )}
-            {attributes.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {attributes.map((attr) => (
-                  <div
-                    key={attr.id}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
-                  >
-                    <div>
-                      <span className="font-medium text-dash-body">
-                        {attr.name}:
-                      </span>{" "}
-                      <span className="text-dash-body text-gray-600">
-                        {attr.value}
-                      </span>
+                  {/* Popular food tags (quick-add chips) */}
+                  {isFood && (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {POPULAR_FOOD_TAGS.map((t) => {
+                        const active = tags.includes(t);
+                        return (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() =>
+                              active
+                                ? setTags(tags.filter((x) => x !== t))
+                                : setTags([...tags, t])
+                            }
+                            className={cn(
+                              "px-2.5 py-1 rounded-lg text-dash-caption font-medium border transition-colors cursor-pointer",
+                              active
+                                ? "bg-orange-500 text-white border-orange-500"
+                                : "bg-white text-gray-600 border-gray-200 hover:border-orange-300 hover:bg-orange-50",
+                            )}
+                          >
+                            {active && <span className="mr-1">✓</span>}
+                            {t}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <button
-                      onClick={() => removeAttribute(attr.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <X size={16} />
-                    </button>
+                  )}
+
+                  {/* Active tags */}
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-100 text-orange-700 rounded-lg text-dash-caption font-medium"
+                        >
+                          {tag}
+                          <button
+                            onClick={() =>
+                              setTags(tags.filter((t) => t !== tag))
+                            }
+                            className="hover:text-red-600 cursor-pointer"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <Input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleTagKeyDown}
+                    placeholder={
+                      isFood
+                        ? "Or type a custom tag and press Enter"
+                        : "Type a tag then press Enter or Space"
+                    }
+                    className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                  />
+                </div>
+
+                {/* Attributes — retail only */}
+                {!isFood && (
+                  <div>
+                    <FieldLabel>Attributes</FieldLabel>
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        value={attributeNameInput}
+                        onChange={(e) => {
+                          setAttributeNameInput(e.target.value);
+                          if (attributeError) setAttributeError("");
+                        }}
+                        placeholder="Name (e.g., Size)"
+                        className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                      />
+                      <Input
+                        type="text"
+                        value={attributeValueInput}
+                        onChange={(e) => {
+                          setAttributeValueInput(e.target.value);
+                          if (attributeError) setAttributeError("");
+                        }}
+                        placeholder="Value (e.g., Large)"
+                        className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={addAttribute}
+                        className="w-11 h-11 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer"
+                      >
+                        <Plus size={18} />
+                      </button>
+                    </div>
+                    {attributeError && (
+                      <p className="text-dash-caption text-red-500 mt-1.5">
+                        {attributeError}
+                      </p>
+                    )}
+                    {attributes.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {attributes.map((attr) => (
+                          <div
+                            key={attr.id}
+                            className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl"
+                          >
+                            <div className="text-dash-body">
+                              <span className="font-semibold text-[#023337]">
+                                {attr.name}:
+                              </span>{" "}
+                              <span className="text-gray-600">
+                                {attr.value}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() =>
+                                setAttributes(
+                                  attributes.filter((a) => a.id !== attr.id),
+                                )
+                              }
+                              className="text-red-400 hover:text-red-600 cursor-pointer"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
+                )}
+              </FormSection>
+            )}
+
+            {/* Availability — food only */}
+            {isFood && (
+              <FormSection title="Availability" icon={Calendar}>
+                <div>
+                  <FieldLabel>Days Available</FieldLabel>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        "mon",
+                        "tue",
+                        "wed",
+                        "thu",
+                        "fri",
+                        "sat",
+                        "sun",
+                      ] as DayOfWeek[]
+                    ).map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => toggleDay(day)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-dash-body font-medium border transition-colors cursor-pointer",
+                          availabilityDays.includes(day)
+                            ? "bg-orange-500 text-white border-orange-500"
+                            : "bg-white text-gray-600 border-gray-200 hover:border-orange-300",
+                        )}
+                      >
+                        {day.charAt(0).toUpperCase() + day.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    {
+                      label: "Start Time",
+                      value: availabilityStartTime,
+                      onChange: setAvailabilityStartTime,
+                    },
+                    {
+                      label: "End Time",
+                      value: availabilityEndTime,
+                      onChange: setAvailabilityEndTime,
+                    },
+                  ].map(({ label, value, onChange }) => (
+                    <div key={label}>
+                      <FieldLabel>{label}</FieldLabel>
+                      <Input
+                        type="time"
+                        value={value}
+                        onChange={(e) => onChange(e.target.value)}
+                        className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </FormSection>
+            )}
+
+            {/* Customer Choices & Extras — food only */}
+            {isFood && (
+              <FormSection title="Customer Choices & Extras" icon={Layers}>
+                {/* Explainer */}
+                <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 -mt-1 space-y-1">
+                  <p className="text-dash-body font-semibold text-blue-700">
+                    What will customers pick when ordering this dish?
+                  </p>
+                  <p className="text-dash-caption text-blue-500">
+                    Add the choices below — e.g. which protein, what size, which
+                    side dish. Only the options you add here will appear to
+                    customers at checkout. Remove any option your kitchen does
+                    not offer, and set the extra cost for each (type 0 if
+                    it&apos;s included in the base price).
+                  </p>
+                </div>
+
+                {/* Quick templates */}
+                <div>
+                  <p className="text-dash-caption font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
+                    Tap to add a choice group
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {NIGERIAN_TEMPLATES.map((tpl) => {
+                      const alreadyAdded = modifiers.some(
+                        (m) => m.name === tpl.name,
+                      );
+                      return (
+                        <button
+                          key={tpl.id}
+                          type="button"
+                          onClick={() => addTemplateGroup(tpl)}
+                          disabled={alreadyAdded}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-dash-caption font-semibold border transition-colors",
+                            alreadyAdded
+                              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                              : "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 cursor-pointer",
+                          )}
+                        >
+                          {alreadyAdded ? (
+                            <CheckCircle2
+                              size={12}
+                              className="text-green-500"
+                            />
+                          ) : (
+                            <Plus size={12} />
+                          )}
+                          {tpl.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-dash-caption text-gray-400 mt-2">
+                    Each group opens below — remove options you don&apos;t offer
+                    and set your own prices
+                  </p>
+                </div>
+
+                {modifiers.length > 0 && (
+                  <div className="space-y-2">
+                    {modifiers.map((group) => (
+                      <div
+                        key={group.id}
+                        className="border border-gray-200 rounded-xl overflow-hidden"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedGroupId((p) =>
+                              p === group.id ? null : group.id,
+                            )
+                          }
+                          className="w-full flex items-center justify-between px-3.5 py-3 bg-gray-50 hover:bg-orange-50 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-dash-body font-semibold text-[#023337] truncate">
+                              {group.name}
+                            </span>
+                            <div className="flex gap-1 flex-shrink-0">
+                              {group.required && (
+                                <span className="text-dash-caption bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">
+                                  Required
+                                </span>
+                              )}
+                              {group.multiSelect && (
+                                <span className="text-dash-caption bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md">
+                                  Multi-select
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-dash-caption text-gray-400">
+                              {group.options.length} option
+                              {group.options.length !== 1 ? "s" : ""}
+                            </span>
+                            {expandedGroupId === group.id ? (
+                              <ChevronUp size={13} className="text-gray-400" />
+                            ) : (
+                              <ChevronDown
+                                size={13}
+                                className="text-gray-400"
+                              />
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setModifiers((p) =>
+                                  p.filter((g) => g.id !== group.id),
+                                );
+                                if (expandedGroupId === group.id)
+                                  setExpandedGroupId(null);
+                              }}
+                              className="text-red-400 hover:text-red-600 p-0.5 cursor-pointer"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        </button>
+
+                        {expandedGroupId === group.id && (
+                          <div className="px-3.5 py-3 space-y-2 border-t border-gray-100">
+                            <p className="text-dash-caption text-gray-400 pb-1">
+                              Set the extra cost for each option — type{" "}
+                              <span className="font-semibold text-gray-500">
+                                0
+                              </span>{" "}
+                              if it&apos;s included in the dish price. Delete
+                              any option you don&apos;t offer.
+                            </p>
+                            {group.options.map((opt) => (
+                              <div
+                                key={opt.id}
+                                className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg"
+                              >
+                                <span className="flex-1 text-dash-body text-[#023337]">
+                                  {opt.name}
+                                </span>
+                                <div className="relative flex-shrink-0">
+                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-dash-caption font-medium">
+                                    +₦
+                                  </span>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={
+                                      opt.additionalPrice === 0
+                                        ? ""
+                                        : opt.additionalPrice
+                                    }
+                                    placeholder="0"
+                                    onChange={(e) => {
+                                      const val =
+                                        parseFloat(e.target.value) || 0;
+                                      setModifiers((p) =>
+                                        p.map((g) =>
+                                          g.id === group.id
+                                            ? {
+                                                ...g,
+                                                options: g.options.map((o) =>
+                                                  o.id === opt.id
+                                                    ? {
+                                                        ...o,
+                                                        additionalPrice: val,
+                                                      }
+                                                    : o,
+                                                ),
+                                              }
+                                            : g,
+                                        ),
+                                      );
+                                      const tplId = NIGERIAN_TEMPLATES.find(
+                                        (t) => t.name === group.name,
+                                      )?.id;
+                                      if (tplId)
+                                        saveTemplatePrice(tplId, opt.name, val);
+                                    }}
+                                    className="w-24 h-8 pl-8 pr-2 bg-white border border-gray-200 rounded-lg text-dash-caption text-[#023337]"
+                                  />
+                                </div>
+                                <button
+                                  onClick={() =>
+                                    setModifiers((p) =>
+                                      p.map((g) =>
+                                        g.id === group.id
+                                          ? {
+                                              ...g,
+                                              options: g.options.filter(
+                                                (o) => o.id !== opt.id,
+                                              ),
+                                            }
+                                          : g,
+                                      ),
+                                    )
+                                  }
+                                  className="text-red-400 hover:text-red-600 cursor-pointer flex-shrink-0"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            ))}
+                            <div className="flex gap-2 pt-1 border-t border-gray-100 mt-1">
+                              <Input
+                                type="text"
+                                value={optionName}
+                                onChange={(e) => setOptionName(e.target.value)}
+                                placeholder="Add another option…"
+                                className="flex-1 h-9 px-2 bg-gray-50 border border-gray-200 rounded-lg text-dash-body"
+                              />
+                              <div className="relative flex-shrink-0">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-dash-caption">
+                                  +₦
+                                </span>
+                                <Input
+                                  type="number"
+                                  value={optionPrice}
+                                  onChange={(e) =>
+                                    setOptionPrice(e.target.value)
+                                  }
+                                  placeholder="0"
+                                  min={0}
+                                  className="w-24 h-9 pl-7 pr-2 bg-gray-50 border border-gray-200 rounded-lg text-dash-body"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => addModifierOption(group.id)}
+                                disabled={!optionName.trim()}
+                                className="w-9 h-9 bg-orange-500 text-white rounded-lg flex items-center justify-center hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex-shrink-0"
+                              >
+                                <Plus size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </FormSection>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Bottom action buttons - visible on mobile only */}
-      <div className="lg:hidden -mt-3">{actionButtons}</div>
-    </div>
+        {/* Action buttons */}
+        <div className="flex justify-end gap-3">
+          {isEditMode ? (
+            <>
+              <button
+                onClick={() => navigate(`/${userId}/products`)}
+                className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-xl whitespace-nowrap transition-colors cursor-pointer">
+                {isFood ? "Update Dish" : "Save Changes"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
+                <Save size={14} />
+                Save Draft
+              </button>
+              <button className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-xl whitespace-nowrap transition-colors cursor-pointer">
+                {isFood ? "Publish Dish" : "Publish Product"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

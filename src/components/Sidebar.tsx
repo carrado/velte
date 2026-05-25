@@ -25,6 +25,7 @@ import { usersApi } from "@/services/users";
 import { toast } from "sonner";
 import LogoutModal from "@/components/LogOutModal";
 import type { NavItem, NavSection, SidebarProps } from "@/types/common";
+import { useIsFood } from "@/hooks/useBusinessType";
 
 function NavLink({
   item,
@@ -61,6 +62,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [btnDisabled, setBtnDisabled] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const isFood = useIsFood();
 
   const [effectiveSide, setEffectiveSide] = useState<"left" | "right">("left");
 
@@ -127,16 +129,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       ],
     },
     {
-      title: "Product",
+      title: isFood ? "My Menu" : "Products",
       items: [
         {
-          label: "Add Products",
+          label: isFood ? "Add a Dish" : "Add Products",
           icon: <PlusCircle size={16} />,
           href: "products/add",
           mobile: true,
         },
         {
-          label: "Product List",
+          label: isFood ? "View Menu" : "Product List",
           icon: <List size={16} />,
           href: "products/",
           mobile: true,

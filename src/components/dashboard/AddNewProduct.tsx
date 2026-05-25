@@ -5,6 +5,7 @@ import {
   fetchAddableProducts,
   type AddableProduct,
 } from "@/services/dashboard";
+import { useIsFood } from "@/hooks/useBusinessType";
 
 function ProductRow({ product }: { product: AddableProduct }) {
   return (
@@ -25,6 +26,7 @@ function ProductRow({ product }: { product: AddableProduct }) {
 }
 
 export default function AddNewProduct() {
+  const isFood = useIsFood();
   const { data: products, isLoading: prodLoading } = useQuery<AddableProduct[]>(
     {
       queryKey: ["addableProducts"],
@@ -36,7 +38,7 @@ export default function AddNewProduct() {
     <div className="bg-white sm:rounded-2xl shadow-sm sm:p-5 px-3 py-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-dash-heading font-semibold text-[#111827]">
-          Add New Product
+          {isFood ? "Add New Dish" : "Add New Product"}
         </h3>
         <button className="text-dash-secondary text-orange-500 hover:underline cursor-pointer font-medium">
           + Add New
@@ -45,7 +47,7 @@ export default function AddNewProduct() {
 
       {/* Products */}
       <p className="text-dash-secondary font-semibold text-[#6B7280] uppercase tracking-wide mb-2">
-        Product
+        {isFood ? "Menu Item" : "Product"}
       </p>
 
       {prodLoading ? (

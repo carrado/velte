@@ -8,6 +8,8 @@ import type {
   BestSellingProduct,
   DashboardCategory,
   AddableProduct,
+  FoodDashboardStats,
+  PopularByHourPoint,
 } from "@/types/dashboard";
 
 export type {
@@ -20,6 +22,8 @@ export type {
   BestSellingProduct,
   DashboardCategory,
   AddableProduct,
+  FoodDashboardStats,
+  PopularByHourPoint,
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -184,6 +188,36 @@ export async function fetchBestSelling(): Promise<BestSellingProduct[]> {
       price: 999,
       image: "",
     },
+  ];
+}
+
+export async function fetchFoodDashboardStats(): Promise<FoodDashboardStats> {
+  await delay(300);
+  return {
+    avgPrepMins: { value: 22, change: -3 },
+    ordersToday: { value: 47, growth: 12 },
+    ordersInPrep: { value: 8 },
+    completionRate: { percentage: 91 },
+  };
+}
+
+export async function fetchPopularByHour(): Promise<PopularByHourPoint[]> {
+  await delay(300);
+  return [
+    { hour: "8am", count: 12 },
+    { hour: "9am", count: 18 },
+    { hour: "10am", count: 22 },
+    { hour: "11am", count: 30 },
+    { hour: "12pm", count: 45, label: "Lunch" },
+    { hour: "1pm", count: 38 },
+    { hour: "2pm", count: 26 },
+    { hour: "3pm", count: 20 },
+    { hour: "4pm", count: 18 },
+    { hour: "5pm", count: 25 },
+    { hour: "6pm", count: 40, label: "Dinner" },
+    { hour: "7pm", count: 35 },
+    { hour: "8pm", count: 22 },
+    { hour: "9pm", count: 14 },
   ];
 }
 

@@ -5,6 +5,7 @@ import { Zap, X } from "lucide-react";
 import { toast } from "sonner";
 import { getTrialRemaining } from "@/lib/trial";
 import { openPaystackPopup } from "@/lib/paystack";
+import { useTrialStore } from "@/store/trialStore";
 import {
   initializeSubscription,
   verifySubscription,
@@ -66,11 +67,18 @@ export default function TrialBanner({ trialEndsAt }: TrialBannerProps) {
     }
   };
 
-  if (remaining.expired || dismissed) return null;
+  const setUrgency = useTrialStore((s) => s.setUrgency);
 
-  // Urgency level: high = ≤2 days, medium = ≤5 days, low = otherwise
-  const isUrgent = remaining.days <= 2;
-  const isMedium = !isUrgent && remaining.days <= 5;
+  // Urgency level: urgent = ≤1 day, medium = ≤3 days, low = otherwise
+  const isUrgent = remaining.days <= 1;
+  const isMedium = !isUrgent && remaining.days <= 3;
+
+  useEffect(() => {
+    setUrgency(isMedium, isUrgent);
+    return () => setUrgency(false, false);
+  }, [isMedium, isUrgent, setUrgency]);
+
+  if (remaining.expired || dismissed) return null;
 
   return (
     <div
@@ -191,7 +199,7 @@ export default function TrialBanner({ trialEndsAt }: TrialBannerProps) {
               <span>Loading…</span>
             </span>
           ) : (
-            "Subscribe · ₦8,500"
+            "Subscribe"
           )}
         </button>
       </div>

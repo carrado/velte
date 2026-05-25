@@ -25,12 +25,39 @@ export interface CategoryProduct {
   expirationDate?: string;
   attributes?: ProductAttribute[];
   tags?: string[];
+  modifiers?: ProductModifier[];
+  availability?: MenuAvailability;
+  estimatedPrepMins?: number;
+  isVeg?: boolean;
+  isSpicy?: boolean;
 }
 
 export interface ProductAttribute {
   id: string;
   name: string;
   value: string;
+}
+
+export interface ModifierOption {
+  id: string;
+  name: string;
+  additionalPrice: number;
+}
+
+export interface ProductModifier {
+  id: string;
+  name: string;
+  required: boolean;
+  multiSelect: boolean;
+  options: ModifierOption[];
+}
+
+export type DayOfWeek = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+export interface MenuAvailability {
+  days: DayOfWeek[];
+  startTime: string;
+  endTime: string;
 }
 
 export interface CategoryCardProps {
@@ -87,6 +114,7 @@ export interface ProductsTableProps {
   onRestock: (product: CategoryProduct) => void;
   onChangePrice: (product: CategoryProduct) => void;
   onDelete: (product: CategoryProduct) => void;
+  isFood?: boolean;
 }
 
 export type AddProductTaxOption = "yes" | "no";

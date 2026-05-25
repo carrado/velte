@@ -5,6 +5,7 @@ import type {
   UserNotifications,
   UserCompany,
   UserPreferences,
+  BusinessType,
 } from "@/types/user";
 
 export type { UserNotifications };
@@ -41,6 +42,7 @@ function mapRawUser(u: Record<string, unknown>): User {
     company: (u.company as UserCompany) ?? undefined,
     preferences: (u.preferences as UserPreferences) ?? undefined,
     onboarding: (u.onboarding as boolean) ?? false,
+    businessType: (u.businessType as BusinessType) ?? undefined,
   };
 }
 
@@ -111,5 +113,18 @@ export const settingsApi = {
       data,
     });
     return response.notifications;
+  },
+
+  updateBusinessType: async (businessType: BusinessType): Promise<User> => {
+    const response = await apiClient<{
+      success: true;
+      user: Record<string, unknown>;
+    }>("/auth/business-type", {
+      method: "PATCH",
+      data: { businessType },
+    });
+    const user = mapRawUser(response.user);
+    useUserStore.getState().updateUser(user);
+    return user;
   },
 };

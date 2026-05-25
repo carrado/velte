@@ -15,6 +15,7 @@ import {
   fetchWeeklyReport,
   type WeeklyReportPoint,
 } from "@/services/dashboard";
+import { useIsFood } from "@/hooks/useBusinessType";
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -39,7 +40,7 @@ const formatYAxis = (value: number) => {
   return `${value / 1000}k`;
 };
 
-const stats = [
+const retailStats = [
   { label: "Customers", value: "52k", active: true },
   { label: "Total Number of Products", value: "3.5k", active: false },
   { label: "Products in Stock", value: "2.5k", active: false },
@@ -47,7 +48,16 @@ const stats = [
   { label: "Revenue Generated", value: "250k", active: false },
 ];
 
+const foodStats = [
+  { label: "Orders This Week", value: "328", active: true },
+  { label: "Completed Orders", value: "301", active: false },
+  { label: "Cancelled Orders", value: "27", active: false },
+  { label: "Avg Prep Time", value: "22 min", active: false },
+  { label: "Revenue Generated", value: "250k", active: false },
+];
+
 export default function WeeklyReport() {
+  const isFood = useIsFood();
   const [period, setPeriod] = useState<"this_week" | "last_week">("this_week");
 
   const { data, isLoading } = useQuery<WeeklyReportPoint[]>({
@@ -113,7 +123,7 @@ export default function WeeklyReport() {
 
       {/* Stats row */}
       <div className="flex flex-wrap gap-x-6 gap-y-3 mb-5 border-b border-[#E5E7EB] pb-4">
-        {stats.map((stat) => (
+        {(isFood ? foodStats : retailStats).map((stat) => (
           <div key={stat.label} className="relative pb-2">
             <p className="text-dash-body font-bold text-[#111827]">
               {stat.value}

@@ -1,3 +1,5 @@
+export type BusinessType = "retail" | "food";
+
 export interface UserCompany {
   name?: string;
   location?: string;
@@ -32,4 +34,5 @@ export interface User {
   company?: UserCompany;
   preferences?: UserPreferences;
   onboarding: boolean;
+  businessType?: BusinessType;
 }
