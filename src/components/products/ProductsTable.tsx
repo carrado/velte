@@ -25,9 +25,9 @@ function ProductCard({
   const pricing = computePrice(product);
 
   return (
-    <div className="bg-white rounded-md border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden">
+    <div className="bg-white rounded-md border border-gray-100 shadow-sm hover:shadow-md transition-all">
       {/* Product image */}
-      <div className="relative w-full h-44">
+      <div className="relative w-full h-44 overflow-hidden rounded-t-md">
         {product.mainImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

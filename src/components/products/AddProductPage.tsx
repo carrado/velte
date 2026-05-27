@@ -752,12 +752,14 @@ function PublishProgressModal({
   step,
   done,
   isFood,
+  isEditMode,
 }: {
   open: boolean;
   progress: number;
   step: string;
   done: boolean;
   isFood: boolean;
+  isEditMode: boolean;
 }) {
   if (!open) return null;
 
@@ -773,6 +775,8 @@ function PublishProgressModal({
         >
           {done ? (
             <CheckCircle2 size={32} className="text-green-500" />
+          ) : isEditMode ? (
+            <Save size={32} className="text-orange-500 animate-pulse" />
           ) : (
             <Upload size={32} className="text-orange-500 animate-bounce" />
           )}
@@ -782,17 +786,29 @@ function PublishProgressModal({
         <div className="text-center space-y-1.5">
           <h2 className="text-dash-heading font-black text-[#023337]">
             {done
-              ? isFood
-                ? "Dish is Live!"
-                : "Product is Live!"
-              : isFood
-                ? "Publishing Your Dish"
-                : "Publishing Your Product"}
+              ? isEditMode
+                ? isFood
+                  ? "Dish Updated!"
+                  : "Changes Saved!"
+                : isFood
+                  ? "Dish is Live!"
+                  : "Product is Live!"
+              : isEditMode
+                ? isFood
+                  ? "Updating Your Dish"
+                  : "Saving Your Changes"
+                : isFood
+                  ? "Publishing Your Dish"
+                  : "Publishing Your Product"}
           </h2>
           <p className="text-dash-caption text-gray-400 leading-relaxed">
             {done
-              ? "Everything's set. Your customers can now find this listing on your store."
-              : `Hang tight — we're uploading your media and saving your ${isFood ? "dish" : "product"} to your store. This usually takes a few seconds.`}
+              ? isEditMode
+                ? "Your changes have been saved. Customers will see the updated listing right away."
+                : "Everything's set. Your customers can now find this listing on your store."
+              : isEditMode
+                ? `Hang tight — we're uploading any new media and saving your ${isFood ? "dish" : "product"} changes. This usually takes a few seconds.`
+                : `Hang tight — we're uploading your media and saving your ${isFood ? "dish" : "product"} to your store. This usually takes a few seconds.`}
           </p>
         </div>
 
@@ -816,7 +832,7 @@ function PublishProgressModal({
         </div>
 
         {/* Tip card */}
-        {!done && (
+        {!done && !isEditMode && (
           <div className="w-full bg-[#F1F5F9] rounded-xl p-3.5">
             <p className="text-dash-caption font-semibold text-[#023337] mb-0.5">
               Did you know?
@@ -2563,6 +2579,7 @@ export default function AddProductPage({
         step={publishModal.step}
         done={publishModal.done}
         isFood={isFood}
+        isEditMode={isEditMode}
       />
     </>
   );
