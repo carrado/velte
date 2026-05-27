@@ -2,65 +2,110 @@
 
 import { cn } from "@/lib/utils";
 import { getAvailableStock } from "@/services/products";
+import { computePrice, fmt } from "@/lib/product-price";
 import type { ProductsTableProps } from "@/types/product";
 import type { CategoryProduct } from "@/types/product";
 import ProductActionsPopover from "./ProductActionsPopover";
 import { Star, Clock, Package } from "lucide-react";
 
-function StockBadge({ available }: { available: number }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center px-2.5 py-0.5 rounded-full text-dash-caption font-semibold",
-        available > 0
-          ? "bg-green-100 text-green-700"
-          : "bg-red-100 text-red-700",
-      )}
-    >
-      {available > 0 ? `${available} in stock` : "Out of stock"}
-    </span>
-  );
-}
-
-function FoodCard({
+function ProductCard({
   product,
+  isFood,
   onRestock,
   onChangePrice,
   onDelete,
 }: {
   product: CategoryProduct;
+  isFood: boolean;
   onRestock: () => void;
   onChangePrice: () => void;
   onDelete: () => void;
 }) {
   const available = getAvailableStock(product);
+  const pricing = computePrice(product);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden">
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
+    <div className="bg-white rounded-md border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden">
+      {/* Product image */}
+      <div className="relative w-full h-44">
+        {product.mainImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.mainImageUrl}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
           <div
             className={cn(
-              "w-11 h-11 rounded-xl flex items-center justify-center text-white font-black text-dash-heading flex-shrink-0",
+              "w-full h-full flex items-center justify-center text-white font-black text-4xl",
               product.colorClass,
             )}
           >
             {product.name.charAt(0)}
           </div>
+        )}
+        <div className="absolute top-2 right-2">
           <ProductActionsPopover
             product={product}
+            isFood={isFood}
             onRestock={onRestock}
             onChangePrice={onChangePrice}
             onDelete={onDelete}
           />
         </div>
+      </div>
 
-        <p className="text-dash-body font-bold text-[#023337] mb-0.5 line-clamp-2">
+      {/* Content */}
+      <div className="p-3">
+        <p className="text-dash-body font-bold text-[#023337] mb-1 line-clamp-2">
           {product.name}
         </p>
-        <p className="text-dash-heading font-black text-orange-500 mb-3">
-          ₦{product.price.toLocaleString("en-NG")}
-        </p>
+
+        {/* Price */}
+        <div className="mb-3">
+          {pricing.isNegotiable ? (
+            <p className="text-dash-heading font-black text-orange-500">
+              {fmt(pricing.minFinalPrice!, pricing.currencySymbol)}{" "}
+              <span className="text-gray-400 font-medium">–</span>{" "}
+              {fmt(pricing.finalPrice, pricing.currencySymbol)}
+            </p>
+          ) : (
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-dash-heading font-black text-orange-500">
+                {fmt(pricing.finalPrice, pricing.currencySymbol)}
+              </p>
+              {pricing.hasDiscount && (
+                <span className="text-dash-caption text-gray-400 line-through">
+                  {fmt(pricing.basePrice, pricing.currencySymbol)}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Breakdown */}
+          {(pricing.hasDiscount || pricing.hasTax || pricing.isNegotiable) && (
+            <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+              {pricing.hasDiscount && (
+                <span className="text-dash-caption text-green-600 font-medium">
+                  −{fmt(pricing.discountAmount!, pricing.currencySymbol)} off
+                </span>
+              )}
+              {pricing.hasTax && (
+                <span className="text-dash-caption text-gray-400">
+                  {product.taxType === "percentage"
+                    ? `+${product.taxValue}% tax`
+                    : `+${fmt(pricing.taxAmount, pricing.currencySymbol)} tax`}
+                </span>
+              )}
+              {pricing.isNegotiable && (
+                <span className="text-dash-caption text-blue-500 font-medium">
+                  Negotiable
+                </span>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <span
@@ -71,7 +116,13 @@ function FoodCard({
                 : "bg-red-100 text-red-700",
             )}
           >
-            {available > 0 ? "Available" : "Not Available"}
+            {available > 0
+              ? isFood
+                ? "Available"
+                : "In Stock"
+              : isFood
+                ? "Not Available"
+                : "Out of Stock"}
           </span>
           {product.featured && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-amber-100 text-amber-700">
@@ -118,154 +169,18 @@ export default function ProductsTable({
 }: ProductsTableProps) {
   if (products.length === 0) return <EmptyState isFood={isFood} />;
 
-  if (isFood) {
-    return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 p-5">
-        {products.map((product) => (
-          <FoodCard
-            key={product.id}
-            product={product}
-            onRestock={() => onRestock(product)}
-            onChangePrice={() => onChangePrice(product)}
-            onDelete={() => onDelete(product)}
-          />
-        ))}
-      </div>
-    );
-  }
-
   return (
-    <>
-      {/* Desktop table */}
-      <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50/80 border-b border-gray-100">
-              <th className="text-left px-5 py-3 text-dash-caption font-semibold text-gray-400 uppercase tracking-wider w-10">
-                #
-              </th>
-              <th className="text-left px-4 py-3 text-dash-caption font-semibold text-gray-400 uppercase tracking-wider">
-                Product
-              </th>
-              <th className="text-center px-4 py-3 text-dash-caption font-semibold text-gray-400 uppercase tracking-wider">
-                Date Added
-              </th>
-              <th className="text-center px-4 py-3 text-dash-caption font-semibold text-gray-400 uppercase tracking-wider">
-                Total Qty
-              </th>
-              <th className="text-center px-4 py-3 text-dash-caption font-semibold text-gray-400 uppercase tracking-wider">
-                Stock
-              </th>
-              <th className="text-center px-4 py-3 text-dash-caption font-semibold text-gray-400 uppercase tracking-wider">
-                Sold
-              </th>
-              <th className="text-right px-5 py-3 text-dash-caption font-semibold text-gray-400 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {products.map((p, i) => {
-              const available = getAvailableStock(p);
-              return (
-                <tr
-                  key={p.id}
-                  className="hover:bg-orange-50/20 transition-colors"
-                >
-                  <td className="px-5 py-4 text-dash-caption text-gray-400 font-medium">
-                    {rowOffset + i + 1}
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          "w-10 h-10 rounded-xl flex items-center justify-center font-black text-dash-body text-white flex-shrink-0",
-                          p.colorClass,
-                        )}
-                      >
-                        {p.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="text-dash-body font-semibold text-[#023337]">
-                          {p.name}
-                        </p>
-                        <p className="text-dash-caption font-bold text-orange-500">
-                          ₦{p.price.toLocaleString("en-NG")}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 text-center text-dash-body text-gray-500">
-                    {p.createdDate}
-                  </td>
-                  <td className="px-4 py-4 text-center text-dash-body font-medium text-[#023337]">
-                    {p.totalQuantity}
-                  </td>
-                  <td className="px-4 py-4 text-center">
-                    <StockBadge available={available} />
-                  </td>
-                  <td className="px-4 py-4 text-center text-dash-body text-gray-500">
-                    {p.orderedQuantity}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <ProductActionsPopover
-                      product={p}
-                      onRestock={() => onRestock(p)}
-                      onChangePrice={() => onChangePrice(p)}
-                      onDelete={() => onDelete(p)}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile list */}
-      <div className="sm:hidden divide-y divide-gray-100">
-        {products.map((p) => {
-          const available = getAvailableStock(p);
-          return (
-            <div key={p.id} className="flex items-center gap-3 px-4 py-3.5">
-              <div
-                className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center font-black text-dash-body text-white flex-shrink-0",
-                  p.colorClass,
-                )}
-              >
-                {p.name.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-dash-body font-semibold text-[#023337] truncate">
-                  {p.name}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className="text-dash-caption font-bold text-orange-500">
-                    ₦{p.price.toLocaleString("en-NG")}
-                  </span>
-                  <span
-                    className={cn(
-                      "px-2 py-0.5 rounded-full text-dash-caption font-semibold",
-                      available > 0
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700",
-                    )}
-                  >
-                    {available > 0 ? `${available} in stock` : "Out of stock"}
-                  </span>
-                </div>
-              </div>
-              <ProductActionsPopover
-                product={p}
-                onRestock={() => onRestock(p)}
-                onChangePrice={() => onChangePrice(p)}
-                onDelete={() => onDelete(p)}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </>
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 p-5">
+      {products.map((product) => (
+        <ProductCard
+          key={product.id}
+          product={product}
+          isFood={isFood}
+          onRestock={() => onRestock(product)}
+          onChangePrice={() => onChangePrice(product)}
+          onDelete={() => onDelete(product)}
+        />
+      ))}
+    </div>
   );
 }

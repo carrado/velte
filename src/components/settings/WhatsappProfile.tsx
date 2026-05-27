@@ -854,7 +854,7 @@ export function WhatsAppProfileSection() {
     if (stored.length > 0) return;
     categoriesApi
       .getProducts()
-      .then(setProducts)
+      .then((result) => setProducts(result.products))
       .catch(() => toast.error("Could not load products"));
   }, [setProducts]);
 

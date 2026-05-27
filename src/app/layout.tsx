@@ -73,7 +73,7 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: "https://res.cloudinary.com/dbhpul04t/image/upload/v1765811857/favicon_ffn1ja.ico",
+    icon: "https://res.cloudinary.com/dbhpul04t/image/upload/v1779845711/velte_manifest_qdphtb.png",
     shortcut: "/favicon-16x16.png",
     apple: "/apple-touch-icon.png",
   },

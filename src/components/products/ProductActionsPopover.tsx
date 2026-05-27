@@ -15,6 +15,7 @@ import { useNavigation } from "../NavigationProgressContext";
 
 export default function ProductActionsPopover({
   product,
+  isFood = false,
   onRestock,
   onChangePrice,
   onDelete,
@@ -45,12 +46,12 @@ export default function ProductActionsPopover({
     <div ref={popoverRef} className="relative">
       <button
         onClick={() => setPopoverOpen(!popoverOpen)}
-        className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+        className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-300 bg-gray-100 transition-colors cursor-pointer"
       >
         <MoreHorizontal size={16} />
       </button>
       {popoverOpen && (
-        <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-20">
+        <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50">
           <button
             onClick={() => {
               setPopoverOpen(false);
@@ -71,16 +72,18 @@ export default function ProductActionsPopover({
             <Edit2 size={14} className="text-blue-500" />
             Edit Product
           </button>
-          <button
-            onClick={() => {
-              setPopoverOpen(false);
-              onRestock();
-            }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
-          >
-            <RefreshCw size={14} className="text-orange-500" />
-            Restock
-          </button>
+          {!isFood && (
+            <button
+              onClick={() => {
+                setPopoverOpen(false);
+                onRestock();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
+            >
+              <RefreshCw size={14} className="text-orange-500" />
+              Restock
+            </button>
+          )}
           <button
             onClick={() => {
               setPopoverOpen(false);

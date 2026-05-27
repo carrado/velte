@@ -29,6 +29,8 @@ import {
   Info,
   Eye,
   EyeOff,
+  ShoppingCart,
+  ChefHat,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -36,6 +38,7 @@ import { useMutation } from "@tanstack/react-query";
 import Image from "next/image";
 import { useState } from "react";
 import { usersApi } from "@/services/users";
+import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------
 // Validation schema (updated with strong password and username rules)
@@ -88,6 +91,10 @@ const signupSchema = z
     address: z.string().min(5, "Please enter your business address"),
     username: usernameSchema,
     services: z.array(z.string()).min(1, "Add at least one service"),
+    businessType: z.enum(["retail", "food"], {
+      required_error: "Please select your business type",
+      invalid_type_error: "Please select your business type",
+    }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -312,6 +319,7 @@ export default function Signup() {
       address: "",
       username: "",
       services: [] as string[],
+      businessType: "" as "retail" | "food",
     } satisfies SignupForm,
     onSubmit: async ({ value }) => {
       const parsed = signupSchema.safeParse(value);
@@ -565,6 +573,87 @@ export default function Signup() {
                   onBlur={field.handleBlur}
                   error={field.state.meta.errors[0]}
                 />
+              )}
+            </form.Field>
+
+            {/* Business Type */}
+            <form.Field
+              name="businessType"
+              validators={{
+                onChange: ({ value }) => {
+                  const r = z.enum(["retail", "food"]).safeParse(value);
+                  return r.success
+                    ? undefined
+                    : "Please select your business type";
+                },
+              }}
+            >
+              {(field) => (
+                <div>
+                  <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+                    <Building2 className="w-3.5 h-3.5 text-orange-400" />
+                    Business Type
+                  </Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      {
+                        type: "retail" as const,
+                        label: "Retail Store",
+                        desc: "Sell products & track inventory",
+                        icon: ShoppingCart,
+                      },
+                      {
+                        type: "food" as const,
+                        label: "Food Vendor",
+                        desc: "Manage a menu & food orders",
+                        icon: ChefHat,
+                      },
+                    ].map(({ type, label, desc, icon: Icon }) => {
+                      const active = field.state.value === type;
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => field.handleChange(type)}
+                          className={cn(
+                            "flex items-start gap-3 p-3.5 rounded-xl border-2 text-left transition-all cursor-pointer",
+                            active
+                              ? "border-orange-500 bg-orange-500/8"
+                              : "border-black/[0.15] hover:border-orange-400/50 hover:bg-orange-500/5",
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5",
+                              active ? "bg-orange-500" : "bg-black/[0.06]",
+                            )}
+                          >
+                            <Icon
+                              size={15}
+                              className={
+                                active ? "text-white" : "text-black/40"
+                              }
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <p
+                              className={cn(
+                                "text-sm font-semibold",
+                                active ? "text-orange-600" : "text-black/70",
+                              )}
+                            >
+                              {label}
+                            </p>
+                            <p className="text-xs text-black/40 mt-0.5 leading-relaxed">
+                              {desc}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <FieldError message={field.state.meta.errors[0]} />
+                </div>
               )}
             </form.Field>
 

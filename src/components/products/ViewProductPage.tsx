@@ -274,19 +274,16 @@ export default function ViewProductPage({ productId }: { productId: string }) {
   const { navigate } = useNavigation();
   const isFood = useIsFood();
 
-  const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: queryKeys.products.list,
-    queryFn: categoriesApi.getProducts,
+  const { data: product, isLoading: productsLoading } = useQuery({
+    queryKey: queryKeys.products.detail(productId),
+    queryFn: () => categoriesApi.getProduct(productId),
   });
 
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.products.categories,
     queryFn: categoriesApi.getCategories,
+    enabled: !isFood,
   });
-
-  const product: CategoryProduct | undefined = products.find(
-    (p) => p.id === productId,
-  );
 
   const category: Category | undefined = categories.find(
     (c) => c.id === product?.categoryId,
@@ -462,7 +459,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                   style={{ width: `${stockPercent}%` }}
                 />
               </div>
-              {product.lowStockThreshold !== undefined &&
+              {product.lowStockThreshold != null &&
                 available <= product.lowStockThreshold &&
                 available > 0 && (
                   <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">

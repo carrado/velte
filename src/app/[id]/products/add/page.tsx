@@ -3,5 +3,5 @@
 import AddProductPage from "@/components/products/AddProductPage";
 
 export default function AddProductRoute() {
-  return <AddProductPage />;
+  return <AddProductPage mode="add" />;
 }

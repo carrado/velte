@@ -2,11 +2,13 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { queryKeys } from "@/lib/query-keys";
 import { categoriesApi } from "@/services/products";
+import { uploadProductMedia } from "@/lib/cloudinary";
+import { getErrorMessage } from "@/lib/error-message";
 import {
   Save,
   ChevronDown,
@@ -35,9 +37,10 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   AddProductTaxOption,
-  DayOfWeek,
   ProductModifier,
   ModifierOption,
+  RetailProductPayload,
+  FoodProductPayload,
 } from "@/types/product";
 import { useIsFood } from "@/hooks/useBusinessType";
 import { Input } from "../ui/input";
@@ -52,7 +55,6 @@ import { toast } from "sonner";
 
 type TaxType = "percentage" | "fixed";
 type MediaType = "image" | "video";
-type ImportTab = "file" | "crm";
 
 interface ProductAttribute {
   id: string;
@@ -253,98 +255,6 @@ const NIGERIAN_TEMPLATES: NigerianTemplate[] = [
   },
 ];
 
-// ── CRM platform config ───────────────────────────────────────────────────────
-
-const RETAIL_PLATFORMS = [
-  {
-    id: "shopify",
-    name: "Shopify",
-    desc: "Import your Shopify catalogue",
-    color: "bg-green-500",
-    initial: "S",
-  },
-  {
-    id: "woocommerce",
-    name: "WooCommerce",
-    desc: "Sync from your WooCommerce store",
-    color: "bg-purple-600",
-    initial: "W",
-  },
-  {
-    id: "wix",
-    name: "Wix Commerce",
-    desc: "Connect your Wix online store",
-    color: "bg-black",
-    initial: "W",
-  },
-  {
-    id: "squarespace",
-    name: "Squarespace",
-    desc: "Import from Squarespace Commerce",
-    color: "bg-gray-800",
-    initial: "SQ",
-  },
-  {
-    id: "etsy",
-    name: "Etsy",
-    desc: "Sync your Etsy product listings",
-    color: "bg-orange-500",
-    initial: "E",
-  },
-  {
-    id: "gsheets",
-    name: "Google Sheets",
-    desc: "Import directly from Google Sheets",
-    color: "bg-emerald-500",
-    initial: "GS",
-  },
-];
-
-const FOOD_PLATFORMS = [
-  {
-    id: "chowdeck",
-    name: "Chowdeck",
-    desc: "Import your Chowdeck restaurant menu",
-    color: "bg-orange-500",
-    initial: "CD",
-  },
-  {
-    id: "glovo",
-    name: "Glovo",
-    desc: "Sync your Glovo restaurant menu",
-    color: "bg-yellow-500",
-    initial: "G",
-  },
-  {
-    id: "bolt",
-    name: "Bolt Food",
-    desc: "Import from your Bolt Food account",
-    color: "bg-green-600",
-    initial: "BF",
-  },
-  {
-    id: "ordernow",
-    name: "OrderNow.ng",
-    desc: "Sync menu from OrderNow Nigeria",
-    color: "bg-blue-600",
-    initial: "ON",
-  },
-  {
-    id: "gsheets",
-    name: "Google Sheets",
-    desc: "Import directly from Google Sheets",
-    color: "bg-emerald-500",
-    initial: "GS",
-  },
-  {
-    id: "jumia",
-    name: "Jumia Food",
-    desc: "Import your saved Jumia Food menu export",
-    color: "bg-red-500",
-    initial: "JF",
-  },
-];
-
 // ── Nigerian food constants ───────────────────────────────────────────────────
 
 const NIGERIAN_FOOD_CATEGORIES = [
@@ -382,10 +292,12 @@ const POPULAR_FOOD_TAGS = [
 function FormSection({
   title,
   icon: Icon,
+  required,
   children,
 }: {
   title: string;
   icon: React.ElementType;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -394,7 +306,10 @@ function FormSection({
         <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
           <Icon size={13} className="text-orange-500" />
         </div>
-        <h3 className="text-dash-heading font-bold text-[#023337]">{title}</h3>
+        <h3 className="text-dash-heading font-bold text-[#023337]">
+          {title}
+          {required && <span className="text-red-500 ml-0.5">*</span>}
+        </h3>
       </div>
       <div className="px-5 py-5 space-y-5">{children}</div>
     </div>
@@ -404,13 +319,16 @@ function FormSection({
 function FieldLabel({
   children,
   optional,
+  required,
 }: {
   children: React.ReactNode;
   optional?: boolean;
+  required?: boolean;
 }) {
   return (
     <label className="block text-dash-body font-bold text-[#023337] mb-2">
       {children}
+      {required && <span className="text-red-500 ml-0.5">*</span>}
       {optional && (
         <span className="font-normal text-gray-400 ml-1">(Optional)</span>
       )}
@@ -519,15 +437,12 @@ function ImportProductsModal({
   onClose: () => void;
   isFood: boolean;
 }) {
-  const [tab, setTab] = useState<ImportTab>("file");
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [previewRows, setPreviewRows] = useState<ImportedRow[]>([]);
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const platforms = isFood ? FOOD_PLATFORMS : RETAIL_PLATFORMS;
 
   const resetFile = () => {
     setFileName(null);
@@ -589,7 +504,7 @@ function ImportProductsModal({
         {/* Header */}
         <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-md bg-orange-500 flex items-center justify-center flex-shrink-0">
               <Upload size={18} className="text-white" />
             </div>
             <div>
@@ -597,7 +512,7 @@ function ImportProductsModal({
                 Import {isFood ? "Menu Items" : "Products"}
               </h3>
               <p className="text-dash-caption text-gray-400">
-                Bulk-add from a spreadsheet or connect a platform
+                Bulk-add from a spreadsheet
               </p>
             </div>
           </div>
@@ -612,245 +527,162 @@ function ImportProductsModal({
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100">
-          {[
-            {
-              key: "file" as const,
-              label: "Upload File",
-              icon: FileSpreadsheet,
-            },
-          ].map(({ key, label, icon: Icon }) => (
+        <div className="px-6 py-5 space-y-4">
+          {/* Step 1 — template */}
+          <div className="flex items-center justify-between p-3.5 bg-blue-50 border border-blue-100 rounded-md">
+            <div className="flex items-center gap-2.5">
+              <FileSpreadsheet
+                size={16}
+                className="text-blue-500 flex-shrink-0"
+              />
+              <div>
+                <p className="text-dash-body font-semibold text-blue-700">
+                  Step 1 — Download our template
+                </p>
+                <p className="text-dash-caption text-blue-500">
+                  {isFood
+                    ? "Fill in your dishes — we included 5 examples to guide you"
+                    : "Fill in the CSV template, then upload it below"}
+                </p>
+              </div>
+            </div>
             <button
-              key={key}
-              onClick={() => setTab(key)}
+              onClick={() => downloadTemplate(isFood)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0"
+            >
+              <Download size={13} />
+              Template
+            </button>
+          </div>
+
+          {/* Step 2 — drop zone */}
+          {!previewRows.length && !parseError && (
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
               className={cn(
-                "flex items-center gap-2 px-6 py-3.5 text-dash-body font-medium border-b-2 transition-colors cursor-pointer",
-                tab === key
-                  ? "border-orange-500 text-orange-500"
-                  : "border-transparent text-gray-500 hover:text-gray-700",
+                "border-2 border-dashed rounded-2xl h-40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors",
+                dragOver
+                  ? "border-orange-400 bg-orange-50"
+                  : "border-gray-200 bg-gray-50 hover:border-orange-300 hover:bg-orange-50/50",
               )}
             >
-              <Icon size={15} />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* File import tab */}
-        {tab === "file" && (
-          <div className="px-6 py-5 space-y-4">
-            {/* Step 1 — template */}
-            <div className="flex items-center justify-between p-3.5 bg-blue-50 border border-blue-100 rounded-xl">
-              <div className="flex items-center gap-2.5">
-                <FileSpreadsheet
-                  size={16}
-                  className="text-blue-500 flex-shrink-0"
-                />
-                <div>
-                  <p className="text-dash-body font-semibold text-blue-700">
-                    Step 1 — Download our template
-                  </p>
-                  <p className="text-dash-caption text-blue-500">
-                    {isFood
-                      ? "Fill in your dishes — we included 5 examples to guide you"
-                      : "Fill in the CSV template, then upload it below"}
-                  </p>
-                </div>
+              <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200 flex items-center justify-center shadow-sm">
+                <Upload size={20} className="text-gray-400" />
               </div>
-              <button
-                onClick={() => downloadTemplate(isFood)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0"
-              >
-                <Download size={13} />
-                Template
-              </button>
-            </div>
-
-            {/* Step 2 — drop zone */}
-            {!previewRows.length && !parseError && (
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
+              <p className="text-dash-body font-semibold text-gray-600">
+                {isFood
+                  ? "Drop your menu CSV here, or "
+                  : "Drop your CSV here, or "}
+                <span className="text-orange-500">browse</span>
+              </p>
+              <p className="text-dash-caption text-gray-400">
+                {isFood
+                  ? "Step 2 — upload your filled template"
+                  : "Supports .csv files · Excel → save as CSV"}
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFile(f);
                 }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={cn(
-                  "border-2 border-dashed rounded-2xl h-40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors",
-                  dragOver
-                    ? "border-orange-400 bg-orange-50"
-                    : "border-gray-200 bg-gray-50 hover:border-orange-300 hover:bg-orange-50/50",
-                )}
-              >
-                <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200 flex items-center justify-center shadow-sm">
-                  <Upload size={20} className="text-gray-400" />
-                </div>
-                <p className="text-dash-body font-semibold text-gray-600">
-                  {isFood
-                    ? "Drop your menu CSV here, or "
-                    : "Drop your CSV here, or "}
-                  <span className="text-orange-500">browse</span>
-                </p>
-                <p className="text-dash-caption text-gray-400">
-                  {isFood
-                    ? "Step 2 — upload your filled template"
-                    : "Supports .csv files · Excel → save as CSV"}
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleFile(f);
-                  }}
-                />
-              </div>
-            )}
+              />
+            </div>
+          )}
 
-            {/* Error */}
-            {parseError && (
-              <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-xl">
-                <AlertCircle
-                  size={15}
-                  className="text-red-500 mt-0.5 flex-shrink-0"
-                />
-                <div>
-                  <p className="text-dash-body font-semibold text-red-700">
-                    Import failed
-                  </p>
-                  <p className="text-dash-caption text-red-600 mt-0.5">
-                    {parseError}
-                  </p>
-                  <button
-                    onClick={resetFile}
-                    className="text-dash-caption text-red-500 underline mt-1 cursor-pointer"
-                  >
-                    Try again
-                  </button>
-                </div>
+          {/* Error */}
+          {parseError && (
+            <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-md">
+              <AlertCircle
+                size={15}
+                className="text-red-500 mt-0.5 flex-shrink-0"
+              />
+              <div>
+                <p className="text-dash-body font-semibold text-red-700">
+                  Import failed
+                </p>
+                <p className="text-dash-caption text-red-600 mt-0.5">
+                  {parseError}
+                </p>
+                <button
+                  onClick={resetFile}
+                  className="text-dash-caption text-red-500 underline mt-1 cursor-pointer"
+                >
+                  Try again
+                </button>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Preview */}
-            {previewRows.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={15} className="text-green-500" />
-                    <p className="text-dash-body font-semibold text-gray-700">
-                      {fileName} — {previewRows.length}+{" "}
-                      {isFood ? "dishes" : "products"} ready to import
-                    </p>
-                  </div>
-                  <button
-                    onClick={resetFile}
-                    className="text-dash-caption text-gray-400 hover:text-red-500 cursor-pointer"
-                  >
-                    Change file
-                  </button>
+          {/* Preview */}
+          {previewRows.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-green-500" />
+                  <p className="text-dash-body font-semibold text-gray-700">
+                    {fileName} — {previewRows.length}+{" "}
+                    {isFood ? "dishes" : "products"} ready to import
+                  </p>
                 </div>
-                <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-dash-caption">
-                      <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200">
+                <button
+                  onClick={resetFile}
+                  className="text-dash-caption text-gray-400 hover:text-red-500 cursor-pointer"
+                >
+                  Change file
+                </button>
+              </div>
+              <div className="border border-gray-200 rounded-md overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-dash-caption">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        {previewHeaders.map((h) => (
+                          <th
+                            key={h}
+                            className="text-left px-3 py-2.5 font-semibold text-gray-500 whitespace-nowrap"
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {previewRows.map((row, i) => (
+                        <tr
+                          key={i}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
                           {previewHeaders.map((h) => (
-                            <th
+                            <td
                               key={h}
-                              className="text-left px-3 py-2.5 font-semibold text-gray-500 whitespace-nowrap"
+                              className="px-3 py-2.5 text-gray-700 max-w-[140px] truncate"
                             >
-                              {h}
-                            </th>
+                              {row[h] || "—"}
+                            </td>
                           ))}
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {previewRows.map((row, i) => (
-                          <tr
-                            key={i}
-                            className="hover:bg-gray-50 transition-colors"
-                          >
-                            {previewHeaders.map((h) => (
-                              <td
-                                key={h}
-                                className="px-3 py-2.5 text-gray-700 max-w-[140px] truncate"
-                              >
-                                {row[h] || "—"}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-dash-caption text-gray-400 px-3 py-2 border-t border-gray-100">
-                    Showing first {previewRows.length} rows · check they look
-                    right before importing
-                  </p>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
+                <p className="text-dash-caption text-gray-400 px-3 py-2 border-t border-gray-100">
+                  Showing first {previewRows.length} rows · check they look
+                  right before importing
+                </p>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* CRM platforms tab */}
-        {tab === "crm" && (
-          <div className="px-6 py-5 space-y-3">
-            {isFood ? (
-              <p className="text-dash-body text-gray-500">
-                Already selling on one of these platforms? Connect it to sync
-                your menu automatically — no manual entry needed.
-              </p>
-            ) : (
-              <p className="text-dash-body text-gray-500">
-                Connect your existing platform to sync products automatically.
-              </p>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {platforms.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-3 p-3.5 border border-gray-100 rounded-xl hover:border-orange-200 hover:bg-orange-50/30 transition-colors"
-                >
-                  <div
-                    className={cn(
-                      "w-10 h-10 rounded-xl flex items-center justify-center text-white text-dash-caption font-black flex-shrink-0",
-                      p.color,
-                    )}
-                  >
-                    {p.initial}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-dash-body font-semibold text-[#023337]">
-                      {p.name}
-                    </p>
-                    <p className="text-dash-caption text-gray-400 truncate">
-                      {p.desc}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() =>
-                      toast.info(
-                        `${p.name} integration coming soon — we're actively building it!`,
-                      )
-                    }
-                    className="px-3 py-1.5 text-dash-caption font-semibold text-orange-600 border border-orange-200 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors cursor-pointer flex-shrink-0"
-                  >
-                    Connect
-                  </button>
-                </div>
-              ))}
             </div>
-            <p className="text-dash-caption text-gray-400 text-center pt-1">
-              All integrations use OAuth — your credentials are never stored on
-              our servers.
-            </p>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Footer */}
         <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
@@ -859,14 +691,14 @@ function ImportProductsModal({
               onClose();
               resetFile();
             }}
-            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors cursor-pointer"
           >
             Cancel
           </button>
-          {tab === "file" && previewRows.length > 0 && (
+          {previewRows.length > 0 && (
             <button
               onClick={handleImport}
-              className="flex-1 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors cursor-pointer"
+              className="flex-1 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors cursor-pointer"
             >
               Import {previewRows.length}+ {isFood ? "Items" : "Products"}
             </button>
@@ -882,7 +714,7 @@ function ImportProductsModal({
 function EditProductSkeleton() {
   return (
     <div className="space-y-5 animate-pulse">
-      <div className="h-8 w-48 bg-gray-200 rounded-xl" />
+      <div className="h-8 w-48 bg-gray-200 rounded-md" />
       <div className="flex flex-col lg:flex-row gap-5">
         <div className="flex-1 space-y-5">
           {[1, 2, 3].map((i) => (
@@ -891,8 +723,8 @@ function EditProductSkeleton() {
               className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4"
             >
               <div className="h-5 w-32 bg-gray-200 rounded-lg" />
-              <div className="h-11 bg-gray-100 rounded-xl" />
-              <div className="h-24 bg-gray-100 rounded-xl" />
+              <div className="h-11 bg-gray-100 rounded-md" />
+              <div className="h-24 bg-gray-100 rounded-md" />
             </div>
           ))}
         </div>
@@ -903,7 +735,7 @@ function EditProductSkeleton() {
               className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4"
             >
               <div className="h-5 w-24 bg-gray-200 rounded-lg" />
-              <div className="h-56 bg-gray-100 rounded-xl" />
+              <div className="h-56 bg-gray-100 rounded-md" />
             </div>
           ))}
         </div>
@@ -912,10 +744,105 @@ function EditProductSkeleton() {
   );
 }
 
+// ── Publish progress modal ───────────────────────────────────────────────────
+
+function PublishProgressModal({
+  open,
+  progress,
+  step,
+  done,
+  isFood,
+}: {
+  open: boolean;
+  progress: number;
+  step: string;
+  done: boolean;
+  isFood: boolean;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm flex flex-col items-center gap-5">
+        {/* Icon */}
+        <div
+          className={cn(
+            "w-16 h-16 rounded-full flex items-center justify-center transition-colors duration-500",
+            done ? "bg-green-100" : "bg-orange-100",
+          )}
+        >
+          {done ? (
+            <CheckCircle2 size={32} className="text-green-500" />
+          ) : (
+            <Upload size={32} className="text-orange-500 animate-bounce" />
+          )}
+        </div>
+
+        {/* Title + description */}
+        <div className="text-center space-y-1.5">
+          <h2 className="text-dash-heading font-black text-[#023337]">
+            {done
+              ? isFood
+                ? "Dish is Live!"
+                : "Product is Live!"
+              : isFood
+                ? "Publishing Your Dish"
+                : "Publishing Your Product"}
+          </h2>
+          <p className="text-dash-caption text-gray-400 leading-relaxed">
+            {done
+              ? "Everything's set. Your customers can now find this listing on your store."
+              : `Hang tight — we're uploading your media and saving your ${isFood ? "dish" : "product"} to your store. This usually takes a few seconds.`}
+          </p>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-full">
+          <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-500 ease-out",
+                done ? "bg-green-500" : "bg-orange-500",
+              )}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="flex justify-between items-center mt-1.5">
+            <p className="text-dash-caption text-gray-400 truncate">{step}</p>
+            <p className="text-dash-caption font-bold text-[#023337] ml-2 shrink-0">
+              {progress}%
+            </p>
+          </div>
+        </div>
+
+        {/* Tip card */}
+        {!done && (
+          <div className="w-full bg-[#F1F5F9] rounded-xl p-3.5">
+            <p className="text-dash-caption font-semibold text-[#023337] mb-0.5">
+              Did you know?
+            </p>
+            <p className="text-dash-caption text-gray-500 leading-relaxed">
+              {isFood
+                ? "Dishes with bright, clear photos get up to 3× more orders. A good cover photo makes all the difference."
+                : "Products with detailed descriptions and multiple images sell significantly faster than those with minimal info."}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export default function AddProductPage({ productId }: { productId?: string }) {
-  const isEditMode = !!productId;
+export default function AddProductPage({
+  mode,
+  productId,
+}: {
+  mode: "add" | "edit";
+  productId?: string;
+}) {
+  const isEditMode = mode === "edit";
   const isFood = useIsFood();
 
   // Basic
@@ -940,11 +867,14 @@ export default function AddProductPage({ productId }: { productId?: string }) {
   const [expirationDate, setExpirationDate] = useState("");
   const [isFeatured, setIsFeatured] = useState(false);
 
-  // Media
+  // Media — preview URLs (blob) + backing File objects for upload
   const [mediaType, setMediaType] = useState<MediaType>("image");
   const [mainImage, setMainImage] = useState<string | null>(null);
+  const [mainImageFile, setMainImageFile] = useState<File | null>(null);
   const [thumbnails, setThumbnails] = useState<string[]>([]);
+  const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
   const [videoFile, setVideoFile] = useState<string | null>(null);
+  const [videoFileObj, setVideoFileObj] = useState<File | null>(null);
 
   // Tags + attributes
   const [tagInput, setTagInput] = useState("");
@@ -956,17 +886,9 @@ export default function AddProductPage({ productId }: { productId?: string }) {
 
   // Food-specific
   const [estimatedPrepMins, setEstimatedPrepMins] = useState(20);
-  const [availabilityDays, setAvailabilityDays] = useState<DayOfWeek[]>([
-    "mon",
-    "tue",
-    "wed",
-    "thu",
-    "fri",
-    "sat",
-    "sun",
-  ]);
-  const [availabilityStartTime, setAvailabilityStartTime] = useState("08:00");
-  const [availabilityEndTime, setAvailabilityEndTime] = useState("22:00");
+  const [isCurrentlyAvailable, setIsCurrentlyAvailable] = useState(true);
+  const [dailyLimit, setDailyLimit] = useState("");
+  const [allowPreOrder, setAllowPreOrder] = useState(false);
   const [modifiers, setModifiers] = useState<ProductModifier[]>([]);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [optionName, setOptionName] = useState("");
@@ -976,6 +898,16 @@ export default function AddProductPage({ productId }: { productId?: string }) {
   const [savedTemplatePrices, setSavedTemplatePrices] = useState<
     Record<string, Record<string, number>>
   >({});
+
+  // Submission state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [publishModal, setPublishModal] = useState({
+    open: false,
+    progress: 0,
+    step: "",
+    done: false,
+  });
 
   // UI state
   const [currencyPopoverOpen, setCurrencyPopoverOpen] = useState(false);
@@ -1013,26 +945,41 @@ export default function AddProductPage({ productId }: { productId?: string }) {
     });
   };
 
-  // Edit mode: fetch existing product list
+  // Retail categories (food uses hardcoded constants)
+  const { data: retailCategories = [] } = useQuery({
+    queryKey: queryKeys.products.categories,
+    queryFn: categoriesApi.getCategories,
+    enabled: !isFood,
+  });
+
+  // Edit mode: fetch single product by ID
   const pathname = usePathname();
   const userId = pathname.split("/").filter(Boolean)[0];
   const { navigate } = useNavigation();
+  const queryClient = useQueryClient();
 
-  const { data: allProducts = [], isLoading: productLoading } = useQuery({
-    queryKey: queryKeys.products.list,
-    queryFn: categoriesApi.getProducts,
-    enabled: isEditMode,
+  const { data: existingProduct, isLoading: productLoading } = useQuery({
+    queryKey: queryKeys.products.detail(productId!),
+    queryFn: () => categoriesApi.getProduct(productId!),
+    enabled: isEditMode && !!productId,
   });
-  const existingProduct = isEditMode
-    ? allProducts.find((p) => p.id === productId)
-    : undefined;
 
-  // Pre-fill state once the product is loaded
+  // Pre-fill form once the product is loaded
   useEffect(() => {
     if (!existingProduct) return;
     setProductName(existingProduct.name);
+    setDescription(existingProduct.description ?? "");
     setSelectedCategory(existingProduct.categoryId ?? "");
     setPrice(String(existingProduct.price));
+    if (existingProduct.currency) setCurrency(existingProduct.currency);
+    if (existingProduct.discountedPrice)
+      setDiscountedPrice(String(existingProduct.discountedPrice));
+    setTaxIncluded(existingProduct.taxIncluded ? "yes" : "no");
+    if (existingProduct.taxType) setTaxType(existingProduct.taxType as TaxType);
+    if (existingProduct.taxValue) setTaxValue(String(existingProduct.taxValue));
+    if (existingProduct.isNegotiable) setIsNegotiable(true);
+    if (existingProduct.minimumPrice)
+      setMinimumPrice(String(existingProduct.minimumPrice));
     setStockQuantity(String(existingProduct.totalQuantity ?? ""));
     setThreshold(String(existingProduct.lowStockThreshold ?? ""));
     setManufacturingDate(existingProduct.manufacturingDate ?? "");
@@ -1041,14 +988,18 @@ export default function AddProductPage({ productId }: { productId?: string }) {
     setTags(existingProduct.tags ?? []);
     setAttributes(existingProduct.attributes ?? []);
     setModifiers(existingProduct.modifiers ?? []);
-    if (existingProduct.availability) {
-      setAvailabilityDays(existingProduct.availability.days);
-      setAvailabilityStartTime(existingProduct.availability.startTime);
-      setAvailabilityEndTime(existingProduct.availability.endTime);
-    }
-    if (existingProduct.estimatedPrepMins) {
+    if (existingProduct.mainImageUrl)
+      setMainImage(existingProduct.mainImageUrl);
+    if (existingProduct.thumbnailUrls?.length)
+      setThumbnails(existingProduct.thumbnailUrls);
+    if (existingProduct.estimatedPrepMins)
       setEstimatedPrepMins(existingProduct.estimatedPrepMins);
-    }
+    if (existingProduct.isCurrentlyAvailable !== undefined)
+      setIsCurrentlyAvailable(existingProduct.isCurrentlyAvailable);
+    if (existingProduct.dailyLimit)
+      setDailyLimit(String(existingProduct.dailyLimit));
+    if (existingProduct.allowPreOrder !== undefined)
+      setAllowPreOrder(existingProduct.allowPreOrder);
   }, [existingProduct]);
 
   useEffect(() => {
@@ -1082,17 +1033,21 @@ export default function AddProductPage({ productId }: { productId?: string }) {
 
   const handleMainImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setMainImage(URL.createObjectURL(file));
+    if (file) {
+      setMainImage(URL.createObjectURL(file));
+      setMainImageFile(file);
+    }
   };
   const clearMainImage = () => {
     setMainImage(null);
+    setMainImageFile(null);
     if (mainImageRef.current) mainImageRef.current.value = "";
   };
   const handleThumbUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const urls = Array.from(e.target.files ?? []).map((f) =>
-      URL.createObjectURL(f),
-    );
+    const files = Array.from(e.target.files ?? []);
+    const urls = files.map((f) => URL.createObjectURL(f));
     setThumbnails((prev) => [...prev, ...urls].slice(0, 4));
+    setThumbnailFiles((prev) => [...prev, ...files].slice(0, 4));
   };
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1115,11 +1070,6 @@ export default function AddProductPage({ productId }: { productId?: string }) {
     setAttributeNameInput("");
     setAttributeValueInput("");
   };
-
-  const toggleDay = (day: DayOfWeek) =>
-    setAvailabilityDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
-    );
 
   const addTemplateGroup = (tpl: NigerianTemplate) => {
     if (modifiers.some((m) => m.name === tpl.name)) return;
@@ -1158,6 +1108,213 @@ export default function AddProductPage({ productId }: { productId?: string }) {
   };
 
   const currSymbol = currency === "NGN" ? "₦" : "$";
+  const isElectronics = selectedCategory === "electronics";
+  const isHealth = selectedCategory === "health";
+  const canSubmit =
+    productName.trim().length > 0 &&
+    selectedCategory !== "" &&
+    parseFloat(price) > 0 &&
+    (mainImage !== null || videoFile !== null) &&
+    (isFood ||
+      (stockQuantity !== "" &&
+        threshold !== "" &&
+        (!(isHealth || isElectronics) || expirationDate !== "")));
+
+  // ── Form submission ────────────────────────────────────────────────────────
+
+  const handleSubmit = async () => {
+    if (!productName.trim()) {
+      toast.error(
+        isFood ? "Dish name is required" : "Product name is required",
+      );
+      return;
+    }
+    if (!selectedCategory) {
+      toast.error("Please select a category");
+      return;
+    }
+    if (!price || parseFloat(price) <= 0) {
+      toast.error("Price must be greater than zero");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFieldErrors({});
+    setPublishModal({
+      open: true,
+      progress: 0,
+      step: "Preparing…",
+      done: false,
+    });
+
+    try {
+      // Calculate how many uploads we'll do so each gets an equal share of 0–75%
+      const uploadCount =
+        (mainImageFile ? 1 : 0) +
+        thumbnailFiles.length +
+        (videoFileObj ? 1 : 0);
+      const uploadShare = uploadCount > 0 ? Math.floor(75 / uploadCount) : 0;
+      let uploadsCompleted = 0;
+
+      const advanceUpload = (step: string) => {
+        uploadsCompleted++;
+        setPublishModal((prev) => ({
+          ...prev,
+          progress: Math.min(75, uploadsCompleted * uploadShare),
+          step,
+        }));
+      };
+
+      // Upload main image
+      let mainImageUrl: string | null = null;
+      if (mainImageFile) {
+        setPublishModal((prev) => ({ ...prev, step: "Uploading main image…" }));
+        mainImageUrl = await uploadProductMedia(mainImageFile, "image");
+        advanceUpload("Main image ready");
+      } else if (mainImage && !mainImage.startsWith("blob:")) {
+        mainImageUrl = mainImage;
+      }
+
+      // Upload thumbnails
+      let thumbnailUrls: string[] = [];
+      for (let i = 0; i < thumbnailFiles.length; i++) {
+        setPublishModal((prev) => ({
+          ...prev,
+          step:
+            thumbnailFiles.length > 1
+              ? `Uploading photo ${i + 1} of ${thumbnailFiles.length}…`
+              : "Uploading extra photo…",
+        }));
+        const url = await uploadProductMedia(thumbnailFiles[i], "image");
+        thumbnailUrls.push(url);
+        advanceUpload(
+          thumbnailFiles.length > 1
+            ? `Photo ${i + 1} uploaded`
+            : "Extra photo ready",
+        );
+      }
+      const remoteThumbUrls = thumbnails.filter((u) => !u.startsWith("blob:"));
+      thumbnailUrls = [...remoteThumbUrls, ...thumbnailUrls].slice(0, 5);
+
+      // Upload video
+      let videoUrl: string | null = null;
+      if (videoFileObj) {
+        setPublishModal((prev) => ({ ...prev, step: "Uploading video…" }));
+        videoUrl = await uploadProductMedia(videoFileObj, "video");
+        advanceUpload("Video ready");
+      }
+
+      // Save to backend
+      setPublishModal((prev) => ({
+        ...prev,
+        progress: 82,
+        step: "Saving to your store…",
+      }));
+
+      const priceKobo = Math.round(parseFloat(price) * 100);
+      const base = {
+        name: productName.trim(),
+        description: description.trim() || null,
+        category_id: selectedCategory,
+        price: priceKobo,
+        currency,
+        discounted_price:
+          !isNegotiable && discountedPrice
+            ? Math.round(parseFloat(discountedPrice) * 100)
+            : null,
+        tax_included: taxIncluded === "yes",
+        tax_type: taxIncluded === "yes" ? taxType : null,
+        tax_value:
+          taxIncluded === "yes" && taxValue ? parseFloat(taxValue) : null,
+        is_negotiable: isNegotiable,
+        minimum_price:
+          isNegotiable && minimumPrice
+            ? Math.round(parseFloat(minimumPrice) * 100)
+            : null,
+        is_featured: isFeatured,
+        tags,
+        main_image_url: mainImageUrl,
+        thumbnail_urls: thumbnailUrls,
+        video_url: videoUrl,
+      };
+
+      let payload: RetailProductPayload | FoodProductPayload;
+
+      if (isFood) {
+        payload = {
+          ...base,
+          estimated_prep_mins: estimatedPrepMins,
+          is_currently_available: isCurrentlyAvailable,
+          daily_limit: dailyLimit ? parseInt(dailyLimit) : null,
+          allow_pre_order: allowPreOrder,
+          modifiers: modifiers.map((m) => ({
+            name: m.name,
+            required: m.required,
+            multi_select: m.multiSelect,
+            options: m.options.map((o) => ({
+              name: o.name,
+              additional_price: Math.round(o.additionalPrice * 100),
+            })),
+          })),
+        } as FoodProductPayload;
+      } else {
+        payload = {
+          ...base,
+          stock_quantity: parseInt(stockQuantity) || 0,
+          low_stock_threshold: threshold ? parseInt(threshold) : null,
+          manufacturing_date: isHealth ? manufacturingDate || null : null,
+          expiration_date:
+            isHealth || isElectronics ? expirationDate || null : null,
+          attributes: attributes.map(({ name, value }) => ({ name, value })),
+        } as RetailProductPayload;
+      }
+
+      if (isEditMode && productId) {
+        await categoriesApi.updateProduct(productId, payload);
+      } else {
+        await categoriesApi.createProduct(payload);
+      }
+
+      setPublishModal((prev) => ({
+        ...prev,
+        progress: 100,
+        step: isEditMode ? "Changes saved!" : "Published successfully!",
+        done: true,
+      }));
+
+      queryClient.invalidateQueries({
+        queryKey: ["products", "list"],
+        refetchType: "none",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["products", "stats"],
+        refetchType: "none",
+      });
+
+      await new Promise((r) => setTimeout(r, 1100));
+      setPublishModal((prev) => ({ ...prev, open: false }));
+      navigate(`/${userId}/products`);
+    } catch (err: unknown) {
+      setPublishModal((prev) => ({ ...prev, open: false }));
+      const apiErr = err as {
+        data?: {
+          error?: { fields?: Record<string, string>; message?: string };
+        };
+        status?: number;
+      };
+      if (apiErr.status === 400 && apiErr.data?.error?.fields) {
+        setFieldErrors(apiErr.data.error.fields);
+        toast.error("Please fix the highlighted fields");
+      } else {
+        toast.error(
+          apiErr.data?.error?.message ??
+            getErrorMessage(err, "Something went wrong"),
+        );
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (isEditMode && productLoading) return <EditProductSkeleton />;
 
@@ -1177,7 +1334,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
         </div>
         <button
           onClick={() => navigate(`/${userId}/products`)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-md transition-colors cursor-pointer"
         >
           <ArrowLeft size={15} />
           Back to Products
@@ -1194,7 +1351,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
         isFood={isFood}
       />
 
-      <div className="space-y-5">
+      <div className="space-y-5 sm:pb-10 pb-10">
         {/* Page header */}
         <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
@@ -1222,7 +1379,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
           {!isEditMode && (
             <button
               onClick={() => setImportModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-600 text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-600 text-dash-body font-semibold rounded-md transition-colors cursor-pointer"
             >
               <Upload size={15} />
               {isFood ? "Bulk Upload Dishes" : "Import from CSV / CRM"}
@@ -1240,7 +1397,9 @@ export default function AddProductPage({ productId }: { productId?: string }) {
               icon={isFood ? ChefHat : Package}
             >
               <div>
-                <FieldLabel>{isFood ? "Dish Name" : "Product Name"}</FieldLabel>
+                <FieldLabel required>
+                  {isFood ? "Dish Name" : "Product Name"}
+                </FieldLabel>
                 <Input
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
@@ -1249,9 +1408,14 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                       ? "e.g., Jollof Rice, Egusi Soup, Suya…"
                       : "e.g., Wireless Headphones"
                   }
-                  className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                  className={`w-full h-11 px-3 bg-gray-50 border rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 ${fieldErrors.name ? "border-red-400" : "border-gray-200"}`}
                 />
-                {isFood && (
+                {fieldErrors.name && (
+                  <p className="text-dash-caption text-red-500 mt-1">
+                    {fieldErrors.name}
+                  </p>
+                )}
+                {!fieldErrors.name && isFood && (
                   <p className="text-dash-caption text-gray-400 mt-1.5">
                     Write it exactly as you call it on your menu
                   </p>
@@ -1259,7 +1423,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
               </div>
 
               <div>
-                <FieldLabel>Description</FieldLabel>
+                <FieldLabel optional>Description</FieldLabel>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -1269,12 +1433,12 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                       : "Describe the product features and benefits…"
                   }
                   rows={4}
-                  className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
+                  className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
                 />
               </div>
 
               <div>
-                <FieldLabel>
+                <FieldLabel required>
                   {isFood ? "What type of dish is this?" : "Product Category"}
                 </FieldLabel>
                 {isFood ? (
@@ -1289,7 +1453,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                             setSelectedCategory(active ? "" : cat.id)
                           }
                           className={cn(
-                            "flex items-center gap-1.5 px-3 py-2 rounded-xl text-dash-body font-medium border transition-colors cursor-pointer",
+                            "flex items-center gap-1.5 px-3 py-2 rounded-md text-dash-body font-medium border transition-colors cursor-pointer",
                             active
                               ? "bg-orange-500 text-white border-orange-500"
                               : "bg-white text-gray-700 border-gray-200 hover:border-orange-300 hover:bg-orange-50",
@@ -1306,13 +1470,15 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     value={selectedCategory}
                     onValueChange={(v) => setSelectedCategory(v ?? "")}
                   >
-                    <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
+                    <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="" disabled>
-                        Select a category
-                      </SelectItem>
+                      {retailCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.emoji} {cat.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
@@ -1323,17 +1489,17 @@ export default function AddProductPage({ productId }: { productId?: string }) {
             <FormSection title="Pricing" icon={BarChart3}>
               {/* Base price */}
               <div>
-                <FieldLabel>
+                <FieldLabel required>
                   {isFood ? "Dish Price" : "Product Price"}
                 </FieldLabel>
-                <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
+                <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-md overflow-hidden">
                   <Input
                     type="number"
                     step="any"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="0.00"
-                    className="flex-1 min-w-0 px-3 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                    className="flex-1 min-w-0 px-3 pt-3 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
                   />
                   <div className="relative">
                     <button
@@ -1350,7 +1516,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     {currencyPopoverOpen && (
                       <div
                         ref={currencyDropdownRef}
-                        className="absolute right-0 top-full mt-1 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 min-w-[100px]"
+                        className="absolute right-0 top-full mt-1 z-50 bg-white rounded-md shadow-lg border border-gray-200 py-1 min-w-[100px]"
                       >
                         {[
                           ["NGN", "₦ NGN"],
@@ -1372,6 +1538,11 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     )}
                   </div>
                 </div>
+                {fieldErrors.price && (
+                  <p className="text-dash-caption text-red-500 mt-1">
+                    {fieldErrors.price}
+                  </p>
+                )}
               </div>
 
               {/* Negotiable Price */}
@@ -1393,7 +1564,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                 {isNegotiable && (
                   <div>
                     <FieldLabel>Minimum Price</FieldLabel>
-                    <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3">
+                    <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3">
                       <span className="bg-orange-50 rounded-lg px-2 py-1 text-dash-caption font-bold text-orange-600 flex-shrink-0">
                         {currSymbol}
                       </span>
@@ -1417,7 +1588,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
               {!isNegotiable && (
                 <div>
                   <FieldLabel optional>Discounted Price</FieldLabel>
-                  <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3">
+                  <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3">
                     <span className="bg-orange-50 rounded-lg px-2 py-1 text-dash-caption font-bold text-orange-600 flex-shrink-0">
                       {currSymbol}
                     </span>
@@ -1453,7 +1624,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                   <div>
                     <FieldLabel>Tax Amount</FieldLabel>
                     <div className="flex gap-2">
-                      <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden flex-1">
+                      <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-md overflow-hidden flex-1">
                         <Input
                           type="number"
                           step="any"
@@ -1470,7 +1641,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                             type="button"
                             onClick={() => setTaxType(type)}
                             className={cn(
-                              "px-3.5 h-11 text-dash-body rounded-xl transition-colors cursor-pointer font-medium",
+                              "px-3.5 h-11 text-dash-body rounded-md transition-colors cursor-pointer font-medium",
                               taxType === type
                                 ? "bg-orange-500 text-white"
                                 : "bg-gray-100 text-gray-700 hover:bg-gray-200",
@@ -1499,12 +1670,18 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   });
-                const taxLabel =
-                  taxIncluded === "yes" && taxAmt > 0
-                    ? taxType === "percentage"
-                      ? `${taxAmt}% included`
-                      : `${currSymbol}${fmt(taxAmt)} included`
-                    : "Not specified";
+                const hasTax = taxIncluded === "yes" && taxAmt > 0;
+                const taxComputed = hasTax
+                  ? taxType === "percentage"
+                    ? (effectiveAmt * taxAmt) / 100
+                    : taxAmt
+                  : 0;
+                const totalAmt = effectiveAmt + taxComputed;
+                const taxLabel = hasTax
+                  ? taxType === "percentage"
+                    ? `+${taxAmt}% (${currSymbol}${fmt(taxComputed)})`
+                    : `+${currSymbol}${fmt(taxAmt)}`
+                  : "None";
                 return (
                   <div className="bg-orange-50/70 border border-orange-100 rounded-2xl p-4">
                     <p className="text-dash-caption font-semibold text-orange-500 uppercase tracking-wider mb-3">
@@ -1527,7 +1704,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     ) : (
                       <p className="text-[1.6rem] font-black text-[#023337] leading-none mb-3">
                         {currSymbol}
-                        {effectiveAmt > 0 ? fmt(effectiveAmt) : "—"}
+                        {totalAmt > 0 ? fmt(totalAmt) : "—"}
                       </p>
                     )}
                     <div className="space-y-1.5 pt-3 border-t border-orange-100">
@@ -1551,9 +1728,26 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                           </div>
                         </>
                       )}
+                      {hasTax && (
+                        <div className="flex justify-between text-dash-caption">
+                          <span className="text-gray-500">Subtotal</span>
+                          <span className="text-gray-500">
+                            {currSymbol}
+                            {fmt(effectiveAmt)}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-dash-caption">
                         <span className="text-gray-500">Tax</span>
-                        <span className="text-gray-500">{taxLabel}</span>
+                        <span
+                          className={
+                            hasTax
+                              ? "text-orange-500 font-semibold"
+                              : "text-gray-400"
+                          }
+                        >
+                          {taxLabel}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1566,7 +1760,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
               <FormSection title="Inventory" icon={Layers}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <FieldLabel>Stock Quantity</FieldLabel>
+                    <FieldLabel required>Stock Quantity</FieldLabel>
                     <Input
                       type="number"
                       step="1"
@@ -1574,11 +1768,11 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                       value={stockQuantity}
                       onChange={(e) => setStockQuantity(e.target.value)}
                       placeholder="e.g., 100"
-                      className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                      className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                     />
                   </div>
                   <div>
-                    <FieldLabel>Low Stock Threshold</FieldLabel>
+                    <FieldLabel required>Low Stock Threshold</FieldLabel>
                     <Input
                       type="number"
                       step="1"
@@ -1586,7 +1780,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                       value={threshold}
                       onChange={(e) => setThreshold(e.target.value)}
                       placeholder="e.g., 10"
-                      className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                      className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                     />
                     <p className="text-dash-caption text-gray-400 mt-1.5">
                       Notify me when stock drops to this level
@@ -1594,43 +1788,52 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  {[
-                    {
-                      label: "Manufacturing Date",
-                      optional: true,
-                      ref: manufacturingDateRef,
-                      value: manufacturingDate,
-                      onChange: setManufacturingDate,
-                    },
-                    {
-                      label: "Expiration Date",
-                      optional: false,
-                      ref: expirationDateRef,
-                      value: expirationDate,
-                      onChange: setExpirationDate,
-                    },
-                  ].map(({ label, optional, ref, value, onChange }) => (
-                    <div key={label}>
-                      <FieldLabel optional={optional}>{label}</FieldLabel>
+                {(isHealth || isElectronics) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {isHealth && (
+                      <div>
+                        <FieldLabel optional>Manufacturing Date</FieldLabel>
+                        <div className="relative">
+                          <Input
+                            ref={manufacturingDateRef}
+                            type="date"
+                            value={manufacturingDate}
+                            onClick={() => openDatePicker(manufacturingDateRef)}
+                            onChange={(e) =>
+                              setManufacturingDate(e.target.value)
+                            }
+                            className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
+                          />
+                          <Calendar
+                            size={16}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer"
+                            onClick={() => openDatePicker(manufacturingDateRef)}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <FieldLabel required>
+                        {isElectronics ? "Guarantee Until" : "Expiration Date"}
+                      </FieldLabel>
                       <div className="relative">
                         <Input
-                          ref={ref}
+                          ref={expirationDateRef}
                           type="date"
-                          value={value}
-                          onClick={() => openDatePicker(ref)}
-                          onChange={(e) => onChange(e.target.value)}
-                          className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
+                          value={expirationDate}
+                          onClick={() => openDatePicker(expirationDateRef)}
+                          onChange={(e) => setExpirationDate(e.target.value)}
+                          className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
                         />
                         <Calendar
                           size={16}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer"
-                          onClick={() => openDatePicker(ref)}
+                          onClick={() => openDatePicker(expirationDateRef)}
                         />
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
 
                 <CheckboxField
                   checked={isFeatured}
@@ -1653,7 +1856,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                         type="button"
                         onClick={() => setEstimatedPrepMins(mins)}
                         className={cn(
-                          "px-3 py-1.5 rounded-xl text-dash-body font-medium border transition-colors cursor-pointer",
+                          "px-3 py-1.5 rounded-md text-dash-body font-medium border transition-colors cursor-pointer",
                           estimatedPrepMins === mins
                             ? "bg-orange-500 text-white border-orange-500"
                             : "bg-white text-gray-600 border-gray-200 hover:border-orange-300",
@@ -1670,11 +1873,11 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                       onClick={() =>
                         setEstimatedPrepMins((p) => Math.max(5, p - 5))
                       }
-                      className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-heading font-bold flex-shrink-0"
+                      className="w-10 h-10 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-heading font-bold flex-shrink-0"
                     >
                       −
                     </button>
-                    <div className="flex-1 h-10 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center">
+                    <div className="flex-1 h-10 bg-gray-50 border border-gray-200 rounded-md flex items-center justify-center">
                       <span className="text-dash-body font-black text-gray-800">
                         {estimatedPrepMins} min
                       </span>
@@ -1682,7 +1885,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     <button
                       type="button"
                       onClick={() => setEstimatedPrepMins((p) => p + 5)}
-                      className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-heading font-bold flex-shrink-0"
+                      className="w-10 h-10 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-heading font-bold flex-shrink-0"
                     >
                       +
                     </button>
@@ -1698,8 +1901,8 @@ export default function AddProductPage({ productId }: { productId?: string }) {
           {/* ── Right column ── */}
           <div className="w-full lg:w-[440px] flex-shrink-0 space-y-5">
             {/* Media */}
-            <FormSection title="Media" icon={ImageIcon}>
-              <div className="flex gap-2 mb-1">
+            <FormSection title="Media" icon={ImageIcon} required>
+              <div className="flex gap-2 mb-2 -mt-1">
                 {[
                   { key: "image" as const, icon: ImageIcon, label: "Images" },
                   { key: "video" as const, icon: Video, label: "Video" },
@@ -1709,7 +1912,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     type="button"
                     onClick={() => setMediaType(key)}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-xl text-dash-body font-medium transition-colors cursor-pointer",
+                      "flex items-center gap-2 px-4 py-2 rounded-md text-dash-body font-medium transition-colors cursor-pointer",
                       mediaType === key
                         ? "bg-orange-500 text-white"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200",
@@ -1724,7 +1927,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
               {mediaType === "image" ? (
                 <>
                   {/* Main image */}
-                  <div className="relative border border-gray-200 rounded-xl overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
+                  <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
                     {mainImage ? (
                       <img
                         src={mainImage}
@@ -1777,7 +1980,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     {thumbnails.map((url, i) => (
                       <div
                         key={i}
-                        className="relative w-20 h-20 border border-gray-200 rounded-xl overflow-hidden flex-shrink-0 group"
+                        className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
                       >
                         <img
                           src={url}
@@ -1797,7 +2000,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     {thumbnails.length < 4 && (
                       <button
                         onClick={() => thumbRef.current?.click()}
-                        className="w-20 h-20 border border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
+                        className="w-20 h-20 border border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
                       >
                         <PlusCircle size={18} className="text-orange-400" />
                         <span className="text-dash-caption text-orange-400">
@@ -1816,7 +2019,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                   </div>
                 </>
               ) : (
-                <div className="relative border border-gray-200 rounded-xl overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
+                <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
                   {videoFile ? (
                     <video
                       src={videoFile}
@@ -1857,7 +2060,10 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
-                      if (f) setVideoFile(URL.createObjectURL(f));
+                      if (f) {
+                        setVideoFile(URL.createObjectURL(f));
+                        setVideoFileObj(f);
+                      }
                     }}
                   />
                 </div>
@@ -1868,7 +2074,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
             {!isFood && (
               <FormSection title="Tags & Attributes" icon={Tag}>
                 <div>
-                  <FieldLabel>Tags</FieldLabel>
+                  <FieldLabel optional>Tags</FieldLabel>
 
                   {/* Popular food tags (quick-add chips) */}
                   {isFood && (
@@ -1931,14 +2137,14 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                         ? "Or type a custom tag and press Enter"
                         : "Type a tag then press Enter or Space"
                     }
-                    className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                    className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                   />
                 </div>
 
                 {/* Attributes — retail only */}
                 {!isFood && (
                   <div>
-                    <FieldLabel>Attributes</FieldLabel>
+                    <FieldLabel optional>Attributes</FieldLabel>
                     <div className="flex gap-2">
                       <Input
                         type="text"
@@ -1948,7 +2154,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                           if (attributeError) setAttributeError("");
                         }}
                         placeholder="Name (e.g., Size)"
-                        className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                        className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                       />
                       <Input
                         type="text"
@@ -1958,12 +2164,12 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                           if (attributeError) setAttributeError("");
                         }}
                         placeholder="Value (e.g., Large)"
-                        className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                        className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                       />
                       <button
                         type="button"
                         onClick={addAttribute}
-                        className="w-11 h-11 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer"
+                        className="w-11 h-11 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer"
                       >
                         <Plus size={18} />
                       </button>
@@ -1978,7 +2184,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                         {attributes.map((attr) => (
                           <div
                             key={attr.id}
-                            className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl"
+                            className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-md"
                           >
                             <div className="text-dash-body">
                               <span className="font-semibold text-[#023337]">
@@ -2007,63 +2213,60 @@ export default function AddProductPage({ productId }: { productId?: string }) {
               </FormSection>
             )}
 
-            {/* Availability — food only */}
+            {/* Availability & Stock — food only */}
             {isFood && (
-              <FormSection title="Availability" icon={Calendar}>
-                <div>
-                  <FieldLabel>Days Available</FieldLabel>
-                  <div className="flex flex-wrap gap-2">
-                    {(
-                      [
-                        "mon",
-                        "tue",
-                        "wed",
-                        "thu",
-                        "fri",
-                        "sat",
-                        "sun",
-                      ] as DayOfWeek[]
-                    ).map((day) => (
-                      <button
-                        key={day}
-                        type="button"
-                        onClick={() => toggleDay(day)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-dash-body font-medium border transition-colors cursor-pointer",
-                          availabilityDays.includes(day)
-                            ? "bg-orange-500 text-white border-orange-500"
-                            : "bg-white text-gray-600 border-gray-200 hover:border-orange-300",
-                        )}
-                      >
-                        {day.charAt(0).toUpperCase() + day.slice(1)}
-                      </button>
-                    ))}
+              <FormSection title="Availability & Stock" icon={Calendar}>
+                {/* Currently available toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-dash-body font-bold text-[#023337]">
+                      Currently Available
+                    </p>
+                    <p className="text-dash-caption text-gray-400 mt-0.5">
+                      Turn off if this dish is not ready to order right now
+                    </p>
                   </div>
+                  <Toggle
+                    value={isCurrentlyAvailable}
+                    onChange={setIsCurrentlyAvailable}
+                  />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    {
-                      label: "Start Time",
-                      value: availabilityStartTime,
-                      onChange: setAvailabilityStartTime,
-                    },
-                    {
-                      label: "End Time",
-                      value: availabilityEndTime,
-                      onChange: setAvailabilityEndTime,
-                    },
-                  ].map(({ label, value, onChange }) => (
-                    <div key={label}>
-                      <FieldLabel>{label}</FieldLabel>
-                      <Input
-                        type="time"
-                        value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-dash-body text-[#023337]"
-                      />
-                    </div>
-                  ))}
+                {/* Daily quantity limit */}
+                <div>
+                  <FieldLabel>
+                    Daily Quantity Limit{" "}
+                    <span className="text-gray-400 font-normal">
+                      (optional)
+                    </span>
+                  </FieldLabel>
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={dailyLimit}
+                    onChange={(e) => setDailyLimit(e.target.value)}
+                    placeholder="e.g. 20"
+                    className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                  />
+                  <p className="text-dash-caption text-gray-400 mt-1.5">
+                    Dish auto-marks as unavailable once this many orders are
+                    placed today
+                  </p>
+                </div>
+
+                {/* Pre-order toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-dash-body font-bold text-[#023337]">
+                      Allow Pre-orders
+                    </p>
+                    <p className="text-dash-caption text-gray-400 mt-0.5">
+                      Customers can book this dish for a future date and time —
+                      their chosen date overrides the prep time
+                    </p>
+                  </div>
+                  <Toggle value={allowPreOrder} onChange={setAllowPreOrder} />
                 </div>
               </FormSection>
             )}
@@ -2072,7 +2275,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
             {isFood && (
               <FormSection title="Customer Choices & Extras" icon={Layers}>
                 {/* Explainer */}
-                <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 -mt-1 space-y-1">
+                <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 -mt-1 space-y-1">
                   <p className="text-dash-body font-semibold text-blue-700">
                     What will customers pick when ordering this dish?
                   </p>
@@ -2102,7 +2305,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                           onClick={() => addTemplateGroup(tpl)}
                           disabled={alreadyAdded}
                           className={cn(
-                            "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-dash-caption font-semibold border transition-colors",
+                            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-dash-caption font-semibold border transition-colors",
                             alreadyAdded
                               ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
                               : "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 cursor-pointer",
@@ -2132,7 +2335,7 @@ export default function AddProductPage({ productId }: { productId?: string }) {
                     {modifiers.map((group) => (
                       <div
                         key={group.id}
-                        className="border border-gray-200 rounded-xl overflow-hidden"
+                        className="border border-gray-200 rounded-md overflow-hidden"
                       >
                         <button
                           type="button"
@@ -2314,32 +2517,53 @@ export default function AddProductPage({ productId }: { productId?: string }) {
         </div>
 
         {/* Action buttons */}
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end absolute py-2 w-full bg-white px-5 bottom-0 right-0 gap-3">
           {isEditMode ? (
             <>
               <button
                 onClick={() => navigate(`/${userId}/products`)}
-                className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+                disabled={isSubmitting}
+                className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
               >
                 Cancel
               </button>
-              <button className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-xl whitespace-nowrap transition-colors cursor-pointer">
-                {isFood ? "Update Dish" : "Save Changes"}
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !canSubmit}
+                className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSubmitting
+                  ? "Saving…"
+                  : isFood
+                    ? "Update Dish"
+                    : "Save Changes"}
               </button>
             </>
           ) : (
             <>
-              <button className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
-                <Save size={14} />
-                Save Draft
-              </button>
-              <button className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-xl whitespace-nowrap transition-colors cursor-pointer">
-                {isFood ? "Publish Dish" : "Publish Product"}
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !canSubmit}
+                className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSubmitting
+                  ? "Publishing…"
+                  : isFood
+                    ? "Publish Dish"
+                    : "Publish Product"}
               </button>
             </>
           )}
         </div>
       </div>
+
+      <PublishProgressModal
+        open={publishModal.open}
+        progress={publishModal.progress}
+        step={publishModal.step}
+        done={publishModal.done}
+        isFood={isFood}
+      />
     </>
   );
 }

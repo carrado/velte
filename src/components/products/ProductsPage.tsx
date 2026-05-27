@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { usePathname } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useMutation,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import {
   Plus,
   Search,
@@ -15,10 +20,14 @@ import {
   Star,
   AlertCircle,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categoriesApi } from "@/services/products";
 import { queryKeys } from "@/lib/query-keys";
+import { getErrorMessage } from "@/lib/error-message";
+import { toast } from "sonner";
 import type {
   Category,
   ProductTab,
@@ -26,6 +35,7 @@ import type {
   CategoryModalProps,
   RestockModalProps,
   PriceModalProps,
+  ProductListParams,
 } from "@/types/product";
 import type { FilterField } from "@/types/common";
 import { useIsFood } from "@/hooks/useBusinessType";
@@ -39,6 +49,29 @@ import SortMenu from "../SortMenu";
 import { Input } from "../ui/input";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+
+const FOOD_MENU_SECTIONS: Category[] = [
+  { id: "rice", name: "Rice Dishes", emoji: "🍚", bgColor: "bg-amber-100" },
+  { id: "soups", name: "Soups & Stews", emoji: "🍲", bgColor: "bg-orange-100" },
+  { id: "swallow", name: "Swallows", emoji: "🫙", bgColor: "bg-yellow-100" },
+  { id: "grilled", name: "Grilled & BBQ", emoji: "🔥", bgColor: "bg-red-100" },
+  { id: "protein", name: "Proteins", emoji: "🍗", bgColor: "bg-pink-100" },
+  {
+    id: "snacks",
+    name: "Snacks & Street",
+    emoji: "🥘",
+    bgColor: "bg-teal-100",
+  },
+  { id: "drinks", name: "Drinks", emoji: "🥤", bgColor: "bg-blue-100" },
+  { id: "breakfast", name: "Breakfast", emoji: "🌅", bgColor: "bg-purple-100" },
+  {
+    id: "desserts",
+    name: "Desserts & Sweets",
+    emoji: "🍨",
+    bgColor: "bg-indigo-100",
+  },
+  { id: "party", name: "Party Packs", emoji: "🎉", bgColor: "bg-green-100" },
+];
 
 const EMOJI_OPTIONS = [
   "🛒",
@@ -95,7 +128,17 @@ const PRODUCT_FILTER_FIELDS: FilterField[] = [
   },
 ];
 
-// ── Category modal (unchanged) ────────────────────────────────────────────────
+const SORT_MAP: Record<
+  ProductSort,
+  { sort_by: "created_at" | "price"; sort_order: "asc" | "desc" }
+> = {
+  newest: { sort_by: "created_at", sort_order: "desc" },
+  oldest: { sort_by: "created_at", sort_order: "asc" },
+  price_asc: { sort_by: "price", sort_order: "asc" },
+  price_desc: { sort_by: "price", sort_order: "desc" },
+};
+
+// ── Category modal ────────────────────────────────────────────────────────────
 
 function CategoryModal({
   open,
@@ -253,7 +296,7 @@ function CategoryModal({
   );
 }
 
-// ── Restock modal (unchanged) ─────────────────────────────────────────────────
+// ── Restock modal ─────────────────────────────────────────────────────────────
 
 function RestockModal({
   open,
@@ -327,7 +370,7 @@ function RestockModal({
   );
 }
 
-// ── Price modal (unchanged) ───────────────────────────────────────────────────
+// ── Price modal ───────────────────────────────────────────────────────────────
 
 function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
   const [price, setPrice] = useState("");
@@ -398,7 +441,6 @@ function CategoryStrip({
   onSelect,
   onEdit,
   onDelete,
-  onAdd,
   isFood,
 }: {
   categories: Category[];
@@ -406,11 +448,13 @@ function CategoryStrip({
   onSelect: (id: string | null) => void;
   onEdit: (cat: Category) => void;
   onDelete: (id: string) => void;
-  onAdd: () => void;
   isFood: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -426,98 +470,136 @@ function CategoryStrip({
     return () => document.removeEventListener("mousedown", handler);
   }, [openId]);
 
-  return (
-    <div
-      ref={containerRef}
-      className="flex gap-2 overflow-x-auto pb-0.5"
-      style={{ scrollbarWidth: "none" }}
-    >
-      {/* All chip */}
-      <button
-        onClick={() => onSelect(null)}
-        className={cn(
-          "flex-shrink-0 h-9 px-4 rounded-xl text-dash-body font-semibold border transition-colors cursor-pointer",
-          selectedId === null
-            ? "bg-orange-500 text-white border-orange-500"
-            : "bg-white text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600",
-        )}
-      >
-        All {isFood ? "Dishes" : "Products"}
-      </button>
+  const updateScrollState = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
 
-      {/* Category chips */}
-      {categories.map((cat) => (
-        <div key={cat.id} className="relative flex-shrink-0">
-          <div
-            className={cn(
-              "flex items-center h-9 rounded-xl border transition-colors overflow-hidden",
-              selectedId === cat.id
-                ? "border-orange-400 bg-orange-50"
-                : "border-gray-200 bg-white hover:border-orange-200",
-            )}
-          >
-            <button
-              onClick={() => onSelect(selectedId === cat.id ? null : cat.id)}
-              className="flex items-center gap-1.5 pl-3 pr-2 h-full cursor-pointer"
-            >
-              <span className="text-[15px] leading-none">{cat.emoji}</span>
-              <span
-                className={cn(
-                  "text-dash-body font-medium whitespace-nowrap",
-                  selectedId === cat.id ? "text-orange-600" : "text-gray-700",
-                )}
-              >
-                {cat.name}
-              </span>
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenId(openId === cat.id ? null : cat.id);
-              }}
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener("scroll", updateScrollState);
+    const ro = new ResizeObserver(updateScrollState);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateScrollState);
+      ro.disconnect();
+    };
+  }, [categories]);
+
+  const scroll = (dir: "left" | "right") => {
+    scrollRef.current?.scrollBy({
+      left: dir === "left" ? -180 : 180,
+      behavior: "smooth",
+    });
+  };
+
+  return (
+    <div ref={containerRef} className="relative flex items-center gap-1">
+      {canScrollLeft && (
+        <button
+          onClick={() => scroll("left")}
+          className="flex-shrink-0 w-7 h-7 rounded-lg border border-gray-200 bg-white shadow-sm flex items-center justify-center text-gray-400 hover:text-orange-500 hover:border-orange-300 transition-colors cursor-pointer"
+        >
+          <ChevronLeft size={14} />
+        </button>
+      )}
+      <div
+        ref={scrollRef}
+        className="flex gap-2 overflow-x-auto pb-0.5 flex-1"
+        style={{ scrollbarWidth: "none" }}
+      >
+        <button
+          onClick={() => onSelect(null)}
+          className={cn(
+            "flex-shrink-0 h-9 px-4 rounded-xl text-dash-body font-semibold border transition-colors cursor-pointer",
+            selectedId === null
+              ? "bg-orange-500 text-white border-orange-500"
+              : "bg-white text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600",
+          )}
+        >
+          All {isFood ? "Dishes" : "Products"}
+        </button>
+        {categories.map((cat) => (
+          <div key={cat.id} className="relative flex-shrink-0">
+            <div
               className={cn(
-                "px-1.5 h-full flex items-center border-l transition-colors cursor-pointer",
+                "flex items-center h-9 rounded-xl border transition-colors overflow-hidden",
                 selectedId === cat.id
-                  ? "border-orange-200 text-orange-300 hover:text-orange-500"
-                  : "border-gray-100 text-gray-300 hover:text-gray-500",
+                  ? "border-orange-400 bg-orange-50"
+                  : "border-gray-200 bg-white hover:border-orange-200",
               )}
             >
-              <MoreHorizontal size={13} />
-            </button>
-          </div>
-
-          {openId === cat.id && (
-            <div className="absolute left-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-20">
               <button
-                onClick={() => {
-                  setOpenId(null);
-                  onEdit(cat);
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => onSelect(selectedId === cat.id ? null : cat.id)}
+                className={cn(
+                  "flex items-center gap-1.5 h-full cursor-pointer",
+                  isFood ? "px-3" : "pl-3 pr-2",
+                )}
               >
-                <Pencil size={12} className="text-gray-400" /> Edit
+                <span className="text-[15px] leading-none">{cat.emoji}</span>
+                <span
+                  className={cn(
+                    "text-dash-body font-medium whitespace-nowrap",
+                    selectedId === cat.id ? "text-orange-600" : "text-gray-700",
+                  )}
+                >
+                  {cat.name}
+                </span>
               </button>
-              <button
-                onClick={() => {
-                  setOpenId(null);
-                  onDelete(cat.id);
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-              >
-                <Trash2 size={12} className="text-red-400" /> Delete
-              </button>
+              {!isFood && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenId(openId === cat.id ? null : cat.id);
+                  }}
+                  className={cn(
+                    "px-1.5 h-full flex items-center border-l transition-colors cursor-pointer",
+                    selectedId === cat.id
+                      ? "border-orange-200 text-orange-300 hover:text-orange-500"
+                      : "border-gray-100 text-gray-300 hover:text-gray-500",
+                  )}
+                >
+                  <MoreHorizontal size={13} />
+                </button>
+              )}
             </div>
-          )}
-        </div>
-      ))}
-
-      {/* Add chip */}
-      <button
-        onClick={onAdd}
-        className="flex-shrink-0 h-9 px-3.5 rounded-xl border border-dashed border-gray-300 text-gray-400 hover:border-orange-300 hover:text-orange-500 flex items-center gap-1.5 text-dash-body transition-colors cursor-pointer"
-      >
-        <Plus size={13} /> Add
-      </button>
+            {!isFood && openId === cat.id && (
+              <div className="absolute left-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-20">
+                <button
+                  onClick={() => {
+                    setOpenId(null);
+                    onEdit(cat);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <Pencil size={12} className="text-gray-400" /> Edit
+                </button>
+                <button
+                  onClick={() => {
+                    setOpenId(null);
+                    onDelete(cat.id);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                >
+                  <Trash2 size={12} className="text-red-400" /> Delete
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {canScrollRight && (
+        <button
+          onClick={() => scroll("right")}
+          className="flex-shrink-0 w-7 h-7 rounded-lg border border-gray-200 bg-white shadow-sm flex items-center justify-center text-gray-400 hover:text-orange-500 hover:border-orange-300 transition-colors cursor-pointer"
+        >
+          <ChevronRight size={14} />
+        </button>
+      )}
     </div>
   );
 }
@@ -527,27 +609,27 @@ function CategoryStrip({
 export default function ProductsPage() {
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const userId = pathname.split("/").filter(Boolean)[0];
+  const pathSegments = pathname.split("/").filter(Boolean);
+  const userId = pathSegments[0];
+  const isProductsListPage = pathSegments.at(-1) === "products";
   const isFood = useIsFood();
 
-  const { data: categories = [] } = useQuery({
-    queryKey: queryKeys.products.categories,
-    queryFn: categoriesApi.getCategories,
-  });
-  const { data: products = [] } = useQuery({
-    queryKey: queryKeys.products.list,
-    queryFn: categoriesApi.getProducts,
-  });
-
+  // Filter / sort / pagination state
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
   const [activeTab, setActiveTab] = useState<ProductTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [productFilters, setProductFilters] = useState<Record<string, string>>(
+    DEFAULT_PRODUCT_FILTERS,
+  );
+  const [productSort, setProductSort] = useState<ProductSort>("newest");
+
+  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-
   const [restockModal, setRestockModal] = useState<{
     open: boolean;
     product: CategoryProduct | null;
@@ -561,63 +643,156 @@ export default function ProductsPage() {
     product: CategoryProduct | null;
   }>({ open: false, product: null });
 
-  const [productFilters, setProductFilters] = useState<Record<string, string>>(
-    DEFAULT_PRODUCT_FILTERS,
-  );
-  const [productSort, setProductSort] = useState<ProductSort>("newest");
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 350);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
-  // ── Filtering & sorting ──────────────────────────────────────────────────
-
-  let filteredProducts = products.filter((p) => {
-    if (selectedCategoryId && p.categoryId !== selectedCategoryId) return false;
-    if (activeTab === "featured" && !p.featured) return false;
-    if (activeTab === "on-sale" && (!p.onSale || !p.inStock)) return false;
-    if (activeTab === "out-of-stock" && p.inStock) return false;
-    if (
-      searchQuery &&
-      !p.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-      return false;
-    if (productFilters["stockStatus"] === "in-stock" && !p.inStock)
-      return false;
-    if (productFilters["stockStatus"] === "out-of-stock" && p.inStock)
-      return false;
-    return true;
-  });
-
-  filteredProducts = [...filteredProducts].sort((a, b) => {
-    if (productSort === "newest")
-      return b.createdDate.localeCompare(a.createdDate);
-    if (productSort === "oldest")
-      return a.createdDate.localeCompare(b.createdDate);
-    if (productSort === "price_asc") return a.price - b.price;
-    if (productSort === "price_desc") return b.price - a.price;
-    return 0;
-  });
-
-  const totalFiltered = filteredProducts.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / ITEMS_PER_PAGE));
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedProducts = filteredProducts.slice(
-    startIndex,
-    startIndex + ITEMS_PER_PAGE,
-  );
-
-  const allCount = products.filter(
-    (p) => !selectedCategoryId || p.categoryId === selectedCategoryId,
-  ).length;
-
-  // Quick stats
-  const inStockCount = products.filter((p) => !!p.inStock).length;
-  const outOfStockCount = products.filter((p) => !p.inStock).length;
-  const featuredCount = products.filter((p) => p.featured).length;
-
+  // Reset to page 1 when filters change
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
-  }, [selectedCategoryId, activeTab, searchQuery]);
+  }, [
+    selectedCategoryId,
+    activeTab,
+    debouncedSearch,
+    productFilters,
+    productSort,
+  ]);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+  // ── Build query params ─────────────────────────────────────────────────────
+
+  const queryParams = useMemo<ProductListParams>(() => {
+    const { sort_by, sort_order } = SORT_MAP[productSort];
+    const params: ProductListParams = {
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+      sort_by,
+      sort_order,
+    };
+    if (selectedCategoryId) params.category_id = selectedCategoryId;
+    if (activeTab !== "all") params.tab = activeTab;
+    if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
+    if (productFilters.stockStatus && productFilters.stockStatus !== "all") {
+      params.stock_status = productFilters.stockStatus as
+        | "in-stock"
+        | "out-of-stock";
+    }
+    return params;
+  }, [
+    currentPage,
+    productSort,
+    selectedCategoryId,
+    activeTab,
+    debouncedSearch,
+    productFilters,
+  ]);
+
+  // ── Data queries ───────────────────────────────────────────────────────────
+
+  const { data: fetchedCategories = [] } = useQuery({
+    queryKey: queryKeys.products.categories,
+    queryFn: categoriesApi.getCategories,
+    enabled: !isFood,
+  });
+  const categories = isFood ? FOOD_MENU_SECTIONS : fetchedCategories;
+
+  const { data: productsData, isLoading: productsLoading } = useQuery({
+    queryKey: queryKeys.products.list(queryParams),
+    queryFn: () => categoriesApi.getProducts(queryParams),
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    enabled: isProductsListPage,
+  });
+
+  const products = productsData?.products ?? [];
+  const totalPages = productsData?.pagination.total_pages ?? 1;
+  const totalInView = productsData?.pagination.total ?? 0;
+
+  // Lightweight queries for the stats bar — fetch total counts per filter
+  const { data: statsAll } = useQuery({
+    queryKey: queryKeys.products.stats("all"),
+    queryFn: () => categoriesApi.getProducts({ limit: 1 }),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    enabled: isProductsListPage,
+  });
+  const { data: statsInStock } = useQuery({
+    queryKey: queryKeys.products.stats("in-stock"),
+    queryFn: () =>
+      categoriesApi.getProducts({ limit: 1, stock_status: "in-stock" }),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    enabled: isProductsListPage,
+  });
+  const { data: statsOutOfStock } = useQuery({
+    queryKey: queryKeys.products.stats("out-of-stock"),
+    queryFn: () => categoriesApi.getProducts({ limit: 1, tab: "out-of-stock" }),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    enabled: isProductsListPage,
+  });
+  const { data: statsFeatured } = useQuery({
+    queryKey: queryKeys.products.stats("featured"),
+    queryFn: () => categoriesApi.getProducts({ limit: 1, tab: "featured" }),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    enabled: isProductsListPage,
+  });
+
+  const totalCount = statsAll?.pagination.total ?? 0;
+  const inStockCount = statsInStock?.pagination.total ?? 0;
+  const outOfStockCount = statsOutOfStock?.pagination.total ?? 0;
+  const featuredCount = statsFeatured?.pagination.total ?? 0;
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+    queryClient.invalidateQueries({ queryKey: ["products", "stats"] });
+  };
+
+  const restockMutation = useMutation({
+    mutationFn: ({
+      productId,
+      quantity,
+    }: {
+      productId: string;
+      quantity: number;
+    }) => categoriesApi.restockProduct(productId, quantity),
+    onSuccess: () => {
+      invalidateAll();
+      toast.success("Stock updated");
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const priceMutation = useMutation({
+    mutationFn: ({ productId, price }: { productId: string; price: number }) =>
+      categoriesApi.changePrice(productId, price),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      toast.success("Price updated");
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (productId: string) => categoriesApi.deleteProduct(productId),
+    onSuccess: () => {
+      invalidateAll();
+      setDeleteModal({ open: false, product: null });
+      toast.success("Product deleted");
+    },
+    onError: (err) =>
+      toast.error(
+        getErrorMessage(err, "Delete failed — check stock or pending orders"),
+      ),
+  });
+
+  // ── Category handlers (UI-only for retail) ─────────────────────────────────
 
   const handleAddCategory = (data: {
     name: string;
@@ -650,15 +825,7 @@ export default function ProductsPage() {
       queryKeys.products.categories,
       (prev) =>
         (prev ?? []).map((c) =>
-          c.id === editingCategory.id
-            ? {
-                ...c,
-                name: data.name,
-                emoji: data.emoji,
-                bgColor: data.bgColor,
-                description: data.description,
-              }
-            : c,
+          c.id === editingCategory.id ? { ...c, ...data } : c,
         ),
     );
     setEditingCategory(null);
@@ -673,35 +840,18 @@ export default function ProductsPage() {
     if (selectedCategoryId === id) setSelectedCategoryId(null);
   };
 
+  // ── Product action handlers ────────────────────────────────────────────────
+
   const handleRestock = (productId: string, quantity: number) => {
-    queryClient.setQueryData<CategoryProduct[]>(
-      queryKeys.products.list,
-      (prev) =>
-        (prev ?? []).map((p) => {
-          if (p.id !== productId) return p;
-          return {
-            ...p,
-            totalQuantity: p.inStock ? p.totalQuantity + quantity : quantity,
-          };
-        }),
-    );
+    restockMutation.mutate({ productId, quantity });
   };
 
   const handlePriceChange = (productId: string, newPrice: number) => {
-    queryClient.setQueryData<CategoryProduct[]>(
-      queryKeys.products.list,
-      (prev) =>
-        (prev ?? []).map((p) =>
-          p.id === productId ? { ...p, price: newPrice } : p,
-        ),
-    );
+    priceMutation.mutate({ productId, price: newPrice });
   };
 
   const handleDeleteProduct = (productId: string) => {
-    queryClient.setQueryData<CategoryProduct[]>(
-      queryKeys.products.list,
-      (prev) => (prev ?? []).filter((p) => p.id !== productId),
-    );
+    deleteMutation.mutate(productId);
   };
 
   const { navigate } = useNavigation();
@@ -723,7 +873,7 @@ export default function ProductsPage() {
   const stats = [
     {
       label: isFood ? "Total Dishes" : "Total Products",
-      value: products.length,
+      value: totalCount,
       icon: isFood ? ChefHat : Package,
       color: "text-blue-500",
       bg: "bg-blue-50",
@@ -765,25 +915,13 @@ export default function ProductsPage() {
               : "Manage and track your product catalogue"}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => navigate(`/${userId}/products/add`)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
-          >
-            <Plus size={16} />
-            {isFood ? "Add Dish" : "Add Product"}
-          </button>
-          <button
-            onClick={() => {
-              setEditingCategory(null);
-              setModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
-          >
-            <Plus size={15} className="text-orange-500" />
-            Category
-          </button>
-        </div>
+        <button
+          onClick={() => navigate(`/${userId}/products/add`)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
+        >
+          <Plus size={16} />
+          {isFood ? "Add Dish" : "Add Product"}
+        </button>
       </div>
 
       {/* ── Stats strip ─────────────────────────────────────────────────── */}
@@ -831,10 +969,6 @@ export default function ProductsPage() {
             setModalOpen(true);
           }}
           onDelete={handleDeleteCategory}
-          onAdd={() => {
-            setEditingCategory(null);
-            setModalOpen(true);
-          }}
           isFood={isFood}
         />
       </div>
@@ -846,7 +980,7 @@ export default function ProductsPage() {
           <TabBar
             tabs={tabs.map((t) => ({
               ...t,
-              count: t.key === "all" ? allCount : undefined,
+              count: t.key === "all" ? totalInView : undefined,
             }))}
             activeTab={activeTab}
             onChange={(tab) => {
@@ -854,7 +988,6 @@ export default function ProductsPage() {
               setCurrentPage(1);
             }}
           />
-
           <div className="flex items-center gap-2">
             <div className="relative flex-1 lg:w-52 lg:flex-none">
               <Input
@@ -869,7 +1002,6 @@ export default function ProductsPage() {
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400"
               />
             </div>
-
             <FilterPopover
               values={productFilters}
               defaultValues={DEFAULT_PRODUCT_FILTERS}
@@ -883,7 +1015,6 @@ export default function ProductsPage() {
                 setCurrentPage(1);
               }}
             />
-
             <SortMenu
               currentSort={productSort}
               onSort={(o) => {
@@ -896,14 +1027,25 @@ export default function ProductsPage() {
         </div>
 
         {/* Product list */}
-        <ProductsTable
-          products={paginatedProducts}
-          rowOffset={startIndex}
-          onRestock={(p) => setRestockModal({ open: true, product: p })}
-          onChangePrice={(p) => setPriceModal({ open: true, product: p })}
-          onDelete={(p) => setDeleteModal({ open: true, product: p })}
-          isFood={isFood}
-        />
+        {productsLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 p-5">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-32 bg-gray-100 rounded-md animate-pulse"
+              />
+            ))}
+          </div>
+        ) : (
+          <ProductsTable
+            products={products}
+            rowOffset={(currentPage - 1) * ITEMS_PER_PAGE}
+            onRestock={(p) => setRestockModal({ open: true, product: p })}
+            onChangePrice={(p) => setPriceModal({ open: true, product: p })}
+            onDelete={(p) => setDeleteModal({ open: true, product: p })}
+            isFood={isFood}
+          />
+        )}
 
         <Pagination
           currentPage={currentPage}
@@ -912,7 +1054,7 @@ export default function ProductsPage() {
         />
       </div>
 
-      {/* ── Modals (unchanged) ───────────────────────────────────────────── */}
+      {/* ── Modals ───────────────────────────────────────────────────────── */}
       <CategoryModal
         open={modalOpen}
         editing={editingCategory}

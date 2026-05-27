@@ -425,7 +425,7 @@ export default function TransactionsPage() {
           id="generate-link-section"
           className={cn(
             "lg:w-[360px] w-full flex-shrink-0",
-            currentStep === 1 && !overlayPaused && "relative z-[55]",
+            currentStep === 1 && overlayPaused && "relative z-[55]",
           )}
         >
           <div className="bg-white sm:rounded-lg shadow-sm p-5 flex flex-col gap-4 h-full">

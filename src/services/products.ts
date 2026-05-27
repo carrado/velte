@@ -1,690 +1,300 @@
-import type { Category, CategoryProduct } from "@/types/product";
+import { apiClient } from "@/lib/api";
+import type {
+  Category,
+  CategoryProduct,
+  ProductModifier,
+  ProductAttribute,
+  ProductListParams,
+  ProductListResult,
+  CreateProductPayload,
+} from "@/types/product";
 
 export type { Category, CategoryProduct };
 export type { ProductTab, CategoryCardProps } from "@/types/product";
+export type { ProductListParams, ProductListResult, CreateProductPayload };
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-export const CATEGORIES_DATA: Category[] = [
-  {
-    id: "electronics",
-    name: "Electronics",
-    emoji: "💻",
-    bgColor: "bg-blue-100",
-    description: "Gadgets, devices and tech accessories",
-  },
-  {
-    id: "fashion",
-    name: "Fashion",
-    emoji: "👗",
-    bgColor: "bg-pink-100",
-    description: "Clothing, footwear and apparel",
-  },
-  {
-    id: "accessories",
-    name: "Accessories",
-    emoji: "👜",
-    bgColor: "bg-amber-100",
-    description: "Bags, wallets, belts and more",
-  },
-  {
-    id: "home-kitchen",
-    name: "Home & Kitchen",
-    emoji: "🏠",
-    bgColor: "bg-teal-100",
-    description: "Appliances, cookware and home decor",
-  },
-  {
-    id: "sports",
-    name: "Sports & Outdoors",
-    emoji: "⚽",
-    bgColor: "bg-green-100",
-    description: "Equipment, gear and outdoor essentials",
-  },
-  {
-    id: "toys",
-    name: "Toys & Games",
-    emoji: "🎮",
-    bgColor: "bg-purple-100",
-    description: "Toys, board games and entertainment",
-  },
-  {
-    id: "health",
-    name: "Health & Fitness",
-    emoji: "💪",
-    bgColor: "bg-red-100",
-    description: "Supplements, fitness gear and wellness",
-  },
-  {
-    id: "books",
-    name: "Books",
-    emoji: "📚",
-    bgColor: "bg-yellow-100",
-    description: "Fiction, non-fiction and educational",
-  },
-];
-
-export const PRODUCTS_DATA: CategoryProduct[] = [
-  // Electronics
-  {
-    id: "p1",
-    name: "Wireless Bluetooth Headphones",
-    categoryId: "electronics",
-    createdDate: "01-01-2025",
-    orderedQuantity: 25,
-    totalQuantity: 50,
-    price: 300,
-    featured: true,
-    onSale: true,
-    inStock: 25,
-    colorClass: "bg-blue-200",
-  },
-  {
-    id: "p2",
-    name: "Full HD Webcam",
-    categoryId: "electronics",
-    createdDate: "01-01-2025",
-    orderedQuantity: 20,
-    totalQuantity: 40,
-    price: 300,
-    featured: false,
-    onSale: true,
-    inStock: 20,
-    colorClass: "bg-blue-300",
-  },
-  {
-    id: "p3",
-    name: "Smart LED Color Bulb",
-    categoryId: "electronics",
-    createdDate: "01-01-2025",
-    orderedQuantity: 16,
-    totalQuantity: 24,
-    price: 25,
-    featured: false,
-    onSale: false,
-    inStock: 8,
-    colorClass: "bg-blue-200",
-  },
-  {
-    id: "p4",
-    name: "Mechanical Keyboard",
-    categoryId: "electronics",
-    createdDate: "02-01-2025",
-    orderedQuantity: 30,
-    totalQuantity: 45,
-    price: 85,
-    featured: true,
-    onSale: true,
-    inStock: 15,
-    colorClass: "bg-blue-300",
-  },
-  {
-    id: "p5",
-    name: "USB-C Hub",
-    categoryId: "electronics",
-    createdDate: "02-01-2025",
-    orderedQuantity: 45,
-    totalQuantity: 67,
-    price: 35,
-    featured: false,
-    onSale: false,
-    inStock: 22,
-    colorClass: "bg-blue-200",
-  },
-  {
-    id: "p6",
-    name: "Smart Watch Series 5",
-    categoryId: "electronics",
-    createdDate: "03-01-2025",
-    orderedQuantity: 60,
-    totalQuantity: 60,
-    price: 199,
-    featured: true,
-    onSale: false,
-    inStock: 0,
-    colorClass: "bg-blue-300",
-  },
-  {
-    id: "p7",
-    name: "Portable Charger 20000mAh",
-    categoryId: "electronics",
-    createdDate: "03-01-2025",
-    orderedQuantity: 35,
-    totalQuantity: 52,
-    price: 40,
-    featured: false,
-    onSale: true,
-    inStock: 17,
-    colorClass: "bg-blue-200",
-  },
-  {
-    id: "p8",
-    name: "Noise Cancelling Earbuds",
-    categoryId: "electronics",
-    createdDate: "04-01-2025",
-    orderedQuantity: 28,
-    totalQuantity: 42,
-    price: 79,
-    featured: true,
-    onSale: false,
-    inStock: 14,
-    colorClass: "bg-blue-300",
-  },
-  // Fashion
-  {
-    id: "p9",
-    name: "Men's Classic T-Shirt",
-    categoryId: "fashion",
-    createdDate: "01-01-2025",
-    orderedQuantity: 20,
-    totalQuantity: 30,
-    price: 20,
-    featured: false,
-    onSale: true,
-    inStock: 10,
-    colorClass: "bg-pink-200",
-  },
-  {
-    id: "p10",
-    name: "Casual Baseball Cap",
-    categoryId: "fashion",
-    createdDate: "01-01-2025",
-    orderedQuantity: 55,
-    totalQuantity: 82,
-    price: 15,
-    featured: true,
-    onSale: false,
-    inStock: 27,
-    colorClass: "bg-pink-300",
-  },
-  {
-    id: "p11",
-    name: "Men's Polo Shirt Blue",
-    categoryId: "fashion",
-    createdDate: "05-01-2025",
-    orderedQuantity: 10,
-    totalQuantity: 10,
-    price: 25,
-    featured: false,
-    onSale: false,
-    inStock: 0,
-    colorClass: "bg-pink-200",
-  },
-  {
-    id: "p12",
-    name: "Women's Summer Dress",
-    categoryId: "fashion",
-    createdDate: "05-01-2025",
-    orderedQuantity: 40,
-    totalQuantity: 60,
-    price: 45,
-    featured: true,
-    onSale: true,
-    inStock: 20,
-    colorClass: "bg-pink-300",
-  },
-  {
-    id: "p13",
-    name: "Denim Jacket Classic",
-    categoryId: "fashion",
-    createdDate: "06-01-2025",
-    orderedQuantity: 22,
-    totalQuantity: 33,
-    price: 65,
-    featured: false,
-    onSale: false,
-    inStock: 11,
-    colorClass: "bg-pink-200",
-  },
-  {
-    id: "p14",
-    name: "Hoodie Sweatshirt Grey",
-    categoryId: "fashion",
-    createdDate: "06-01-2025",
-    orderedQuantity: 18,
-    totalQuantity: 27,
-    price: 40,
-    featured: false,
-    onSale: true,
-    inStock: 9,
-    colorClass: "bg-pink-300",
-  },
-  // Accessories
-  {
-    id: "p15",
-    name: "Men's Leather Wallet",
-    categoryId: "accessories",
-    createdDate: "01-01-2025",
-    orderedQuantity: 35,
-    totalQuantity: 52,
-    price: 25,
-    featured: false,
-    onSale: false,
-    inStock: 17,
-    colorClass: "bg-amber-200",
-  },
-  {
-    id: "p16",
-    name: "Men's Leather Wallet Black",
-    categoryId: "accessories",
-    createdDate: "01-01-2025",
-    orderedQuantity: 35,
-    totalQuantity: 52,
-    price: 25,
-    featured: true,
-    onSale: false,
-    inStock: 17,
-    colorClass: "bg-amber-300",
-  },
-  {
-    id: "p17",
-    name: "Canvas Tote Bag",
-    categoryId: "accessories",
-    createdDate: "07-01-2025",
-    orderedQuantity: 15,
-    totalQuantity: 22,
-    price: 18,
-    featured: false,
-    onSale: true,
-    inStock: 7,
-    colorClass: "bg-amber-200",
-  },
-  {
-    id: "p18",
-    name: "Polarized Sunglasses",
-    categoryId: "accessories",
-    createdDate: "07-01-2025",
-    orderedQuantity: 42,
-    totalQuantity: 42,
-    price: 35,
-    featured: true,
-    onSale: false,
-    inStock: 0,
-    colorClass: "bg-amber-300",
-  },
-  {
-    id: "p19",
-    name: "Genuine Leather Belt",
-    categoryId: "accessories",
-    createdDate: "08-01-2025",
-    orderedQuantity: 25,
-    totalQuantity: 37,
-    price: 22,
-    featured: false,
-    onSale: true,
-    inStock: 12,
-    colorClass: "bg-amber-200",
-  },
-  // Home & Kitchen
-  {
-    id: "p20",
-    name: "Memory Foam Pillow",
-    categoryId: "home-kitchen",
-    createdDate: "01-01-2025",
-    orderedQuantity: 40,
-    totalQuantity: 60,
-    price: 30,
-    featured: true,
-    onSale: false,
-    inStock: 20,
-    colorClass: "bg-teal-200",
-  },
-  {
-    id: "p21",
-    name: "Coffee Maker 12-Cup",
-    categoryId: "home-kitchen",
-    createdDate: "01-01-2025",
-    orderedQuantity: 45,
-    totalQuantity: 67,
-    price: 70,
-    featured: false,
-    onSale: true,
-    inStock: 22,
-    colorClass: "bg-teal-300",
-  },
-  {
-    id: "p22",
-    name: "Non-Stick Frying Pan",
-    categoryId: "home-kitchen",
-    createdDate: "08-01-2025",
-    orderedQuantity: 32,
-    totalQuantity: 48,
-    price: 25,
-    featured: false,
-    onSale: false,
-    inStock: 16,
-    colorClass: "bg-teal-200",
-  },
-  {
-    id: "p23",
-    name: "Stainless Steel Kettle",
-    categoryId: "home-kitchen",
-    createdDate: "09-01-2025",
-    orderedQuantity: 28,
-    totalQuantity: 42,
-    price: 28,
-    featured: true,
-    onSale: true,
-    inStock: 14,
-    colorClass: "bg-teal-300",
-  },
-  {
-    id: "p24",
-    name: "Digital Air Fryer 5L",
-    categoryId: "home-kitchen",
-    createdDate: "09-01-2025",
-    orderedQuantity: 67,
-    totalQuantity: 67,
-    price: 110,
-    featured: true,
-    onSale: false,
-    inStock: 0,
-    colorClass: "bg-teal-200",
-  },
-  {
-    id: "p25",
-    name: "Cutting Board Set 3pc",
-    categoryId: "home-kitchen",
-    createdDate: "10-01-2025",
-    orderedQuantity: 19,
-    totalQuantity: 28,
-    price: 15,
-    featured: false,
-    onSale: true,
-    inStock: 9,
-    colorClass: "bg-teal-300",
-  },
-  {
-    id: "p26",
-    name: "Food Storage Containers",
-    categoryId: "home-kitchen",
-    createdDate: "10-01-2025",
-    orderedQuantity: 38,
-    totalQuantity: 57,
-    price: 20,
-    featured: false,
-    onSale: false,
-    inStock: 19,
-    colorClass: "bg-teal-200",
-  },
-  // Sports & Outdoors
-  {
-    id: "p27",
-    name: "Premium Yoga Mat 6mm",
-    categoryId: "sports",
-    createdDate: "11-01-2025",
-    orderedQuantity: 50,
-    totalQuantity: 75,
-    price: 35,
-    featured: true,
-    onSale: false,
-    inStock: 25,
-    colorClass: "bg-green-200",
-  },
-  {
-    id: "p28",
-    name: "Resistance Bands Set 5pc",
-    categoryId: "sports",
-    createdDate: "11-01-2025",
-    orderedQuantity: 33,
-    totalQuantity: 49,
-    price: 20,
-    featured: false,
-    onSale: true,
-    inStock: 16,
-    colorClass: "bg-green-300",
-  },
-  {
-    id: "p29",
-    name: "Insulated Water Bottle",
-    categoryId: "sports",
-    createdDate: "12-01-2025",
-    orderedQuantity: 44,
-    totalQuantity: 66,
-    price: 18,
-    featured: false,
-    onSale: false,
-    inStock: 22,
-    colorClass: "bg-green-200",
-  },
-  {
-    id: "p30",
-    name: "Trail Running Shoes",
-    categoryId: "sports",
-    createdDate: "12-01-2025",
-    orderedQuantity: 27,
-    totalQuantity: 27,
-    price: 75,
-    featured: true,
-    onSale: true,
-    inStock: 0,
-    colorClass: "bg-green-300",
-  },
-  {
-    id: "p31",
-    name: "2-Person Camping Tent",
-    categoryId: "sports",
-    createdDate: "13-01-2025",
-    orderedQuantity: 12,
-    totalQuantity: 18,
-    price: 95,
-    featured: false,
-    onSale: false,
-    inStock: 6,
-    colorClass: "bg-green-200",
-  },
-  // Toys & Games
-  {
-    id: "p32",
-    name: "Creative Building Blocks",
-    categoryId: "toys",
-    createdDate: "13-01-2025",
-    orderedQuantity: 29,
-    totalQuantity: 43,
-    price: 30,
-    featured: true,
-    onSale: false,
-    inStock: 14,
-    colorClass: "bg-purple-200",
-  },
-  {
-    id: "p33",
-    name: "Remote Control Racing Car",
-    categoryId: "toys",
-    createdDate: "14-01-2025",
-    orderedQuantity: 36,
-    totalQuantity: 54,
-    price: 45,
-    featured: false,
-    onSale: true,
-    inStock: 18,
-    colorClass: "bg-purple-300",
-  },
-  {
-    id: "p34",
-    name: "Wooden Chess Board Set",
-    categoryId: "toys",
-    createdDate: "14-01-2025",
-    orderedQuantity: 18,
-    totalQuantity: 18,
-    price: 40,
-    featured: false,
-    onSale: false,
-    inStock: 0,
-    colorClass: "bg-purple-200",
-  },
-  {
-    id: "p35",
-    name: "1000-Piece Puzzle",
-    categoryId: "toys",
-    createdDate: "15-01-2025",
-    orderedQuantity: 24,
-    totalQuantity: 36,
-    price: 15,
-    featured: true,
-    onSale: true,
-    inStock: 12,
-    colorClass: "bg-purple-300",
-  },
-  // Health & Fitness
-  {
-    id: "p36",
-    name: "Whey Protein Powder Vanilla",
-    categoryId: "health",
-    createdDate: "15-01-2025",
-    orderedQuantity: 61,
-    totalQuantity: 91,
-    price: 55,
-    featured: true,
-    onSale: false,
-    inStock: 30,
-    colorClass: "bg-red-200",
-  },
-  {
-    id: "p37",
-    name: "Multivitamin Gummies 60ct",
-    categoryId: "health",
-    createdDate: "16-01-2025",
-    orderedQuantity: 48,
-    totalQuantity: 72,
-    price: 18,
-    featured: false,
-    onSale: true,
-    inStock: 24,
-    colorClass: "bg-red-300",
-  },
-  {
-    id: "p38",
-    name: "High-Density Foam Roller",
-    categoryId: "health",
-    createdDate: "16-01-2025",
-    orderedQuantity: 23,
-    totalQuantity: 34,
-    price: 25,
-    featured: false,
-    onSale: false,
-    inStock: 11,
-    colorClass: "bg-red-200",
-  },
-  {
-    id: "p39",
-    name: "Adjustable Dumbbell Set",
-    categoryId: "health",
-    createdDate: "17-01-2025",
-    orderedQuantity: 15,
-    totalQuantity: 15,
-    price: 120,
-    featured: true,
-    onSale: true,
-    inStock: 0,
-    colorClass: "bg-red-300",
-  },
-  {
-    id: "p40",
-    name: "Speed Jump Rope Pro",
-    categoryId: "health",
-    createdDate: "17-01-2025",
-    orderedQuantity: 31,
-    totalQuantity: 46,
-    price: 12,
-    featured: false,
-    onSale: false,
-    inStock: 15,
-    colorClass: "bg-red-200",
-  },
-  {
-    id: "p41",
-    name: "Posture Corrector Brace",
-    categoryId: "health",
-    createdDate: "18-01-2025",
-    orderedQuantity: 20,
-    totalQuantity: 30,
-    price: 28,
-    featured: false,
-    onSale: true,
-    inStock: 10,
-    colorClass: "bg-red-300",
-  },
-  // Books
-  {
-    id: "p42",
-    name: "Atomic Habits",
-    categoryId: "books",
-    createdDate: "18-01-2025",
-    orderedQuantity: 55,
-    totalQuantity: 82,
-    price: 18,
-    featured: true,
-    onSale: false,
-    inStock: 27,
-    colorClass: "bg-yellow-200",
-  },
-  {
-    id: "p43",
-    name: "Zero to One",
-    categoryId: "books",
-    createdDate: "19-01-2025",
-    orderedQuantity: 34,
-    totalQuantity: 51,
-    price: 15,
-    featured: true,
-    onSale: true,
-    inStock: 17,
-    colorClass: "bg-yellow-300",
-  },
-  {
-    id: "p44",
-    name: "Rich Dad Poor Dad",
-    categoryId: "books",
-    createdDate: "19-01-2025",
-    orderedQuantity: 67,
-    totalQuantity: 100,
-    price: 16,
-    featured: false,
-    onSale: false,
-    inStock: 33,
-    colorClass: "bg-yellow-200",
-  },
-  {
-    id: "p45",
-    name: "The Art of War",
-    categoryId: "books",
-    createdDate: "20-01-2025",
-    orderedQuantity: 28,
-    totalQuantity: 28,
-    price: 12,
-    featured: false,
-    onSale: false,
-    inStock: 0,
-    colorClass: "bg-yellow-300",
-  },
-];
+// ── Utility ──────────────────────────────────────────────────────────────────
 
 export const getAvailableStock = (product: CategoryProduct) =>
   product.totalQuantity - product.orderedQuantity;
 
+// ── API response shapes ───────────────────────────────────────────────────────
+
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+}
+
+interface ApiCategory {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
+interface ApiModifierOption {
+  id: string;
+  name: string;
+  additional_price: number;
+}
+
+interface ApiModifier {
+  id: string;
+  name: string;
+  required: boolean;
+  multi_select: boolean;
+  options: ApiModifierOption[];
+}
+
+interface ApiProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  category_id: string;
+  price: number;
+  currency: "NGN" | "USD";
+  discounted_price: number | null;
+  tax_included: boolean;
+  tax_type: "percentage" | "fixed" | null;
+  tax_value: number | null;
+  is_negotiable: boolean;
+  minimum_price: number | null;
+  is_featured: boolean;
+  on_sale: boolean;
+  tags: string[];
+  main_image_url: string | null;
+  thumbnail_urls: string[];
+  video_url: string | null;
+  color_class: string | null;
+  created_at: string;
+  updated_at: string;
+  // retail
+  stock_quantity?: number;
+  ordered_quantity?: number;
+  low_stock_threshold?: number | null;
+  manufacturing_date?: string | null;
+  expiration_date?: string | null;
+  attributes?: { id: string; name: string; value: string }[];
+  // food
+  estimated_prep_mins?: number;
+  is_currently_available?: boolean;
+  daily_limit?: number | null;
+  allow_pre_order?: boolean;
+  modifiers?: ApiModifier[];
+}
+
+// ── Mappers ───────────────────────────────────────────────────────────────────
+
+const CATEGORY_BG: Record<string, string> = {
+  electronics: "bg-blue-100",
+  fashion: "bg-pink-100",
+  accessories: "bg-amber-100",
+  "home-kitchen": "bg-teal-100",
+  sports: "bg-green-100",
+  toys: "bg-purple-100",
+  health: "bg-red-100",
+  books: "bg-yellow-100",
+};
+
+function mapCategory(c: ApiCategory): Category {
+  return {
+    id: c.id,
+    name: c.name,
+    emoji: c.emoji,
+    bgColor: CATEGORY_BG[c.id] ?? "bg-gray-100",
+  };
+}
+
+function mapProduct(p: ApiProduct): CategoryProduct {
+  const isFood =
+    p.is_currently_available !== undefined ||
+    p.estimated_prep_mins !== undefined;
+
+  let totalQuantity: number;
+  let orderedQuantity: number;
+  let inStock: number;
+
+  if (isFood) {
+    const avail = p.is_currently_available ?? true;
+    totalQuantity = avail ? 1 : 0;
+    orderedQuantity = 0;
+    inStock = avail ? 1 : 0;
+  } else {
+    totalQuantity = p.stock_quantity ?? 0;
+    orderedQuantity = p.ordered_quantity ?? 0;
+    inStock = totalQuantity - orderedQuantity;
+  }
+
+  const modifiers: ProductModifier[] = (p.modifiers ?? []).map((m) => ({
+    id: m.id,
+    name: m.name,
+    required: m.required,
+    multiSelect: m.multi_select,
+    options: m.options.map((o) => ({
+      id: o.id,
+      name: o.name,
+      additionalPrice: o.additional_price / 100,
+    })),
+  }));
+
+  const attributes: ProductAttribute[] = (p.attributes ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    value: a.value,
+  }));
+
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    categoryId: p.category_id,
+    price: p.price / 100,
+    currency: p.currency,
+    discountedPrice:
+      p.discounted_price !== null ? p.discounted_price / 100 : null,
+    taxIncluded: p.tax_included,
+    taxType: p.tax_type,
+    taxValue: p.tax_value,
+    isNegotiable: p.is_negotiable,
+    minimumPrice: p.minimum_price !== null ? p.minimum_price / 100 : null,
+    featured: p.is_featured,
+    onSale: p.on_sale,
+    tags: p.tags,
+    mainImageUrl: p.main_image_url,
+    thumbnailUrls: p.thumbnail_urls,
+    videoUrl: p.video_url,
+    colorClass: p.color_class ?? "bg-gray-200",
+    createdDate: p.created_at,
+    totalQuantity,
+    orderedQuantity,
+    inStock,
+    lowStockThreshold: p.low_stock_threshold,
+    manufacturingDate: p.manufacturing_date,
+    expirationDate: p.expiration_date,
+    attributes,
+    estimatedPrepMins: p.estimated_prep_mins,
+    isCurrentlyAvailable: p.is_currently_available,
+    dailyLimit: p.daily_limit,
+    allowPreOrder: p.allow_pre_order,
+    modifiers,
+  };
+}
+
+// ── API functions ─────────────────────────────────────────────────────────────
+
 export const categoriesApi = {
+  // ── Categories ─────────────────────────────────────────────────────────────
+
   getCategories: async (): Promise<Category[]> => {
-    await delay(300);
-    return [...CATEGORIES_DATA];
+    const res = await apiClient<ApiResponse<ApiCategory[]>>("/categories");
+    return res.data.map(mapCategory);
   },
-  getProducts: async (): Promise<CategoryProduct[]> => {
-    await delay(400);
-    return [...PRODUCTS_DATA];
-  },
-  createCategory: async (data: Omit<Category, "id">): Promise<Category> => {
-    await delay(300);
-    return { ...data, id: `cat-${Date.now()}` };
-  },
+
+  // Retail category CRUD is UI-only (not persisted to backend)
+  createCategory: async (data: Omit<Category, "id">): Promise<Category> => ({
+    ...data,
+    id: `cat-${Date.now()}`,
+  }),
   updateCategory: async (
     id: string,
     data: Partial<Category>,
-  ): Promise<Category> => {
-    await delay(300);
-    const existing = CATEGORIES_DATA.find((c) => c.id === id);
-    return { ...existing!, ...data };
+  ): Promise<Category> => ({ id, ...data }) as Category,
+  deleteCategory: async (): Promise<void> => {},
+
+  // ── Products ───────────────────────────────────────────────────────────────
+
+  getProducts: async (
+    params?: ProductListParams,
+  ): Promise<ProductListResult> => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.category_id) qs.set("category_id", params.category_id);
+    if (params?.tab && params.tab !== "all") qs.set("tab", params.tab);
+    if (params?.search?.trim()) qs.set("search", params.search.trim());
+    if (params?.sort_by) qs.set("sort_by", params.sort_by);
+    if (params?.sort_order) qs.set("sort_order", params.sort_order);
+    if (params?.stock_status) qs.set("stock_status", params.stock_status);
+
+    const query = qs.toString() ? `?${qs}` : "";
+    const res = await apiClient<
+      ApiResponse<{
+        products: ApiProduct[];
+        pagination: ProductListResult["pagination"];
+      }>
+    >(`/products${query}`);
+
+    return {
+      products: res.data.products.map(mapProduct),
+      pagination: res.data.pagination,
+    };
   },
-  deleteCategory: async (): Promise<void> => {
-    await delay(300);
+
+  getProduct: async (id: string): Promise<CategoryProduct> => {
+    const res = await apiClient<ApiResponse<ApiProduct>>(`/products/${id}`);
+    return mapProduct(res.data);
+  },
+
+  createProduct: async (
+    payload: CreateProductPayload,
+  ): Promise<CategoryProduct> => {
+    const res = await apiClient<ApiResponse<ApiProduct>>("/products", {
+      method: "POST",
+      data: payload,
+    });
+    return mapProduct(res.data);
+  },
+
+  updateProduct: async (
+    id: string,
+    payload: Partial<CreateProductPayload>,
+  ): Promise<CategoryProduct> => {
+    const res = await apiClient<ApiResponse<ApiProduct>>(`/products/${id}`, {
+      method: "PUT",
+      data: payload,
+    });
+    return mapProduct(res.data);
+  },
+
+  deleteProduct: async (id: string): Promise<void> => {
+    await apiClient(`/products/${id}`, { method: "DELETE" });
+  },
+
+  // ── Retail actions ─────────────────────────────────────────────────────────
+
+  restockProduct: async (
+    id: string,
+    quantity: number,
+  ): Promise<CategoryProduct> => {
+    const res = await apiClient<ApiResponse<ApiProduct>>(
+      `/products/${id}/restock`,
+      { method: "POST", data: { quantity } },
+    );
+    return mapProduct(res.data);
+  },
+
+  changePrice: async (
+    id: string,
+    priceNaira: number,
+  ): Promise<CategoryProduct> => {
+    const res = await apiClient<ApiResponse<ApiProduct>>(
+      `/products/${id}/price`,
+      { method: "PATCH", data: { price: Math.round(priceNaira * 100) } },
+    );
+    return mapProduct(res.data);
+  },
+
+  // ── Food actions ───────────────────────────────────────────────────────────
+
+  toggleAvailability: async (
+    id: string,
+    is_currently_available: boolean,
+  ): Promise<{ id: string; is_currently_available: boolean }> => {
+    const res = await apiClient<
+      ApiResponse<{ id: string; is_currently_available: boolean }>
+    >(`/products/${id}/availability`, {
+      method: "PATCH",
+      data: { is_currently_available },
+    });
+    return res.data;
   },
 };

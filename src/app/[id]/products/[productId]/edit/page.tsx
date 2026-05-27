@@ -1,4 +1,4 @@
-import AddProductPage from "@/components/products/AddProductPage";
+import EditProductPage from "@/components/products/EditProductPage";
 
 export default async function Page({
   params,
@@ -6,5 +6,5 @@ export default async function Page({
   params: Promise<{ productId: string }>;
 }) {
   const { productId } = await params;
-  return <AddProductPage productId={productId} />;
+  return <EditProductPage productId={productId} />;
 }

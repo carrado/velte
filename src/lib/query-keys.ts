@@ -1,5 +1,6 @@
 import type { FetchTransactionsParams } from "@/types/transaction";
 import type { OrderFilter } from "@/types/order";
+import type { ProductListParams } from "@/types/product";
 
 export { DEFAULT_TRANSACTIONS_LIST_PARAMS } from "@/lib/transaction-list-params";
 
@@ -20,7 +21,11 @@ export const queryKeys = {
   },
   products: {
     categories: ["products", "categories"] as const,
-    list: ["products", "list"] as const,
+    list: (params?: ProductListParams) =>
+      ["products", "list", params ?? {}] as const,
+    detail: (id: string) => ["products", "detail", id] as const,
+    stats: (filter: "all" | "in-stock" | "out-of-stock" | "featured") =>
+      ["products", "stats", filter] as const,
   },
   customers: {
     list: ["customers", "list"] as const,

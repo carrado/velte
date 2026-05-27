@@ -27,7 +27,7 @@ export type PrefetchTask = {
 
 export function getRouteKey(href: string): string {
   const segments = href.split("/").filter(Boolean);
-  return segments[1] ?? "";
+  return segments.slice(1).join("/");
 }
 
 export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
@@ -97,17 +97,24 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
             ),
         },
       ];
-    case "products":
+    case "products": {
+      const defaultParams = {
+        page: 1,
+        limit: 10,
+        sort_by: "created_at" as const,
+        sort_order: "desc" as const,
+      };
       return [
         {
           queryKey: queryKeys.products.categories,
           queryFn: categoriesApi.getCategories,
         },
         {
-          queryKey: queryKeys.products.list,
-          queryFn: categoriesApi.getProducts,
+          queryKey: queryKeys.products.list(defaultParams),
+          queryFn: () => categoriesApi.getProducts(defaultParams),
         },
       ];
+    }
     case "ai-setup":
       return [
         {

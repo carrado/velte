@@ -32,8 +32,6 @@ import {
   RefreshCw,
   Shield,
   KeyRound,
-  ChefHat,
-  Store,
   Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -42,8 +40,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUserStore } from "@/store/userStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { settingsApi } from "@/services/settings";
-import { useBusinessType, useIsFood } from "@/hooks/useBusinessType";
-import type { BusinessType } from "@/types/user";
+import { useIsFood } from "@/hooks/useBusinessType";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
 import { WhatsAppProfileSection } from "./WhatsappProfile";
@@ -309,8 +306,6 @@ function BottomSaveButton({
 function AccountSettingsPanel() {
   const storeUser = useUserStore((s) => s.user);
   const queryClient = useQueryClient();
-  const currentBusinessType = useBusinessType();
-
   // ── Profile ──────────────────────────────────────────────────────────────────
   const { data: profileData } = useQuery({
     queryKey: queryKeys.settings.profile,
@@ -387,12 +382,6 @@ function AccountSettingsPanel() {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.profile });
       toast.success("Profile updated");
     },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const businessTypeMutation = useMutation({
-    mutationFn: settingsApi.updateBusinessType,
-    onSuccess: () => toast.success("Business type updated"),
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -658,86 +647,6 @@ function AccountSettingsPanel() {
           loading={profileMutation.isPending}
           label="Save Profile"
         />
-      </SectionCard>
-
-      {/* Business Type */}
-      <SectionCard
-        icon={Store}
-        title="Business Type"
-        description="Tell us how your business operates"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {(
-            [
-              {
-                type: "retail" as BusinessType,
-                label: "Retail Store",
-                desc: "Sell physical products and track inventory",
-                icon: ShoppingCart,
-              },
-              {
-                type: "food" as BusinessType,
-                label: "Food Vendor",
-                desc: "Manage a menu, prep times, and food orders",
-                icon: ChefHat,
-              },
-            ] as const
-          ).map(({ type, label, desc, icon: Icon }) => {
-            const active = currentBusinessType === type;
-            return (
-              <button
-                key={type}
-                onClick={() => !active && businessTypeMutation.mutate(type)}
-                disabled={businessTypeMutation.isPending}
-                className={cn(
-                  "flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all cursor-pointer disabled:opacity-60",
-                  active
-                    ? "border-orange-500 bg-orange-50"
-                    : "border-gray-200 hover:border-orange-200 hover:bg-orange-50/40",
-                )}
-              >
-                <div
-                  className={cn(
-                    "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5",
-                    active ? "bg-orange-500" : "bg-gray-100",
-                  )}
-                >
-                  <Icon
-                    size={17}
-                    className={active ? "text-white" : "text-gray-400"}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p
-                      className={cn(
-                        "text-dash-body font-semibold",
-                        active ? "text-orange-600" : "text-gray-800",
-                      )}
-                    >
-                      {label}
-                    </p>
-                    {active && (
-                      <span className="text-dash-micro bg-orange-500 text-white px-1.5 py-0.5 rounded-full leading-none">
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-dash-secondary text-gray-500 mt-0.5 leading-relaxed">
-                    {desc}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-200 rounded-xl mt-4">
-          <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
-          <p className="text-dash-secondary text-blue-700 leading-relaxed">
-            Changing your business type updates the order flow, status labels,
-            and AI responses for your customers.
-          </p>
-        </div>
       </SectionCard>
 
       {/* Password */}
