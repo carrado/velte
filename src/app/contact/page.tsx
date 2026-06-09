@@ -107,7 +107,7 @@ export default function Contact() {
                         href="tel:+15551234567"
                         className="text-white hover:text-[rgb(247,107,16)]"
                       >
-                        +1 (555) 123-4567
+                        +234 (0) 816 327 6826
                       </a>
                     </div>
                   </div>
@@ -116,7 +116,8 @@ export default function Contact() {
                     <div>
                       <p className="text-white/40 text-sm">Headquarters</p>
                       <p className="text-white">
-                        548 Market St, San Francisco, CA 94104
+                        Plot XI, Republic Estate, Independence Layout, Enugu,
+                        Nigeria
                       </p>
                     </div>
                   </div>

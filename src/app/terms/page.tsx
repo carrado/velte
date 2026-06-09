@@ -82,8 +82,8 @@ const sections = [
       For any questions about these Terms, please contact us at:
 
       Velte Inc.
-      548 Market St, San Francisco, CA 94104
-      legal@velte.ai
+      Plot XI, Republic Estate, Independence Layout, Enugu, Nigeria
+      legal@velte.ng
     `,
   },
 ];

@@ -83,9 +83,9 @@ const sections = [
       If you have any questions about this Privacy Policy, please contact us at:
 
       Velte Inc.
-      548 Market St, San Francisco, CA 94104
-      privacy@velte.ai
-      +1 (555) 123-4567
+      Plot XI, Republic Estate, Independence Layout, Enugu, Nigeria
+      privacy@velte.ng
+      +234 (0) 816 327 6826
     `,
   },
 ];
