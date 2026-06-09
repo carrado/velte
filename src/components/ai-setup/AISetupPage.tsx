@@ -576,6 +576,10 @@ function WABASetupStep({
                       ok: false,
                       text: "Numbers active on personal WhatsApp cannot be used. The number must be on WhatsApp Business app or unused entirely.",
                     },
+                    {
+                      ok: false,
+                      text: "If your existing number has two-step verification (a 6-digit PIN) enabled, turn it off in the WhatsApp Business app before connecting — Meta blocks the migration otherwise.",
+                    },
                   ].map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5">
                       <div
@@ -700,16 +704,45 @@ function SelectNumberStep({
             <p className="text-dash-body font-medium text-gray-500 mb-1">
               No numbers found
             </p>
-            <p className="text-dash-body text-gray-400 mb-5">
-              Make sure you completed the WhatsApp Business setup
+            <p className="text-dash-body text-gray-400 mb-4 max-w-xs mx-auto">
+              If you were connecting an existing number, it likely isn't linked
+              to your Meta Business Portfolio yet — that's required before it
+              can appear here.
             </p>
-            <button
-              onClick={onRefetch}
-              className="inline-flex items-center gap-1.5 text-dash-body text-orange-500 hover:text-orange-600 font-medium transition-colors cursor-pointer"
+            <div className="text-left bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5 max-w-xs mx-auto space-y-2">
+              {[
+                "Link your number at business.facebook.com → Settings → WhatsApp Accounts",
+                "Make sure two-step verification (6-digit PIN) is turned off on the number",
+                "Then come back and refresh",
+              ].map((step, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-orange-100 text-orange-600 text-dash-micro font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {i + 1}
+                  </div>
+                  <span className="text-dash-body text-gray-600 leading-relaxed">
+                    {step}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <a
+              href="https://business.facebook.com/latest/settings/whatsapp_account"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-dash-body text-gray-500 hover:text-orange-500 font-medium transition-colors mb-4"
             >
-              <RefreshCw size={14} />
-              Try again
-            </button>
+              Open Business Portfolio settings
+              <ChevronRight size={13} />
+            </a>
+            <div>
+              <button
+                onClick={onRefetch}
+                className="inline-flex items-center gap-1.5 text-dash-body text-orange-500 hover:text-orange-600 font-medium transition-colors cursor-pointer"
+              >
+                <RefreshCw size={14} />
+                Refresh numbers
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-3 mb-5">
