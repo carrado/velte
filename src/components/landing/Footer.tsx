@@ -75,10 +75,10 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="border-t border-white/[0.06] pt-7 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-white/30 text-sm">
-            &copy; {year} Velte. All rights reserved.
+            &copy; {year} Velte Technologies. All rights reserved.
           </p>
           <p className="text-white/20 text-xs">
-            Helping businesses sell smarter
+            Helping businesses sell smarter with AI.
           </p>
         </div>
       </div>
