@@ -2,9 +2,12 @@ import { apiClient } from "@/lib/api";
 import { useSubscriptionStore } from "@/store/subscriptionStore";
 import type {
   Subscription,
+  SubscriptionTier,
   InitializeSubscriptionResponse,
   VerifySubscriptionResponse,
 } from "@/types/subscription";
+
+type BillingPeriod = "monthly" | "annual";
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -31,11 +34,12 @@ export async function getSubscriptionStatus(): Promise<Subscription> {
 }
 
 export async function initializeSubscription(
-  plan: "monthly" | "annual" = "monthly",
+  tier: SubscriptionTier,
+  plan: BillingPeriod = "monthly",
 ): Promise<InitializeSubscriptionResponse> {
   return unwrap<InitializeSubscriptionResponse>("/subscription/initialize", {
     method: "POST",
-    body: JSON.stringify({ plan }),
+    body: JSON.stringify({ tier, plan }),
   });
 }
 
