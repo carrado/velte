@@ -576,6 +576,10 @@ function WABASetupStep({
                       ok: false,
                       text: "Numbers active on personal WhatsApp cannot be used. The number must be on WhatsApp Business app or unused entirely.",
                     },
+                    {
+                      ok: false,
+                      text: "If your existing number has two-step verification (a 6-digit PIN) enabled, turn it off in the WhatsApp Business app before connecting — Meta blocks the migration otherwise.",
+                    },
                   ].map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5">
                       <div

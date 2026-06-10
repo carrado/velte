@@ -1,26 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Zap, X } from "lucide-react";
-import { toast } from "sonner";
+import { usePathname, useRouter } from "next/navigation";
+import { Zap } from "lucide-react";
 import { getTrialRemaining } from "@/lib/trial";
-import { openPaystackPopup } from "@/lib/paystack";
 import { useTrialStore } from "@/store/trialStore";
-import {
-  initializeSubscription,
-  verifySubscription,
-} from "@/services/subscription";
 
 interface TrialBannerProps {
   trialEndsAt: string;
 }
 
 export default function TrialBanner({ trialEndsAt }: TrialBannerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [remaining, setRemaining] = useState(() =>
     getTrialRemaining(trialEndsAt),
   );
-  const [loading, setLoading] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed] = useState(false);
 
   useEffect(() => {
     setRemaining(getTrialRemaining(trialEndsAt));
@@ -31,40 +27,10 @@ export default function TrialBanner({ trialEndsAt }: TrialBannerProps) {
     return () => clearInterval(id);
   }, [trialEndsAt]);
 
-  const handleSubscribe = async () => {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const { authorization_url, reference } = await initializeSubscription();
-      const popup = openPaystackPopup({
-        url: authorization_url,
-        onClose: async () => {
-          try {
-            const result = await verifySubscription(reference);
-            if (result.isSubscribed) {
-              toast.success("Subscription activated. Welcome aboard!");
-            } else {
-              toast.error("Payment not completed. Please try again.");
-            }
-          } catch {
-            toast.error(
-              "We couldn't verify your payment. Please contact support.",
-            );
-          } finally {
-            setLoading(false);
-          }
-        },
-      });
-      if (!popup) {
-        toast.error("Please allow popups to complete payment.");
-        setLoading(false);
-      }
-    } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : "Couldn't start checkout. Try again.";
-      toast.error(msg);
-      setLoading(false);
-    }
+  const handleSubscribe = () => {
+    // Route to the billing page where the user picks and pays for a plan
+    const userId = pathname.split("/")[1];
+    router.push(`/${userId}/billing`);
   };
 
   const setUrgency = useTrialStore((s) => s.setUrgency);
@@ -175,11 +141,9 @@ export default function TrialBanner({ trialEndsAt }: TrialBannerProps) {
       <div className="flex items-center gap-2 flex-shrink-0">
         <button
           onClick={handleSubscribe}
-          disabled={loading}
           className={`
             relative text-sm font-semibold px-4 py-1.5 rounded-md
-            transition-all duration-150 active:scale-95
-            disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer
+            transition-all duration-150 active:scale-95 cursor-pointer
             ${
               isUrgent
                 ? "bg-white text-red-600 hover:bg-red-50 shadow-md shadow-red-900/30"
@@ -189,18 +153,7 @@ export default function TrialBanner({ trialEndsAt }: TrialBannerProps) {
             }
           `}
         >
-          {loading ? (
-            <span className="flex items-center gap-1.5">
-              <span
-                className={`
-                  inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin
-                `}
-              />
-              <span>Loading…</span>
-            </span>
-          ) : (
-            "Subscribe"
-          )}
+          Subscribe
         </button>
       </div>
 

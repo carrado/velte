@@ -62,7 +62,7 @@ export default function CallToAction() {
           </div>
 
           <p className="text-white/30 text-sm mt-6">
-            14-day free trial · No credit card required · Cancel anytime
+            7-day free trial · No credit card required · Cancel anytime
           </p>
         </motion.div>
       </div>

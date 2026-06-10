@@ -13,7 +13,6 @@ import {
   Receipt,
   Calendar,
   AlertTriangle,
-  ChevronRight,
   Sparkles,
   Wifi,
 } from "lucide-react";
@@ -27,6 +26,15 @@ import {
   verifySubscription,
 } from "@/services/subscription";
 import { useSubscriptionStore } from "@/store/subscriptionStore";
+import {
+  annualMonthly,
+  naira,
+  planByTier,
+  planTotal,
+  plans,
+} from "@/lib/plans";
+import type { BillingPeriod, PricingPlan } from "@/types/pricing";
+import type { SubscriptionTier } from "@/types/subscription";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,6 +45,8 @@ interface PaymentHistoryItem {
   reference: string;
   status: "success" | "failed";
 }
+
+type SubStatus = "trial" | "active" | "expired";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -157,82 +167,157 @@ function CountdownRing({
   );
 }
 
-// ── Plan Card ─────────────────────────────────────────────────────────────────
+// ── Billing Period Toggle ─────────────────────────────────────────────────────
 
-function PlanCard({
-  onSubscribe,
-  loading,
-  isRenewal,
+function PeriodToggle({
+  period,
+  onChange,
 }: {
-  onSubscribe: () => void;
-  loading: boolean;
-  isRenewal: boolean;
+  period: BillingPeriod;
+  onChange: (p: BillingPeriod) => void;
 }) {
-  const perks = [
-    "1 WhatsApp number",
-    "Unlimited AI conversations / month",
-    "Unlimited products",
-    "Negotiation & discount controls",
-    "Accept Payments",
-    "Issue Invoices and Receipts",
-    "PWA Notifications",
-  ];
+  return (
+    <div className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 p-1">
+      {(["monthly", "annual"] as const).map((p) => {
+        const active = period === p;
+        return (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onChange(p)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-dash-secondary font-semibold transition-colors cursor-pointer",
+              active
+                ? "bg-orange-500 text-white shadow-sm"
+                : "text-gray-500 hover:text-gray-800",
+            )}
+          >
+            {p === "monthly" ? "Monthly" : "Annual"}
+            {p === "annual" && (
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-dash-micro font-bold",
+                  active
+                    ? "bg-white/20 text-white"
+                    : "bg-orange-100 text-orange-600",
+                )}
+              >
+                -20%
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Tier Card ─────────────────────────────────────────────────────────────────
+
+function TierCard({
+  plan,
+  period,
+  status,
+  currentTier,
+  loading,
+  onSubscribe,
+}: {
+  plan: PricingPlan;
+  period: BillingPeriod;
+  status: SubStatus;
+  currentTier: SubscriptionTier | null;
+  loading: boolean;
+  onSubscribe: (tier: SubscriptionTier, period: BillingPeriod) => void;
+}) {
+  const isCurrent = status === "active" && currentTier === plan.id;
+  const total = planTotal(plan.monthlyPrice, period);
+  const isAnnual = period === "annual";
+
+  // Button label adapts to the user's situation.
+  let label: string;
+  if (isCurrent) label = `Renew · ${naira(total)}`;
+  else if (status === "active") label = `Switch to ${plan.name}`;
+  else label = `Subscribe · ${naira(total)}`;
 
   return (
-    <div className="relative overflow-hidden bg-white sm:rounded-2xl border border-gray-200">
+    <div
+      className={cn(
+        "relative flex flex-col overflow-hidden bg-white rounded-2xl border",
+        isCurrent
+          ? "border-emerald-300 ring-2 ring-emerald-200"
+          : plan.popular
+            ? "border-orange-200 ring-2 ring-orange-100"
+            : "border-gray-200",
+      )}
+    >
       {/* Accent bar */}
-      <div className="h-1.5 bg-orange-400" />
+      <div
+        className={cn("h-1.5", isCurrent ? "bg-emerald-400" : "bg-orange-400")}
+      />
 
-      <div className="p-5 sm:p-6">
-        {/* Corner ribbon */}
+      {/* Corner badge */}
+      {(isCurrent || plan.badge) && (
         <div className="absolute top-1.5 right-0">
-          <div className="bg-orange-500 text-white text-dash-micro font-black px-3 py-1 rounded-bl-xl uppercase tracking-wide">
-            MVP Plan
+          <div
+            className={cn(
+              "text-white text-dash-micro font-black px-3 py-1 rounded-bl-xl uppercase tracking-wide",
+              isCurrent ? "bg-emerald-500" : "bg-orange-500",
+            )}
+          >
+            {isCurrent ? "Current Plan" : plan.badge}
           </div>
         </div>
+      )}
 
-        <div className="flex items-start gap-3 mb-5">
-          <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Sparkles size={18} className="text-white" />
-          </div>
-          <div>
-            <h3 className="text-dash-heading font-bold text-gray-900">
-              Velte AI PRO
-            </h3>
-            <p className="text-dash-secondary text-gray-400 mt-0.5">
-              Everything you need to run AI sales
-            </p>
-          </div>
+      <div className="flex flex-col flex-1 p-5 sm:p-6">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          {plan.popular && <Sparkles size={15} className="text-orange-500" />}
+          <p className="text-dash-body font-bold text-orange-600">
+            {plan.name}
+          </p>
         </div>
 
-        <div className="flex items-baseline gap-1.5 mb-5">
-          <span className="text-3xl font-black text-gray-900">₦8,500</span>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-3xl font-black text-gray-900">
+            {naira(total)}
+          </span>
           <span className="text-dash-body text-gray-400 font-medium">
-            / month
+            {isAnnual ? "/ year" : "/ month"}
           </span>
         </div>
+        <p className="text-dash-secondary text-orange-600 h-4 mt-1">
+          {isAnnual
+            ? `${naira(annualMonthly(plan.monthlyPrice))}/mo billed annually`
+            : ""}
+        </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4 mb-6">
-          {perks.map((p) => (
-            <div
-              key={p}
-              className="flex items-center gap-2 text-dash-secondary text-gray-700"
+        <p className="text-dash-secondary text-gray-500 leading-relaxed mt-2 mb-4">
+          {plan.description}
+        </p>
+
+        <ul className="space-y-2 mb-6 flex-1">
+          {plan.features.map((feature) => (
+            <li
+              key={feature}
+              className="flex items-start gap-2 text-dash-secondary text-gray-700"
             >
               <CheckCircle2
                 size={13}
-                className="text-orange-500 flex-shrink-0"
+                className="text-orange-500 flex-shrink-0 mt-0.5"
               />
-              {p}
-            </div>
+              {feature}
+            </li>
           ))}
-        </div>
+        </ul>
 
         <button
-          onClick={onSubscribe}
+          onClick={() => onSubscribe(plan.id, period)}
           disabled={loading}
           className={cn(
-            "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-dash-body font-bold transition-all active:scale-[0.98] cursor-pointer",
-            "bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-200",
+            "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-dash-body font-bold transition-all active:scale-[0.98] cursor-pointer mt-auto",
+            isCurrent
+              ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200"
+              : "bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-200",
             "disabled:opacity-60 disabled:cursor-not-allowed",
           )}
         >
@@ -244,14 +329,10 @@ function PlanCard({
           ) : (
             <>
               <CreditCard size={14} />
-              {isRenewal ? "Renew · ₦8,500" : "Subscribe · ₦8,500"}
+              {label}
             </>
           )}
         </button>
-
-        <p className="text-dash-micro text-gray-400 text-center mt-2">
-          One-time monthly payment · No automatic charges
-        </p>
       </div>
     </div>
   );
@@ -309,7 +390,9 @@ export default function BillingPage() {
     queryKey: queryKeys.subscription.status,
     queryFn: getSubscriptionStatus,
   });
-  const [loadingPay, setLoadingPay] = useState(false);
+  // Which tier's button is currently processing (null when idle).
+  const [loadingTier, setLoadingTier] = useState<SubscriptionTier | null>(null);
+  const [period, setPeriod] = useState<BillingPeriod>("monthly");
 
   const history: PaymentHistoryItem[] =
     subscription?.transactions?.map((item) => ({
@@ -341,11 +424,31 @@ export default function BillingPage() {
       ? fmtDate(trialEndsAt)
       : null;
 
-  const handleSubscribe = async () => {
-    if (loadingPay) return;
-    setLoadingPay(true);
+  // ── Current tier ───────────────────────────────────────────────────────────
+  const currentTier = subscription?.tier ?? null;
+  const currentPeriod: BillingPeriod =
+    subscription?.plan === "annual" ? "annual" : "monthly";
+  const currentPlan = status === "active" ? planByTier(currentTier) : null;
+  const currentPlanName = currentPlan
+    ? `Velte AI ${currentPlan.name}`
+    : "Velte AI";
+  const currentPrice = currentPlan
+    ? `${naira(planTotal(currentPlan.monthlyPrice, currentPeriod))} / ${
+        currentPeriod === "annual" ? "year" : "month"
+      }`
+    : `From ${naira(plans[0].monthlyPrice)} / month`;
+
+  const handleSubscribe = async (
+    tier: SubscriptionTier,
+    billingPeriod: BillingPeriod,
+  ) => {
+    if (loadingTier) return;
+    setLoadingTier(tier);
     try {
-      const { authorization_url, reference } = await initializeSubscription();
+      const { authorization_url, reference } = await initializeSubscription(
+        tier,
+        billingPeriod,
+      );
       const popup = openPaystackPopup({
         url: authorization_url,
         onClose: async () => {
@@ -359,19 +462,19 @@ export default function BillingPage() {
           } catch {
             toast.error("Could not verify payment. Contact support.");
           } finally {
-            setLoadingPay(false);
+            setLoadingTier(null);
           }
         },
       });
       if (!popup) {
         toast.error("Please allow popups to complete payment.");
-        setLoadingPay(false);
+        setLoadingTier(null);
       }
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : "Checkout failed. Try again.";
       toast.error(msg);
-      setLoadingPay(false);
+      setLoadingTier(null);
     }
   };
 
@@ -456,7 +559,7 @@ export default function BillingPage() {
               <div className="flex items-center gap-2.5">
                 <StatusBadge status={status} />
                 <span className="text-dash-body font-bold text-gray-900">
-                  Velte AI Pro
+                  {currentPlanName}
                 </span>
               </div>
 
@@ -509,7 +612,7 @@ export default function BillingPage() {
                 </div>
                 <div className="flex items-center gap-1.5 text-dash-secondary text-gray-500">
                   <Receipt size={11} className="text-orange-400" />
-                  <span>₦8,500 / month</span>
+                  <span>{currentPrice}</span>
                 </div>
               </div>
             </div>
@@ -521,7 +624,7 @@ export default function BillingPage() {
                 <div className="flex-shrink-0 flex justify-center">
                   <CountdownRing
                     days={trialDaysLeft}
-                    totalDays={14}
+                    totalDays={7}
                     label="trial days left"
                     urgent={isUrgent}
                   />
@@ -531,51 +634,36 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* ── Plan Card — shown when not active ── */}
-      {status !== "active" && (
-        <PlanCard
-          onSubscribe={handleSubscribe}
-          loading={loadingPay}
-          isRenewal={status === "expired"}
-        />
-      )}
-
-      {/* ── Renew early — shown when active ── */}
-      {status === "active" && (
-        <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
-          <div className="flex sm:items-center sm:justify-between sm:flex-row flex-col gap-3">
-            <div>
-              <h3 className="text-dash-heading font-bold text-gray-900">
-                Renew Early
-              </h3>
-              <p className="text-dash-secondary text-gray-400 mt-0.5">
-                Extend your access before it expires
-              </p>
-            </div>
-            <div className="flex justify-end sm:justify-normal">
-              <button
-                onClick={handleSubscribe}
-                disabled={loadingPay}
-                className={cn(
-                  "flex items-center gap-2 py-2 px-4 rounded-xl text-dash-body font-semibold transition-all cursor-pointer",
-                  "bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200",
-                  "disabled:opacity-60 disabled:cursor-not-allowed",
-                )}
-              >
-                {loadingPay ? (
-                  <RefreshCw size={13} className="animate-spin" />
-                ) : (
-                  <>
-                    <RefreshCw size={13} />
-                    Renew · ₦8,500
-                    <ChevronRight size={13} />
-                  </>
-                )}
-              </button>
-            </div>
+      {/* ── Plans ── */}
+      <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+          <div>
+            <h3 className="text-dash-heading font-bold text-gray-900">
+              {status === "active" ? "Your Plan" : "Choose a Plan"}
+            </h3>
+            <p className="text-dash-secondary text-gray-400 mt-0.5">
+              {status === "active"
+                ? "Renew, upgrade, or switch your subscription"
+                : "Pick the plan that fits your business"}
+            </p>
           </div>
+          <PeriodToggle period={period} onChange={setPeriod} />
         </div>
-      )}
+
+        <div className="grid sm:grid-cols-2 gap-4 items-stretch">
+          {plans.map((plan) => (
+            <TierCard
+              key={plan.id}
+              plan={plan}
+              period={period}
+              status={status}
+              currentTier={currentTier}
+              loading={loadingTier === plan.id}
+              onSubscribe={handleSubscribe}
+            />
+          ))}
+        </div>
+      </div>
 
       {/* ── Payment History ── */}
       <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">

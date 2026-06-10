@@ -10,6 +10,7 @@ const publicRoutes = [
   "/careers",
   "/contact",
   "/privacy",
+  "/pricing",
   "/terms",
   "/_next",
   "/favicon.ico",

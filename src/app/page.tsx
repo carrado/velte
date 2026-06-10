@@ -6,6 +6,8 @@ import HowItWorks from "@/components/landing/HowItWorks";
 import Navbar from "@/components/landing/Navbar";
 import Pricing from "@/components/landing/Pricing";
 import Stats from "@/components/landing/Stats";
+import Testimonials from "@/components/landing/Testimonials";
+import UseCases from "@/components/landing/UseCases";
 
 export default function Home() {
   return (
@@ -15,7 +17,9 @@ export default function Home() {
         <Hero />
         <Stats />
         <Features />
+        <UseCases />
         <HowItWorks />
+        <Testimonials />
         <Pricing />
         <CallToAction />
         <Footer />

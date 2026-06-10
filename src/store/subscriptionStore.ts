@@ -33,6 +33,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()((set) => ({
             currentPeriodStart: null,
             currentPeriodEnd: null,
             plan: null,
+            tier: null,
             transactions: [],
           },
 
