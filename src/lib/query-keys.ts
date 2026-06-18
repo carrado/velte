@@ -1,8 +1,15 @@
 import type { FetchTransactionsParams } from "@/types/transaction";
-import type { OrderFilter } from "@/types/order";
+import type { OrderListParams } from "@/types/order";
 import type { ProductListParams } from "@/types/product";
 
 export { DEFAULT_TRANSACTIONS_LIST_PARAMS } from "@/lib/transaction-list-params";
+
+export const DEFAULT_ORDERS_LIST_PARAMS: OrderListParams = {
+  page: 1,
+  limit: 10,
+  sort_by: "created_at",
+  sort_order: "desc",
+};
 
 export const queryKeys = {
   dashboard: {
@@ -17,7 +24,9 @@ export const queryKeys = {
   },
   orders: {
     stats: ["orderStats"] as const,
-    list: (tab: OrderFilter) => ["orders", tab] as const,
+    list: (params?: OrderListParams) =>
+      ["orders", "list", params ?? {}] as const,
+    detail: (id: string) => ["orders", "detail", id] as const,
   },
   products: {
     categories: ["products", "categories"] as const,

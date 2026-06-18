@@ -129,8 +129,9 @@ export function useNotificationSeeder(userId: string | undefined) {
     }
 
     Promise.all([fetchOrders(), categoriesApi.getProducts()])
-      .then(([orders, productsResult]) => {
+      .then(([ordersResult, productsResult]) => {
         if (cancelled) return;
+        const orders = ordersResult.orders;
         const products = productsResult.products;
 
         const notifications: AppNotification[] = [

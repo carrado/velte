@@ -108,10 +108,9 @@ export const transactionService = {
   },
 
   /**
-   * Initiate a refund transfer for a cancelled order.
-   * The backend resolves the customer's bank details from the PaymentLink
-   * associated with the order, creates a Paystack transfer recipient,
-   * and initiates the transfer from the merchant's Paystack balance.
+   * Initiate a refund for a cancelled order. The backend reverses the original
+   * Paystack charge back to the customer's payment source (card/bank) — no
+   * customer bank details are collected. Idempotent server-side.
    */
   async initiateOrderRefund(
     payload: InitiateOrderRefundPayload,

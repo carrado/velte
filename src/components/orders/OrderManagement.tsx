@@ -1,9 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { queryKeys } from "@/lib/query-keys";
+import { getErrorMessage } from "@/lib/error-message";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import {
   Tooltip,
@@ -42,6 +48,7 @@ import type {
   Order,
   OrderFilter,
   OrderStatus,
+  OrderListParams,
   SortOption,
 } from "@/types/order";
 import type { FilterField } from "@/types/common";
@@ -286,11 +293,19 @@ function OrderCard({
       <div className="flex items-start gap-3">
         <div
           className={cn(
-            "w-11 h-11 rounded-xl flex items-center justify-center font-bold text-dash-body flex-shrink-0 border",
+            "w-11 h-11 rounded-xl flex items-center justify-center font-bold text-dash-body flex-shrink-0 border overflow-hidden",
             order.product.color,
           )}
         >
-          {order.product.initials}
+          {order.product.image ? (
+            <img
+              src={order.product.image}
+              alt={order.product.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            order.product.initials
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-dash-body font-bold text-[#023337] leading-tight truncate">
@@ -703,6 +718,16 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "price_desc", label: "Price high to low" },
 ];
 
+const SORT_MAP: Record<
+  SortOption,
+  { sort_by: "created_at" | "price"; sort_order: "asc" | "desc" }
+> = {
+  newest: { sort_by: "created_at", sort_order: "desc" },
+  oldest: { sort_by: "created_at", sort_order: "asc" },
+  price_asc: { sort_by: "price", sort_order: "asc" },
+  price_desc: { sort_by: "price", sort_order: "desc" },
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OrderManagement() {
@@ -738,6 +763,7 @@ export default function OrderManagement() {
 
   const [activeTab, setActiveTab] = useState<OrderFilter>("all");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [filters, setFilters] =
     useState<Record<string, string>>(DEFAULT_FILTERS);
@@ -755,73 +781,69 @@ export default function OrderManagement() {
     "confirm" | "refund" | null
   >(null);
 
+  // Debounce the search box before it reaches the server
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset to page 1 whenever a filter that changes the result set changes
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(1);
+  }, [activeTab, debouncedSearch, filters, sortBy]);
+
+  // ── build query params ─────────────────────────────────────────────────────
+
+  const queryParams = useMemo<OrderListParams>(() => {
+    const { sort_by, sort_order } = SORT_MAP[sortBy];
+    // The dropdown filter (orderStatus) overrides the active tab when set.
+    const effectiveTab = (
+      filters["orderStatus"] !== "all" ? filters["orderStatus"] : activeTab
+    ) as OrderFilter;
+
+    const params: OrderListParams = {
+      page,
+      limit: PAGE_SIZE,
+      sort_by,
+      sort_order,
+    };
+    if (effectiveTab !== "all") params.tab = effectiveTab;
+    if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
+    if (filters["paymentStatus"] && filters["paymentStatus"] !== "all") {
+      params.payment_status =
+        filters["paymentStatus"] === "Paid" ? "paid" : "unpaid";
+    }
+    if (filters["startDate"]) params.start_date = filters["startDate"];
+    if (filters["endDate"]) params.end_date = filters["endDate"];
+    return params;
+  }, [page, sortBy, activeTab, debouncedSearch, filters]);
+
+  // ── data ─────────────────────────────────────────────────────────────────
+
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: queryKeys.orders.stats,
     queryFn: fetchOrderStats,
   });
-  const { data: orders = [], isLoading: ordersLoading } = useQuery({
-    queryKey: queryKeys.orders.list(activeTab),
-    queryFn: () => fetchOrders(activeTab),
+  const { data: listData, isLoading: ordersLoading } = useQuery({
+    queryKey: queryKeys.orders.list(queryParams),
+    queryFn: () => fetchOrders(queryParams),
+    placeholderData: keepPreviousData,
   });
   const mutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
       updateOrderStatus(id, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.stats });
+    },
+    onError: (err) =>
+      toast.error(getErrorMessage(err, "Failed to update order status.")),
   });
 
-  // ── filtering + sorting ──────────────────────────────────────────────────
-
-  const foodInProgress = (s: string) =>
-    ["Pending", "Preparing", "Ready", "OnTheWay"].includes(s);
-  const isCompleted = (s: string) =>
-    isFood ? s === "Delivered" : s === "Delivered" || s === "Shipped";
-  const isPending = (s: string) =>
-    isFood ? foodInProgress(s) : s === "Pending";
-
-  let filtered = orders.filter((o) => {
-    const matchesSearch =
-      o.orderId.toLowerCase().includes(search.toLowerCase()) ||
-      o.product.name.toLowerCase().includes(search.toLowerCase());
-    if (!matchesSearch) return false;
-    if (
-      filters["startDate"] &&
-      new Date(o.date) < new Date(filters["startDate"])
-    )
-      return false;
-    if (filters["endDate"] && new Date(o.date) > new Date(filters["endDate"]))
-      return false;
-    if (
-      filters["paymentStatus"] !== "all" &&
-      o.payment !== filters["paymentStatus"]
-    )
-      return false;
-    if (filters["orderStatus"] !== "all") {
-      if (filters["orderStatus"] === "completed" && !isCompleted(o.status))
-        return false;
-      if (filters["orderStatus"] === "pending" && !isPending(o.status))
-        return false;
-      if (filters["orderStatus"] === "cancelled" && o.status !== "Cancelled")
-        return false;
-    } else if (activeTab !== "all") {
-      if (activeTab === "completed" && !isCompleted(o.status)) return false;
-      if (activeTab === "pending" && !isPending(o.status)) return false;
-      if (activeTab === "cancelled" && o.status !== "Cancelled") return false;
-    }
-    return true;
-  });
-
-  filtered = [...filtered].sort((a, b) => {
-    if (sortBy === "newest")
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    if (sortBy === "oldest")
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
-    if (sortBy === "price_asc") return a.price - b.price;
-    if (sortBy === "price_desc") return b.price - a.price;
-    return 0;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const orders = listData?.orders ?? [];
+  const totalPages = listData?.pagination.total_pages ?? 1;
+  const allCount = stats?.totalOrders.value ?? 0;
 
   // ── handlers ─────────────────────────────────────────────────────────────
 
@@ -830,13 +852,6 @@ export default function OrderManagement() {
     setPage(1);
     setFilters((prev) => ({ ...prev, orderStatus: "all" }));
   }
-
-  const tabCounts: Record<OrderFilter, number> = {
-    all: orders.length,
-    completed: orders.filter((o) => isCompleted(o.status)).length,
-    pending: orders.filter((o) => isPending(o.status)).length,
-    cancelled: orders.filter((o) => o.status === "Cancelled").length,
-  };
 
   const confirmMarkShipped = () => {
     if (pendingShippedOrderId) {
@@ -979,7 +994,7 @@ export default function OrderManagement() {
           <TabBar
             tabs={TABS.map((t) => ({
               ...t,
-              count: t.key === "all" ? tabCounts.all : undefined,
+              count: t.key === "all" ? allCount : undefined,
             }))}
             activeTab={activeTab}
             onChange={handleTabChange}
@@ -1029,7 +1044,7 @@ export default function OrderManagement() {
       {/* Order cards */}
       {ordersLoading ? (
         <OrderSkeleton />
-      ) : paginated.length === 0 ? (
+      ) : orders.length === 0 ? (
         <div className="bg-white sm:rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
           <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Package size={24} className="text-orange-300" />
@@ -1043,7 +1058,7 @@ export default function OrderManagement() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {paginated.map((order) => (
+          {orders.map((order) => (
             <OrderCard
               key={order.id}
               order={order}
@@ -1064,7 +1079,7 @@ export default function OrderManagement() {
       )}
 
       {/* Pagination */}
-      {!ordersLoading && paginated.length > 0 && (
+      {!ordersLoading && orders.length > 0 && (
         <div className="bg-white sm:rounded-xl shadow-sm">
           <Pagination
             currentPage={page}

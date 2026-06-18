@@ -17,7 +17,11 @@ import { getAISetupStatus } from "@/services/aiSetup";
 import { getSubscriptionStatus } from "@/services/subscription";
 import { settingsApi } from "@/services/settings";
 import { fetchWhatsAppProfile } from "@/services/whatsappProfile";
-import { DEFAULT_TRANSACTIONS_LIST_PARAMS, queryKeys } from "@/lib/query-keys";
+import {
+  DEFAULT_ORDERS_LIST_PARAMS,
+  DEFAULT_TRANSACTIONS_LIST_PARAMS,
+  queryKeys,
+} from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
 
 export type PrefetchTask = {
@@ -70,8 +74,8 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
     case "orders":
       return [
         {
-          queryKey: queryKeys.orders.list("all"),
-          queryFn: () => fetchOrders("all"),
+          queryKey: queryKeys.orders.list(DEFAULT_ORDERS_LIST_PARAMS),
+          queryFn: () => fetchOrders(DEFAULT_ORDERS_LIST_PARAMS),
         },
         {
           queryKey: queryKeys.orders.stats,

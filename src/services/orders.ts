@@ -1,180 +1,231 @@
+import { apiClient } from "@/lib/api";
 import type {
   OrderStatus,
   OrderFilter,
   Order,
   OrderStats,
+  OrderListParams,
+  OrderListResult,
+  OrderDetail,
+  PaymentStatus,
 } from "@/types/order";
 
 export type { OrderStatus, OrderFilter, Order, OrderStats };
 export type { PaymentStatus } from "@/types/order";
+export type { OrderListParams, OrderListResult, OrderDetail };
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+// ── API response shapes ─────────────────────────────────────────────────────────
 
-export async function fetchOrderStats(): Promise<OrderStats> {
-  await delay(400);
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+}
+
+/** Canonical lifecycle status as stored on the backend (snake_case). */
+type ApiOrderStatus =
+  | "pending"
+  | "preparing"
+  | "ready"
+  | "on_the_way"
+  | "shipped"
+  | "delivered"
+  | "cancelled";
+
+interface ApiOrder {
+  id: string;
+  /** Display reference, e.g. "#ORD0001" */
+  reference: string;
+  product_name: string;
+  /** Product photo URL (snapshot at order time); null when unavailable */
+  product_image: string | null;
+  product_initials: string | null;
+  /** Tailwind avatar classes, e.g. "bg-blue-100 text-blue-600" */
+  product_color: string | null;
+  /** Grand total in kobo (NGN) */
+  total_amount: number;
+  payment_status: "paid" | "unpaid";
+  status: ApiOrderStatus;
+  created_at: string;
+}
+
+interface ApiOrderDetail extends ApiOrder {
+  quantity: number;
+  /** Unit price in kobo */
+  unit_price: number;
+  /** Sum of line items in kobo (before delivery fee) */
+  subtotal: number;
+  /** Delivery / shipping fee in kobo */
+  delivery_fee: number;
+  payment_method: string | null;
+  sku: string | null;
+  notes: string | null;
+  customer: {
+    name: string;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+  };
+  fulfillment_type: "delivery" | "pickup";
+  delivery_address: string | null;
+  carrier: string | null;
+  estimated_delivery: string | null;
+  estimated_prep_mins: number | null;
+  updated_at: string;
+}
+
+interface ApiOrderStats {
+  total_orders: { value: number; growth: number };
+  new_orders: { value: number; growth: number };
+  completed_orders: { value: number; percentage: number };
+  canceled_orders: { value: number; growth: number };
+}
+
+// ── Status mapping ──────────────────────────────────────────────────────────────
+
+const STATUS_FROM_API: Record<ApiOrderStatus, OrderStatus> = {
+  pending: "Pending",
+  preparing: "Preparing",
+  ready: "Ready",
+  on_the_way: "OnTheWay",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+
+const STATUS_TO_API: Record<OrderStatus, ApiOrderStatus> = {
+  Pending: "pending",
+  Preparing: "preparing",
+  Ready: "ready",
+  OnTheWay: "on_the_way",
+  Shipped: "shipped",
+  Delivered: "delivered",
+  Cancelled: "cancelled",
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const DEFAULT_AVATAR = "bg-gray-100 text-gray-600";
+
+function initialsFrom(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+/** Format an ISO timestamp to the DD-MM-YYYY string the UI renders. */
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+// ── Mappers ───────────────────────────────────────────────────────────────────
+
+function mapOrder(o: ApiOrder): Order {
+  const payment: PaymentStatus =
+    o.payment_status === "paid" ? "Paid" : "Unpaid";
   return {
-    totalOrders: { value: 1240, growth: 14.4 },
-    newOrders: { value: 240, growth: 20 },
-    completedOrders: { value: 960, percentage: 85 },
-    canceledOrders: { value: 87, growth: -5 },
+    id: o.id,
+    orderId: o.reference,
+    product: {
+      name: o.product_name,
+      initials: o.product_initials ?? initialsFrom(o.product_name),
+      color: o.product_color ?? DEFAULT_AVATAR,
+      image: o.product_image ?? null,
+    },
+    date: formatDate(o.created_at),
+    price: o.total_amount / 100,
+    payment,
+    status: STATUS_FROM_API[o.status] ?? "Pending",
   };
 }
 
-const BASE_ORDERS: Order[] = [
-  {
-    id: "1",
-    orderId: "#ORD0001",
-    product: {
-      name: "Wireless Bluetooth Headphones",
-      initials: "WB",
-      color: "bg-blue-100 text-blue-600",
+function mapOrderDetail(o: ApiOrderDetail): OrderDetail {
+  return {
+    ...mapOrder(o),
+    quantity: o.quantity,
+    unitPrice: o.unit_price / 100,
+    subtotal: o.subtotal / 100,
+    deliveryFee: o.delivery_fee / 100,
+    total: o.total_amount / 100,
+    paymentMethod: o.payment_method ?? "—",
+    sku: o.sku,
+    notes: o.notes,
+    customer: {
+      name: o.customer.name,
+      phone: o.customer.phone,
+      email: o.customer.email,
+      address: o.customer.address,
     },
-    date: "01-01-2025",
-    price: 49.99,
-    payment: "Paid",
-    status: "Delivered",
-  },
-  {
-    id: "2",
-    orderId: "#ORD0002",
-    product: {
-      name: "Men's T-Shirt",
-      initials: "MT",
-      color: "bg-purple-100 text-purple-600",
+    fulfillment: {
+      type: o.fulfillment_type,
+      address: o.delivery_address,
+      carrier: o.carrier,
+      estimate: o.estimated_delivery,
+      estimatedPrepMins: o.estimated_prep_mins,
     },
-    date: "01-01-2025",
-    price: 14.99,
-    payment: "Unpaid",
-    status: "Pending",
-  },
-  {
-    id: "3",
-    orderId: "#ORD0003",
-    product: {
-      name: "Men's Leather Wallet",
-      initials: "ML",
-      color: "bg-amber-100 text-amber-700",
-    },
-    date: "01-01-2025",
-    price: 49.99,
-    payment: "Paid",
-    status: "Delivered",
-  },
-  {
-    id: "4",
-    orderId: "#ORD0004",
-    product: {
-      name: "Memory Foam Pillow",
-      initials: "MF",
-      color: "bg-gray-100 text-gray-600",
-    },
-    date: "01-01-2025",
-    price: 39.99,
-    payment: "Paid",
-    status: "Shipped",
-  },
-  {
-    id: "5",
-    orderId: "#ORD0005",
-    product: {
-      name: "Adjustable Dumbbells",
-      initials: "AD",
-      color: "bg-slate-100 text-slate-600",
-    },
-    date: "01-01-2025",
-    price: 14.99,
-    payment: "Unpaid",
-    status: "Pending",
-  },
-  {
-    id: "6",
-    orderId: "#ORD0006",
-    product: {
-      name: "Coffee Maker",
-      initials: "CM",
-      color: "bg-red-100 text-red-600",
-    },
-    date: "01-01-2025",
-    price: 79.99,
-    payment: "Unpaid",
-    status: "Cancelled",
-  },
-  {
-    id: "7",
-    orderId: "#ORD0007",
-    product: {
-      name: "Casual Baseball Cap",
-      initials: "CB",
-      color: "bg-green-100 text-green-600",
-    },
-    date: "01-01-2025",
-    price: 49.99,
-    payment: "Paid",
-    status: "Delivered",
-  },
-  {
-    id: "8",
-    orderId: "#ORD0008",
-    product: {
-      name: "Full HD Webcam",
-      initials: "FW",
-      color: "bg-indigo-100 text-indigo-600",
-    },
-    date: "01-01-2025",
-    price: 39.99,
-    payment: "Paid",
-    status: "Delivered",
-  },
-  {
-    id: "9",
-    orderId: "#ORD0009",
-    product: {
-      name: "Smart LED Color Bulb",
-      initials: "SL",
-      color: "bg-yellow-100 text-yellow-600",
-    },
-    date: "01-01-2025",
-    price: 79.99,
-    payment: "Unpaid",
-    status: "Delivered",
-  },
-  {
-    id: "10",
-    orderId: "#ORD0010",
-    product: {
-      name: "Men's T-Shirt",
-      initials: "MT",
-      color: "bg-purple-100 text-purple-600",
-    },
-    date: "05-01-2025",
-    price: 14.99,
-    payment: "Unpaid",
-    status: "Delivered",
-  },
-];
+    placedAt: o.created_at,
+    updatedAt: o.updated_at,
+  };
+}
 
-const ordersData: Order[] = BASE_ORDERS.map((o) => ({ ...o }));
+// ── API functions ─────────────────────────────────────────────────────────────
 
 export async function fetchOrders(
-  filter: OrderFilter = "all",
-): Promise<Order[]> {
-  await delay(500);
-  if (filter === "completed")
-    return ordersData.filter(
-      (o) => o.status === "Delivered" || o.status === "Shipped",
-    );
-  if (filter === "pending")
-    return ordersData.filter((o) => o.status === "Pending");
-  if (filter === "cancelled")
-    return ordersData.filter((o) => o.status === "Cancelled");
-  return [...ordersData];
+  params: OrderListParams = {},
+): Promise<OrderListResult> {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.tab && params.tab !== "all") qs.set("tab", params.tab);
+  if (params.search?.trim()) qs.set("search", params.search.trim());
+  if (params.payment_status) qs.set("payment_status", params.payment_status);
+  if (params.start_date) qs.set("start_date", params.start_date);
+  if (params.end_date) qs.set("end_date", params.end_date);
+  if (params.sort_by) qs.set("sort_by", params.sort_by);
+  if (params.sort_order) qs.set("sort_order", params.sort_order);
+
+  const query = qs.toString() ? `?${qs}` : "";
+  const res = await apiClient<
+    ApiResponse<{
+      orders: ApiOrder[];
+      pagination: OrderListResult["pagination"];
+    }>
+  >(`/orders${query}`);
+
+  return {
+    orders: res.data.orders.map(mapOrder),
+    pagination: res.data.pagination,
+  };
+}
+
+export async function fetchOrderStats(): Promise<OrderStats> {
+  const res = await apiClient<ApiResponse<ApiOrderStats>>("/orders/stats");
+  const s = res.data;
+  return {
+    totalOrders: s.total_orders,
+    newOrders: s.new_orders,
+    completedOrders: s.completed_orders,
+    canceledOrders: s.canceled_orders,
+  };
+}
+
+export async function getOrder(id: string): Promise<OrderDetail> {
+  const res = await apiClient<ApiResponse<ApiOrderDetail>>(`/orders/${id}`);
+  return mapOrderDetail(res.data);
 }
 
 export async function updateOrderStatus(
   id: string,
   status: OrderStatus,
-): Promise<void> {
-  await delay(300);
-  const order = ordersData.find((o) => o.id === id);
-  if (order) order.status = status;
+): Promise<Order> {
+  const res = await apiClient<ApiResponse<ApiOrder>>(`/orders/${id}/status`, {
+    method: "PATCH",
+    data: { status: STATUS_TO_API[status] },
+  });
+  return mapOrder(res.data);
 }

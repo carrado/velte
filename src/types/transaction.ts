@@ -135,9 +135,8 @@ export interface InitiateOrderRefundResponse {
   success: boolean;
   message: string;
   data: {
-    transferCode: string; // Paystack transfer code e.g. "TRF_xxxx"
-    transferReference: string; // Internal idempotency reference
+    refundReference: string; // Paystack refund id
     amount: number; // Amount in NGN (as sent)
-    status: "pending" | "success" | "failed";
+    status: "pending" | "processed" | "failed";
   };
 }

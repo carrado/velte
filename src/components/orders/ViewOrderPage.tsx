@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useState } from "react";
-import { fetchOrders, updateOrderStatus } from "@/services/orders";
+import { getOrder, updateOrderStatus } from "@/services/orders";
 import { transactionService } from "@/services/transactions";
 import type { Order, OrderStatus } from "@/types/order";
 import {
@@ -198,14 +198,22 @@ function OrderHeroCard({
       <div className="px-5 pt-4 pb-5">
         {/* Main row */}
         <div className="flex items-start gap-4">
-          {/* Large product avatar */}
+          {/* Large product avatar — product photo when available, else initials */}
           <div
             className={cn(
-              "w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-2xl font-black flex-shrink-0 border-2",
+              "w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-2xl font-black flex-shrink-0 border-2 overflow-hidden",
               order.product.color,
             )}
           >
-            {order.product.initials}
+            {order.product.image ? (
+              <img
+                src={order.product.image}
+                alt={order.product.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              order.product.initials
+            )}
           </div>
 
           {/* Centre: name + id + status */}
@@ -985,9 +993,9 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
     "cancel_confirm" | "refund_transfer" | "ship_confirm" | null
   >(null);
 
-  const { data: orders = [], isLoading } = useQuery({
-    queryKey: queryKeys.orders.list("all"),
-    queryFn: () => fetchOrders("all"),
+  const { data: order, isLoading } = useQuery({
+    queryKey: queryKeys.orders.detail(orderId),
+    queryFn: () => getOrder(orderId),
   });
 
   const statusMutation = useMutation({
@@ -995,6 +1003,7 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
       updateOrderStatus(id, status),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.stats });
       const labels: Record<OrderStatus, string> = {
         Shipped: "Order marked as shipped.",
         Delivered: "Order marked as delivered.",
@@ -1009,8 +1018,6 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
     onError: () =>
       toast.error("Failed to update order status. Please try again."),
   });
-
-  const order: Order | undefined = orders.find((o) => o.id === orderId);
 
   if (isLoading) return <ViewOrderSkeleton />;
 
@@ -1117,11 +1124,19 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
             <div className="flex items-start gap-4">
               <div
                 className={cn(
-                  "w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-xl font-black flex-shrink-0 border-2",
+                  "w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-xl font-black flex-shrink-0 border-2 overflow-hidden",
                   order.product.color,
                 )}
               >
-                {order.product.initials}
+                {order.product.image ? (
+                  <img
+                    src={order.product.image}
+                    alt={order.product.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  order.product.initials
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-dash-title font-bold text-[#023337] leading-tight">
@@ -1133,21 +1148,23 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
                       Unit Price
                     </p>
                     <p className="text-dash-body font-bold text-[#023337]">
-                      ₦{order.price.toFixed(2)}
+                      ₦{order.unitPrice.toFixed(2)}
                     </p>
                   </div>
                   <div>
                     <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
                       Qty
                     </p>
-                    <p className="text-dash-body font-bold text-[#023337]">1</p>
+                    <p className="text-dash-body font-bold text-[#023337]">
+                      {order.quantity}
+                    </p>
                   </div>
                   <div>
                     <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
                       Total
                     </p>
                     <p className="text-dash-body font-black text-orange-500">
-                      ₦{order.price.toFixed(2)}
+                      ₦{order.total.toFixed(2)}
                     </p>
                   </div>
                   <div>
@@ -1155,8 +1172,8 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
                       {isFood ? "Code" : "SKU"}
                     </p>
                     <p className="text-dash-body font-mono font-semibold text-gray-500 truncate">
-                      {order.product.initials}-
-                      {order.id.slice(0, 6).toUpperCase()}
+                      {order.sku ??
+                        `${order.product.initials}-${order.id.slice(0, 6).toUpperCase()}`}
                     </p>
                   </div>
                 </div>
@@ -1177,7 +1194,7 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
               <InfoRow
                 icon={CreditCard}
                 label="Payment"
-                value="Credit / Debit Card"
+                value={order.paymentMethod}
               />
               <InfoRow
                 icon={CreditCard}
@@ -1202,11 +1219,32 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
             icon={isFood ? Bike : Truck}
           >
             <div className="grid grid-cols-2 gap-5">
-              <InfoRow icon={User} label="Customer" value="John Doe" />
+              <InfoRow
+                icon={User}
+                label="Customer"
+                value={order.customer.name}
+              />
+              {order.customer.phone && (
+                <InfoRow
+                  icon={CreditCard}
+                  label="Phone"
+                  value={order.customer.phone}
+                />
+              )}
               <InfoRow
                 icon={MapPin}
-                label="Delivery Address"
-                value="123 Main Street, Lagos"
+                label={
+                  order.fulfillment.type === "pickup"
+                    ? "Pickup"
+                    : "Delivery Address"
+                }
+                value={
+                  order.fulfillment.type === "pickup"
+                    ? "Customer pickup"
+                    : (order.fulfillment.address ??
+                      order.customer.address ??
+                      "—")
+                }
                 full
               />
               {isFood ? (
@@ -1214,7 +1252,11 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
                   <InfoRow
                     icon={ChefHat}
                     label="Order Type"
-                    value="Food Delivery"
+                    value={
+                      order.fulfillment.type === "pickup"
+                        ? "Pickup"
+                        : "Food Delivery"
+                    }
                   />
                   <InfoRow
                     icon={Clock}
@@ -1224,7 +1266,9 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
                         ? "Completed"
                         : order.status === "Cancelled"
                           ? "N/A"
-                          : "~20 mins"
+                          : order.fulfillment.estimatedPrepMins
+                            ? `~${order.fulfillment.estimatedPrepMins} mins`
+                            : "—"
                     }
                   />
                 </>
@@ -1233,7 +1277,7 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
                   <InfoRow
                     icon={Truck}
                     label="Carrier"
-                    value="Standard Delivery"
+                    value={order.fulfillment.carrier ?? "Standard Delivery"}
                   />
                   <InfoRow
                     icon={Clock}
@@ -1243,7 +1287,8 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
                         ? order.date
                         : order.status === "Cancelled"
                           ? "N/A"
-                          : "3 – 5 business days"
+                          : (order.fulfillment.estimate ??
+                            "3 – 5 business days")
                     }
                   />
                 </>
