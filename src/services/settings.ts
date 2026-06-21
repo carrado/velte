@@ -7,6 +7,8 @@ import type {
   UserPreferences,
   BusinessType,
 } from "@/types/user";
+import type { InvoiceReceiptSettings } from "@/types/invoice";
+import type { AiSettings } from "@/types/ai-settings";
 
 export type { UserNotifications };
 
@@ -113,6 +115,48 @@ export const settingsApi = {
       data,
     });
     return response.notifications;
+  },
+
+  getInvoiceSettings: async (): Promise<InvoiceReceiptSettings> => {
+    const response = await apiClient<{
+      success: true;
+      data: InvoiceReceiptSettings;
+    }>("/auth/invoice-settings");
+    return response.data;
+  },
+
+  // Accepts a partial document (the UI saves one tab — `invoice` or `receipt` —
+  // at a time) and returns the full, merged settings.
+  saveInvoiceSettings: async (
+    data: Partial<InvoiceReceiptSettings>,
+  ): Promise<InvoiceReceiptSettings> => {
+    const response = await apiClient<{
+      success: true;
+      data: InvoiceReceiptSettings;
+    }>("/auth/invoice-settings", {
+      method: "PUT",
+      data,
+    });
+    return response.data;
+  },
+
+  getAiSettings: async (): Promise<AiSettings> => {
+    const response = await apiClient<{
+      success: true;
+      data: AiSettings;
+    }>("/auth/ai-settings");
+    return response.data;
+  },
+
+  saveAiSettings: async (data: Partial<AiSettings>): Promise<AiSettings> => {
+    const response = await apiClient<{
+      success: true;
+      data: AiSettings;
+    }>("/auth/ai-settings", {
+      method: "PUT",
+      data,
+    });
+    return response.data;
   },
 
   updateBusinessType: async (businessType: BusinessType): Promise<User> => {

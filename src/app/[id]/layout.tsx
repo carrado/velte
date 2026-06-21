@@ -15,6 +15,9 @@ const PushNotificationManager = dynamic(
   () => import("@/components/PushNotificationManager"),
   { ssr: false },
 );
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { getOrder } from "@/services/orders";
 import { checkAISetup } from "@/services/aiSetup";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { usersApi } from "@/services/users";
@@ -36,6 +39,18 @@ const PATH_TITLES: Record<string, string> = {
   search: "Search",
   notifications: "Notifications",
 };
+
+// Returns the orderId when on the single-order detail route, else null.
+// Route shape: /[id]/orders/[orderId]
+function getOrderDetailId(pathname: string): string | null {
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length === 3 && segments[1] === "orders") return segments[2];
+  return null;
+}
+
+function truncateTitle(name: string, max = 32): string {
+  return name.length > max ? `${name.slice(0, max).trimEnd()}…` : name;
+}
 
 function getTitle(pathname: string): string {
   const segments = pathname.split("/").filter(Boolean);
@@ -65,6 +80,15 @@ export default function DashboardRootLayout({
 
   const userId = pathname.split("/")[1];
   useNotificationSeeder(userId);
+
+  // On the single-order route the title should be the product name, not the
+  // order id. Re-uses the same query key as ViewOrderPage so the fetch dedupes.
+  const orderDetailId = getOrderDetailId(pathname);
+  const { data: detailOrder } = useQuery({
+    queryKey: queryKeys.orders.detail(orderDetailId ?? ""),
+    queryFn: () => getOrder(orderDetailId!),
+    enabled: !!orderDetailId,
+  });
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });
@@ -134,6 +158,10 @@ export default function DashboardRootLayout({
             <div className="py-4 md:p-6 space-y-6 text-dash-body antialiased">
               <Header
                 title={(() => {
+                  if (orderDetailId)
+                    return detailOrder?.product?.name
+                      ? truncateTitle(detailOrder.product.name)
+                      : "Order";
                   const t = getTitle(pathname);
                   if (!isFood) return t;
                   const foodMap: Record<string, string> = {

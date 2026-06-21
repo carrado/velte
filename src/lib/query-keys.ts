@@ -54,6 +54,8 @@ export const queryKeys = {
     profile: ["settings", "profile"] as const,
     notifications: ["settings", "notifications"] as const,
     whatsappProfile: ["settings", "whatsappProfile"] as const,
+    invoice: ["settings", "invoice"] as const,
+    ai: ["settings", "ai"] as const,
   },
   search: {
     results: (q: string) => ["search", "results", q] as const,

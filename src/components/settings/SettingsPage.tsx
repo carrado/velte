@@ -9,7 +9,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Info,
-  Moon,
   Sun,
   Building2,
   Phone,
@@ -18,7 +17,6 @@ import {
   Hash,
   Calendar,
   User,
-  Package,
   Printer,
   Download,
   Eye,
@@ -45,6 +43,12 @@ import { queryKeys } from "@/lib/query-keys";
 import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
 import { WhatsAppProfileSection } from "./WhatsappProfile";
 import { updateWhatsAppProfilePicture } from "@/services/whatsappProfile";
+import type {
+  InvoiceDocBusiness,
+  InvoiceSettings,
+  ReceiptSettings,
+} from "@/types/invoice";
+import type { ShopHoursConfig, EscalationConfig } from "@/types/ai-settings";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -78,45 +82,11 @@ interface OrderSettings {
   allowSameDay: boolean;
 }
 
-interface ShopHoursConfig {
-  is24Hours: boolean;
-  offlineMessage: string;
-  openTime: string;
-  closeTime: string;
-}
+// ShopHoursConfig + EscalationConfig live in `@/types/ai-settings` (shared with
+// the settings service).
 
-interface EscalationConfig {
-  enabled: boolean;
-  threshold: number;
-}
-
-interface BusinessInfo {
-  name: string;
-  address: string;
-  phone: string;
-  email: string;
-  logo: string;
-  taxId: string;
-  website: string;
-}
-
-interface InvoiceConfig {
-  business: BusinessInfo;
-  footerNote: string;
-  primaryColor: string;
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-  dueDays: number;
-}
-
-interface ReceiptConfig {
-  business: BusinessInfo;
-  thankYouMessage: string;
-  returnPolicy: string;
-  primaryColor: string;
-  showBarcode: boolean;
-}
+// Invoice / Receipt config types live in `@/types/invoice` (shared with the
+// settings service). The business logo is the account avatar, not a stored field.
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
@@ -1181,7 +1151,7 @@ function OrderSettingsPanel() {
             <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
             <p className="text-dash-secondary text-blue-700 leading-relaxed">
               These estimates are communicated by the AI when customers ask
-              about shipping times. They don't automatically trigger any
+              about shipping times. They don&apos;t automatically trigger any
               logistics workflow.
             </p>
           </div>
@@ -1201,27 +1171,53 @@ function OrderSettingsPanel() {
 // PANEL 3 — AI Settings
 // ══════════════════════════════════════════════════════════════════════════════
 
+// Fixed order-total amount (Naira) that triggers escalation. Not editable.
+const ESCALATION_AMOUNT = 1_000_000;
+
 function AISettingsPanel() {
   const [shopHours, setShopHours] = useState<ShopHoursConfig>({
     is24Hours: true,
-    offlineMessage:
-      "We're currently closed. Our team will respond to your message during business hours. Thank you for your patience!",
-    openTime: "08:00",
-    closeTime: "20:00",
   });
 
+  // The escalation threshold is a fixed order-total amount, not editable.
+  const escalationAmountText = `₦${ESCALATION_AMOUNT.toLocaleString()}`;
   const [escalation, setEscalation] = useState<EscalationConfig>({
     enabled: false,
-    threshold: 5,
+    threshold: ESCALATION_AMOUNT,
   });
 
-  const [isSaving, setIsSaving] = useState(false);
+  const queryClient = useQueryClient();
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setIsSaving(false);
-    toast.success("AI settings saved");
+  // Load saved AI settings. retry:false + ignored error so the panel still works
+  // with defaults if the request fails.
+  const { data: savedAi } = useQuery({
+    queryKey: queryKeys.settings.ai,
+    queryFn: settingsApi.getAiSettings,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (savedAi) {
+      // 24/7 is enforced; threshold is fixed server-side. Keep both constant
+      // regardless of the stored payload.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShopHours({ is24Hours: true });
+      setEscalation({ ...savedAi.escalation, threshold: ESCALATION_AMOUNT });
+    }
+  }, [savedAi]);
+
+  const saveMutation = useMutation({
+    mutationFn: settingsApi.saveAiSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.settings.ai, data);
+      toast.success("AI settings saved");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const handleSave = () => {
+    saveMutation.mutate({ shopHours, escalation });
   };
 
   return (
@@ -1232,20 +1228,13 @@ function AISettingsPanel() {
         title="Shop Operating Hours"
         description="Control when your AI assistant is active"
       >
+        {/* 24/7 is enforced for Phase 1 — custom operating-hours design is
+            deferred to Phase 2 (see docs/PHASE2_SHOP_OPERATING_HOURS.md). */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <div className="flex items-center justify-between py-3">
             <div className="flex items-center gap-2.5">
-              <div
-                className={cn(
-                  "w-7 h-7 rounded-lg flex items-center justify-center transition-colors",
-                  shopHours.is24Hours ? "bg-orange-100" : "bg-gray-100",
-                )}
-              >
-                {shopHours.is24Hours ? (
-                  <Sun size={13} className="text-orange-500" />
-                ) : (
-                  <Moon size={13} className="text-gray-500" />
-                )}
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-orange-100">
+                <Sun size={13} className="text-orange-500" />
               </div>
               <div>
                 <p className="text-dash-body font-semibold text-gray-900">
@@ -1256,107 +1245,13 @@ function AISettingsPanel() {
                 </p>
               </div>
             </div>
-            <Toggle
-              enabled={shopHours.is24Hours}
-              onChange={() =>
-                setShopHours((p) => ({ ...p, is24Hours: !p.is24Hours }))
-              }
-            />
-          </div>
-
-          {!shopHours.is24Hours && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-dash-secondary font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
-                    Opening Time
-                  </label>
-                  <div className="relative">
-                    <Sun
-                      size={13}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    />
-                    <input
-                      type="time"
-                      value={shopHours.openTime}
-                      onChange={(e) =>
-                        setShopHours((p) => ({
-                          ...p,
-                          openTime: e.target.value,
-                        }))
-                      }
-                      className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl pl-8 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-dash-secondary font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
-                    Closing Time
-                  </label>
-                  <div className="relative">
-                    <Moon
-                      size={13}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    />
-                    <input
-                      type="time"
-                      value={shopHours.closeTime}
-                      onChange={(e) =>
-                        setShopHours((p) => ({
-                          ...p,
-                          closeTime: e.target.value,
-                        }))
-                      }
-                      className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl pl-8 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-dash-body font-semibold text-gray-900 block mb-1">
-                  Offline Message
-                </label>
-                <p className="text-dash-secondary text-gray-500 mb-2">
-                  Sent to customers who message outside your operating hours
-                </p>
-                <textarea
-                  value={shopHours.offlineMessage}
-                  onChange={(e) =>
-                    setShopHours((p) => ({
-                      ...p,
-                      offlineMessage: e.target.value,
-                    }))
-                  }
-                  rows={3}
-                  placeholder="e.g. We're closed right now. We'll get back to you during business hours..."
-                  className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
-                />
-                <p className="text-dash-secondary text-gray-400 mt-1 text-right">
-                  {shopHours.offlineMessage.length}/300
-                </p>
-              </div>
-
-              <div className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                <Info
-                  size={13}
-                  className="text-gray-400 flex-shrink-0 mt-0.5"
-                />
-                <p className="text-dash-secondary text-gray-500 leading-relaxed">
-                  Your AI will be active from{" "}
-                  <span className="font-semibold text-gray-700">
-                    {shopHours.openTime}
-                  </span>{" "}
-                  to{" "}
-                  <span className="font-semibold text-gray-700">
-                    {shopHours.closeTime}
-                  </span>{" "}
-                  daily. Outside these hours the offline message above will be
-                  sent.
-                </p>
-              </div>
+            <div className="flex items-center gap-2.5">
+              <span className="text-dash-caption font-semibold text-orange-500">
+                Always on
+              </span>
+              <Toggle enabled disabled onChange={() => {}} />
             </div>
-          )}
+          </div>
         </div>
       </SectionCard>
 
@@ -1364,7 +1259,7 @@ function AISettingsPanel() {
       <SectionCard
         icon={Zap}
         title="Basic Escalation Trigger"
-        description="Get notified when order quantities exceed your threshold"
+        description="Get notified when an order's total amount exceeds the threshold"
       >
         <div className="space-y-4">
           <div className="flex items-center justify-between py-3 border-b border-gray-100">
@@ -1388,30 +1283,21 @@ function AISettingsPanel() {
             <div className="space-y-4">
               <div>
                 <label className="text-dash-body font-semibold text-gray-900 block mb-1">
-                  Order Quantity Threshold
+                  Order Amount Threshold
                 </label>
                 <p className="text-dash-secondary text-gray-500 mb-2">
-                  When a customer orders this many items or more, an invoice is
-                  generated instead of automated fulfillment
+                  When an order&apos;s total reaches this amount or more, an
+                  invoice is generated instead of automated fulfillment
                 </p>
-                <div className="relative max-w-[160px]">
-                  <Package
-                    size={13}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    value={escalation.threshold}
-                    onChange={(e) =>
-                      setEscalation((p) => ({
-                        ...p,
-                        threshold: parseInt(e.target.value) || 1,
-                      }))
-                    }
-                    className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl pl-8 pr-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
-                  />
+                <div className="flex items-center gap-2 max-w-[220px] rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5">
+                  <Lock size={13} className="text-gray-400 flex-shrink-0" />
+                  <span className="text-dash-body font-bold text-gray-800">
+                    {escalationAmountText}
+                  </span>
                 </div>
+                <p className="text-dash-caption text-gray-400 mt-1.5">
+                  Fixed at {escalationAmountText} — this cannot be changed.
+                </p>
               </div>
 
               <div className="flex items-start gap-2.5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
@@ -1425,13 +1311,13 @@ function AISettingsPanel() {
                   </p>
                   <p className="text-dash-secondary text-amber-700 leading-relaxed">
                     The AI does <span className="font-bold">not</span> receive
-                    payment on your behalf when a customer orders{" "}
+                    payment on your behalf when an order totals{" "}
                     <span className="font-bold">
-                      {escalation.threshold}+ items
+                      {escalationAmountText} or more
                     </span>
                     . An invoice is automatically generated and sent to{" "}
                     <span className="font-bold">your email</span> with the
-                    customer's full details (name, contact, and order
+                    customer&apos;s full details (name, contact, and order
                     breakdown). Customise the invoice format in the{" "}
                     <span className="font-bold">Invoice & Receipt tab</span>.
                   </p>
@@ -1456,7 +1342,7 @@ function AISettingsPanel() {
 
       <BottomSaveButton
         onClick={handleSave}
-        loading={isSaving}
+        loading={saveMutation.isPending}
         label="Save AI Settings"
       />
     </div>
@@ -1467,7 +1353,13 @@ function AISettingsPanel() {
 // PANEL 4 — Invoice & Receipt
 // ══════════════════════════════════════════════════════════════════════════════
 
-function InvoicePreview({ config }: { config: InvoiceConfig }) {
+function InvoicePreview({
+  config,
+  logo,
+}: {
+  config: InvoiceSettings;
+  logo?: string;
+}) {
   const today = new Date();
   const due = new Date(today);
   due.setDate(due.getDate() + config.dueDays);
@@ -1480,10 +1372,6 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-      <div
-        className="h-2"
-        style={{ backgroundColor: config.primaryColor || "#f97316" }}
-      />
       <div className="p-6">
         <div className="flex items-start justify-between mb-6">
           <div>
@@ -1498,6 +1386,14 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
             </p>
           </div>
           <div className="text-right">
+            {logo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logo}
+                alt="Business logo"
+                className="w-12 h-12 rounded-lg object-cover ml-auto mb-1.5 border border-gray-100"
+              />
+            )}
             <p className="text-dash-body font-bold text-gray-900">
               {config.business.name || "Your Business Name"}
             </p>
@@ -1631,15 +1527,36 @@ function InvoicePreview({ config }: { config: InvoiceConfig }) {
           </p>
         )}
       </div>
-      <div
-        className="h-1.5 opacity-30"
-        style={{ backgroundColor: config.primaryColor || "#f97316" }}
-      />
     </div>
   );
 }
 
-function ReceiptPreview({ config }: { config: ReceiptConfig }) {
+// Abbreviate a business name to uppercase initials for the receipt number prefix:
+// "Acme Stores Limited" → "ASL". Mirrors the backend (documents.service.js).
+function abbreviateBusiness(name: string): string {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return "RCP";
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  const abbr =
+    words.length === 1 ? words[0].slice(0, 3) : words.map((w) => w[0]).join("");
+  return (
+    abbr
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 5) || "RCP"
+  );
+}
+
+// Stable sample random segment for the preview (real receipts: ABBR-{random}-{seq}).
+const SAMPLE_RECEIPT_RAND = String(Math.floor(1000 + Math.random() * 9000));
+
+function ReceiptPreview({
+  config,
+  logo,
+}: {
+  config: ReceiptSettings;
+  logo?: string;
+}) {
   const today = new Date();
   const fmt = (d: Date) =>
     d.toLocaleDateString("en-NG", {
@@ -1647,55 +1564,83 @@ function ReceiptPreview({ config }: { config: ReceiptConfig }) {
       month: "short",
       year: "numeric",
     });
+  // Sample number — real receipts: ABBR-{random}-{incrementing per-store seq}.
+  const receiptNo = `${abbreviateBusiness(config.business.name)}-${SAMPLE_RECEIPT_RAND}-0001`;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm max-w-sm mx-auto">
-      <div
-        className="h-2"
-        style={{ backgroundColor: config.primaryColor || "#f97316" }}
-      />
-      <div className="p-5">
-        <div className="text-center mb-5">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2"
-            style={{ backgroundColor: `${config.primaryColor || "#f97316"}18` }}
-          >
-            <Building2
-              size={18}
-              style={{ color: config.primaryColor || "#f97316" }}
+    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm max-w-md mx-auto">
+      <div className="p-6">
+        <div className="text-center mb-6">
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logo}
+              alt="Business logo"
+              className="w-16 h-16 rounded-xl object-cover mx-auto mb-2.5 border border-gray-100"
             />
-          </div>
-          <p className="text-dash-body font-black text-gray-900">
+          ) : (
+            <div
+              className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-2.5"
+              style={{
+                backgroundColor: `${config.primaryColor || "#f97316"}18`,
+              }}
+            >
+              <Building2
+                size={28}
+                style={{ color: config.primaryColor || "#f97316" }}
+              />
+            </div>
+          )}
+          <p className="text-dash-title font-black text-gray-900">
             {config.business.name || "Your Business Name"}
           </p>
-          <p className="text-dash-caption text-gray-400 mt-0.5">
+          <p className="text-dash-secondary text-gray-400 mt-1">
             {config.business.address || "Business Address"}
           </p>
-          <p className="text-dash-caption text-gray-400">
+          <p className="text-dash-secondary text-gray-400">
             {config.business.phone || "+234 800 000 0000"}
           </p>
         </div>
-        <div className="border-t border-dashed border-gray-200 mb-4" />
-        <div className="flex justify-between text-dash-caption text-gray-500 mb-4">
-          <span>Receipt #RCP-001</span>
+
+        <div className="border-t-2 border-dashed border-gray-200 mb-4" />
+        <div className="flex justify-between text-dash-secondary font-semibold text-gray-500 mb-4">
+          <span>Receipt #{receiptNo}</span>
           <span>{fmt(today)}</span>
         </div>
-        <div className="space-y-2 mb-4">
+
+        {/* Billed To — name drops below the label, phone under the name */}
+        <div className="mb-4">
+          <p className="text-dash-micro font-bold text-gray-400 uppercase tracking-wide mb-1">
+            Billed To
+          </p>
+          <p className="text-dash-body font-bold text-gray-900">
+            Customer Name
+          </p>
+          <p className="text-dash-secondary text-gray-500">+234 800 000 0000</p>
+          <p className="text-dash-secondary text-gray-500">
+            customer@email.com
+          </p>
+        </div>
+
+        <div className="mb-4">
           {[
             { name: "Product A", qty: 2, price: 15000 },
             { name: "Product B", qty: 1, price: 8500 },
           ].map((item, i) => (
-            <div key={i} className="flex justify-between text-dash-secondary">
-              <span className="text-gray-700">
-                {item.qty}x {item.name}
+            <div
+              key={i}
+              className="flex justify-between text-dash-body py-2 border-b border-gray-100"
+            >
+              <span className="text-gray-700 font-medium">
+                {item.qty} × {item.name}
               </span>
-              <span className="font-semibold text-gray-900">
+              <span className="font-bold text-gray-900">
                 ₦{(item.qty * item.price).toLocaleString()}
               </span>
             </div>
           ))}
         </div>
-        <div className="border-t border-dashed border-gray-200 mb-3" />
+
         <div className="flex justify-between text-dash-secondary text-gray-500 mb-1">
           <span>Subtotal</span>
           <span>₦38,500</span>
@@ -1705,62 +1650,86 @@ function ReceiptPreview({ config }: { config: ReceiptConfig }) {
           <span>₦2,888</span>
         </div>
         <div
-          className="flex justify-between text-dash-body font-black"
+          className="flex justify-between text-dash-title font-black pt-2.5 border-t-2 border-gray-200"
           style={{ color: config.primaryColor || "#f97316" }}
         >
           <span>TOTAL</span>
           <span>₦41,388</span>
         </div>
-        <div className="border-t border-dashed border-gray-200 mt-3 mb-4" />
+
+        <div className="border-t-2 border-dashed border-gray-200 mt-4 mb-5" />
         <div className="text-center">
-          <p className="text-dash-secondary font-bold text-gray-800 mb-1">
+          <p className="text-dash-body font-bold text-gray-800 mb-1.5">
             {config.thankYouMessage || "Thank you for your purchase!"}
           </p>
           {config.returnPolicy && (
-            <p className="text-dash-micro text-gray-400 leading-relaxed">
+            <p className="text-dash-caption text-gray-400 leading-relaxed">
               {config.returnPolicy}
             </p>
           )}
         </div>
         {config.showBarcode && (
-          <div className="mt-4 flex flex-col items-center gap-1">
+          <div className="mt-5 flex flex-col items-center gap-1.5">
             <div className="flex gap-px">
-              {Array.from({ length: 40 }).map((_, i) => (
+              {Array.from({ length: 48 }).map((_, i) => (
                 <div
                   key={i}
                   className="bg-gray-800"
                   style={{
                     width: i % 3 === 0 ? "3px" : "1.5px",
-                    height: "24px",
+                    height: "30px",
                   }}
                 />
               ))}
             </div>
-            <p className="text-dash-micro text-gray-400 tracking-widest">
-              RCP-2024-001
+            <p className="text-dash-caption text-gray-400 tracking-widest">
+              {receiptNo}
             </p>
           </div>
         )}
       </div>
-      <div
-        className="h-1.5 opacity-30"
-        style={{ backgroundColor: config.primaryColor || "#f97316" }}
-      />
+    </div>
+  );
+}
+
+function BusinessLogoNote({ logo }: { logo?: string }) {
+  return (
+    <div className="flex items-center gap-3 p-3 mb-5 bg-orange-50 border border-orange-100 rounded-xl">
+      <div className="w-11 h-11 rounded-lg overflow-hidden bg-white border border-orange-100 flex items-center justify-center flex-shrink-0">
+        {logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logo}
+            alt="Business logo"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <Building2 size={18} className="text-orange-300" />
+        )}
+      </div>
+      <p className="text-dash-secondary text-orange-700 leading-relaxed">
+        Your <span className="font-semibold">account profile photo</span> is
+        used as the logo on your invoices and receipts. Change it from the{" "}
+        <span className="font-semibold">Account</span> tab.
+      </p>
     </div>
   );
 }
 
 function InvoiceReceiptPanel() {
   const [activeTab, setActiveTab] = useState<InvoiceTab>("invoice");
-  const [isSaving, setIsSaving] = useState(false);
+  const queryClient = useQueryClient();
+  const storeUser = useUserStore((s) => s.user);
 
-  const [invoiceConfig, setInvoiceConfig] = useState<InvoiceConfig>({
+  // The business logo IS the account profile photo — shared across the app.
+  const logo = storeUser?.avatar ?? "";
+
+  const [invoiceConfig, setInvoiceConfig] = useState<InvoiceSettings>({
     business: {
       name: "",
       address: "",
       phone: "",
       email: "",
-      logo: "",
       taxId: "",
       website: "",
     },
@@ -1773,13 +1742,12 @@ function InvoiceReceiptPanel() {
     dueDays: 7,
   });
 
-  const [receiptConfig, setReceiptConfig] = useState<ReceiptConfig>({
+  const [receiptConfig, setReceiptConfig] = useState<ReceiptSettings>({
     business: {
       name: "",
       address: "",
       phone: "",
       email: "",
-      logo: "",
       taxId: "",
       website: "",
     },
@@ -1789,24 +1757,78 @@ function InvoiceReceiptPanel() {
     showBarcode: true,
   });
 
-  const updateInvoiceBusiness = (field: keyof BusinessInfo, value: string) =>
+  // Load saved settings. retry:false + ignored error so the panel still works
+  // (with sensible defaults) before the backend endpoint exists.
+  const { data: savedSettings } = useQuery({
+    queryKey: queryKeys.settings.invoice,
+    queryFn: settingsApi.getInvoiceSettings,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  // Fill any blank business field from the account profile, so a first-time
+  // user sees their details pre-populated instead of empty inputs.
+  const fillBusiness = (b: InvoiceDocBusiness): InvoiceDocBusiness => ({
+    name: b.name || storeUser?.company?.name || storeUser?.businessName || "",
+    address: b.address || storeUser?.company?.location || "",
+    phone: b.phone || storeUser?.phone || storeUser?.company?.phone || "",
+    email: b.email || storeUser?.email || "",
+    taxId: b.taxId || "",
+    website: b.website || "",
+  });
+
+  useEffect(() => {
+    if (savedSettings) {
+      setInvoiceConfig({
+        ...savedSettings.invoice,
+        business: fillBusiness(savedSettings.invoice.business),
+      });
+      setReceiptConfig({
+        ...savedSettings.receipt,
+        business: fillBusiness(savedSettings.receipt.business),
+      });
+    } else if (storeUser) {
+      setInvoiceConfig((p) => ({ ...p, business: fillBusiness(p.business) }));
+      setReceiptConfig((p) => ({ ...p, business: fillBusiness(p.business) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedSettings, storeUser]);
+
+  const updateInvoiceBusiness = (
+    field: keyof InvoiceDocBusiness,
+    value: string,
+  ) =>
     setInvoiceConfig((p) => ({
       ...p,
       business: { ...p.business, [field]: value },
     }));
 
-  const updateReceiptBusiness = (field: keyof BusinessInfo, value: string) =>
+  const updateReceiptBusiness = (
+    field: keyof InvoiceDocBusiness,
+    value: string,
+  ) =>
     setReceiptConfig((p) => ({
       ...p,
       business: { ...p.business, [field]: value },
     }));
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setIsSaving(false);
-    toast.success(
-      `${activeTab === "invoice" ? "Invoice" : "Receipt"} settings saved`,
+  const saveMutation = useMutation({
+    mutationFn: settingsApi.saveInvoiceSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.settings.invoice, data);
+      toast.success(
+        `${activeTab === "invoice" ? "Invoice" : "Receipt"} settings saved`,
+      );
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Save only the tab the user is editing (button label matches).
+  const handleSave = () => {
+    saveMutation.mutate(
+      activeTab === "invoice"
+        ? { invoice: invoiceConfig }
+        : { receipt: receiptConfig },
     );
   };
 
@@ -1855,13 +1877,14 @@ function InvoiceReceiptPanel() {
                 </button>
               </div>
             </div>
-            <InvoicePreview config={invoiceConfig} />
+            <InvoicePreview config={invoiceConfig} logo={logo} />
           </div>
 
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
             <h3 className="text-dash-heading font-bold text-gray-800 mb-5">
               Business Information
             </h3>
+            <BusinessLogoNote logo={logo} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <InputField
                 label="Business Name"
@@ -2015,13 +2038,14 @@ function InvoiceReceiptPanel() {
                 </button>
               </div>
             </div>
-            <ReceiptPreview config={receiptConfig} />
+            <ReceiptPreview config={receiptConfig} logo={logo} />
           </div>
 
           <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
             <h3 className="text-dash-heading font-bold text-gray-800 mb-5">
               Business Information
             </h3>
+            <BusinessLogoNote logo={logo} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <InputField
                 label="Business Name"
@@ -2135,7 +2159,7 @@ function InvoiceReceiptPanel() {
 
       <BottomSaveButton
         onClick={handleSave}
-        loading={isSaving}
+        loading={saveMutation.isPending}
         label={`Save ${activeTab === "invoice" ? "Invoice" : "Receipt"} Settings`}
       />
     </div>

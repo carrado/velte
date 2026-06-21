@@ -9,7 +9,7 @@ import {
   fetchBestSelling,
   fetchAddableProducts,
 } from "@/services/dashboard";
-import { fetchOrders, fetchOrderStats } from "@/services/orders";
+import { fetchOrders, fetchOrderStats, getOrder } from "@/services/orders";
 import { categoriesApi } from "@/services/products";
 import { fetchCustomers } from "@/services/customers";
 import { transactionService } from "@/services/transactions";
@@ -35,6 +35,19 @@ export function getRouteKey(href: string): string {
 }
 
 export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
+  // Dynamic route: single order detail (orders/<orderId>). Prefetch so the
+  // detail page renders from cache instead of fetching on mount.
+  const orderDetailMatch = routeKey.match(/^orders\/([^/]+)$/);
+  if (orderDetailMatch) {
+    const orderId = orderDetailMatch[1];
+    return [
+      {
+        queryKey: queryKeys.orders.detail(orderId),
+        queryFn: () => getOrder(orderId),
+      },
+    ];
+  }
+
   switch (routeKey) {
     case "dashboard":
       return [
