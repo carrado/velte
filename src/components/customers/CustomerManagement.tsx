@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchCustomers } from "@/services/customers";
+import { fetchCustomers, fetchCustomerStats } from "@/services/customers";
+import type { DayPoint } from "@/services/customers";
 import { queryKeys } from "@/lib/query-keys";
 import {
   Tooltip,
@@ -26,46 +27,61 @@ import FilterPopover from "../FilterPopover";
 import SortMenu from "../SortMenu";
 import { Input } from "../ui/input";
 
-const overviewMetrics = [
-  { label: "Active customers", value: "25k" },
-  { label: "New customers", value: "5.6k" },
-  { label: "Shop visitors", value: "250k" },
-  { label: "Conversion rate", value: "5.5%" },
-];
-
-const chartData = [
-  { day: "Sun", value: 19000 },
-  { day: "Mon", value: 22000 },
-  { day: "Tue", value: 28000 },
-  { day: "Wed", value: 35000 },
-  { day: "Thu", value: 45000 },
-  { day: "Fri", value: 32000 },
-  { day: "Sat", value: 38000 },
-];
+// Compact display for the overview cards: 1500 → "1.5k", 250000 → "250k".
+function formatCompact(n: number): string {
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000;
+    return `${m % 1 === 0 ? m : m.toFixed(1)}m`;
+  }
+  if (n >= 1_000) {
+    const k = n / 1_000;
+    return `${k % 1 === 0 ? k : k.toFixed(1)}k`;
+  }
+  return String(n);
+}
 
 const CY_START = 30;
 const CH = 150;
 const CX_START = 40;
 const CW = 640;
-const MAX_VAL = 50000;
 const SVG_W = 700;
 const SVG_H = 210;
-const PEAK_INDEX = 4;
 
-function getX(i: number) {
-  return CX_START + (i / (chartData.length - 1)) * CW;
+const DAY_ORDER = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const FULL_DAY: Record<string, string> = {
+  Sun: "Sunday",
+  Mon: "Monday",
+  Tue: "Tuesday",
+  Wed: "Wednesday",
+  Thu: "Thursday",
+  Fri: "Friday",
+  Sat: "Saturday",
+};
+// Fallback while the stats query is loading, so the chart axes still render.
+const EMPTY_WEEK: DayPoint[] = DAY_ORDER.map((day) => ({ day, value: 0 }));
+
+function getX(i: number, len: number) {
+  return CX_START + (i / Math.max(1, len - 1)) * CW;
 }
-function getY(value: number) {
-  return CY_START + (1 - value / MAX_VAL) * CH;
+function getY(value: number, maxVal: number) {
+  return CY_START + (1 - value / maxVal) * CH;
 }
-function buildLinePath(): string {
-  const pts = chartData.map((d, i) => ({ x: getX(i), y: getY(d.value) }));
+function buildLinePath(data: DayPoint[], maxVal: number): string {
+  const pts = data.map((d, i) => ({
+    x: getX(i, data.length),
+    y: getY(d.value, maxVal),
+  }));
   return pts.reduce((acc, pt, i) => {
     if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
     const prev = pts[i - 1];
     const cpX = ((prev.x + pt.x) / 2).toFixed(1);
     return `${acc} C ${cpX} ${prev.y.toFixed(1)}, ${cpX} ${pt.y.toFixed(1)}, ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
   }, "");
+}
+// Round the chart's top value up to a clean multiple of 5 so the five gridline
+// steps are whole numbers; never below 5 so a quiet week still gets a sane axis.
+function niceMax(v: number): number {
+  return Math.max(5, Math.ceil(v / 5) * 5);
 }
 
 const STATUS_STYLES: Record<CustomerStatus, { dot: string; text: string }> = {
@@ -124,6 +140,11 @@ export default function CustomerManagement() {
     queryFn: fetchCustomers,
   });
 
+  const { data: stats } = useQuery({
+    queryKey: queryKeys.customers.stats,
+    queryFn: fetchCustomerStats,
+  });
+
   const [activeMetric, setActiveMetric] = useState(0);
   const [weekFilter, setWeekFilter] = useState<"this" | "last">("this");
   const [activeTab, setActiveTab] = useState<CustomerFilter>("all");
@@ -145,18 +166,32 @@ export default function CustomerManagement() {
     }, 0);
   };
 
-  const linePath = buildLinePath();
-  const peakX = getX(PEAK_INDEX);
-  const peakY = getY(chartData[PEAK_INDEX].value);
+  // New-customers-per-day for the selected week, with the scale, peak marker, and
+  // axis labels all derived from the real values.
+  const chartData: DayPoint[] =
+    (weekFilter === "this" ? stats?.thisWeek : stats?.lastWeek) ?? EMPTY_WEEK;
+  const peakIndex = chartData.reduce(
+    (best, d, i, arr) => (d.value > arr[best].value ? i : best),
+    0,
+  );
+  const peakValue = chartData[peakIndex].value;
+  const maxVal = niceMax(Math.max(0, ...chartData.map((d) => d.value)));
+
+  const linePath = buildLinePath(chartData, maxVal);
+  const peakX = getX(peakIndex, chartData.length);
+  const peakY = getY(peakValue, maxVal);
   const baseY = CY_START + CH;
   const areaPath = `${linePath} L ${(CX_START + CW).toFixed(1)} ${baseY} L ${CX_START.toFixed(1)} ${baseY} Z`;
 
-  const ttW = 88;
+  const ttW = 100;
   const ttH = 36;
   const ttArrowH = 8;
   const ttX = peakX - ttW / 2;
   const ttY = peakY - ttH - ttArrowH;
-  const yAxisLabels = ["50k", "40k", "30k", "20k", "10k", "0k"];
+  // Six gridline labels, top (max) → bottom (0), as whole numbers.
+  const yAxisLabels = Array.from({ length: 6 }, (_, i) =>
+    formatCompact(Math.round((maxVal * (5 - i)) / 5)),
+  );
 
   let filtered = customers.filter((c) => {
     const matchesTab =
@@ -197,6 +232,21 @@ export default function CustomerManagement() {
     inactive: customers.filter((c) => c.status === "Inactive").length,
     vip: customers.filter((c) => c.status === "VIP").length,
   };
+
+  // Overview cards, computed from the live customer list. "Shop visitors" and
+  // "conversion rate" need analytics we don't track here, so the cards show real
+  // customer metrics instead of placeholder figures.
+  const overviewMetrics = useMemo(() => {
+    const totalOrders = customers.reduce((sum, c) => sum + (c.orders || 0), 0);
+    const active = customers.filter((c) => c.status === "Active").length;
+    const vip = customers.filter((c) => c.status === "VIP").length;
+    return [
+      { label: "Total customers", value: formatCompact(customers.length) },
+      { label: "Active customers", value: formatCompact(active) },
+      { label: "VIP customers", value: formatCompact(vip) },
+      { label: "Total orders", value: formatCompact(totalOrders) },
+    ];
+  }, [customers]);
 
   const columns: ColumnDef<Customer>[] = [
     {
@@ -409,65 +459,69 @@ export default function CustomerManagement() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
-                <line
-                  x1={peakX}
-                  y1={peakY + 6}
-                  x2={peakX}
-                  y2={baseY}
-                  stroke="#f97316"
-                  strokeWidth="1.5"
-                  strokeDasharray="4 3"
-                />
-                <circle
-                  cx={peakX}
-                  cy={peakY}
-                  r="4"
-                  fill="white"
-                  stroke="#f97316"
-                  strokeWidth="2"
-                />
-                <rect
-                  x={ttX}
-                  y={ttY}
-                  width={ttW}
-                  height={ttH}
-                  rx="6"
-                  fill="#023337"
-                />
-                <polygon
-                  points={`${peakX - 5},${ttY + ttH} ${peakX + 5},${ttY + ttH} ${peakX},${ttY + ttH + ttArrowH}`}
-                  fill="#023337"
-                />
-                <text
-                  x={peakX}
-                  y={ttY + 14}
-                  textAnchor="middle"
-                  fill="white"
-                  fontSize="9"
-                  fontFamily="sans-serif"
-                >
-                  Thursday
-                </text>
-                <text
-                  x={peakX}
-                  y={ttY + 27}
-                  textAnchor="middle"
-                  fill="white"
-                  fontSize="11"
-                  fontFamily="sans-serif"
-                  fontWeight="600"
-                >
-                  45,000
-                </text>
+                {peakValue > 0 && (
+                  <>
+                    <line
+                      x1={peakX}
+                      y1={peakY + 6}
+                      x2={peakX}
+                      y2={baseY}
+                      stroke="#f97316"
+                      strokeWidth="1.5"
+                      strokeDasharray="4 3"
+                    />
+                    <circle
+                      cx={peakX}
+                      cy={peakY}
+                      r="4"
+                      fill="white"
+                      stroke="#f97316"
+                      strokeWidth="2"
+                    />
+                    <rect
+                      x={ttX}
+                      y={ttY}
+                      width={ttW}
+                      height={ttH}
+                      rx="6"
+                      fill="#023337"
+                    />
+                    <polygon
+                      points={`${peakX - 5},${ttY + ttH} ${peakX + 5},${ttY + ttH} ${peakX},${ttY + ttH + ttArrowH}`}
+                      fill="#023337"
+                    />
+                    <text
+                      x={peakX}
+                      y={ttY + 14}
+                      textAnchor="middle"
+                      fill="white"
+                      fontSize="9"
+                      fontFamily="sans-serif"
+                    >
+                      {FULL_DAY[chartData[peakIndex].day]}
+                    </text>
+                    <text
+                      x={peakX}
+                      y={ttY + 27}
+                      textAnchor="middle"
+                      fill="white"
+                      fontSize="11"
+                      fontFamily="sans-serif"
+                      fontWeight="600"
+                    >
+                      {peakValue.toLocaleString()} new
+                    </text>
+                  </>
+                )}
                 {chartData.map((d, i) => (
                   <text
                     key={d.day}
-                    x={getX(i)}
+                    x={getX(i, chartData.length)}
                     y={SVG_H - 4}
                     textAnchor="middle"
                     fontSize="11"
-                    fill={i === PEAK_INDEX ? "#023337" : "#9ca3af"}
-                    fontWeight={i === PEAK_INDEX ? "600" : "400"}
+                    fill={i === peakIndex ? "#023337" : "#9ca3af"}
+                    fontWeight={i === peakIndex ? "600" : "400"}
                     fontFamily="sans-serif"
                   >
                     {d.day}
