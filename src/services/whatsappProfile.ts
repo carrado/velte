@@ -1,28 +1,12 @@
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import { useUserStore } from "@/store/userStore";
 import type {
   SaveWhatsAppProfilePayload,
   WhatsAppProfileState,
 } from "@/types/whatsapp-profile";
 
-interface ApiEnvelope<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-}
-
-async function unwrap<T>(
-  endpoint: string,
-  init: Parameters<typeof apiClient>[1],
-): Promise<T> {
-  const res = await apiClient<ApiEnvelope<T>>(endpoint, init);
-  return res.data;
-}
-
 export async function fetchWhatsAppProfile(): Promise<WhatsAppProfileState> {
-  return unwrap<WhatsAppProfileState>("/ai-setup/whatsapp-profile", {
-    method: "GET",
-  });
+  return api.get<WhatsAppProfileState>("/api/ai-setup/whatsapp-profile");
 }
 
 export async function saveWhatsAppProfile(
@@ -32,14 +16,11 @@ export async function saveWhatsAppProfile(
   featuredProductIds: string[];
   catalogSynced: boolean;
 }> {
-  const data = await unwrap<{
+  const data = await api.put<{
     services: string[];
     featuredProductIds: string[];
     catalogSynced: boolean;
-  }>("/ai-setup/whatsapp-profile", {
-    method: "PUT",
-    data: payload,
-  });
+  }>("/api/ai-setup/whatsapp-profile", payload);
 
   useUserStore.getState().updateUser({
     company: {
@@ -55,29 +36,22 @@ export async function saveWhatsAppProfile(
 export async function updateWhatsAppProfilePicture(
   profilePictureUrl: string,
 ): Promise<void> {
-  await unwrap<unknown>("/ai-setup/whatsapp-profile", {
-    method: "PUT",
-    data: { profilePictureUrl },
-  });
+  await api.put("/api/ai-setup/whatsapp-profile", { profilePictureUrl });
 }
 
 export async function updateUserServices(services: string[]): Promise<void> {
   const user = useUserStore.getState().user;
   if (!user?.id) return;
 
-  const res = await apiClient<{
-    success: boolean;
+  const { user: updated } = await api.put<{
     user: { company?: { services?: string[] } };
-  }>("/auth/profile", {
-    method: "PUT",
-    data: { services },
-  });
+  }>("/api/auth/profile", { services });
 
   useUserStore.getState().updateUser({
     company: {
       ...user.company,
-      services: res.user.company?.services ?? services,
+      services: updated.company?.services ?? services,
     },
-    services: res.user.company?.services ?? services,
+    services: updated.company?.services ?? services,
   });
 }

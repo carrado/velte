@@ -24,6 +24,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import AnchoredPopover from "../AnchoredPopover";
 import { categoriesApi } from "@/services/products";
 import { queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
@@ -455,20 +456,10 @@ function CategoryStrip({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (
-        openId &&
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setOpenId(null);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [openId]);
+  // The open chip's menu button, so the (portaled) edit/delete menu can anchor
+  // to it and escape the horizontal scroller's overflow clipping.
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const openCat = categories.find((c) => c.id === openId) ?? null;
 
   const updateScrollState = () => {
     const el = scrollRef.current;
@@ -554,7 +545,9 @@ function CategoryStrip({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setOpenId(openId === cat.id ? null : cat.id);
+                    const willOpen = openId !== cat.id;
+                    setOpenId(willOpen ? cat.id : null);
+                    setAnchorEl(willOpen ? e.currentTarget : null);
                   }}
                   className={cn(
                     "px-1.5 h-full flex items-center border-l transition-colors cursor-pointer",
@@ -567,31 +560,37 @@ function CategoryStrip({
                 </button>
               )}
             </div>
-            {!isFood && openId === cat.id && (
-              <div className="absolute left-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-20">
-                <button
-                  onClick={() => {
-                    setOpenId(null);
-                    onEdit(cat);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-                >
-                  <Pencil size={12} className="text-gray-400" /> Edit
-                </button>
-                <button
-                  onClick={() => {
-                    setOpenId(null);
-                    onDelete(cat.id);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                >
-                  <Trash2 size={12} className="text-red-400" /> Delete
-                </button>
-              </div>
-            )}
           </div>
         ))}
       </div>
+      {!isFood && openCat && anchorEl && (
+        <AnchoredPopover
+          open
+          onClose={() => setOpenId(null)}
+          anchorEl={anchorEl}
+          align="left"
+          className="w-32 bg-white rounded-xl shadow-lg border border-gray-100 py-1"
+        >
+          <button
+            onClick={() => {
+              setOpenId(null);
+              onEdit(openCat);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            <Pencil size={12} className="text-gray-400" /> Edit
+          </button>
+          <button
+            onClick={() => {
+              setOpenId(null);
+              onDelete(openCat.id);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-dash-body text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+          >
+            <Trash2 size={12} className="text-red-400" /> Delete
+          </button>
+        </AnchoredPopover>
+      )}
       {canScrollRight && (
         <button
           onClick={() => scroll("right")}

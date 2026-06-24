@@ -1,5 +1,5 @@
 // services/aiSetup.ts
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import { useAISetupStore } from "@/store/aiSetupStore";
 import type {
   AIConfig,
@@ -10,21 +10,6 @@ import type {
   WABAConfigureResponse,
   WhatsAppNumber,
 } from "@/types/ai-setup";
-
-// Backend wraps every successful response as { success, data, message? }.
-interface ApiEnvelope<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-}
-
-async function unwrap<T>(
-  endpoint: string,
-  init: Parameters<typeof apiClient>[1],
-): Promise<T> {
-  const res = await apiClient<ApiEnvelope<T>>(endpoint, init);
-  return res.data;
-}
 
 // ── Helper to sync server status into the store (e.g., on app load) ──
 export async function syncAISetupStatusFromServer(): Promise<void> {
@@ -49,53 +34,40 @@ export async function syncAISetupStatusFromServer(): Promise<void> {
 // ── API calls ────────────────────────────────────────────────────────
 
 export async function getAISetupStatus(): Promise<AISetupStatus> {
-  return unwrap<AISetupStatus>("/ai-setup/status", { method: "GET" });
+  return api.get<AISetupStatus>("/api/ai-setup/status");
 }
 
 export async function configureWABA(
   accessToken: string,
 ): Promise<WABAConfigureResponse> {
-  return unwrap<WABAConfigureResponse>("/ai-setup/waba/configure", {
-    method: "POST",
-    body: JSON.stringify({ accessToken }),
+  return api.post<WABAConfigureResponse>("/api/ai-setup/waba/configure", {
+    accessToken,
   });
 }
 
 export async function fetchWhatsAppNumbers(): Promise<WhatsAppNumber[]> {
-  const data = await unwrap<NumbersResponse>("/ai-setup/numbers", {
-    method: "GET",
-  });
+  const data = await api.get<NumbersResponse>("/api/ai-setup/numbers");
   return data.numbers;
 }
 
 export async function selectWhatsAppNumber(numberId: string): Promise<void> {
-  await unwrap("/ai-setup/numbers/select", {
-    method: "POST",
-    body: JSON.stringify({ numberId }),
-  });
+  await api.post("/api/ai-setup/numbers/select", { numberId });
 }
 
 export async function updateAIConfig(config: AIConfig): Promise<AIConfig> {
-  const data = await unwrap<AIConfigResponse>("/ai-setup/config", {
-    method: "PUT",
-    body: JSON.stringify(config),
-  });
+  const data = await api.put<AIConfigResponse>("/api/ai-setup/config", config);
   useAISetupStore.getState().setConfig(data.config);
   return data.config;
 }
 
 export async function activateAI(): Promise<ActivateAIResponse> {
-  const result = await unwrap<ActivateAIResponse>("/ai-setup/activate", {
-    method: "POST",
-  });
+  const result = await api.post<ActivateAIResponse>("/api/ai-setup/activate");
   useAISetupStore.getState().markComplete();
   return result;
 }
 
 export async function disconnectAI(): Promise<void> {
-  await apiClient<ApiEnvelope<unknown>>("/ai-setup/disconnect", {
-    method: "DELETE",
-  });
+  await api.del("/api/ai-setup/disconnect");
   useAISetupStore.getState().clearSetup();
 }
 

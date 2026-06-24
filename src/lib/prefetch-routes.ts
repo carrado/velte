@@ -10,6 +10,7 @@ import {
   fetchAddableProducts,
 } from "@/services/dashboard";
 import { fetchOrders, fetchOrderStats, getOrder } from "@/services/orders";
+import type { OrdersPage } from "@/types/order";
 import { categoriesApi } from "@/services/products";
 import { fetchCustomers } from "@/services/customers";
 import { transactionService } from "@/services/transactions";
@@ -18,7 +19,7 @@ import { getSubscriptionStatus } from "@/services/subscription";
 import { settingsApi } from "@/services/settings";
 import { fetchWhatsAppProfile } from "@/services/whatsappProfile";
 import {
-  DEFAULT_ORDERS_LIST_PARAMS,
+  DEFAULT_ORDERS_LIST_QUERY,
   DEFAULT_TRANSACTIONS_LIST_PARAMS,
   queryKeys,
 } from "@/lib/query-keys";
@@ -26,7 +27,12 @@ import { getErrorMessage } from "@/lib/error-message";
 
 export type PrefetchTask = {
   queryKey: readonly unknown[];
-  queryFn: () => Promise<unknown>;
+  queryFn: (ctx?: { pageParam?: unknown }) => Promise<unknown>;
+  /** When set, the task is prefetched as an infinite query (first page only). */
+  infinite?: {
+    initialPageParam: unknown;
+    getNextPageParam: (lastPage: unknown) => unknown;
+  };
 };
 
 export function getRouteKey(href: string): string {
@@ -87,8 +93,19 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
     case "orders":
       return [
         {
-          queryKey: queryKeys.orders.list(DEFAULT_ORDERS_LIST_PARAMS),
-          queryFn: () => fetchOrders(DEFAULT_ORDERS_LIST_PARAMS),
+          queryKey: queryKeys.orders.list(DEFAULT_ORDERS_LIST_QUERY),
+          queryFn: ({ pageParam } = {}) =>
+            fetchOrders({
+              ...DEFAULT_ORDERS_LIST_QUERY,
+              page: (pageParam as number) ?? 1,
+            }),
+          infinite: {
+            initialPageParam: 1,
+            getNextPageParam: (lastPage) => {
+              const p = (lastPage as OrdersPage).pageInfo;
+              return p.page < p.totalPages ? p.page + 1 : undefined;
+            },
+          },
         },
         {
           queryKey: queryKeys.orders.stats,
@@ -187,9 +204,18 @@ export async function runPrefetchTasks(
   onProgress(8);
 
   const results = await Promise.allSettled(
-    tasks.map(async ({ queryKey, queryFn }) => {
+    tasks.map(async ({ queryKey, queryFn, infinite }) => {
       try {
-        await queryClient.prefetchQuery({ queryKey, queryFn });
+        if (infinite) {
+          await queryClient.prefetchInfiniteQuery({
+            queryKey,
+            queryFn,
+            initialPageParam: infinite.initialPageParam,
+            getNextPageParam: infinite.getNextPageParam,
+          });
+        } else {
+          await queryClient.prefetchQuery({ queryKey, queryFn });
+        }
       } finally {
         report();
       }

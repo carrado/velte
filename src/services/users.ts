@@ -1,44 +1,34 @@
 // services/users.ts
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import { useUserStore } from "@/store/userStore";
 import type { User } from "@/types/user";
 
 export const usersApi = {
-  // GET a single user (optional: update store if needed)
+  // GET a single user
   getOne: async (id: string) => {
-    const response = await apiClient(`/users/${id}`);
-    return response;
+    return api.get(`/api/users/${id}`);
   },
 
-  // POST (create) – API call
+  // POST (create / register)
   create: async (data: Record<string, unknown>) => {
-    const response = await apiClient("/auth/register", {
-      method: "POST",
-      data,
-    });
-    return response;
+    return api.post("/api/auth/register", data);
   },
 
-  // POST (login) – API call, then add to store
+  // POST (login) – then add to store
   login: async (data: Record<string, unknown>) => {
-    const response = await apiClient<{ user: User }>("/auth/login", {
-      method: "POST",
-      data,
-    });
-    useUserStore.getState().setUser(response.user);
-    return response;
+    const result = await api.post<{ user: User }>("/api/auth/login", data);
+    useUserStore.getState().setUser(result.user);
+    return result;
   },
 
   logout: async () => {
-    const data: Record<string, never> = {};
-    const response = await apiClient("/auth/logout", { method: "POST", data });
+    const result = await api.post("/api/auth/logout");
     useUserStore.getState().clearUser();
-    return response;
+    return result;
   },
 
   verify: async (data: Record<string, unknown>) => {
-    const response = await apiClient("/auth/verify", { method: "POST", data });
-    return response;
+    return api.post("/api/auth/verify", data);
   },
 
   updateProfile: async (data: {
@@ -46,44 +36,41 @@ export const usersApi = {
     businessName?: string;
     address?: string;
   }) => {
-    const response = await apiClient<{ success: boolean; user: Partial<User> }>(
-      "/auth/profile",
-      { method: "PUT", data },
-    );
-    useUserStore.getState().updateUser(response.user);
-    return response;
-  },
-
-  // PATCH (update) – API call, then update store
-  update: async (id: string, data: Record<string, unknown>) => {
-    const response = await apiClient<{ user: Partial<User> }>(`/users/${id}`, {
-      method: "PATCH",
+    const result = await api.put<{ user: Partial<User> }>(
+      "/api/auth/profile",
       data,
-    });
-    useUserStore.getState().updateUser(response.user);
-    return response;
+    );
+    useUserStore.getState().updateUser(result.user);
+    return result;
   },
 
-  // DELETE – API call, then remove from store
+  // PATCH (update) – then update store
+  update: async (id: string, data: Record<string, unknown>) => {
+    const result = await api.patch<{ user: Partial<User> }>(
+      `/api/users/${id}`,
+      data,
+    );
+    useUserStore.getState().updateUser(result.user);
+    return result;
+  },
+
+  // DELETE – then remove from store
   delete: async (id: string) => {
-    await apiClient(`/users/${id}`, { method: "DELETE" });
+    await api.del(`/api/users/${id}`);
     const { user, clearUser } = useUserStore.getState();
     if (user?.id === id) clearUser();
   },
 
   getMe: async () => {
-    const response = await apiClient<{ user: User }>("/auth/me");
-    useUserStore.getState().setUser(response.user);
-    return response.user;
+    const { user } = await api.get<{ user: User }>("/api/auth/me");
+    useUserStore.getState().setUser(user);
+    return user;
   },
 
   updateOnboarding: async () => {
     const user = useUserStore.getState().user;
     if (!user) return;
-    await apiClient(`/users/${user.id}`, {
-      method: "PATCH",
-      data: { onboarding: false },
-    });
+    await api.patch(`/api/users/${user.id}`, { onboarding: false });
     useUserStore.getState().updateUser({ onboarding: false });
   },
 };

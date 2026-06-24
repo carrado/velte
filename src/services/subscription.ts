@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import { useSubscriptionStore } from "@/store/subscriptionStore";
 import type {
   Subscription,
@@ -9,27 +9,9 @@ import type {
 
 type BillingPeriod = "monthly" | "annual";
 
-interface ApiEnvelope<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-}
-
-async function unwrap<T>(
-  endpoint: string,
-  init?: Parameters<typeof apiClient>[1],
-): Promise<T> {
-  const res = await apiClient<ApiEnvelope<T>>(endpoint, init);
-  return res.data;
-}
-
 export async function getSubscriptionStatus(): Promise<Subscription> {
-  const data = await unwrap<Subscription>("/subscription/status", {
-    method: "GET",
-  });
-
+  const data = await api.get<Subscription>("/api/subscription/status");
   useSubscriptionStore.getState().setSubscription(data);
-
   return data;
 }
 
@@ -37,30 +19,23 @@ export async function initializeSubscription(
   tier: SubscriptionTier,
   plan: BillingPeriod = "monthly",
 ): Promise<InitializeSubscriptionResponse> {
-  return unwrap<InitializeSubscriptionResponse>("/subscription/initialize", {
-    method: "POST",
-    body: JSON.stringify({ tier, plan }),
-  });
+  return api.post<InitializeSubscriptionResponse>(
+    "/api/subscription/initialize",
+    { tier, plan },
+  );
 }
 
 export async function verifySubscription(
   reference: string,
 ): Promise<VerifySubscriptionResponse> {
-  const data = await unwrap<VerifySubscriptionResponse>(
-    "/subscription/verify",
-    {
-      method: "POST",
-      body: JSON.stringify({ reference }),
-    },
+  const data = await api.post<VerifySubscriptionResponse>(
+    "/api/subscription/verify",
+    { reference },
   );
 
   /**
-   * After verification, fetch fresh status again.
-   * This gives the frontend:
-   * - updated isSubscribed
-   * - currentPeriodStart
-   * - currentPeriodEnd
-   * - latest transactions
+   * After verification, fetch fresh status again so the frontend gets the
+   * updated isSubscribed / period bounds / latest transactions.
    */
   await getSubscriptionStatus();
 

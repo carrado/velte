@@ -170,7 +170,7 @@ export default function GeneratePaymentLinkModal({
     setBanksLoading(true);
     transactionService
       .getBanks()
-      .then((res) => setBanks(res.data))
+      .then((res) => setBanks(res))
       .catch(() => toast.error("Failed to load banks"))
       .finally(() => setBanksLoading(false));
   }, [open]);
@@ -185,8 +185,8 @@ export default function GeneratePaymentLinkModal({
     transactionService
       .resolveAccount(accountNumber, bankCode)
       .then((res) => {
-        setResolved(res.data);
-        setAccountName(res.data.accountName);
+        setResolved(res);
+        setAccountName(res.accountName);
       })
       .catch(() =>
         setResolveError("Could not resolve account. Check number and bank."),
@@ -220,7 +220,7 @@ export default function GeneratePaymentLinkModal({
     setSubmitting(true);
     try {
       const res = await transactionService.generatePaymentLink(payload);
-      setGeneratedLink(res.data.url);
+      setGeneratedLink(res.url);
       toast.success("Payment link generated!");
       useOnboardingStore.getState().completeStep(1);
     } catch {

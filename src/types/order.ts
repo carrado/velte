@@ -65,14 +65,16 @@ export interface OrderListParams {
   sort_order?: "asc" | "desc";
 }
 
-export interface OrderListResult {
+export interface OrdersPageInfo {
+  page: number;
+  totalPages: number;
+  total: number;
+}
+
+/** Payload of `GET /api/orders` — a page of orders plus paging info. */
+export interface OrdersPage {
   orders: Order[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    total_pages: number;
-  };
+  pageInfo: OrdersPageInfo;
 }
 
 // ── Order detail ────────────────────────────────────────────────────────────────

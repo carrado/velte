@@ -11,7 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Info, ArrowUp, Search } from "lucide-react";
+import { Info, ArrowUp, ArrowDown, Search } from "lucide-react";
 import { Pagination } from "../Pagination";
 import type {
   Customer,
@@ -201,7 +201,9 @@ export default function CustomerManagement() {
       (activeTab === "vip" && c.status === "VIP");
     const q = search.toLowerCase();
     const matchesSearch =
-      !q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q);
+      !q ||
+      c.name.toLowerCase().includes(q) ||
+      c.code.toLowerCase().includes(q);
     const matchesStatusFilter =
       filters["status"] === "all" || c.status === filters["status"];
     return matchesTab && matchesSearch && matchesStatusFilter;
@@ -248,13 +250,54 @@ export default function CustomerManagement() {
     ];
   }, [customers]);
 
+  // Top summary cards, computed from the live customer list + the new-customers
+  // stats. (We don't track shop visitors, so that card is replaced by a real
+  // "Active customers" figure rather than a placeholder.)
+  const newThisWeek = (stats?.thisWeek ?? []).reduce((s, d) => s + d.value, 0);
+  const newLastWeek = (stats?.lastWeek ?? []).reduce((s, d) => s + d.value, 0);
+  const newGrowthPct =
+    newLastWeek > 0
+      ? Math.round(((newThisWeek - newLastWeek) / newLastWeek) * 100)
+      : newThisWeek > 0
+        ? 100
+        : 0;
+  const activeCustomers = customers.filter((c) => c.status === "Active").length;
+  const activePct =
+    customers.length > 0
+      ? Math.round((activeCustomers / customers.length) * 100)
+      : 0;
+
+  const summaryCards: {
+    title: string;
+    value: string;
+    caption: string;
+    pct?: number;
+  }[] = [
+    {
+      title: "Total customers",
+      value: formatCompact(customers.length),
+      caption: "All time",
+    },
+    {
+      title: "New customers",
+      value: formatCompact(newThisWeek),
+      caption: "Last 7 days",
+      pct: newGrowthPct,
+    },
+    {
+      title: "Active customers",
+      value: formatCompact(activeCustomers),
+      caption: `${activePct}% of total`,
+    },
+  ];
+
   const columns: ColumnDef<Customer>[] = [
     {
       key: "id",
       header: "Customer ID",
       headerClassName: "text-center",
       className: "text-center",
-      cell: (c) => c.id,
+      cell: (c) => c.code,
     },
     {
       key: "name",
@@ -282,7 +325,7 @@ export default function CustomerManagement() {
       header: "Total spend",
       headerClassName: "text-center",
       className: "text-center",
-      cell: (c) => `$${c.spend}`,
+      cell: (c) => `₦${c.spend}`,
     },
     {
       key: "status",
@@ -302,19 +345,15 @@ export default function CustomerManagement() {
       "The total number of unique customers who have interacted with your store to date.",
     "New customers":
       "Customers who made their first purchase in the last 7 days.",
-    Visitors:
-      "Total number of unique visitors who landed on your store in the last 7 days, regardless of whether they made a purchase.",
+    "Active customers":
+      "Customers currently marked active, as a share of your total customer base.",
   };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4 lg:w-[260px] lg:flex-shrink-0">
-          {[
-            { title: "Total customers", value: "11,040", pct: "14.4%" },
-            { title: "New customers", value: "2,370", pct: "20%" },
-            { title: "Visitors", value: "250k", pct: "20%" },
-          ].map((card) => (
+          {summaryCards.map((card) => (
             <div
               key={card.title}
               className="bg-white sm:rounded-lg shadow-sm p-5"
@@ -342,12 +381,24 @@ export default function CustomerManagement() {
                 <span className="text-dash-display font-bold text-[#023337]">
                   {card.value}
                 </span>
-                <span className="flex items-center gap-0.5 text-dash-body font-medium text-orange-500">
-                  <ArrowUp size={13} />
-                  {card.pct}
-                </span>
+                {card.pct !== undefined && (
+                  <span
+                    className={`flex items-center gap-0.5 text-dash-body font-medium ${
+                      card.pct < 0 ? "text-red-500" : "text-orange-500"
+                    }`}
+                  >
+                    {card.pct < 0 ? (
+                      <ArrowDown size={13} />
+                    ) : (
+                      <ArrowUp size={13} />
+                    )}
+                    {Math.abs(card.pct)}%
+                  </span>
+                )}
               </div>
-              <p className="text-dash-secondary text-gray-400">Last 7 days</p>
+              <p className="text-dash-secondary text-gray-400">
+                {card.caption}
+              </p>
             </div>
           ))}
         </div>
@@ -595,12 +646,12 @@ export default function CustomerManagement() {
           mobileCard={(customer) => (
             <MobileCard
               title={customer.name}
-              subtitle={customer.id}
+              subtitle={customer.code}
               badge={<StatusBadge status={customer.status} />}
               fields={[
                 { label: "Phone", value: customer.phone },
                 { label: "Orders", value: customer.orders },
-                { label: "Total spend", value: `$${customer.spend}` },
+                { label: "Total spend", value: `₦${customer.spend}` },
               ]}
             />
           )}

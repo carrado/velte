@@ -1,12 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  keepPreviousData,
-} from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
@@ -37,12 +32,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { useIsFood } from "@/hooks/useBusinessType";
-import { Pagination } from "@/components/Pagination";
-import {
-  fetchOrders,
-  fetchOrderStats,
-  updateOrderStatus,
-} from "@/services/orders";
+import { useOrdersConnection } from "@/hooks/useOrdersConnection";
+import { fetchOrderStats, updateOrderStatus } from "@/services/orders";
 import { transactionService } from "@/services/transactions";
 import type {
   Order,
@@ -764,7 +755,6 @@ export default function OrderManagement() {
   const [activeTab, setActiveTab] = useState<OrderFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [filters, setFilters] =
     useState<Record<string, string>>(DEFAULT_FILTERS);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
@@ -787,23 +777,18 @@ export default function OrderManagement() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset to page 1 whenever a filter that changes the result set changes
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPage(1);
-  }, [activeTab, debouncedSearch, filters, sortBy]);
-
   // ── build query params ─────────────────────────────────────────────────────
+  // Cursor-paged: no `page` here. Changing any of these starts a fresh
+  // connection (new query key), so there's no page to reset.
 
-  const queryParams = useMemo<OrderListParams>(() => {
+  const queryParams = useMemo<Omit<OrderListParams, "page">>(() => {
     const { sort_by, sort_order } = SORT_MAP[sortBy];
     // The dropdown filter (orderStatus) overrides the active tab when set.
     const effectiveTab = (
       filters["orderStatus"] !== "all" ? filters["orderStatus"] : activeTab
     ) as OrderFilter;
 
-    const params: OrderListParams = {
-      page,
+    const params: Omit<OrderListParams, "page"> = {
       limit: PAGE_SIZE,
       sort_by,
       sort_order,
@@ -817,7 +802,7 @@ export default function OrderManagement() {
     if (filters["startDate"]) params.start_date = filters["startDate"];
     if (filters["endDate"]) params.end_date = filters["endDate"];
     return params;
-  }, [page, sortBy, activeTab, debouncedSearch, filters]);
+  }, [sortBy, activeTab, debouncedSearch, filters]);
 
   // ── data ─────────────────────────────────────────────────────────────────
 
@@ -825,11 +810,13 @@ export default function OrderManagement() {
     queryKey: queryKeys.orders.stats,
     queryFn: fetchOrderStats,
   });
-  const { data: listData, isLoading: ordersLoading } = useQuery({
-    queryKey: queryKeys.orders.list(queryParams),
-    queryFn: () => fetchOrders(queryParams),
-    placeholderData: keepPreviousData,
-  });
+  const {
+    data: listData,
+    isLoading: ordersLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useOrdersConnection(queryParams);
   const mutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
       updateOrderStatus(id, status),
@@ -841,15 +828,13 @@ export default function OrderManagement() {
       toast.error(getErrorMessage(err, "Failed to update order status.")),
   });
 
-  const orders = listData?.orders ?? [];
-  const totalPages = listData?.pagination.total_pages ?? 1;
+  const orders = listData?.pages.flatMap((p) => p.orders) ?? [];
   const allCount = stats?.totalOrders.value ?? 0;
 
   // ── handlers ─────────────────────────────────────────────────────────────
 
   function handleTabChange(tab: OrderFilter) {
     setActiveTab(tab);
-    setPage(1);
     setFilters((prev) => ({ ...prev, orderStatus: "all" }));
   }
 
@@ -1006,7 +991,6 @@ export default function OrderManagement() {
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
-                  setPage(1);
                 }}
                 placeholder={isFood ? "Search orders" : "Search order report"}
                 className="pl-3 pr-9 py-2 text-dash-body bg-[#f9fafb] border border-[#e5e7eb] rounded-lg w-full"
@@ -1022,18 +1006,15 @@ export default function OrderManagement() {
               fields={ordersFilterFields}
               onApply={(newFilters) => {
                 setFilters(newFilters);
-                setPage(1);
               }}
               onReset={() => {
                 setFilters(DEFAULT_FILTERS);
-                setPage(1);
               }}
             />
             <SortMenu
               currentSort={sortBy}
               onSort={(option) => {
                 setSortBy(option);
-                setPage(1);
               }}
               options={SORT_OPTIONS}
             />
@@ -1078,14 +1059,19 @@ export default function OrderManagement() {
         </div>
       )}
 
-      {/* Pagination */}
-      {!ordersLoading && orders.length > 0 && (
-        <div className="bg-white sm:rounded-xl shadow-sm">
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
+      {/* Load more (cursor-paged) */}
+      {!ordersLoading && orders.length > 0 && hasNextPage && (
+        <div className="bg-white sm:rounded-xl shadow-sm flex justify-center py-4 border-t border-gray-100">
+          <button
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200 text-dash-body text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            {isFetchingNextPage && (
+              <Loader2 size={16} className="animate-spin" />
+            )}
+            {isFetchingNextPage ? "Loading…" : "Load more"}
+          </button>
         </div>
       )}
     </div>

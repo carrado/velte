@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import type {
   RawSearchResponse,
   SearchParams,
@@ -34,8 +34,8 @@ export const searchService = {
     const qs = new URLSearchParams({ q: params.q });
     if (params.limit) qs.set("limit", String(params.limit));
 
-    const raw = await apiClient<RawSearchResponse>(`/search?${qs.toString()}`);
-    const { orders, products, customers, transactions, categories } = raw.data;
+    const { orders, products, customers, transactions, categories } =
+      await api.get<RawSearchResponse["data"]>(`/api/search?${qs.toString()}`);
 
     return {
       orders: orders.map((o) => ({

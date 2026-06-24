@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { transactionsListParamsFromUi } from "@/lib/transaction-list-params";
@@ -100,11 +101,11 @@ const TABS: { key: TransactionTabFilter; label: string }[] = [
 
 const STAT_TOOLTIPS: Record<string, string> = {
   "Total Revenue":
-    "The total revenue collected from all completed transactions in the last 7 days.",
+    "Total revenue from all completed transactions to date. The change compares this week to last week.",
   "Completed Transactions":
-    "The number of transactions that were successfully processed and completed in the last 7 days.",
+    "All transactions successfully processed and completed to date. The change compares this week to last week.",
   "Pending Transactions":
-    "Transactions that have been initiated but are still awaiting confirmation or processing.",
+    "Transactions initiated but still awaiting confirmation or processing.",
   "Failed Transactions":
     "Transactions that were attempted but failed or were canceled before completion.",
 };
@@ -158,7 +159,7 @@ function StatCard({
           </>
         )}
       </div>
-      <p className="text-dash-body text-gray-500">Last 7 days</p>
+      <p className="text-dash-body text-gray-500">vs last week</p>
     </div>
   );
 }
@@ -178,6 +179,8 @@ function TxStatusBadge({ status }: { status: Transaction["status"] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TransactionsPage() {
+  const router = useRouter();
+  const { id: userId } = useParams<{ id: string }>();
   const { currentStep, overlayPaused } = useOnboardingStore();
   const [activeTab, setActiveTab] = useState<TransactionTabFilter>("all");
   const [search, setSearch] = useState("");
@@ -248,30 +251,27 @@ export default function TransactionsPage() {
     if (isError) toast.error("Failed to load transactions");
   }, [isError]);
 
-  const transactions = listResponse?.success
-    ? listResponse.data.transactions
-    : [];
-  const totalPages = listResponse?.success
-    ? listResponse.data.pagination.totalPages
-    : 1;
-  const totalCount = listResponse?.success
-    ? listResponse.data.pagination.total
-    : 0;
-  const stats = listResponse?.success
-    ? listResponse.data.stats
-    : {
-        totalRevenue: "$0",
-        completedTransactions: 0,
-        pendingTransactions: 0,
-        failedTransactions: 0,
-        revenueChange: "0%",
-        completedChange: "0%",
-        pendingChange: "0%",
-        failedChange: "0%",
-      };
-  const paymentLink = listResponse?.success
-    ? listResponse.data.paymentLink
-    : null;
+  const transactions = listResponse?.transactions ?? [];
+  const totalPages = listResponse?.pagination.totalPages ?? 1;
+  const totalCount = listResponse?.pagination.total ?? 0;
+  const stats = listResponse?.stats ?? {
+    totalRevenue: "₦0",
+    completedTransactions: 0,
+    pendingTransactions: 0,
+    failedTransactions: 0,
+    revenueChange: "0%",
+    completedChange: "0%",
+    pendingChange: "0%",
+    failedChange: "0%",
+  };
+  // A change string like "-8%" is a decrease. For most metrics up = good; for
+  // failed transactions a decrease is the good (green) direction.
+  const isUp = (change: string) => !change.trim().startsWith("-");
+
+  const goToOrder = (orderId?: string | null) => {
+    if (orderId) router.push(`/${userId}/orders/${orderId}`);
+  };
+  const paymentLink = listResponse?.paymentLink ?? null;
   const paymentLinkLoading = isLoading && !listResponse;
   const loading = isLoading && !listResponse;
 
@@ -291,9 +291,7 @@ export default function TransactionsPage() {
     setLinkActionLoading(true);
     try {
       if (warningModal === "deactivate") {
-        const res = await transactionService.deactivatePaymentLink(
-          paymentLink.id,
-        );
+        await transactionService.deactivatePaymentLink(paymentLink.id);
         toast.success("Payment link deactivated");
       } else {
         await transactionService.deletePaymentLink(paymentLink.id);
@@ -317,9 +315,7 @@ export default function TransactionsPage() {
 
     setLinkActionLoading(true);
     try {
-      const res = await transactionService.reactivatePaymentLink(
-        paymentLink.id,
-      );
+      await transactionService.reactivatePaymentLink(paymentLink.id);
       toast.success("Payment link reactivated");
       queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all });
     } catch {
@@ -377,11 +373,17 @@ export default function TransactionsPage() {
       header: "Action",
       headerClassName: "text-center",
       className: "text-center",
-      cell: () => (
-        <button className="text-dash-body text-indigo-500 hover:underline cursor-pointer">
-          View Details
-        </button>
-      ),
+      cell: (t) =>
+        t.orderId ? (
+          <button
+            onClick={() => goToOrder(t.orderId)}
+            className="text-dash-body text-indigo-500 hover:underline cursor-pointer"
+          >
+            View Details
+          </button>
+        ) : (
+          <span className="text-dash-body text-gray-300">—</span>
+        ),
     },
   ];
 
@@ -394,28 +396,28 @@ export default function TransactionsPage() {
               title="Total Revenue"
               value={stats.totalRevenue}
               change={stats.revenueChange}
-              positive
+              positive={isUp(stats.revenueChange)}
               loading={loading}
             />
             <StatCard
               title="Completed Transactions"
               value={String(stats.completedTransactions)}
               change={stats.completedChange}
-              positive
+              positive={isUp(stats.completedChange)}
               loading={loading}
             />
             <StatCard
               title="Pending Transactions"
               value={String(stats.pendingTransactions)}
               change={stats.pendingChange}
-              positive
+              positive={isUp(stats.pendingChange)}
               loading={loading}
             />
             <StatCard
               title="Failed Transactions"
               value={String(stats.failedTransactions)}
               change={stats.failedChange}
-              positive={false}
+              positive={!isUp(stats.failedChange)}
               loading={loading}
             />
           </div>
@@ -675,9 +677,14 @@ export default function TransactionsPage() {
                 ]}
                 gridCols={3}
                 footer={
-                  <button className="text-dash-body text-indigo-500 hover:underline cursor-pointer">
-                    View Details
-                  </button>
+                  tx.orderId ? (
+                    <button
+                      onClick={() => goToOrder(tx.orderId)}
+                      className="text-dash-body text-indigo-500 hover:underline cursor-pointer"
+                    >
+                      View Details
+                    </button>
+                  ) : null
                 }
               />
             );

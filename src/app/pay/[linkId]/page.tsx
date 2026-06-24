@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { naira } from "@/lib/plans";
+import { computeCharge } from "@/lib/commission";
 import { getPayLink, initializePay } from "@/services/pay";
 import type { PayLinkData } from "@/types/pay";
 
@@ -55,17 +56,38 @@ function PayPageInner() {
 
   const alreadyPaid = data?.order?.paid === true;
 
-  // The amount to charge: fixed (from order/link) or entered by the payer.
-  const chargeAmount = data?.amountFixed
-    ? data.amount
+  // When the payer arrives from a WhatsApp order link (?ref=<orderId>), the
+  // order carries the price agreed with the AI. That negotiated amount always
+  // wins over the link/product price — and locks the amount as fixed.
+  const agreedAmount = data?.order?.amount ?? null;
+  const isFixed = agreedAmount != null || data?.amountFixed === true;
+  const fixedAmount = agreedAmount ?? data?.amount ?? null;
+
+  // The product price (X) the seller receives: fixed (order/link) or entered.
+  const productPrice = isFixed
+    ? fixedAmount
     : enteredAmount
       ? Number(enteredAmount)
       : null;
 
+  // Breakdown shown to the buyer (Product + Service fee = Total). The backend is
+  // the source of truth: for fixed/order links it returns serviceFee/total, so
+  // prefer those. For open-amount links the buyer hasn't paid yet, so we render
+  // a live preview from the shared util (re-validated server-side at charge time).
+  const breakdown =
+    productPrice != null && productPrice > 0
+      ? computeCharge(productPrice)
+      : null;
+  const serviceFee =
+    isFixed && data?.serviceFee != null
+      ? data.serviceFee
+      : breakdown?.serviceFee;
+  const total = isFixed && data?.total != null ? data.total : breakdown?.total;
+
   const handlePay = async () => {
     if (!data || paying || alreadyPaid) return;
 
-    if (!data.amountFixed && (!chargeAmount || chargeAmount <= 0)) {
+    if (!isFixed && (!productPrice || productPrice <= 0)) {
       toast.error("Please enter a valid amount.");
       return;
     }
@@ -75,7 +97,7 @@ function PayPageInner() {
       const { authorization_url } = await initializePay(linkId, {
         ref,
         email: email.trim() || undefined,
-        amount: data.amountFixed ? undefined : Number(enteredAmount),
+        amount: isFixed ? undefined : Number(enteredAmount),
       });
       // Full-page redirect to Paystack — more reliable than a popup for the
       // mobile shoppers who arrive here from a WhatsApp link. Paystack returns
@@ -145,17 +167,8 @@ function PayPageInner() {
         ) : null}
 
         {/* Amount */}
-        <div className="mt-6 text-center">
-          {data.amountFixed ? (
-            <>
-              <p className="text-xs uppercase tracking-wide text-gray-400">
-                Amount
-              </p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">
-                {data.amount != null ? naira(data.amount) : "—"}
-              </p>
-            </>
-          ) : (
+        <div className="mt-6">
+          {!isFixed ? (
             <label className="block text-left">
               <span className="text-sm font-medium text-gray-700">
                 Enter amount (₦)
@@ -170,7 +183,25 @@ function PayPageInner() {
                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-lg focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
               />
             </label>
-          )}
+          ) : null}
+
+          {/* Itemized breakdown: Product + Service fee = Total */}
+          {productPrice != null && productPrice > 0 ? (
+            <div className="mt-4 space-y-2 rounded-xl bg-gray-50 p-4 text-sm">
+              <div className="flex items-center justify-between text-gray-600">
+                <span>Product</span>
+                <span>{naira(productPrice)}</span>
+              </div>
+              <div className="flex items-center justify-between text-gray-600">
+                <span>Service fee</span>
+                <span>{serviceFee != null ? naira(serviceFee) : "—"}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between border-t border-gray-200 pt-2 text-base font-semibold text-gray-900">
+                <span>Total</span>
+                <span>{total != null ? naira(total) : "—"}</span>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Optional email for receipt */}
@@ -206,8 +237,8 @@ function PayPageInner() {
           >
             {paying
               ? "Redirecting to payment…"
-              : chargeAmount != null && chargeAmount > 0
-                ? `Pay ${naira(chargeAmount)}`
+              : total != null && total > 0
+                ? `Pay ${naira(total)}`
                 : "Pay"}
           </button>
         )}

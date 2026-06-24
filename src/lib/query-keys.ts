@@ -11,6 +11,16 @@ export const DEFAULT_ORDERS_LIST_PARAMS: OrderListParams = {
   sort_order: "desc",
 };
 
+/**
+ * Initial params for the orders list. Must match the params OrderManagement
+ * builds on first render so the prefetched (infinite) cache hits.
+ */
+export const DEFAULT_ORDERS_LIST_QUERY: Omit<OrderListParams, "page"> = {
+  limit: 10,
+  sort_by: "created_at",
+  sort_order: "desc",
+};
+
 export const queryKeys = {
   dashboard: {
     stats: ["dashboardStats"] as const,
@@ -24,7 +34,7 @@ export const queryKeys = {
   },
   orders: {
     stats: ["orderStats"] as const,
-    list: (params?: OrderListParams) =>
+    list: (params?: Omit<OrderListParams, "page">) =>
       ["orders", "list", params ?? {}] as const,
     detail: (id: string) => ["orders", "detail", id] as const,
   },

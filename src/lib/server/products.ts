@@ -1,0 +1,280 @@
+import { backendFetch } from "./backend";
+import type {
+  Category,
+  CategoryProduct,
+  ProductModifier,
+  ProductAttribute,
+  ProductListResult,
+  CreateProductPayload,
+} from "@/types/product";
+
+/* Server data module for products & categories. Maps the backend's snake_case /
+   kobo shapes into the camelCase / naira domain objects the UI consumes. */
+
+// ── Upstream shapes ──────────────────────────────────────────────────────────
+
+interface ApiCategory {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
+interface ApiModifierOption {
+  id: string;
+  name: string;
+  additional_price: number;
+}
+
+interface ApiModifier {
+  id: string;
+  name: string;
+  required: boolean;
+  multi_select: boolean;
+  options: ApiModifierOption[];
+}
+
+interface ApiProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  category_id: string;
+  price: number;
+  currency: "NGN" | "USD";
+  discounted_price: number | null;
+  tax_included: boolean;
+  tax_type: "percentage" | "fixed" | null;
+  tax_value: number | null;
+  is_negotiable: boolean;
+  minimum_price: number | null;
+  is_featured: boolean;
+  on_sale: boolean;
+  tags: string[];
+  main_image_url: string | null;
+  thumbnail_urls: string[];
+  video_url: string | null;
+  color_class: string | null;
+  created_at: string;
+  updated_at: string;
+  stock_quantity?: number;
+  ordered_quantity?: number;
+  low_stock_threshold?: number | null;
+  manufacturing_date?: string | null;
+  expiration_date?: string | null;
+  attributes?: { id: string; name: string; value: string }[];
+  estimated_prep_mins?: number;
+  is_currently_available?: boolean;
+  daily_limit?: number | null;
+  allow_pre_order?: boolean;
+  modifiers?: ApiModifier[];
+}
+
+interface ApiPagination {
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+/** Upstream envelope. The backend wraps payloads as `{ success, data }`. */
+interface Wrapped<T> {
+  data: T;
+}
+
+// ── Mappers ──────────────────────────────────────────────────────────────────
+
+const CATEGORY_BG: Record<string, string> = {
+  electronics: "bg-blue-100",
+  fashion: "bg-pink-100",
+  accessories: "bg-amber-100",
+  "home-kitchen": "bg-teal-100",
+  sports: "bg-green-100",
+  toys: "bg-purple-100",
+  health: "bg-red-100",
+  books: "bg-yellow-100",
+};
+
+function mapCategory(c: ApiCategory): Category {
+  return {
+    id: c.id,
+    name: c.name,
+    emoji: c.emoji,
+    bgColor: CATEGORY_BG[c.id] ?? "bg-gray-100",
+  };
+}
+
+function mapProduct(p: ApiProduct): CategoryProduct {
+  const isFood =
+    p.is_currently_available !== undefined ||
+    p.estimated_prep_mins !== undefined;
+
+  let totalQuantity: number;
+  let orderedQuantity: number;
+  let inStock: number;
+
+  if (isFood) {
+    const avail = p.is_currently_available ?? true;
+    totalQuantity = avail ? 1 : 0;
+    orderedQuantity = 0;
+    inStock = avail ? 1 : 0;
+  } else {
+    totalQuantity = p.stock_quantity ?? 0;
+    orderedQuantity = p.ordered_quantity ?? 0;
+    inStock = totalQuantity - orderedQuantity;
+  }
+
+  const modifiers: ProductModifier[] = (p.modifiers ?? []).map((m) => ({
+    id: m.id,
+    name: m.name,
+    required: m.required,
+    multiSelect: m.multi_select,
+    options: m.options.map((o) => ({
+      id: o.id,
+      name: o.name,
+      additionalPrice: o.additional_price / 100,
+    })),
+  }));
+
+  const attributes: ProductAttribute[] = (p.attributes ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    value: a.value,
+  }));
+
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    categoryId: p.category_id,
+    price: p.price / 100,
+    currency: p.currency,
+    discountedPrice:
+      p.discounted_price !== null ? p.discounted_price / 100 : null,
+    taxIncluded: p.tax_included,
+    taxType: p.tax_type,
+    taxValue: p.tax_value,
+    isNegotiable: p.is_negotiable,
+    minimumPrice: p.minimum_price !== null ? p.minimum_price / 100 : null,
+    featured: p.is_featured,
+    onSale: p.on_sale,
+    tags: p.tags,
+    mainImageUrl: p.main_image_url,
+    thumbnailUrls: p.thumbnail_urls,
+    videoUrl: p.video_url,
+    colorClass: p.color_class ?? "bg-gray-200",
+    createdDate: p.created_at,
+    totalQuantity,
+    orderedQuantity,
+    inStock,
+    lowStockThreshold: p.low_stock_threshold,
+    manufacturingDate: p.manufacturing_date,
+    expirationDate: p.expiration_date,
+    attributes,
+    estimatedPrepMins: p.estimated_prep_mins,
+    isCurrentlyAvailable: p.is_currently_available,
+    dailyLimit: p.daily_limit,
+    allowPreOrder: p.allow_pre_order,
+    modifiers,
+  };
+}
+
+// ── Data functions ───────────────────────────────────────────────────────────
+
+export async function listCategories(cookie: string): Promise<Category[]> {
+  const { data } = await backendFetch<Wrapped<ApiCategory[]>>("/categories", {
+    cookie,
+  });
+  return data.map(mapCategory);
+}
+
+export async function listProducts(
+  search: URLSearchParams,
+  cookie: string,
+): Promise<ProductListResult> {
+  const qs = search.toString();
+  const { data } = await backendFetch<
+    Wrapped<{ products: ApiProduct[]; pagination: ApiPagination }>
+  >(`/products${qs ? `?${qs}` : ""}`, { cookie });
+  return {
+    products: data.products.map(mapProduct),
+    pagination: data.pagination,
+  };
+}
+
+export async function getProduct(
+  id: string,
+  cookie: string,
+): Promise<CategoryProduct> {
+  const { data } = await backendFetch<Wrapped<ApiProduct>>(`/products/${id}`, {
+    cookie,
+  });
+  return mapProduct(data);
+}
+
+export async function createProduct(
+  payload: CreateProductPayload,
+  cookie: string,
+): Promise<CategoryProduct> {
+  const { data } = await backendFetch<Wrapped<ApiProduct>>("/products", {
+    method: "POST",
+    body: payload,
+    cookie,
+  });
+  return mapProduct(data);
+}
+
+export async function updateProduct(
+  id: string,
+  payload: Partial<CreateProductPayload>,
+  cookie: string,
+): Promise<CategoryProduct> {
+  const { data } = await backendFetch<Wrapped<ApiProduct>>(`/products/${id}`, {
+    method: "PUT",
+    body: payload,
+    cookie,
+  });
+  return mapProduct(data);
+}
+
+export async function deleteProduct(id: string, cookie: string): Promise<void> {
+  await backendFetch(`/products/${id}`, { method: "DELETE", cookie });
+}
+
+export async function restockProduct(
+  id: string,
+  quantity: number,
+  cookie: string,
+): Promise<CategoryProduct> {
+  const { data } = await backendFetch<Wrapped<ApiProduct>>(
+    `/products/${id}/restock`,
+    { method: "POST", body: { quantity }, cookie },
+  );
+  return mapProduct(data);
+}
+
+/** `priceNaira` from the client is converted to kobo for the backend. */
+export async function changePrice(
+  id: string,
+  priceNaira: number,
+  cookie: string,
+): Promise<CategoryProduct> {
+  const { data } = await backendFetch<Wrapped<ApiProduct>>(
+    `/products/${id}/price`,
+    { method: "PATCH", body: { price: Math.round(priceNaira * 100) }, cookie },
+  );
+  return mapProduct(data);
+}
+
+export async function setAvailability(
+  id: string,
+  isCurrentlyAvailable: boolean,
+  cookie: string,
+): Promise<{ id: string; is_currently_available: boolean }> {
+  const { data } = await backendFetch<
+    Wrapped<{ id: string; is_currently_available: boolean }>
+  >(`/products/${id}/availability`, {
+    method: "PATCH",
+    body: { is_currently_available: isCurrentlyAvailable },
+    cookie,
+  });
+  return data;
+}

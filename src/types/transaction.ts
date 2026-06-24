@@ -4,12 +4,16 @@ export type TransactionTabFilter = "all" | "completed" | "pending" | "canceled";
 
 export interface Transaction {
   id: string;
+  /** Display code (CUST-XXXXXX), derived server-side to match the customers table. */
   customerId: string;
   name: string;
   date: string;
+  /** Total, pre-formatted in Naira (e.g. "₦12,500"). */
   total: string;
   method: TransactionMethod;
   status: TransactionStatus;
+  /** Originating order's DB id — links "View details" to the order. Null if unknown. */
+  orderId?: string | null;
 }
 
 export interface TransactionStats {
@@ -55,18 +59,6 @@ export interface GeneratePaymentLinkPayload {
   description?: string;
 }
 
-export interface GeneratePaymentLinkResponse {
-  success: boolean;
-  data: PaymentLink;
-  message?: string;
-}
-
-export interface ResolveAccountResponse {
-  success: boolean;
-  data: ResolvedAccount;
-  message?: string;
-}
-
 export interface FetchTransactionsParams {
   page?: number;
   limit?: number;
@@ -79,19 +71,17 @@ export interface FetchTransactionsParams {
   endDate?: string;
 }
 
-export interface FetchTransactionsResponse {
-  success: boolean;
-  data: {
-    transactions: Transaction[];
-    pagination: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    };
-    stats: TransactionStats;
-    paymentLink: PaymentLinkData | null;
+/** Unwrapped payload of `GET /transactions` (envelope `data`). */
+export interface TransactionsListResult {
+  transactions: Transaction[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
   };
+  stats: TransactionStats;
+  paymentLink: PaymentLinkData | null;
 }
 
 export interface PaymentLinkData {
@@ -117,12 +107,6 @@ export interface PaymentLinkWarningModalProps {
   onConfirm: () => void;
 }
 
-export interface PaymentLinkActionResponse {
-  success: boolean;
-  data?: PaymentLinkData;
-  message?: string;
-}
-
 export interface InitiateOrderRefundPayload {
   /** Internal order ID (not the display orderId like "#ORD0001") */
   orderId: string;
@@ -131,12 +115,9 @@ export interface InitiateOrderRefundPayload {
   reason: string;
 }
 
-export interface InitiateOrderRefundResponse {
-  success: boolean;
-  message: string;
-  data: {
-    refundReference: string; // Paystack refund id
-    amount: number; // Amount in NGN (as sent)
-    status: "pending" | "processed" | "failed";
-  };
+/** Unwrapped payload of `POST /transactions/order-refund` (envelope `data`). */
+export interface OrderRefundResult {
+  refundReference: string; // Paystack refund id
+  amount: number; // Amount in NGN (as sent)
+  status: "pending" | "processed" | "failed";
 }

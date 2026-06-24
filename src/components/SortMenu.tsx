@@ -2,7 +2,8 @@
 
 import { ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import AnchoredPopover from "./AnchoredPopover";
 
 interface SortMenuProps<T extends string = string> {
   currentSort: T;
@@ -16,46 +17,42 @@ export default function SortMenu<T extends string = string>({
   options,
 }: SortMenuProps<T>) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
-        onClick={() => setOpen(!open)}
+        ref={triggerRef}
+        onClick={() => setOpen((o) => !o)}
         className="p-2 border border-[#d1d5db] rounded bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
       >
         <ArrowUpDown size={18} className="text-[#6a717f]" />
       </button>
-      {open && (
-        <div className="absolute right-0 top-10 z-40 w-48 bg-white rounded-lg shadow-lg border border-[#e5e7eb] py-1">
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => {
-                onSort(opt.value);
-                setOpen(false);
-              }}
-              className={cn(
-                "w-full text-left px-4 py-2 text-dash-body hover:bg-orange-50 transition-colors cursor-pointer",
-                currentSort === opt.value
-                  ? "bg-orange-100 text-orange-600"
-                  : "text-[#111827]",
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+      <AnchoredPopover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={triggerRef}
+        align="right"
+        className="w-48 bg-white rounded-lg shadow-lg border border-[#e5e7eb] py-1"
+      >
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => {
+              onSort(opt.value);
+              setOpen(false);
+            }}
+            className={cn(
+              "w-full text-left px-4 py-2 text-dash-body hover:bg-orange-50 transition-colors cursor-pointer",
+              currentSort === opt.value
+                ? "bg-orange-100 text-orange-600"
+                : "text-[#111827]",
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </AnchoredPopover>
+    </>
   );
 }

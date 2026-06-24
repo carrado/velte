@@ -1,19 +1,11 @@
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 
 export const passwordApi = {
   sendOTP: async (data: Record<string, unknown>) => {
-    const response = await apiClient("/auth/getPasswordOTP", {
-      method: "POST",
-      data,
-    });
-    return response;
+    return api.post("/api/auth/getPasswordOTP", data);
   },
 
   resetPassword: async (data: Record<string, unknown>) => {
-    const response = await apiClient("/auth/reset-password", {
-      method: "POST",
-      data,
-    });
-    return response;
+    return api.post("/api/auth/reset-password", data);
   },
 };

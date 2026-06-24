@@ -14,10 +14,15 @@ export interface PayLinkData {
   accountName: string;
   bankName: string;
   description: string;
-  amount: number | null; // null = open amount (payer enters it)
+  amount: number | null; // null = open amount (payer enters it). The product price (X) the seller receives.
   amountFixed: boolean;
   currency: string; // "NGN"
   order: PayLinkOrder | null;
+  // Commission breakdown computed by the backend (see docs/commission-fees.md).
+  // Present when the amount is known (fixed/order links); null for open-amount
+  // links where the buyer hasn't entered an amount yet.
+  serviceFee: number | null; // C + F — bundled "Service fee" shown to the buyer
+  total: number | null; // X + C + F — the amount actually charged
 }
 
 export interface InitializePayResponse {

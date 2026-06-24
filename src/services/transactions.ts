@@ -1,24 +1,21 @@
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import type {
   FetchTransactionsParams,
-  FetchTransactionsResponse,
+  TransactionsListResult,
   GeneratePaymentLinkPayload,
-  GeneratePaymentLinkResponse,
-  PaymentLinkActionResponse,
+  PaymentLink,
   PaymentLinkData,
-  ResolveAccountResponse,
+  ResolvedAccount,
   BankOption,
   InitiateOrderRefundPayload,
-  InitiateOrderRefundResponse,
+  OrderRefundResult,
 } from "@/types/transaction";
 
 export const transactionService = {
-  /**
-   * Fetch paginated transactions with optional filters
-   */
+  /** Fetch paginated transactions with optional filters */
   async getTransactions(
     params: FetchTransactionsParams = {},
-  ): Promise<FetchTransactionsResponse> {
+  ): Promise<TransactionsListResult> {
     const query = new URLSearchParams();
     if (params.page) query.set("page", String(params.page));
     if (params.limit) query.set("limit", String(params.limit));
@@ -31,77 +28,66 @@ export const transactionService = {
     if (params.endDate) query.set("endDate", params.endDate);
 
     const qs = query.toString();
-    return apiClient<FetchTransactionsResponse>(
-      `/transactions${qs ? `?${qs}` : ""}`,
+    return api.get<TransactionsListResult>(
+      `/api/transactions${qs ? `?${qs}` : ""}`,
     );
   },
 
-  /**
-   * Resolve a bank account — called when user finishes typing 10-digit number
-   */
+  /** Resolve a bank account — called when the user finishes typing the number */
   async resolveAccount(
     accountNumber: string,
     bankCode: string,
-  ): Promise<ResolveAccountResponse> {
-    return apiClient<ResolveAccountResponse>(
-      `/transactions/resolve-account?accountNumber=${accountNumber}&bankCode=${bankCode}`,
+  ): Promise<ResolvedAccount> {
+    const { account } = await api.get<{ account: ResolvedAccount }>(
+      `/api/transactions/resolve-account?accountNumber=${encodeURIComponent(
+        accountNumber,
+      )}&bankCode=${encodeURIComponent(bankCode)}`,
     );
+    return account;
   },
 
-  /**
-   * Generate a payment link
-   */
+  /** Generate a payment link */
   async generatePaymentLink(
     payload: GeneratePaymentLinkPayload,
-  ): Promise<GeneratePaymentLinkResponse> {
-    return apiClient<GeneratePaymentLinkResponse>(
-      "/transactions/payment-link",
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-      },
+  ): Promise<PaymentLink> {
+    const { paymentLink } = await api.post<{ paymentLink: PaymentLink }>(
+      "/api/transactions/payment-link",
+      payload,
     );
+    return paymentLink;
   },
 
-  /**
-   * Fetch list of supported banks
-   */
-  async getBanks(): Promise<{ success: boolean; data: BankOption[] }> {
-    return apiClient<{ success: boolean; data: BankOption[] }>(
-      "/transactions/banks",
+  /** Fetch list of supported banks */
+  async getBanks(): Promise<BankOption[]> {
+    const { banks } = await api.get<{ banks: BankOption[] }>(
+      "/api/transactions/banks",
     );
+    return banks;
   },
 
-  async deactivatePaymentLink(id: string): Promise<PaymentLinkActionResponse> {
-    return apiClient<PaymentLinkActionResponse>(
-      `/transactions/payment-link/${id}/deactivate`,
-      { method: "PATCH" },
-    );
+  async deactivatePaymentLink(id: string): Promise<PaymentLinkData | null> {
+    const { paymentLink } = await api.patch<{
+      paymentLink: PaymentLinkData | null;
+    }>(`/api/transactions/payment-link/${id}/deactivate`);
+    return paymentLink;
   },
 
-  async reactivatePaymentLink(id: string): Promise<PaymentLinkActionResponse> {
-    return apiClient<PaymentLinkActionResponse>(
-      `/transactions/payment-link/${id}/reactivate`,
-      { method: "PATCH" },
-    );
+  async reactivatePaymentLink(id: string): Promise<PaymentLinkData | null> {
+    const { paymentLink } = await api.patch<{
+      paymentLink: PaymentLinkData | null;
+    }>(`/api/transactions/payment-link/${id}/reactivate`);
+    return paymentLink;
   },
 
-  async deletePaymentLink(
-    id: string,
-  ): Promise<{ success: boolean; message?: string }> {
-    return apiClient<{ success: boolean; message?: string }>(
-      `/transactions/payment-link/${id}`,
-      { method: "DELETE" },
-    );
+  async deletePaymentLink(id: string): Promise<void> {
+    await api.del(`/api/transactions/payment-link/${id}`);
   },
 
   async getPaymentLink(): Promise<PaymentLinkData | null> {
     try {
       // Payment link is returned as part of the transactions list response
-      const res = await apiClient<FetchTransactionsResponse>(
-        "/transactions?limit=1&page=1",
-      );
-      return res.success ? (res.data.paymentLink ?? null) : null;
+      const res = await this.getTransactions({ limit: 1, page: 1 });
+      return res.paymentLink ?? null;
     } catch {
       return null;
     }
@@ -114,13 +100,11 @@ export const transactionService = {
    */
   async initiateOrderRefund(
     payload: InitiateOrderRefundPayload,
-  ): Promise<InitiateOrderRefundResponse> {
-    return apiClient<InitiateOrderRefundResponse>(
-      "/transactions/order-refund",
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-      },
+  ): Promise<OrderRefundResult> {
+    const { refund } = await api.post<{ refund: OrderRefundResult }>(
+      "/api/transactions/order-refund",
+      payload,
     );
+    return refund;
   },
 };

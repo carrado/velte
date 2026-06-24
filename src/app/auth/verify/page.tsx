@@ -12,7 +12,7 @@ import { ShieldCheck, ArrowRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import Image from "next/image";
 import { usersApi } from "@/services/users";
 
@@ -48,11 +48,7 @@ function VerifyForm() {
   });
 
   const resendMutation = useMutation({
-    mutationFn: () =>
-      apiClient("/auth/resend-verification", {
-        method: "POST",
-        body: JSON.stringify({ email }),
-      }),
+    mutationFn: () => api.post("/api/auth/resend-verification", { email }),
     onSuccess: () => {
       toast.success("New verification code sent!");
     },

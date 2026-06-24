@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import { useUserStore } from "@/store/userStore";
 import type {
   User,
@@ -50,24 +50,20 @@ function mapRawUser(u: Record<string, unknown>): User {
 
 export const settingsApi = {
   fetchProfile: async (): Promise<User> => {
-    const response = await apiClient<{
-      success: true;
-      user: Record<string, unknown>;
-    }>("/auth/me");
-    const user = mapRawUser(response.user);
+    const { user: raw } = await api.get<{ user: Record<string, unknown> }>(
+      "/api/auth/me",
+    );
+    const user = mapRawUser(raw);
     useUserStore.getState().setUser(user);
     return user;
   },
 
   updateProfile: async (data: UpdateProfileData): Promise<User> => {
-    const response = await apiClient<{
-      success: true;
-      user: Record<string, unknown>;
-    }>("/auth/profile", {
-      method: "PUT",
+    const { user: raw } = await api.put<{ user: Record<string, unknown> }>(
+      "/api/auth/profile",
       data,
-    });
-    const user = mapRawUser(response.user);
+    );
+    const user = mapRawUser(raw);
     useUserStore.getState().updateUser(user);
     return user;
   },
@@ -75,54 +71,41 @@ export const settingsApi = {
   requestPasswordChange: async (
     data: RequestPasswordChangeData,
   ): Promise<{ message: string }> => {
-    return apiClient<{ success: true; message: string }>(
-      "/auth/change-password/request",
-      {
-        method: "POST",
-        data,
-      },
+    const { message } = await api.post<{ message: string }>(
+      "/api/auth/change-password/request",
+      data,
     );
+    return { message: message ?? "" };
   },
 
   confirmPasswordChange: async (
     data: ConfirmPasswordChangeData,
   ): Promise<{ message: string }> => {
-    return apiClient<{ success: true; message: string }>(
-      "/auth/change-password/confirm",
-      {
-        method: "POST",
-        data,
-      },
+    const { message } = await api.post<{ message: string }>(
+      "/api/auth/change-password/confirm",
+      data,
     );
+    return { message: message ?? "" };
   },
 
   getNotificationSettings: async (): Promise<UserNotifications> => {
-    const response = await apiClient<{
-      success: true;
+    const { notifications } = await api.get<{
       notifications: UserNotifications;
-    }>("/auth/notifications");
-    return response.notifications;
+    }>("/api/auth/notifications");
+    return notifications;
   },
 
   saveNotificationSettings: async (
     data: Partial<UserNotifications>,
   ): Promise<UserNotifications> => {
-    const response = await apiClient<{
-      success: true;
+    const { notifications } = await api.put<{
       notifications: UserNotifications;
-    }>("/auth/notifications", {
-      method: "PUT",
-      data,
-    });
-    return response.notifications;
+    }>("/api/auth/notifications", data);
+    return notifications;
   },
 
   getInvoiceSettings: async (): Promise<InvoiceReceiptSettings> => {
-    const response = await apiClient<{
-      success: true;
-      data: InvoiceReceiptSettings;
-    }>("/auth/invoice-settings");
-    return response.data;
+    return api.get<InvoiceReceiptSettings>("/api/auth/invoice-settings");
   },
 
   // Accepts a partial document (the UI saves one tab — `invoice` or `receipt` —
@@ -130,44 +113,23 @@ export const settingsApi = {
   saveInvoiceSettings: async (
     data: Partial<InvoiceReceiptSettings>,
   ): Promise<InvoiceReceiptSettings> => {
-    const response = await apiClient<{
-      success: true;
-      data: InvoiceReceiptSettings;
-    }>("/auth/invoice-settings", {
-      method: "PUT",
-      data,
-    });
-    return response.data;
+    return api.put<InvoiceReceiptSettings>("/api/auth/invoice-settings", data);
   },
 
   getAiSettings: async (): Promise<AiSettings> => {
-    const response = await apiClient<{
-      success: true;
-      data: AiSettings;
-    }>("/auth/ai-settings");
-    return response.data;
+    return api.get<AiSettings>("/api/auth/ai-settings");
   },
 
   saveAiSettings: async (data: Partial<AiSettings>): Promise<AiSettings> => {
-    const response = await apiClient<{
-      success: true;
-      data: AiSettings;
-    }>("/auth/ai-settings", {
-      method: "PUT",
-      data,
-    });
-    return response.data;
+    return api.put<AiSettings>("/api/auth/ai-settings", data);
   },
 
   updateBusinessType: async (businessType: BusinessType): Promise<User> => {
-    const response = await apiClient<{
-      success: true;
-      user: Record<string, unknown>;
-    }>("/auth/business-type", {
-      method: "PATCH",
-      data: { businessType },
-    });
-    const user = mapRawUser(response.user);
+    const { user: raw } = await api.patch<{ user: Record<string, unknown> }>(
+      "/api/auth/business-type",
+      { businessType },
+    );
+    const user = mapRawUser(raw);
     useUserStore.getState().updateUser(user);
     return user;
   },

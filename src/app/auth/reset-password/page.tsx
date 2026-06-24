@@ -12,7 +12,7 @@ import { Lock, ArrowRight, Key, AlertCircle, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import Image from "next/image";
 import { passwordSchema } from "@/lib/password-utils";
 import { PasswordStrengthMeter } from "@/components/passwordStrengthMeter";
@@ -34,10 +34,7 @@ function ResetPasswordForm() {
 
   const resetMutation = useMutation({
     mutationFn: (data: { email: string; otp: string; password: string }) =>
-      apiClient("/auth/reset-password", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
+      api.post("/api/auth/reset-password", data),
     onSuccess: () => {
       toast.success("Password updated! You can now log in.");
       router.push("/login");
