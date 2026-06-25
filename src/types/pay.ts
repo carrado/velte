@@ -1,13 +1,33 @@
 // Types for the public pay page (src/app/pay/[linkId]) and its service.
 // Mirrors the velte-backend payPage controller responses.
 
+/** One variant line of an order (e.g. "Red ×3" within a 3-red-1-black order). */
+export interface PayLinkOrderItem {
+  /** Display label, e.g. "T-Shirt (Red)". */
+  name: string | null;
+  /** Variant text only, e.g. "Red, L" (null when the product has no variants). */
+  variant: string | null;
+  /** Units of this variant. */
+  quantity: number;
+  /** Per-unit price incl. modifier add-ons. */
+  unitPrice: number | null;
+  /** unitPrice × quantity. */
+  lineTotal: number | null;
+}
+
 export interface PayLinkOrder {
   ref: string;
   product: string | null;
-  /** Grand total (unit price × quantity). */
+  /** Grand total (Σ line totals). */
   amount: number | null;
-  /** Number of units ordered. */
+  /** Total units ordered (Σ line quantities). */
   quantity: number;
+  /**
+   * Per-variant breakdown. One entry for a plain order, several for a
+   * multi-variant order. Empty for older orders placed before multi-variant
+   * support — the page then falls back to the single product label + quantity.
+   */
+  items: PayLinkOrderItem[];
   customerName: string | null;
   paid: boolean;
 }

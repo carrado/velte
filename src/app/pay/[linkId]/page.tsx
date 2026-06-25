@@ -158,16 +158,40 @@ function PayPageInner() {
                 Hi {data.order.customerName}, here&apos;s your order:
               </p>
             ) : null}
-            <div className="mt-1 flex items-center justify-between gap-2">
-              <span className="font-medium text-gray-900">
-                {data.order.product || "Your order"}
-              </span>
-              {data.order.quantity > 1 ? (
-                <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-sm font-medium text-gray-600">
-                  ×{data.order.quantity}
+            {data.order.items.length > 1 ? (
+              // Multi-variant order (e.g. 3 red + 1 black): one row per line.
+              <ul className="mt-1 space-y-1.5">
+                {data.order.items.map((it, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span className="font-medium text-gray-900">
+                      {it.variant || it.name || "Item"}
+                      <span className="ml-1 font-normal text-gray-500">
+                        ×{it.quantity}
+                      </span>
+                    </span>
+                    {it.lineTotal != null ? (
+                      <span className="shrink-0 text-gray-600">
+                        {naira(it.lineTotal)}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <span className="font-medium text-gray-900">
+                  {data.order.product || "Your order"}
                 </span>
-              ) : null}
-            </div>
+                {data.order.quantity > 1 ? (
+                  <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-sm font-medium text-gray-600">
+                    ×{data.order.quantity}
+                  </span>
+                ) : null}
+              </div>
+            )}
           </div>
         ) : null}
 
