@@ -158,10 +158,15 @@ function PayPageInner() {
                 Hi {data.order.customerName}, here&apos;s your order:
               </p>
             ) : null}
-            <div className="mt-1 flex items-center justify-between">
+            <div className="mt-1 flex items-center justify-between gap-2">
               <span className="font-medium text-gray-900">
                 {data.order.product || "Your order"}
               </span>
+              {data.order.quantity > 1 ? (
+                <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-sm font-medium text-gray-600">
+                  ×{data.order.quantity}
+                </span>
+              ) : null}
             </div>
           </div>
         ) : null}

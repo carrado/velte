@@ -4,7 +4,10 @@
 export interface PayLinkOrder {
   ref: string;
   product: string | null;
+  /** Grand total (unit price × quantity). */
   amount: number | null;
+  /** Number of units ordered. */
+  quantity: number;
   customerName: string | null;
   paid: boolean;
 }
