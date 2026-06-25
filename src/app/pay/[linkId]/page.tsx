@@ -8,6 +8,48 @@ import { computeCharge } from "@/lib/commission";
 import { getPayLink, initializePay } from "@/services/pay";
 import type { PayLinkData } from "@/types/pay";
 
+// Paystack InlineJS v2. `resumeTransaction(accessCode)` opens the popup for a
+// transaction already initialized server-side (amount, subaccount, commission and
+// metadata all locked there) — so no public key is needed on the client.
+interface PaystackPopInstance {
+  resumeTransaction: (
+    accessCode: string,
+    callbacks?: {
+      onSuccess?: (response: { reference: string }) => void;
+      onCancel?: () => void;
+      onError?: (error: { message?: string }) => void;
+    },
+  ) => void;
+}
+declare global {
+  interface Window {
+    PaystackPop?: new () => PaystackPopInstance;
+  }
+}
+
+const PAYSTACK_INLINE_SRC = "https://js.paystack.co/v2/inline.js";
+let paystackScriptPromise: Promise<boolean> | null = null;
+
+// Lazy-load the Paystack inline script once. Resolves false (rather than
+// rejecting) if it can't load, so the caller can fall back to the redirect.
+function loadPaystackInline(): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  if (window.PaystackPop) return Promise.resolve(true);
+  if (paystackScriptPromise) return paystackScriptPromise;
+  paystackScriptPromise = new Promise<boolean>((resolve) => {
+    const script = document.createElement("script");
+    script.src = PAYSTACK_INLINE_SRC;
+    script.async = true;
+    script.onload = () => resolve(!!window.PaystackPop);
+    script.onerror = () => {
+      paystackScriptPromise = null; // allow a retry on the next attempt
+      resolve(false);
+    };
+    document.body.appendChild(script);
+  });
+  return paystackScriptPromise;
+}
+
 export default function PayPage() {
   return (
     <Suspense fallback={<CenteredCard>Loading…</CenteredCard>}>
@@ -94,15 +136,47 @@ function PayPageInner() {
 
     setPaying(true);
     try {
-      const { authorization_url } = await initializePay(linkId, {
+      const { authorization_url, access_code } = await initializePay(linkId, {
         ref,
         email: email.trim() || undefined,
         amount: isFixed ? undefined : Number(enteredAmount),
       });
-      // Full-page redirect to Paystack — more reliable than a popup for the
-      // mobile shoppers who arrive here from a WhatsApp link. Paystack returns
-      // to /payment/callback after payment.
-      window.location.href = authorization_url;
+
+      // The hosted redirect — our reliable fallback. Used directly when the inline
+      // popup can't load (e.g. some WhatsApp in-app browsers) or fails mid-flow.
+      const redirect = () => {
+        window.location.href = authorization_url;
+      };
+
+      // Prefer the inline popup so the buyer stays on this page. It resumes the
+      // server-initialized transaction by its access_code; on success we go to the
+      // same /payment/callback the redirect uses (which verifies server-side).
+      const ready = await loadPaystackInline();
+      if (ready && window.PaystackPop && access_code) {
+        try {
+          const popup = new window.PaystackPop();
+          popup.resumeTransaction(access_code, {
+            onSuccess: (response) => {
+              window.location.href = `/payment/callback?reference=${encodeURIComponent(
+                response.reference,
+              )}`;
+            },
+            onCancel: () => {
+              // Buyer closed the popup — let them try again.
+              setPaying(false);
+            },
+            onError: () => {
+              // Popup failed after opening — fall back to the hosted page.
+              redirect();
+            },
+          });
+          return;
+        } catch {
+          // Instantiating/resuming threw — fall back to the redirect below.
+        }
+      }
+
+      redirect();
     } catch (e: unknown) {
       toast.error(
         e instanceof Error ? e.message : "Could not start payment. Try again.",
