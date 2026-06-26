@@ -97,16 +97,6 @@ export interface PaymentLinkData {
   createdAt: string;
 }
 
-export type PaymentLinkWarningVariant = "deactivate" | "delete";
-
-export interface PaymentLinkWarningModalProps {
-  open: boolean;
-  variant: PaymentLinkWarningVariant;
-  loading?: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}
-
 export interface InitiateOrderRefundPayload {
   /** Internal order ID (not the display orderId like "#ORD0001") */
   orderId: string;

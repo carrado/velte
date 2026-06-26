@@ -40,6 +40,7 @@ import type {
   OrderFilter,
   OrderStatus,
   OrderListParams,
+  PaymentStatus,
   SortOption,
 } from "@/types/order";
 import type { FilterField } from "@/types/common";
@@ -168,13 +169,19 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   }
 }
 
-function PaymentBadge({ status }: { status: "Paid" | "Unpaid" }) {
+function PaymentBadge({ status }: { status: PaymentStatus }) {
+  const dot =
+    status === "Paid"
+      ? "bg-[#21c45d]"
+      : status === "Awaiting"
+        ? "bg-[#3b82f6]"
+        : "bg-[#f59f0a]";
   return (
     <div className="flex items-center gap-1.5">
-      <span
-        className={`w-2 h-2 rounded-full ${status === "Paid" ? "bg-[#21c45d]" : "bg-[#f59f0a]"}`}
-      />
-      <span className="text-dash-body text-[#111827]">{status}</span>
+      <span className={`w-2 h-2 rounded-full ${dot}`} />
+      <span className="text-dash-body text-[#111827]">
+        {status === "Awaiting" ? "Awaiting" : status}
+      </span>
     </div>
   );
 }

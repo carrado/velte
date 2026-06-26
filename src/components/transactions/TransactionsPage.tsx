@@ -16,9 +16,8 @@ import {
   ArrowUp,
   MoreVertical,
   Search,
-  Link2,
   ArrowDown,
-  CreditCard,
+  Landmark,
 } from "lucide-react";
 import { Pagination } from "@/components/Pagination";
 import { cn } from "@/lib/utils";
@@ -35,9 +34,7 @@ import DataTable from "../DataTable";
 import MobileCard from "../MobileCard";
 import { Input } from "../ui/input";
 import GeneratePaymentLinkModal from "./GeneratePaymentLinkModal";
-import PaymentLinkWarningModal from "./PaymentLinkWarningModal";
 import { transactionService } from "@/services/transactions";
-import type { PaymentLinkWarningVariant } from "@/types/transaction";
 import { toast } from "sonner";
 import { useOnboardingStore } from "@/store/onboardingStore";
 
@@ -205,9 +202,6 @@ export default function TransactionsPage() {
       store.resumeOverlay();
     }
   }, [showPaymentLinkModal]);
-  const [warningModal, setWarningModal] =
-    useState<PaymentLinkWarningVariant | null>(null);
-  const [linkActionLoading, setLinkActionLoading] = useState(false);
 
   const sortMap: Record<
     TxSortOption,
@@ -283,46 +277,6 @@ export default function TransactionsPage() {
   const refreshPage = () => {
     setShowPaymentLinkModal(false);
     queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all });
-  };
-
-  const handlePaymentLinkWarningConfirm = async () => {
-    if (!paymentLink || !warningModal) return;
-
-    setLinkActionLoading(true);
-    try {
-      if (warningModal === "deactivate") {
-        await transactionService.deactivatePaymentLink(paymentLink.id);
-        toast.success("Payment link deactivated");
-      } else {
-        await transactionService.deletePaymentLink(paymentLink.id);
-        toast.success("Payment link deleted");
-      }
-      setWarningModal(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all });
-    } catch {
-      toast.error(
-        warningModal === "deactivate"
-          ? "Failed to deactivate payment link"
-          : "Failed to delete payment link",
-      );
-    } finally {
-      setLinkActionLoading(false);
-    }
-  };
-
-  const handleReactivate = async () => {
-    if (!paymentLink) return;
-
-    setLinkActionLoading(true);
-    try {
-      await transactionService.reactivatePaymentLink(paymentLink.id);
-      toast.success("Payment link reactivated");
-      queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all });
-    } catch {
-      toast.error("Failed to reactivate payment link");
-    } finally {
-      setLinkActionLoading(false);
-    }
   };
 
   const columns: ColumnDef<Transaction>[] = [
@@ -447,8 +401,8 @@ export default function TransactionsPage() {
                   className="max-w-[210px] text-center"
                 >
                   <p>
-                    Your active payment link and linked bank account used to
-                    receive payments from customers.
+                    Your linked bank account used to receive payments from
+                    customers.
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -460,16 +414,16 @@ export default function TransactionsPage() {
               <div className="absolute -right-2 bottom-2 w-20 h-20 rounded-full bg-white/10" />
               <div className="flex items-center justify-between relative z-10">
                 <p className="text-dash-body font-semibold tracking-wide">
-                  Payment Link
+                  Bank Account
                 </p>
-                <CreditCard size={20} className="opacity-80" />
+                <Landmark size={20} className="opacity-80" />
               </div>
               <div className="relative z-10">
                 {paymentLinkLoading ? (
                   <div className="h-4 w-40 bg-white/20 animate-pulse rounded mb-2" />
                 ) : paymentLink ? (
                   <p className="text-dash-body font-mono opacity-90 break-all leading-snug">
-                    {paymentLink.url}
+                    {paymentLink.accountNumber}
                   </p>
                 ) : (
                   <p className="text-dash-body tracking-[0.18em] font-mono opacity-60">
@@ -480,7 +434,7 @@ export default function TransactionsPage() {
                   <span>
                     {paymentLink
                       ? paymentLink.accountName
-                      : "No link generated"}
+                      : "No bank account saved"}
                   </span>
                 </div>
               </div>
@@ -489,22 +443,13 @@ export default function TransactionsPage() {
             {/* Details */}
             <div className="space-y-1.5 text-dash-body">
               <p>
-                <span className="text-gray-500">Status: </span>
+                <span className="text-gray-500">Account Name: </span>
                 {paymentLinkLoading ? (
-                  <span className="inline-block h-3 w-12 bg-gray-100 animate-pulse rounded align-middle" />
-                ) : paymentLink ? (
-                  <span
-                    className={cn(
-                      "font-medium",
-                      paymentLink.isActive
-                        ? "text-green-500"
-                        : "text-amber-600",
-                    )}
-                  >
-                    {paymentLink.isActive ? "Active" : "Inactive"}
-                  </span>
+                  <span className="inline-block h-3 w-24 bg-gray-100 animate-pulse rounded align-middle" />
                 ) : (
-                  <span className="text-gray-400 font-medium">Inactive</span>
+                  <span className="text-[#023337]">
+                    {paymentLink ? paymentLink.accountName : "—"}
+                  </span>
                 )}
               </p>
               <p>
@@ -527,71 +472,17 @@ export default function TransactionsPage() {
                   </span>
                 )}
               </p>
-              {paymentLink && (
-                <button
-                  onClick={() =>
-                    navigator.clipboard
-                      .writeText(paymentLink.url)
-                      .then(() => toast.success("Link copied!"))
-                  }
-                  className="text-indigo-500 hover:underline cursor-pointer text-left"
-                >
-                  Copy Link
-                </button>
-              )}
             </div>
 
             {/* Actions */}
             <div className="flex gap-2 mt-auto pt-1">
-              {!paymentLink && (
-                <button
-                  onClick={() => setShowPaymentLinkModal(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2 text-dash-body text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
-                >
-                  <Link2 size={15} />
-                  Generate Link
-                </button>
-              )}
-              {paymentLink && paymentLink.isActive && (
-                <>
-                  <button
-                    type="button"
-                    disabled={linkActionLoading}
-                    onClick={() => setWarningModal("deactivate")}
-                    className="flex-1 border border-red-200 bg-red-50 text-red-500 rounded-lg px-3 py-2 text-dash-body hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
-                  >
-                    Deactivate
-                  </button>
-                  <button
-                    type="button"
-                    disabled={linkActionLoading}
-                    onClick={() => setWarningModal("delete")}
-                    className="flex-1 border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-dash-body hover:bg-gray-50 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
-                </>
-              )}
-              {paymentLink && !paymentLink.isActive && (
-                <>
-                  <button
-                    type="button"
-                    disabled={linkActionLoading}
-                    onClick={handleReactivate}
-                    className="flex-1 border border-green-200 bg-green-50 text-green-600 rounded-lg px-3 py-2 text-dash-body hover:bg-green-100 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
-                  >
-                    Reactivate
-                  </button>
-                  <button
-                    type="button"
-                    disabled={linkActionLoading}
-                    onClick={() => setWarningModal("delete")}
-                    className="flex-1 border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-dash-body hover:bg-gray-50 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
-                </>
-              )}
+              <button
+                onClick={() => setShowPaymentLinkModal(true)}
+                className="flex-1 flex items-center justify-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2 text-dash-body text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                <Landmark size={15} />
+                {paymentLink ? "Update bank account" : "Save bank account"}
+              </button>
             </div>
           </div>
         </div>
@@ -705,14 +596,6 @@ export default function TransactionsPage() {
       <GeneratePaymentLinkModal
         open={showPaymentLinkModal}
         onClose={() => refreshPage()}
-      />
-
-      <PaymentLinkWarningModal
-        open={warningModal !== null}
-        variant={warningModal ?? "deactivate"}
-        loading={linkActionLoading}
-        onClose={() => !linkActionLoading && setWarningModal(null)}
-        onConfirm={handlePaymentLinkWarningConfirm}
       />
     </div>
   );

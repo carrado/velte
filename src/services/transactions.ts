@@ -46,8 +46,12 @@ export const transactionService = {
     return account;
   },
 
-  /** Generate a payment link */
-  async generatePaymentLink(
+  /**
+   * Save the vendor's bank account (account name/number/bank). Customers pay by
+   * direct transfer to this account; staffly shares it on WhatsApp at checkout.
+   * No Paystack subaccount or hosted payment link is created.
+   */
+  async saveBankAccount(
     payload: GeneratePaymentLinkPayload,
   ): Promise<PaymentLink> {
     const { paymentLink } = await api.post<{ paymentLink: PaymentLink }>(
@@ -65,27 +69,13 @@ export const transactionService = {
     return banks;
   },
 
-  async deactivatePaymentLink(id: string): Promise<PaymentLinkData | null> {
-    const { paymentLink } = await api.patch<{
-      paymentLink: PaymentLinkData | null;
-    }>(`/api/transactions/payment-link/${id}/deactivate`);
-    return paymentLink;
-  },
-
-  async reactivatePaymentLink(id: string): Promise<PaymentLinkData | null> {
-    const { paymentLink } = await api.patch<{
-      paymentLink: PaymentLinkData | null;
-    }>(`/api/transactions/payment-link/${id}/reactivate`);
-    return paymentLink;
-  },
-
-  async deletePaymentLink(id: string): Promise<void> {
-    await api.del(`/api/transactions/payment-link/${id}`);
-  },
-
+  /**
+   * Whether the vendor has saved a bank account (returned with the transactions
+   * list). Used by the dashboard onboarding gate. (Stored in the `paymentLink`
+   * field for back-compat — it now holds bank-account details, not a link.)
+   */
   async getPaymentLink(): Promise<PaymentLinkData | null> {
     try {
-      // Payment link is returned as part of the transactions list response
       const res = await this.getTransactions({ limit: 1, page: 1 });
       return res.paymentLink ?? null;
     } catch {

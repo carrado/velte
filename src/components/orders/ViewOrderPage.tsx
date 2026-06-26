@@ -5,7 +5,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useState } from "react";
-import { getOrder, updateOrderStatus } from "@/services/orders";
+import {
+  getOrder,
+  updateOrderStatus,
+  confirmOrderPayment,
+  rejectOrderPayment,
+  getOrderReceiptImage,
+} from "@/services/orders";
 import { transactionService } from "@/services/transactions";
 import type { Order, OrderStatus } from "@/types/order";
 import {
@@ -28,6 +34,8 @@ import {
   Bike,
   Route,
   RefreshCw,
+  Eye,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -992,6 +1000,7 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
   const [modalStep, setModalStep] = useState<
     "cancel_confirm" | "refund_transfer" | "ship_confirm" | null
   >(null);
+  const [showReceipt, setShowReceipt] = useState(false);
 
   const { data: order, isLoading } = useQuery({
     queryKey: queryKeys.orders.detail(orderId),
@@ -1017,6 +1026,42 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
     },
     onError: () =>
       toast.error("Failed to update order status. Please try again."),
+  });
+
+  const confirmPaymentMutation = useMutation({
+    mutationFn: (id: string) => confirmOrderPayment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(orderId),
+      });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.stats });
+      toast.success("Payment confirmed.");
+    },
+    onError: () => toast.error("Failed to confirm payment. Please try again."),
+  });
+
+  const rejectPaymentMutation = useMutation({
+    mutationFn: (id: string) => rejectOrderPayment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(orderId),
+      });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.stats });
+      setShowReceipt(false);
+      toast.success("Payment rejected. The customer has been asked to resend.");
+    },
+    onError: () => toast.error("Failed to reject payment. Please try again."),
+  });
+
+  // The buyer's uploaded receipt — fetched on demand when the vendor opens it.
+  const receiptQuery = useQuery({
+    queryKey: ["order-receipt", orderId],
+    queryFn: () => getOrderReceiptImage(orderId),
+    enabled: showReceipt,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
   if (isLoading) return <ViewOrderSkeleton />;
@@ -1091,6 +1136,107 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
         onSkipAndCancel={handleSkipAndCancel}
         onTransferSuccess={handleTransferSuccess}
       />
+
+      {/* Manual-transfer payment held for the vendor to confirm */}
+      {order.payment === "Awaiting" && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+          <div>
+            <p className="text-dash-body font-semibold text-[#023337]">
+              Payment awaiting your confirmation
+            </p>
+            <p className="text-dash-caption text-gray-500 mt-0.5">
+              The customer uploaded a receipt we verified. Check it against your
+              bank credit alert, then confirm only if the transfer truly landed.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowReceipt(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+            >
+              <Eye size={16} /> View receipt
+            </button>
+            <button
+              type="button"
+              onClick={() => confirmPaymentMutation.mutate(order.id)}
+              disabled={
+                confirmPaymentMutation.isPending ||
+                rejectPaymentMutation.isPending
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {confirmPaymentMutation.isPending
+                ? "Confirming…"
+                : "Confirm payment received"}
+            </button>
+            <button
+              type="button"
+              onClick={() => rejectPaymentMutation.mutate(order.id)}
+              disabled={
+                rejectPaymentMutation.isPending ||
+                confirmPaymentMutation.isPending
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {rejectPaymentMutation.isPending
+                ? "Rejecting…"
+                : "Couldn't find payment"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt preview — the buyer's uploaded transfer receipt */}
+      {showReceipt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setShowReceipt(false)}
+        >
+          <div
+            className="relative max-h-[85vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <p className="flex items-center gap-2 text-dash-body font-semibold text-[#023337]">
+                <Receipt size={16} /> Customer&apos;s receipt
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowReceipt(false)}
+                className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Close"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            {receiptQuery.isLoading && (
+              <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
+                <Loader2 size={28} className="animate-spin" />
+                <p className="text-dash-caption">Loading receipt…</p>
+              </div>
+            )}
+            {receiptQuery.isError && (
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-gray-500">
+                <AlertTriangle size={28} className="text-amber-400" />
+                <p className="text-dash-caption">
+                  Couldn&apos;t load the receipt. It may have expired — ask the
+                  customer to resend it.
+                </p>
+              </div>
+            )}
+            {receiptQuery.data && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={receiptQuery.data}
+                alt="Payment receipt uploaded by the customer"
+                className="w-full rounded-xl border border-gray-100"
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Hero */}
       <OrderHeroCard

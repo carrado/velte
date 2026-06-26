@@ -3,11 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import {
   X,
-  Copy,
   CheckCircle2,
   Loader2,
   AlertCircle,
-  Link2,
+  Landmark,
   ChevronDown,
   Search,
 } from "lucide-react";
@@ -160,8 +159,7 @@ export default function GeneratePaymentLinkModal({
 
   // Submit state
   const [submitting, setSubmitting] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   // Load banks on open
   useEffect(() => {
@@ -203,8 +201,7 @@ export default function GeneratePaymentLinkModal({
     setDescription("");
     setResolved(null);
     setResolveError("");
-    setGeneratedLink("");
-    setCopied(false);
+    setSaved(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -219,27 +216,21 @@ export default function GeneratePaymentLinkModal({
 
     setSubmitting(true);
     try {
-      const res = await transactionService.generatePaymentLink(payload);
-      setGeneratedLink(res.url);
-      toast.success("Payment link generated!");
+      await transactionService.saveBankAccount(payload);
+      setSaved(true);
+      toast.success("Bank account saved!");
       useOnboardingStore.getState().completeStep(1);
     } catch {
-      toast.error("Failed to generate payment link. Please try again.");
+      toast.error("Failed to save bank account. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleCopy() {
-    await navigator.clipboard.writeText(generatedLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -252,14 +243,14 @@ export default function GeneratePaymentLinkModal({
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
-              <Link2 size={15} className="text-orange-500" />
+              <Landmark size={15} className="text-orange-500" />
             </div>
             <div>
               <h2 className="text-[13px] font-bold text-gray-900">
-                Generate Payment Link
+                Save Bank Account
               </h2>
               <p className="text-xs text-gray-400">
-                Link sends funds to your bank account
+                Where customers send their transfers
               </p>
             </div>
           </div>
@@ -273,7 +264,7 @@ export default function GeneratePaymentLinkModal({
 
         {/* Body */}
         <div className="px-6 py-5">
-          {generatedLink ? (
+          {saved ? (
             /* ── Success state ── */
             <div className="space-y-4">
               <div className="flex flex-col items-center gap-2 py-3">
@@ -281,18 +272,21 @@ export default function GeneratePaymentLinkModal({
                   <CheckCircle2 size={22} className="text-green-500" />
                 </div>
                 <p className="text-sm font-semibold text-gray-900">
-                  Link ready to share!
+                  Bank account saved!
                 </p>
                 <p className="text-xs text-gray-400 text-center">
-                  This link will be shared with your customers to receive
-                  payment.
+                  Customers will be asked to transfer to this account at
+                  checkout.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
-                <span className="flex-1 text-xs text-gray-600 truncate font-mono">
-                  {generatedLink}
-                </span>
+              <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
+                <p className="text-sm font-semibold text-gray-900">
+                  {accountName}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {accountNumber} · {bankName}
+                </p>
               </div>
             </div>
           ) : (
@@ -409,12 +403,12 @@ export default function GeneratePaymentLinkModal({
                   {submitting ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
-                      Generating…
+                      Saving…
                     </>
                   ) : (
                     <>
-                      <Link2 size={14} />
-                      Generate Payment Link
+                      <Landmark size={14} />
+                      Save Bank Account
                     </>
                   )}
                 </button>

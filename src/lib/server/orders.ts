@@ -31,7 +31,7 @@ interface ApiOrder {
   product_initials: string | null;
   product_color: string | null;
   total_amount: number; // kobo
-  payment_status: "paid" | "unpaid";
+  payment_status: "paid" | "unpaid" | "awaiting_confirmation";
   status: ApiOrderStatus;
   created_at: string;
 }
@@ -121,7 +121,11 @@ function formatDate(iso: string): string {
 
 function mapOrder(o: ApiOrder): Order {
   const payment: PaymentStatus =
-    o.payment_status === "paid" ? "Paid" : "Unpaid";
+    o.payment_status === "paid"
+      ? "Paid"
+      : o.payment_status === "awaiting_confirmation"
+        ? "Awaiting"
+        : "Unpaid";
   return {
     id: o.id,
     orderId: o.reference,
@@ -224,6 +228,43 @@ export async function setOrderStatus(
     { method: "PATCH", body: { status: STATUS_TO_API[status] }, cookie },
   );
   return mapOrder(data);
+}
+
+// Vendor confirms a held manual-transfer payment (paymentStatus awaiting_confirmation).
+export async function confirmOrderPayment(
+  id: string,
+  cookie: string,
+): Promise<Order> {
+  const { data } = await backendFetch<Wrapped<ApiOrder>>(
+    `/orders/${id}/confirm-payment`,
+    { method: "PATCH", cookie },
+  );
+  return mapOrder(data);
+}
+
+// Vendor rejects a held manual-transfer payment (couldn't find the transfer).
+export async function rejectOrderPayment(
+  id: string,
+  cookie: string,
+): Promise<Order> {
+  const { data } = await backendFetch<Wrapped<ApiOrder>>(
+    `/orders/${id}/reject-payment`,
+    { method: "PATCH", cookie },
+  );
+  return mapOrder(data);
+}
+
+// Fetch the buyer's uploaded receipt (proxied from staffly) as a data URL so the
+// vendor can review it before confirming.
+export async function getOrderReceiptImage(
+  id: string,
+  cookie: string,
+): Promise<string> {
+  const { data } = await backendFetch<Wrapped<{ image: string }>>(
+    `/orders/${id}/receipt-image`,
+    { method: "GET", cookie },
+  );
+  return data.image;
 }
 
 /** Domain status values accepted from clients (for request validation). */

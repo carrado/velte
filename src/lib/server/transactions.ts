@@ -4,7 +4,6 @@ import type {
   TransactionsListResult,
   GeneratePaymentLinkPayload,
   PaymentLink,
-  PaymentLinkData,
   ResolvedAccount,
   BankOption,
   InitiateOrderRefundPayload,
@@ -68,38 +67,6 @@ export async function listBanks(cookie: string): Promise<BankOption[]> {
     { cookie },
   );
   return data;
-}
-
-export async function deactivatePaymentLink(
-  id: string,
-  cookie: string,
-): Promise<PaymentLinkData | null> {
-  const { data } = await backendFetch<Wrapped<PaymentLinkData | null>>(
-    `/transactions/payment-link/${id}/deactivate`,
-    { method: "PATCH", cookie },
-  );
-  return data ?? null;
-}
-
-export async function reactivatePaymentLink(
-  id: string,
-  cookie: string,
-): Promise<PaymentLinkData | null> {
-  const { data } = await backendFetch<Wrapped<PaymentLinkData | null>>(
-    `/transactions/payment-link/${id}/reactivate`,
-    { method: "PATCH", cookie },
-  );
-  return data ?? null;
-}
-
-export async function deletePaymentLink(
-  id: string,
-  cookie: string,
-): Promise<void> {
-  await backendFetch(`/transactions/payment-link/${id}`, {
-    method: "DELETE",
-    cookie,
-  });
 }
 
 export async function initiateOrderRefund(

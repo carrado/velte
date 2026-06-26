@@ -13,7 +13,9 @@ export type FoodOrderStatus =
   | "Delivered"
   | "Cancelled";
 export type OrderStatus = RetailOrderStatus | FoodOrderStatus;
-export type PaymentStatus = "Paid" | "Unpaid";
+// "Awaiting" = a manual-transfer receipt was AI-verified but held for the vendor
+// to confirm in the dashboard (high-value / first-time buyer).
+export type PaymentStatus = "Paid" | "Unpaid" | "Awaiting";
 export type OrderFilter = "all" | "completed" | "pending" | "cancelled";
 
 export interface Order {

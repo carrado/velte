@@ -54,3 +54,27 @@ export async function updateOrderStatus(
   );
   return order;
 }
+
+// Vendor confirms a held manual-transfer payment (payment === "Awaiting").
+export async function confirmOrderPayment(id: string): Promise<Order> {
+  const { order } = await api.patch<{ order: Order }>(
+    `/api/orders/${id}/confirm-payment`,
+  );
+  return order;
+}
+
+// Vendor rejects a held manual-transfer payment (couldn't find the transfer).
+export async function rejectOrderPayment(id: string): Promise<Order> {
+  const { order } = await api.patch<{ order: Order }>(
+    `/api/orders/${id}/reject-payment`,
+  );
+  return order;
+}
+
+// Fetch the buyer's uploaded receipt as a data URL for the vendor to review.
+export async function getOrderReceiptImage(id: string): Promise<string> {
+  const { image } = await api.get<{ image: string }>(
+    `/api/orders/${id}/receipt-image`,
+  );
+  return image;
+}
