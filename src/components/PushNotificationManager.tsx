@@ -46,9 +46,14 @@ function useInstallPrompt() {
 
 export default function PushNotificationManager() {
   const { showBanner, isLoading, subscribe, dismiss } = usePushNotifications();
-  const { prompt: installPrompt, canInstall, isInstalled } = useInstallPrompt();
+  const { prompt: installPrompt, canInstall } = useInstallPrompt();
   const [isActioning, setIsActioning] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  // The browser allows only ONE gesture-gated action per click, and both
+  // Notification.requestPermission() and installPrompt.prompt() are gated. So we
+  // split into two taps: tap 1 enables alerts, then (if installable) we advance
+  // to an "install" step whose button uses its own fresh gesture for tap 2.
+  const [step, setStep] = useState<"main" | "install">("main");
 
   useEffect(() => {
     const sync = () => setIsMobile(window.innerWidth < 768);
@@ -56,36 +61,47 @@ export default function PushNotificationManager() {
     return () => window.removeEventListener("resize", sync);
   }, []);
 
+  const close = () => {
+    setStep("main");
+    dismiss();
+  };
+
   const handlePrimary = async () => {
     setIsActioning(true);
     try {
-      // Subscribe to push FIRST, while the click's user activation is still
-      // live. installPrompt.prompt() consumes the user gesture, so if we showed
-      // the install dialog first, the subsequent Notification.requestPermission()
-      // would run without a gesture and silently resolve to "default" — and the
-      // push subscription would never be saved. (The banner only ever shows when
-      // permission is still "default", so a fresh prompt is always required.)
+      // Subscribe to push using this click's user activation. (The banner only
+      // ever shows when permission is still "default", so a fresh prompt is
+      // always required — and it must run on a live gesture.)
       await subscribe();
-
-      // Then offer the native install dialog as best-effort. It's secondary, and
-      // may no-op if the gesture was already spent above — push is the priority.
-      if (installPrompt) {
-        try {
-          await installPrompt.prompt();
-        } catch {
-          /* install needs its own gesture — ignore; push is already subscribed */
-        }
-      }
+      // If the app is installable, advance to a second tap for the install
+      // dialog; otherwise we're done.
+      if (canInstall) setStep("install");
+      else close();
     } finally {
       setIsActioning(false);
     }
   };
 
+  const handleInstall = async () => {
+    setIsActioning(true);
+    try {
+      if (installPrompt) await installPrompt.prompt();
+    } catch {
+      /* user dismissed or browser blocked it — close either way */
+    } finally {
+      setIsActioning(false);
+      close();
+    }
+  };
+
   const busy = isActioning || isLoading;
+  // Stay open for the install step even though subscribing flips showBanner off.
+  const open = showBanner || (step === "install" && canInstall);
+  const onInstallStep = step === "install" && canInstall;
 
   return (
     <AnimatePresence>
-      {showBanner && (
+      {open && (
         <>
           {/* Mobile backdrop */}
           <motion.div
@@ -95,7 +111,7 @@ export default function PushNotificationManager() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] md:hidden"
-            onClick={dismiss}
+            onClick={close}
           />
 
           {/* Card */}
@@ -117,7 +133,7 @@ export default function PushNotificationManager() {
 
               {/* Dismiss */}
               <button
-                onClick={dismiss}
+                onClick={close}
                 aria-label="Dismiss"
                 className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >
@@ -135,15 +151,18 @@ export default function PushNotificationManager() {
                       Velte
                     </p>
                     <h3 className="text-[15px] font-semibold leading-tight text-slate-900">
-                      Get the full experience
+                      {onInstallStep
+                        ? "Alerts on — add to home screen"
+                        : "Get the full experience"}
                     </h3>
                   </div>
                 </div>
 
                 {/* Body */}
                 <p className="text-[13px] leading-relaxed text-slate-500">
-                  Install Velte on your device and enable notifications to get
-                  instant alerts for new orders and messages.
+                  {onInstallStep
+                    ? "Notifications are enabled. Install Velte on your device for one-tap access and reliable alerts."
+                    : "Install Velte on your device and enable notifications to get instant alerts for new orders and messages."}
                 </p>
 
                 {/* Feature pills — always visible */}
@@ -161,7 +180,7 @@ export default function PushNotificationManager() {
                 {/* Actions */}
                 <div className="mt-5 flex items-center gap-3">
                   <button
-                    onClick={handlePrimary}
+                    onClick={onInstallStep ? handleInstall : handlePrimary}
                     disabled={busy}
                     className={cn(
                       "flex flex-1 items-center justify-center gap-2 rounded-xl",
@@ -174,21 +193,25 @@ export default function PushNotificationManager() {
                     {busy ? (
                       <>
                         <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                        Enabling…
+                        {onInstallStep ? "Installing…" : "Enabling…"}
                       </>
                     ) : (
                       <>
-                        <Download className="h-3.5 w-3.5" />
-                        Install &amp; enable alerts
+                        {onInstallStep ? (
+                          <Download className="h-3.5 w-3.5" />
+                        ) : (
+                          <Bell className="h-3.5 w-3.5" />
+                        )}
+                        {onInstallStep ? "Add to home screen" : "Enable alerts"}
                       </>
                     )}
                   </button>
 
                   <button
-                    onClick={dismiss}
+                    onClick={close}
                     className="shrink-0 text-[13px] font-medium text-slate-400 transition-colors hover:text-slate-600"
                   >
-                    Not now
+                    {onInstallStep ? "Skip" : "Not now"}
                   </button>
                 </div>
               </div>

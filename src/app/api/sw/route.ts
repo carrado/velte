@@ -46,7 +46,16 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "Velte", options),
+    Promise.all([
+      self.registration.showNotification(data.title || "Velte", options),
+      // Nudge any open dashboard tab to refresh its in-app bell immediately,
+      // instead of waiting for the next 45s poll.
+      self.clients
+        .matchAll({ type: "window", includeUncontrolled: true })
+        .then((clients) =>
+          clients.forEach((c) => c.postMessage({ type: "velte-push" })),
+        ),
+    ]),
   );
 });
 

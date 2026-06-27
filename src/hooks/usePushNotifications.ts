@@ -82,6 +82,31 @@ export function usePushNotifications() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Self-heal: if the browser still holds a subscription and permission is
+  // granted, make sure the backend has it. A web-push 410 prunes the server row
+  // while the browser keeps the subscription object — silently desyncing the two,
+  // so notifyUser finds nothing to push to even though the UI shows "subscribed".
+  // Re-POSTing the live subscription on load repairs that. Idempotent (the backend
+  // upserts by endpoint), and a dead endpoint simply 410s again and gets pruned.
+  useEffect(() => {
+    if (!isSupported || !user?.id) return;
+    if (Notification.permission !== "granted") return;
+    navigator.serviceWorker.ready.then(async (reg) => {
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) return;
+      try {
+        const res = await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, subscription: sub.toJSON() }),
+        });
+        if (res.ok) setIsSubscribed(true);
+      } catch {
+        /* best-effort resync — leave UI state as-is on failure */
+      }
+    });
+  }, [isSupported, user?.id]);
+
   // Uninstall detection: beforeinstallprompt fires again after the user
   // removes the PWA. If we had recorded a successful install, treat this as
   // an uninstall event and reset the whole promotion cycle so the banner
