@@ -37,8 +37,8 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: data.body || "",
-    icon: data.icon || "/velte_logo_esn5dj.png",
-    badge: data.badge || "/velte_logo_esn5dj.png",
+    icon: data.icon || "/velte_manifest.png",
+    badge: data.badge || "/velte_manifest.png",
     tag: data.tag || "velte-notification",
     data: { url: data.url || "/" },
     requireInteraction: data.requireInteraction || false,

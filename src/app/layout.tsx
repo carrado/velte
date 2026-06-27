@@ -158,13 +158,9 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: [
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-    ],
-    shortcut: "/favicon-32x32.png",
-    apple: "/apple-touch-icon.png",
+    icon: [{ url: "/velte_manifest.png", type: "image/png" }],
+    shortcut: "/velte_manifest.png",
+    apple: "/velte_manifest.png",
   },
   manifest: "/site.webmanifest",
   // Launch standalone (no browser chrome) and use a translucent iOS status bar so
