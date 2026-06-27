@@ -1,59 +1,57 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Bell, BellOff, Download, X } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { cn } from "@/lib/utils";
 import { installPromptStore } from "@/lib/installPromptStore";
-import type { BeforeInstallPromptEvent } from "@/types/common";
 
 function useInstallPrompt() {
-  const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
+  // The captured beforeinstallprompt lives in installPromptStore (filled by
+  // ServiceWorkerRegistrar, possibly before this mounts). Read it via
+  // useSyncExternalStore so a capture that lands after mount re-renders us too.
+  const prompt = useSyncExternalStore(
+    installPromptStore.subscribe,
+    installPromptStore.get,
+    () => null,
+  );
+  const [isInstalled, setIsInstalled] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(display-mode: standalone)").matches,
+  );
 
   useEffect(() => {
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstalled(true);
-      return;
-    }
-
-    // Sync whatever ServiceWorkerRegistrar already captured before we mounted.
-    const already = installPromptStore.get();
-    if (already) setPrompt(already);
-
-    // Subscribe in case it fires after we mount (first visit, slow browser).
-    const unsub = installPromptStore.subscribe(() =>
-      setPrompt(installPromptStore.get()),
-    );
-
+    if (isInstalled) return;
     const onInstalled = () => {
       setIsInstalled(true);
-      setPrompt(null);
       installPromptStore.clear();
       localStorage.setItem("pwa-was-installed", "1");
     };
-
     window.addEventListener("appinstalled", onInstalled);
-    return () => {
-      unsub();
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
+    return () => window.removeEventListener("appinstalled", onInstalled);
+  }, [isInstalled]);
 
   return { prompt, isInstalled, canInstall: !!prompt && !isInstalled };
 }
 
 export default function PushNotificationManager() {
   const { showBanner, isLoading, subscribe, dismiss } = usePushNotifications();
-  const { prompt: installPrompt, canInstall } = useInstallPrompt();
+  const { prompt: installPrompt, canInstall, isInstalled } = useInstallPrompt();
   const [isActioning, setIsActioning] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   // The browser allows only ONE gesture-gated action per click, and both
   // Notification.requestPermission() and installPrompt.prompt() are gated. So we
-  // split into two taps: tap 1 enables alerts, then (if installable) we advance
-  // to an "install" step whose button uses its own fresh gesture for tap 2.
+  // split into two taps: tap 1 enables alerts, then we advance to an "install"
+  // step whose button uses its own fresh gesture for tap 2.
   const [step, setStep] = useState<"main" | "install">("main");
+  // iOS Safari has no beforeinstallprompt — install is manual via the Share sheet.
+  const [isIOS] = useState(
+    () =>
+      typeof navigator !== "undefined" &&
+      /iphone|ipad|ipod/i.test(navigator.userAgent),
+  );
 
   useEffect(() => {
     const sync = () => setIsMobile(window.innerWidth < 768);
@@ -73,9 +71,10 @@ export default function PushNotificationManager() {
       // ever shows when permission is still "default", so a fresh prompt is
       // always required — and it must run on a live gesture.)
       await subscribe();
-      // If the app is installable, advance to a second tap for the install
-      // dialog; otherwise we're done.
-      if (canInstall) setStep("install");
+      // Advance to the install step unless the app is already installed. We show
+      // it even when no native prompt was captured (Chrome suppresses it after
+      // prior dismissals; iOS never fires it) and fall back to instructions.
+      if (!isInstalled) setStep("install");
       else close();
     } finally {
       setIsActioning(false);
@@ -83,9 +82,15 @@ export default function PushNotificationManager() {
   };
 
   const handleInstall = async () => {
+    // No captured prompt (suppressed / iOS) — the body shows manual steps, so
+    // this button just acknowledges and closes.
+    if (!canInstall) {
+      close();
+      return;
+    }
     setIsActioning(true);
     try {
-      if (installPrompt) await installPrompt.prompt();
+      await installPrompt!.prompt();
     } catch {
       /* user dismissed or browser blocked it — close either way */
     } finally {
@@ -96,8 +101,8 @@ export default function PushNotificationManager() {
 
   const busy = isActioning || isLoading;
   // Stay open for the install step even though subscribing flips showBanner off.
-  const open = showBanner || (step === "install" && canInstall);
-  const onInstallStep = step === "install" && canInstall;
+  const onInstallStep = step === "install" && !isInstalled;
+  const open = showBanner || onInstallStep;
 
   return (
     <AnimatePresence>
@@ -111,7 +116,7 @@ export default function PushNotificationManager() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] md:hidden"
-            onClick={close}
+            aria-hidden
           />
 
           {/* Card */}
@@ -160,9 +165,13 @@ export default function PushNotificationManager() {
 
                 {/* Body */}
                 <p className="text-[13px] leading-relaxed text-slate-500">
-                  {onInstallStep
-                    ? "Notifications are enabled. Install Velte on your device for one-tap access and reliable alerts."
-                    : "Install Velte on your device and enable notifications to get instant alerts for new orders and messages."}
+                  {!onInstallStep
+                    ? "Install Velte on your device and enable notifications to get instant alerts for new orders and messages."
+                    : canInstall
+                      ? "Notifications are enabled. Add Velte to your home screen for one-tap access and reliable alerts."
+                      : isIOS
+                        ? "Notifications are enabled. To install: tap the Share icon in Safari, then choose “Add to Home Screen”."
+                        : "Notifications are enabled. To install: open your browser menu (⋮) and choose “Install app” / “Add to Home screen”."}
                 </p>
 
                 {/* Feature pills — always visible */}
@@ -195,15 +204,18 @@ export default function PushNotificationManager() {
                         <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                         {onInstallStep ? "Installing…" : "Enabling…"}
                       </>
-                    ) : (
+                    ) : !onInstallStep ? (
                       <>
-                        {onInstallStep ? (
-                          <Download className="h-3.5 w-3.5" />
-                        ) : (
-                          <Bell className="h-3.5 w-3.5" />
-                        )}
-                        {onInstallStep ? "Add to home screen" : "Enable alerts"}
+                        <Bell className="h-3.5 w-3.5" />
+                        Enable alerts
                       </>
+                    ) : canInstall ? (
+                      <>
+                        <Download className="h-3.5 w-3.5" />
+                        Add to home screen
+                      </>
+                    ) : (
+                      "Got it"
                     )}
                   </button>
 
