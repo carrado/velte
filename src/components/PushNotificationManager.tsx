@@ -59,12 +59,23 @@ export default function PushNotificationManager() {
   const handlePrimary = async () => {
     setIsActioning(true);
     try {
-      // Show native install dialog first (if available). The user can accept or
-      // dismiss it — we proceed with notifications either way.
-      if (installPrompt) {
-        await installPrompt.prompt();
-      }
+      // Subscribe to push FIRST, while the click's user activation is still
+      // live. installPrompt.prompt() consumes the user gesture, so if we showed
+      // the install dialog first, the subsequent Notification.requestPermission()
+      // would run without a gesture and silently resolve to "default" — and the
+      // push subscription would never be saved. (The banner only ever shows when
+      // permission is still "default", so a fresh prompt is always required.)
       await subscribe();
+
+      // Then offer the native install dialog as best-effort. It's secondary, and
+      // may no-op if the gesture was already spent above — push is the priority.
+      if (installPrompt) {
+        try {
+          await installPrompt.prompt();
+        } catch {
+          /* install needs its own gesture — ignore; push is already subscribed */
+        }
+      }
     } finally {
       setIsActioning(false);
     }

@@ -122,11 +122,16 @@ export function usePushNotifications() {
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       });
 
-      await fetch("/api/push/subscribe", {
+      const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, subscription: sub.toJSON() }),
       });
+      if (!res.ok) {
+        // The browser subscription exists but the backend didn't persist it —
+        // don't claim success, or notifyUser will have nothing to push to.
+        throw new Error(`Subscribe request failed: ${res.status}`);
+      }
 
       setIsSubscribed(true);
     } catch (err) {
