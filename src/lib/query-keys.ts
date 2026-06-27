@@ -71,4 +71,7 @@ export const queryKeys = {
   search: {
     results: (q: string) => ["search", "results", q] as const,
   },
+  notifications: {
+    list: ["notifications", "list"] as const,
+  },
 };

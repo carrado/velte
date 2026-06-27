@@ -4,6 +4,10 @@ import { Bell, CreditCard, Package, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { useNavigation } from "@/components/NavigationProgressContext";
+import {
+  markNotificationRead,
+  markAllNotificationsRead,
+} from "@/services/notifications";
 import type { AppNotification, NotificationType } from "@/types/notification";
 
 function formatDate(iso: string): string {
@@ -41,9 +45,12 @@ function NotificationItem({
   const { icon: Icon, bg, color } = TYPE_CONFIG[notification.type];
 
   function handleClick() {
-    markAsRead(notification.id);
+    if (!notification.read) {
+      markAsRead(notification.id); // optimistic
+      markNotificationRead(notification.id).catch(() => {}); // persist
+    }
     onClose?.();
-    navigate(notification.href);
+    if (notification.href) navigate(notification.href);
   }
 
   return (
@@ -99,6 +106,11 @@ export function NotificationList({
   const { notifications, markAllAsRead } = useNotificationsStore();
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  function handleMarkAllRead() {
+    markAllAsRead(); // optimistic
+    markAllNotificationsRead().catch(() => {}); // persist
+  }
+
   const sorted = [...notifications].sort((a, b) => {
     if (a.read !== b.read) return a.read ? 1 : -1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -136,7 +148,7 @@ export function NotificationList({
         </div>
         {unreadCount > 0 && (
           <button
-            onClick={markAllAsRead}
+            onClick={handleMarkAllRead}
             className="text-xs text-orange-600 hover:text-orange-700 font-medium transition-colors"
           >
             Mark all read

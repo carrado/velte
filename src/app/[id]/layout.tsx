@@ -23,7 +23,7 @@ import { useOnboardingStore } from "@/store/onboardingStore";
 import { usersApi } from "@/services/users";
 import { transactionService } from "@/services/transactions";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useNotificationSeeder } from "@/hooks/useNotificationSeeder";
+import { useNotificationsSync } from "@/hooks/useNotificationsSync";
 import { useUserStore } from "@/store/userStore";
 import { useIsFood } from "@/hooks/useBusinessType";
 
@@ -79,7 +79,7 @@ export default function DashboardRootLayout({
   const mainRef = useRef<HTMLElement>(null);
 
   const userId = pathname.split("/")[1];
-  useNotificationSeeder(userId);
+  useNotificationsSync(userId);
 
   // On the single-order route the title should be the product name, not the
   // order id. Re-uses the same query key as ViewOrderPage so the fetch dedupes.
@@ -155,7 +155,7 @@ export default function DashboardRootLayout({
             ref={mainRef}
             className="flex-1 overflow-y-auto pb-16 sm:pb-0 min-w-0"
           >
-            <div className="py-4 md:p-6 space-y-6 text-dash-body antialiased">
+            <div className="pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 md:p-6 space-y-6 text-dash-body antialiased">
               <Header
                 title={(() => {
                   if (orderDetailId)

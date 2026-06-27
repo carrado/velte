@@ -34,7 +34,7 @@ export default function BottomNav({
   const isActive = (segment: string) => pathname.includes(segment);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-10 md:hidden">
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-10 md:hidden pb-[env(safe-area-inset-bottom)]">
       <div className="flex justify-around items-center px-2 py-2">
         {items.map((item) => (
           <button

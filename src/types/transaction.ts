@@ -103,11 +103,21 @@ export interface InitiateOrderRefundPayload {
   /** Refund amount in NGN (naira, not kobo — backend converts) */
   amount: number;
   reason: string;
+  /**
+   * The customer's bank account the vendor refunded to. Required under the
+   * manual-transfer model: funds went directly to the vendor's bank, so the
+   * vendor sends the money back and we record where it went.
+   */
+  customerAccountNumber: string;
+  customerBankCode: string;
+  customerBankName: string;
+  customerAccountName: string;
 }
 
 /** Unwrapped payload of `POST /transactions/order-refund` (envelope `data`). */
 export interface OrderRefundResult {
-  refundReference: string; // Paystack refund id
+  /** Server-side record id for the refund (not a Paystack reference). */
+  refundReference: string;
   amount: number; // Amount in NGN (as sent)
   status: "pending" | "processed" | "failed";
 }

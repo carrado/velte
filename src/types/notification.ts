@@ -7,5 +7,5 @@ export interface AppNotification {
   body: string;
   read: boolean;
   createdAt: string; // ISO string
-  href: string;
+  href: string | null; // deep-link target; null for notifications with no destination
 }

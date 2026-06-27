@@ -84,9 +84,10 @@ export const transactionService = {
   },
 
   /**
-   * Initiate a refund for a cancelled order. The backend reverses the original
-   * Paystack charge back to the customer's payment source (card/bank) — no
-   * customer bank details are collected. Idempotent server-side.
+   * Record a refund for a cancelled order. Under the manual-transfer model the
+   * customer paid the vendor's bank directly, so there is no platform charge to
+   * reverse — the vendor sends the money back themselves and we record the
+   * destination account here. Idempotent server-side.
    */
   async initiateOrderRefund(
     payload: InitiateOrderRefundPayload,

@@ -23,6 +23,22 @@ const publicRoutes = [
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // 🚫 Block direct browser navigation to API routes.
+  // Real app calls go through fetch() (Sec-Fetch-Dest: empty / Sec-Fetch-Mode: cors|same-origin).
+  // Pasting an /api URL into the address bar is a top-level navigation
+  // (Sec-Fetch-Dest: document) — forbid those so the endpoint can't be loaded directly.
+  if (pathname.startsWith("/api")) {
+    const dest = request.headers.get("sec-fetch-dest");
+    const mode = request.headers.get("sec-fetch-mode");
+    if (dest === "document" || mode === "navigate") {
+      return new NextResponse("Forbidden", {
+        status: 403,
+        headers: { "content-type": "text/plain" },
+      });
+    }
+    return NextResponse.next();
+  }
+
   // ✅ Allow all static assets (images, etc.) – no authentication needed
   if (/\.(png|jpg|jpeg|gif|webp|svg|ico|manifest)$/i.test(pathname)) {
     return NextResponse.next();

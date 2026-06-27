@@ -28,13 +28,11 @@ import {
   Package,
   RefreshCw,
   AlertTriangle,
-  Banknote,
   Loader2,
 } from "lucide-react";
 import { useIsFood } from "@/hooks/useBusinessType";
 import { useOrdersConnection } from "@/hooks/useOrdersConnection";
 import { fetchOrderStats, updateOrderStatus } from "@/services/orders";
-import { transactionService } from "@/services/transactions";
 import type {
   Order,
   OrderFilter,
@@ -47,6 +45,7 @@ import type { FilterField } from "@/types/common";
 import FilterPopover from "../FilterPopover";
 import SortMenu from "../SortMenu";
 import TabBar from "../TabBar";
+import RefundTransferModal from "./RefundTransferModal";
 import { Input } from "../ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -99,89 +98,101 @@ function StatCard({
   );
 }
 
-// ── Status + payment badges ───────────────────────────────────────────────────
+// ── Status + payment indicators ───────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: OrderStatus }) {
-  switch (status) {
-    case "Delivered":
-      return (
-        <div className="flex items-center gap-1.5">
-          <CheckCircle2 size={15} className="text-[#21c45d]" />
-          <span className="text-dash-body text-[#21c45d] font-medium">
-            Delivered
-          </span>
-        </div>
-      );
-    case "Pending":
-      return (
-        <div className="flex items-center gap-1.5">
-          <Clock size={15} className="text-[#f59f0a]" />
-          <span className="text-dash-body text-[#f59f0a] font-medium">
-            Pending
-          </span>
-        </div>
-      );
-    case "Shipped":
-      return (
-        <div className="flex items-center gap-1.5">
-          <Truck size={15} className="text-[#374151]" />
-          <span className="text-dash-body text-[#374151] font-medium">
-            Shipped
-          </span>
-        </div>
-      );
-    case "Cancelled":
-      return (
-        <div className="flex items-center gap-1.5">
-          <XCircle size={15} className="text-[#ef4343]" />
-          <span className="text-dash-body text-[#ef4343] font-medium">
-            Cancelled
-          </span>
-        </div>
-      );
-    case "Preparing":
-      return (
-        <div className="flex items-center gap-1.5">
-          <ChefHat size={15} className="text-[#f97316]" />
-          <span className="text-dash-body text-[#f97316] font-medium">
-            Preparing
-          </span>
-        </div>
-      );
-    case "Ready":
-      return (
-        <div className="flex items-center gap-1.5">
-          <BellRing size={15} className="text-[#0891b2]" />
-          <span className="text-dash-body text-[#0891b2] font-medium">
-            Ready
-          </span>
-        </div>
-      );
-    case "OnTheWay":
-      return (
-        <div className="flex items-center gap-1.5">
-          <Bike size={15} className="text-[#7c3aed]" />
-          <span className="text-dash-body text-[#7c3aed] font-medium">
-            On the Way
-          </span>
-        </div>
-      );
-  }
+const STATUS_META: Record<
+  OrderStatus,
+  { label: string; dot: string; text: string; bar: string }
+> = {
+  Pending: {
+    label: "Pending",
+    dot: "bg-amber-500",
+    text: "text-amber-700",
+    bar: "bg-amber-400",
+  },
+  Preparing: {
+    label: "Preparing",
+    dot: "bg-orange-500",
+    text: "text-orange-700",
+    bar: "bg-orange-400",
+  },
+  Ready: {
+    label: "Ready",
+    dot: "bg-cyan-500",
+    text: "text-cyan-700",
+    bar: "bg-cyan-400",
+  },
+  OnTheWay: {
+    label: "On the Way",
+    dot: "bg-violet-500",
+    text: "text-violet-700",
+    bar: "bg-violet-400",
+  },
+  Shipped: {
+    label: "Shipped",
+    dot: "bg-blue-500",
+    text: "text-blue-700",
+    bar: "bg-blue-400",
+  },
+  Delivered: {
+    label: "Delivered",
+    dot: "bg-emerald-500",
+    text: "text-emerald-700",
+    bar: "bg-emerald-400",
+  },
+  Cancelled: {
+    label: "Cancelled",
+    dot: "bg-rose-500",
+    text: "text-rose-600",
+    bar: "bg-gray-300",
+  },
+};
+
+const PAYMENT_META: Record<
+  PaymentStatus,
+  { label: string; dot: string; text: string }
+> = {
+  Paid: { label: "Paid", dot: "bg-emerald-500", text: "text-emerald-700" },
+  Awaiting: { label: "Awaiting", dot: "bg-amber-500", text: "text-amber-700" },
+  Unpaid: { label: "Unpaid", dot: "bg-gray-300", text: "text-gray-500" },
+};
+
+function Indicator({
+  dot,
+  text,
+  label,
+}: {
+  dot: string;
+  text: string;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
+      <span className={cn("text-dash-body font-medium leading-none", text)}>
+        {label}
+      </span>
+    </span>
+  );
 }
 
-function PaymentBadge({ status }: { status: PaymentStatus }) {
-  const dot =
-    status === "Paid"
-      ? "bg-[#21c45d]"
-      : status === "Awaiting"
-        ? "bg-[#3b82f6]"
-        : "bg-[#f59f0a]";
+function MetaCell({
+  label,
+  align = "left",
+  children,
+}: {
+  label: string;
+  align?: "left" | "right";
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className={`w-2 h-2 rounded-full ${dot}`} />
-      <span className="text-dash-body text-[#111827]">
-        {status === "Awaiting" ? "Awaiting" : status}
-      </span>
+    <div
+      className={cn("bg-white px-4 py-2.5", align === "right" && "text-right")}
+    >
+      <p className="mb-1.5 text-[0.625rem] font-semibold uppercase tracking-wider text-gray-400">
+        {label}
+      </p>
+      {children}
     </div>
   );
 }
@@ -268,9 +279,14 @@ function OrderCard({
   onShipClick: () => void;
   onCancelClick: () => void;
 }) {
-  const actionCfg = isFood
-    ? (FOOD_NEXT_ACTION[order.status] ?? null)
-    : (RETAIL_NEXT_ACTION[order.status] ?? null);
+  // A manual-transfer payment held for the vendor to confirm blocks
+  // fulfillment — they can only verify it (on the order page) or cancel.
+  const awaitingPayment = order.payment === "Awaiting";
+  const actionCfg = awaitingPayment
+    ? null
+    : isFood
+      ? (FOOD_NEXT_ACTION[order.status] ?? null)
+      : (RETAIL_NEXT_ACTION[order.status] ?? null);
 
   const handlePrimaryClick = () => {
     if (!actionCfg) return;
@@ -285,13 +301,24 @@ function OrderCard({
     }
   };
 
+  const statusMeta = STATUS_META[order.status];
+  const paymentMeta = PAYMENT_META[order.payment];
+  const showCancel = order.status === "Pending";
+  const hasFooter = !!actionCfg || showCancel;
+
   return (
-    <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3.5">
+    <article className="group relative flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white transition-colors hover:border-gray-300 hover:shadow-[0_2px_8px_rgba(2,51,55,0.06)]">
+      {/* Status accent rail */}
+      <span
+        aria-hidden
+        className={cn("absolute inset-y-0 left-0 w-[3px]", statusMeta.bar)}
+      />
+
       {/* Header */}
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 p-4">
         <div
           className={cn(
-            "w-11 h-11 rounded-xl flex items-center justify-center font-bold text-dash-body flex-shrink-0 border overflow-hidden",
+            "flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 text-dash-secondary font-semibold",
             order.product.color,
           )}
         >
@@ -299,95 +326,102 @@ function OrderCard({
             <img
               src={order.product.image}
               alt={order.product.name}
-              className="w-full h-full object-cover"
+              className="h-full w-full object-cover"
             />
           ) : (
             order.product.initials
           )}
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-dash-body font-bold text-[#023337] leading-tight truncate">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-dash-heading font-semibold leading-snug text-[#023337]">
             {order.product.name}
           </p>
-          <p className="text-dash-caption text-gray-400 font-medium mt-0.5">
-            {order.orderId}
-          </p>
+          <div className="mt-1 flex items-center gap-1.5 text-dash-caption text-gray-400">
+            <span className="font-mono tracking-tight">{order.orderId}</span>
+            <span className="h-0.5 w-0.5 rounded-full bg-gray-300" />
+            <span>{order.date}</span>
+          </div>
         </div>
         <button
           onClick={onView}
           title="View order"
-          className="p-1.5 rounded-lg hover:bg-orange-50 text-gray-400 hover:text-orange-500 transition-colors cursor-pointer flex-shrink-0"
+          className="flex-shrink-0 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#023337] cursor-pointer"
         >
           <Eye size={15} />
         </button>
       </div>
 
-      {/* Date + price */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 text-dash-caption text-gray-400">
-          <Clock size={11} />
-          <span>{order.date}</span>
-        </div>
-        <span className="text-dash-body font-bold text-orange-500">
-          ₦{order.price.toFixed(2)}
-        </span>
+      {/* Meta strip — hairline-separated columns */}
+      <div className="grid grid-cols-3 gap-px border-t border-gray-100 bg-gray-100">
+        <MetaCell label="Status">
+          <Indicator
+            dot={statusMeta.dot}
+            text={statusMeta.text}
+            label={statusMeta.label}
+          />
+        </MetaCell>
+        <MetaCell label="Payment">
+          <Indicator
+            dot={paymentMeta.dot}
+            text={paymentMeta.text}
+            label={paymentMeta.label}
+          />
+        </MetaCell>
+        <MetaCell label="Total" align="right">
+          <span className="text-dash-body font-bold leading-none text-[#023337]">
+            ₦
+            {order.price.toLocaleString("en-NG", {
+              minimumFractionDigits: 2,
+            })}
+          </span>
+        </MetaCell>
       </div>
 
-      {/* Badges */}
-      <div className="flex items-center gap-3">
-        <PaymentBadge status={order.payment} />
-        <span className="w-px h-3.5 bg-gray-200" />
-        <StatusBadge status={order.status} />
-      </div>
-
-      {/* Primary action */}
-      {actionCfg && (
-        <button
-          onClick={handlePrimaryClick}
-          disabled={mutating}
-          className={cn(
-            "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-dash-body font-semibold transition-colors disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed",
-            actionCfg.className,
+      {/* Footer — actions */}
+      {hasFooter && (
+        <div className="border-t border-gray-100 p-3">
+          {awaitingPayment && showCancel && (
+            <div className="mb-2.5 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
+              <Clock
+                size={13}
+                className="mt-0.5 flex-shrink-0 text-amber-500"
+              />
+              <p className="text-dash-caption leading-snug text-amber-700">
+                Confirm payment before fulfilling — open the order to verify.
+              </p>
+            </div>
           )}
-        >
-          {mutating ? (
-            <RefreshCw size={14} className="animate-spin" />
-          ) : (
-            <actionCfg.icon size={15} />
-          )}
-          {actionCfg.label}
-        </button>
-      )}
-
-      {/* Cancel — Pending only, both types */}
-      {order.status === "Pending" && (
-        <button
-          onClick={onCancelClick}
-          disabled={mutating}
-          className="w-full text-dash-caption text-red-400 hover:text-red-600 font-medium transition-colors disabled:opacity-50 cursor-pointer"
-        >
-          Cancel order
-        </button>
-      )}
-
-      {/* Terminal state pills */}
-      {order.status === "Delivered" && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-100 rounded-xl">
-          <CheckCircle2 size={13} className="text-green-500 flex-shrink-0" />
-          <p className="text-dash-caption text-green-700 font-medium">
-            Order fulfilled
-          </p>
+          <div className="flex items-center gap-2">
+            {actionCfg && (
+              <button
+                onClick={handlePrimaryClick}
+                disabled={mutating}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#023337] py-2.5 text-dash-body font-semibold text-white transition-colors hover:bg-[#034950] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+              >
+                {mutating ? (
+                  <RefreshCw size={14} className="animate-spin" />
+                ) : (
+                  <actionCfg.icon size={15} />
+                )}
+                {actionCfg.label}
+              </button>
+            )}
+            {showCancel && (
+              <button
+                onClick={onCancelClick}
+                disabled={mutating}
+                className={cn(
+                  "flex items-center justify-center rounded-lg border border-gray-200 py-2.5 text-dash-body font-medium text-gray-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 cursor-pointer",
+                  actionCfg ? "px-3.5" : "flex-1",
+                )}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </div>
       )}
-      {order.status === "Cancelled" && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-100 rounded-xl">
-          <XCircle size={13} className="text-red-400 flex-shrink-0" />
-          <p className="text-dash-caption text-red-600 font-medium">
-            Order cancelled
-          </p>
-        </div>
-      )}
-    </div>
+    </article>
   );
 }
 
@@ -397,24 +431,27 @@ function OrderSkeleton() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3.5 animate-pulse"
+          className="overflow-hidden rounded-xl border border-gray-200 bg-white animate-pulse"
         >
-          <div className="flex items-start gap-3">
-            <div className="w-11 h-11 bg-gray-200 rounded-xl flex-shrink-0" />
-            <div className="flex-1 space-y-1.5">
-              <div className="h-3.5 bg-gray-200 rounded w-3/4" />
-              <div className="h-2.5 bg-gray-100 rounded w-1/2" />
+          <div className="flex items-start gap-3 p-4">
+            <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-gray-200" />
+            <div className="flex-1 space-y-2 pt-0.5">
+              <div className="h-3 w-3/4 rounded bg-gray-200" />
+              <div className="h-2.5 w-1/2 rounded bg-gray-100" />
             </div>
+            <div className="h-6 w-6 rounded-md bg-gray-100" />
           </div>
-          <div className="flex justify-between">
-            <div className="h-2.5 bg-gray-100 rounded w-24" />
-            <div className="h-3 bg-gray-200 rounded w-16" />
+          <div className="grid grid-cols-3 gap-px border-t border-gray-100 bg-gray-100">
+            {Array.from({ length: 3 }).map((_, j) => (
+              <div key={j} className="space-y-1.5 bg-white px-4 py-2.5">
+                <div className="h-2 w-10 rounded bg-gray-100" />
+                <div className="h-3 w-14 rounded bg-gray-200" />
+              </div>
+            ))}
           </div>
-          <div className="flex gap-3">
-            <div className="h-3 bg-gray-100 rounded w-16" />
-            <div className="h-3 bg-gray-100 rounded w-20" />
+          <div className="border-t border-gray-100 p-3">
+            <div className="h-9 rounded-lg bg-gray-100" />
           </div>
-          <div className="h-10 bg-gray-100 rounded-xl" />
         </div>
       ))}
     </div>
@@ -532,140 +569,6 @@ function CancelConfirmModal({
             className="flex-1 px-4 py-2.5 text-dash-body font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors cursor-pointer"
           >
             Yes, Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RefundTransferModal({
-  isOpen,
-  order,
-  onSkipAndCancel,
-  onTransferSuccess,
-}: {
-  isOpen: boolean;
-  order: Order | null;
-  onSkipAndCancel: () => void;
-  onTransferSuccess: () => void;
-}) {
-  const [isTransferring, setIsTransferring] = useState(false);
-
-  if (!isOpen || !order) return null;
-
-  const handleTransfer = async () => {
-    setIsTransferring(true);
-    try {
-      await transactionService.initiateOrderRefund({
-        orderId: order.id,
-        amount: order.price,
-        reason: `Refund for cancelled order ${order.orderId} — ${order.product.name}`,
-      });
-      toast.success(
-        `₦${order.price.toFixed(2)} refund queued successfully. Processing in 1–3 business days.`,
-      );
-      setTimeout(() => onTransferSuccess(), 600);
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Transfer failed. Please try again.";
-      toast.error(message);
-    } finally {
-      setIsTransferring(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex h-full items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center">
-            <Banknote size={18} className="text-white" />
-          </div>
-          <div>
-            <h3 className="text-dash-heading font-bold text-[#023337]">
-              Refund Transfer
-            </h3>
-            <p className="text-dash-caption text-gray-400">{order.orderId}</p>
-          </div>
-        </div>
-
-        <div className="px-6 py-5 space-y-4">
-          <div className="bg-orange-50 border border-orange-100 rounded-2xl px-5 py-4 text-center">
-            <p className="text-dash-caption text-orange-400 uppercase tracking-wide font-semibold mb-1">
-              Refund Amount
-            </p>
-            <p className="text-[2rem] font-black text-orange-600 leading-none">
-              ₦{order.price.toFixed(2)}
-            </p>
-            <p className="text-dash-caption text-orange-400 mt-1">
-              Full order value will be refunded
-            </p>
-          </div>
-
-          <div className="bg-gray-50 rounded-xl border border-gray-100 divide-y divide-gray-100">
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-dash-caption text-gray-400 font-medium">
-                Item
-              </span>
-              <span className="text-dash-caption font-semibold text-[#023337] max-w-[160px] text-right truncate">
-                {order.product.name}
-              </span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-dash-caption text-gray-400 font-medium">
-                Order ID
-              </span>
-              <span className="text-dash-caption font-semibold text-[#023337]">
-                {order.orderId}
-              </span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-dash-caption text-gray-400 font-medium">
-                Reason
-              </span>
-              <span className="text-dash-caption font-semibold text-[#023337]">
-                Order Cancelled
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded-xl">
-            <AlertTriangle
-              size={13}
-              className="text-blue-400 mt-0.5 flex-shrink-0"
-            />
-            <p className="text-dash-caption text-blue-600">
-              The order will be cancelled after the refund is initiated.
-              Skipping will cancel the order without a refund.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-3 px-6 pb-5">
-          <button
-            onClick={onSkipAndCancel}
-            disabled={isTransferring}
-            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            Skip & Cancel
-          </button>
-          <button
-            onClick={handleTransfer}
-            disabled={isTransferring}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {isTransferring ? (
-              <>
-                <Loader2 size={15} className="animate-spin" /> Sending…
-              </>
-            ) : (
-              <>
-                <Banknote size={15} /> Transfer ₦{order.price.toFixed(2)}
-              </>
-            )}
           </button>
         </div>
       </div>
@@ -860,7 +763,12 @@ export default function OrderManagement() {
 
   const handleCancelConfirm = () => {
     if (!cancelingOrder) return;
-    if (cancelingOrder.payment === "Paid") {
+    // "Awaiting" means the customer submitted a verified transfer receipt, so
+    // cancelling may require sending the money back — route through the refund.
+    if (
+      cancelingOrder.payment === "Paid" ||
+      cancelingOrder.payment === "Awaiting"
+    ) {
       setCancelModalStep("refund");
     } else {
       mutation.mutate({ id: cancelingOrder.id, status: "Cancelled" });
@@ -896,7 +804,10 @@ export default function OrderManagement() {
       />
       <CancelConfirmModal
         isOpen={cancelModalStep === "confirm"}
-        isPaid={cancelingOrder?.payment === "Paid"}
+        isPaid={
+          cancelingOrder?.payment === "Paid" ||
+          cancelingOrder?.payment === "Awaiting"
+        }
         onClose={() => {
           setCancelModalStep(null);
           setCancelingOrder(null);

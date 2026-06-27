@@ -12,8 +12,8 @@ import {
   rejectOrderPayment,
   getOrderReceiptImage,
 } from "@/services/orders";
-import { transactionService } from "@/services/transactions";
 import type { Order, OrderStatus } from "@/types/order";
+import RefundTransferModal from "@/components/orders/RefundTransferModal";
 import {
   ArrowLeft,
   Truck,
@@ -36,6 +36,7 @@ import {
   RefreshCw,
   Eye,
   Receipt,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -383,9 +384,14 @@ function JourneyCard({
   const isCancelled = order.status === "Cancelled";
   const isDelivered = order.status === "Delivered";
 
-  // Compute primary action
+  // Compute primary action. A manual-transfer payment awaiting the vendor's
+  // confirmation blocks fulfillment — they can only verify it (in the panel
+  // above) or cancel, never progress the order.
+  const awaitingPayment = order.payment === "Awaiting";
   let action: ActionDef | null = null;
-  if (!isFood) {
+  if (awaitingPayment) {
+    action = null;
+  } else if (!isFood) {
     if (order.status === "Pending")
       action = {
         label: "Mark as Shipped",
@@ -818,139 +824,6 @@ function CancelConfirmModal({
   );
 }
 
-function RefundTransferModal({
-  isOpen,
-  order,
-  onSkipAndCancel,
-  onTransferSuccess,
-}: {
-  isOpen: boolean;
-  order: Order;
-  onSkipAndCancel: () => void;
-  onTransferSuccess: () => void;
-}) {
-  const [isTransferring, setIsTransferring] = useState(false);
-
-  if (!isOpen) return null;
-
-  const handleTransfer = async () => {
-    setIsTransferring(true);
-    try {
-      await transactionService.initiateOrderRefund({
-        orderId: order.id,
-        amount: order.price,
-        reason: `Refund for cancelled order ${order.orderId} — ${order.product.name}`,
-      });
-      toast.success(
-        `₦${order.price.toFixed(2)} refund queued. Processing in 1–3 business days.`,
-      );
-      setTimeout(() => onTransferSuccess(), 600);
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Transfer failed. Please try again.";
-      toast.error(message);
-    } finally {
-      setIsTransferring(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center flex-shrink-0">
-            <Banknote size={18} className="text-white" />
-          </div>
-          <div>
-            <h3 className="text-dash-heading font-bold text-[#023337]">
-              Refund Transfer
-            </h3>
-            <p className="text-dash-caption text-gray-400">{order.orderId}</p>
-          </div>
-        </div>
-
-        <div className="px-6 py-5 space-y-4">
-          {/* Amount */}
-          <div className="bg-orange-50 border border-orange-100 rounded-2xl px-5 py-4 text-center">
-            <p className="text-dash-caption text-orange-400 uppercase tracking-wide font-semibold mb-1">
-              Refund Amount
-            </p>
-            <p className="text-[2rem] font-black text-orange-600 leading-none tracking-tight">
-              ₦{order.price.toFixed(2)}
-            </p>
-            <p className="text-dash-caption text-orange-400 mt-1">
-              Full order value will be refunded
-            </p>
-          </div>
-
-          {/* Summary */}
-          <div className="bg-gray-50 rounded-xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
-            {[
-              { label: "Item", value: order.product.name, truncate: true },
-              { label: "Order ID", value: order.orderId },
-              { label: "Reason", value: "Order Cancelled" },
-            ].map(({ label, value, truncate }) => (
-              <div
-                key={label}
-                className="flex items-center justify-between px-4 py-2.5"
-              >
-                <span className="text-dash-caption text-gray-400 font-medium flex-shrink-0">
-                  {label}
-                </span>
-                <span
-                  className={cn(
-                    "text-dash-caption font-semibold text-[#023337] text-right ml-4",
-                    truncate ? "truncate max-w-[160px]" : "",
-                  )}
-                >
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl">
-            <AlertTriangle
-              size={13}
-              className="text-blue-400 mt-0.5 flex-shrink-0"
-            />
-            <p className="text-dash-caption text-blue-600">
-              Skipping will cancel the order without a refund.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-3 px-6 pb-6">
-          <button
-            onClick={onSkipAndCancel}
-            disabled={isTransferring}
-            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            Skip & Cancel
-          </button>
-          <button
-            onClick={handleTransfer}
-            disabled={isTransferring}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {isTransferring ? (
-              <>
-                <Loader2 size={14} className="animate-spin" /> Sending…
-              </>
-            ) : (
-              <>
-                <Banknote size={14} /> Transfer ₦{order.price.toFixed(2)}
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function ViewOrderSkeleton() {
@@ -1086,6 +959,9 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
   }
 
   const isPaid = order.payment === "Paid";
+  // "Awaiting" means a verified transfer receipt is on file, so cancelling may
+  // require sending the money back — treat it like paid for the refund flow.
+  const needsRefund = isPaid || order.payment === "Awaiting";
   const steps = isFood ? FOOD_STEPS : RETAIL_STEPS;
   const activeIdx = steps.findIndex((s) => s.status === order.status);
   const resolvedActiveIdx = activeIdx === -1 ? steps.length - 1 : activeIdx;
@@ -1098,7 +974,7 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
   };
 
   const handleCancelConfirm = () => {
-    if (!isPaid) {
+    if (!needsRefund) {
       statusMutation.mutate({ id: order.id, status: "Cancelled" });
       setModalStep(null);
     } else {
@@ -1126,7 +1002,7 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
       />
       <CancelConfirmModal
         isOpen={modalStep === "cancel_confirm"}
-        isPaid={isPaid}
+        isPaid={needsRefund}
         onClose={() => setModalStep(null)}
         onConfirm={handleCancelConfirm}
       />
@@ -1139,50 +1015,114 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
 
       {/* Manual-transfer payment held for the vendor to confirm */}
       {order.payment === "Awaiting" && (
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 space-y-3">
-          <div>
-            <p className="text-dash-body font-semibold text-[#023337]">
-              Payment awaiting your confirmation
-            </p>
-            <p className="text-dash-caption text-gray-500 mt-0.5">
-              The customer uploaded a receipt we verified. Check it against your
-              bank credit alert, then confirm only if the transfer truly landed.
-            </p>
+        <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <Banknote size={13} className="text-amber-500" />
+              </div>
+              <h3 className="text-dash-heading font-bold text-[#023337]">
+                Payment Verification
+              </h3>
+            </div>
+            <span className="inline-flex items-center gap-1 text-dash-caption font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
+              <Clock size={10} /> Action needed
+            </span>
           </div>
-          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setShowReceipt(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
-            >
-              <Eye size={16} /> View receipt
-            </button>
-            <button
-              type="button"
-              onClick={() => confirmPaymentMutation.mutate(order.id)}
-              disabled={
-                confirmPaymentMutation.isPending ||
-                rejectPaymentMutation.isPending
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {confirmPaymentMutation.isPending
-                ? "Confirming…"
-                : "Confirm payment received"}
-            </button>
-            <button
-              type="button"
-              onClick={() => rejectPaymentMutation.mutate(order.id)}
-              disabled={
-                rejectPaymentMutation.isPending ||
-                confirmPaymentMutation.isPending
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {rejectPaymentMutation.isPending
-                ? "Rejecting…"
-                : "Couldn't find payment"}
-            </button>
+
+          {/* Body */}
+          <div className="px-5 py-5 space-y-4">
+            {/* Amount to verify */}
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center flex-shrink-0">
+                  <Banknote size={14} className="text-orange-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
+                    Amount to verify
+                  </p>
+                  <p className="text-dash-caption text-gray-500">
+                    Match against your bank credit alert
+                  </p>
+                </div>
+              </div>
+              <p className="text-dash-title font-black text-[#023337] whitespace-nowrap">
+                ₦
+                {order.price.toLocaleString("en-NG", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+            </div>
+
+            {/* Verified-receipt note */}
+            <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-3">
+              <ShieldCheck
+                size={15}
+                className="text-amber-500 mt-0.5 flex-shrink-0"
+              />
+              <p className="text-dash-caption text-amber-700 leading-relaxed">
+                The customer uploaded a receipt that passed our automated check.
+                Confirm only after you&apos;ve seen the matching credit alert in
+                your bank — an uploaded receipt alone isn&apos;t proof the money
+                arrived.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => confirmPaymentMutation.mutate(order.id)}
+                disabled={
+                  confirmPaymentMutation.isPending ||
+                  rejectPaymentMutation.isPending
+                }
+                className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl bg-green-500 hover:bg-green-600 !text-white text-dash-body font-semibold transition-all disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {confirmPaymentMutation.isPending ? (
+                  <>
+                    <RefreshCw size={15} className="animate-spin" />
+                    Confirming…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} />
+                    Confirm payment received
+                  </>
+                )}
+              </button>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowReceipt(true)}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-dash-body font-medium text-[#023337] border border-gray-200 bg-white hover:bg-gray-50 transition-all cursor-pointer"
+                >
+                  <Eye size={15} /> View receipt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => rejectPaymentMutation.mutate(order.id)}
+                  disabled={
+                    rejectPaymentMutation.isPending ||
+                    confirmPaymentMutation.isPending
+                  }
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-dash-body font-medium text-red-600 border border-red-200 bg-white hover:bg-red-50 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {rejectPaymentMutation.isPending ? (
+                    <>
+                      <RefreshCw size={15} className="animate-spin" />{" "}
+                      Rejecting…
+                    </>
+                  ) : (
+                    <>
+                      <XCircle size={15} /> Couldn&apos;t find it
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1190,50 +1130,75 @@ export default function ViewOrderPage({ orderId }: { orderId: string }) {
       {/* Receipt preview — the buyer's uploaded transfer receipt */}
       {showReceipt && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
           onClick={() => setShowReceipt(false)}
         >
           <div
-            className="relative max-h-[85vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-4 shadow-xl"
+            className="relative flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between">
-              <p className="flex items-center gap-2 text-dash-body font-semibold text-[#023337]">
-                <Receipt size={16} /> Customer&apos;s receipt
-              </p>
+            {/* Header */}
+            <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+              <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center flex-shrink-0">
+                <Receipt size={18} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-dash-heading font-bold text-[#023337]">
+                  Customer&apos;s Receipt
+                </h3>
+                <p className="text-dash-caption text-gray-400">
+                  {order.orderId}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowReceipt(false)}
-                className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 cursor-pointer"
                 aria-label="Close"
               >
                 <XCircle size={20} />
               </button>
             </div>
 
-            {receiptQuery.isLoading && (
-              <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
-                <Loader2 size={28} className="animate-spin" />
-                <p className="text-dash-caption">Loading receipt…</p>
+            {/* Body */}
+            <div className="overflow-auto px-6 py-5">
+              {/* Amount reminder */}
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-gray-50 border border-gray-100 px-4 py-2.5">
+                <span className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
+                  Expected amount
+                </span>
+                <span className="text-dash-body font-black text-[#023337] whitespace-nowrap">
+                  ₦
+                  {order.price.toLocaleString("en-NG", {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
               </div>
-            )}
-            {receiptQuery.isError && (
-              <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-gray-500">
-                <AlertTriangle size={28} className="text-amber-400" />
-                <p className="text-dash-caption">
-                  Couldn&apos;t load the receipt. It may have expired — ask the
-                  customer to resend it.
-                </p>
-              </div>
-            )}
-            {receiptQuery.data && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={receiptQuery.data}
-                alt="Payment receipt uploaded by the customer"
-                className="w-full rounded-xl border border-gray-100"
-              />
-            )}
+
+              {receiptQuery.isLoading && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
+                  <Loader2 size={28} className="animate-spin" />
+                  <p className="text-dash-caption">Loading receipt…</p>
+                </div>
+              )}
+              {receiptQuery.isError && (
+                <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-gray-500">
+                  <AlertTriangle size={28} className="text-amber-400" />
+                  <p className="text-dash-caption">
+                    Couldn&apos;t load the receipt. It may have expired — ask
+                    the customer to resend it.
+                  </p>
+                </div>
+              )}
+              {receiptQuery.data && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={receiptQuery.data}
+                  alt="Payment receipt uploaded by the customer"
+                  className="w-full rounded-xl border border-gray-100"
+                />
+              )}
+            </div>
           </div>
         </div>
       )}
