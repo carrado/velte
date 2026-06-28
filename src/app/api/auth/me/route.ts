@@ -12,7 +12,10 @@ export async function GET() {
       "/auth/me",
       { cookie: gate.cookie },
     );
-    return NextResponse.json({ user });
+    // The backend's /auth/me returns the raw Mongoose doc (`_id`), whereas login
+    // returns `id`. The frontend `User` type — and features like push subscribe —
+    // depend on `id`, so normalise it here or a getMe() refresh wipes `user.id`.
+    return NextResponse.json({ user: { ...user, id: user.id ?? user._id } });
   } catch (err) {
     return fail(err, "Failed to load profile.");
   }
