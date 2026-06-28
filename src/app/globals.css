@@ -194,6 +194,17 @@ button {
   }
 }
 
+/* Installed PWA only: paint the document black so the hand-off from the native
+   launch splash (dark V image on iOS, black bg + icon on Android) to the web view
+   stays dark instead of flashing the default light `--background`. Covers the
+   moment before React mounts the AppInitOverlay, plus any overscroll/rubber-band. */
+@media (display-mode: standalone) {
+  html,
+  body {
+    background-color: #000 !important;
+  }
+}
+
 /* Installed PWA only: frost the translucent status-bar strip so the OS glyphs
    stay legible over light content, and give it a subtle native-app depth. The
    status bar itself is set translucent via apple-mobile-web-app-status-bar-style. */

@@ -4,6 +4,14 @@ import { NextResponse } from "next/server";
 // Route handlers bypass Next.js's dev-server JS pipeline so the browser
 // receives the file without any redirect.
 const SW = `const CACHE_NAME = "velte-cache-v1";
+const VAPID_PUBLIC_KEY = "${process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -56,6 +64,34 @@ self.addEventListener("push", (event) => {
           clients.forEach((c) => c.postMessage({ type: "velte-push" })),
         ),
     ]),
+  );
+});
+
+self.addEventListener("pushsubscriptionchange", (event) => {
+  // The browser rotated or expired this subscription (Chrome key rotation, a
+  // web-push 410, cleared site data, etc.). If we don't re-subscribe and
+  // re-register right now, the backend row 410s and gets pruned, leaving this
+  // device with no endpoint — push then silently stops until the next app open.
+  // Re-subscribing here needs no user gesture and no auth prompt; the POST to
+  // /api/push/subscribe rides the existing same-origin auth cookie.
+  event.waitUntil(
+    (async () => {
+      try {
+        const sub =
+          event.newSubscription ||
+          (await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+          }));
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscription: sub.toJSON() }),
+        });
+      } catch (err) {
+        // Best-effort — the app-load self-heal retries on next open.
+      }
+    })(),
   );
 });
 

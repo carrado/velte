@@ -82,30 +82,57 @@ export function usePushNotifications() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Self-heal: if the browser still holds a subscription and permission is
-  // granted, make sure the backend has it. A web-push 410 prunes the server row
-  // while the browser keeps the subscription object — silently desyncing the two,
-  // so notifyUser finds nothing to push to even though the UI shows "subscribed".
-  // Re-POSTing the live subscription on load repairs that. Idempotent (the backend
-  // upserts by endpoint), and a dead endpoint simply 410s again and gets pruned.
-  useEffect(() => {
+  // Self-heal: with permission already granted, make sure a live subscription
+  // exists AND the backend has it. Two desyncs to repair:
+  //  1. Browser holds a subscription but the backend pruned its row (a web-push
+  //     410 deletes server-side while the browser keeps the object) — re-POST it.
+  //  2. The browser dropped the subscription entirely (410/rotation/cleared data)
+  //     and pushsubscriptionchange never fired because the app wasn't open — so
+  //     getSubscription() is null. Re-create it (subscribe needs no gesture once
+  //     permission is granted), otherwise the device has no endpoint at all.
+  // Idempotent: the backend upserts by endpoint, and a dead endpoint just 410s
+  // again and gets pruned.
+  const resyncSubscription = useCallback(async () => {
     if (!isSupported || !user?.id) return;
     if (Notification.permission !== "granted") return;
-    navigator.serviceWorker.ready.then(async (reg) => {
-      const sub = await reg.pushManager.getSubscription();
-      if (!sub) return;
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) return;
       try {
-        const res = await fetch("/api/push/subscribe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: user.id, subscription: sub.toJSON() }),
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
         });
-        if (res.ok) setIsSubscribed(true);
       } catch {
-        /* best-effort resync — leave UI state as-is on failure */
+        return; // can't re-create (e.g. offline) — try again next time
       }
-    });
+    }
+    try {
+      const res = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, subscription: sub.toJSON() }),
+      });
+      if (res.ok) setIsSubscribed(true);
+    } catch {
+      /* best-effort resync — leave UI state as-is on failure */
+    }
   }, [isSupported, user?.id]);
+
+  // Run the repair on mount (cold launch) AND every time the app returns to the
+  // foreground. A resumed-from-background PWA doesn't reload, so the mount run
+  // alone would miss a subscription the browser rotated or dropped while we were
+  // backgrounded; the visibilitychange re-run closes that window.
+  useEffect(() => {
+    resyncSubscription();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") resyncSubscription();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [resyncSubscription]);
 
   // Uninstall detection: beforeinstallprompt fires again after the user
   // removes the PWA. If we had recorded a successful install, treat this as

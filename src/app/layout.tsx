@@ -181,19 +181,14 @@ export const metadata: Metadata = {
   },
 };
 
-// Translucent theme color (frosted status/toolbar where the browser honours alpha)
-// + viewport-fit:cover so env(safe-area-inset-*) is populated on notched devices.
+// Black theme color so the OS chrome / PWA splash strip matches the dark launch
+// experience (never the old whitish light-mode value) + viewport-fit:cover so
+// env(safe-area-inset-*) is populated on notched devices.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    {
-      media: "(prefers-color-scheme: light)",
-      color: "rgba(255, 255, 255, 0.6)",
-    },
-    { media: "(prefers-color-scheme: dark)", color: "rgba(2, 51, 55, 0.6)" },
-  ],
+  themeColor: "#000000",
 };
 
 export default function RootLayout({
