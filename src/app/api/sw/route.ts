@@ -13,6 +13,18 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
+// A subscription created with a rotated (old) VAPID key 403s forever on the
+// backend, so it must be replaced. Returns false when the key differs; true when
+// it matches or the browser doesn't expose the key (can't verify — leave as-is).
+function subscriptionMatchesKey(sub, vapidKey) {
+  const existing = sub.options && sub.options.applicationServerKey;
+  if (!existing) return true;
+  const current = urlBase64ToUint8Array(vapidKey);
+  const a = new Uint8Array(existing);
+  if (a.length !== current.length) return false;
+  return a.every((byte, i) => byte === current[i]);
+}
+
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(["/"])));
@@ -77,12 +89,25 @@ self.addEventListener("pushsubscriptionchange", (event) => {
   event.waitUntil(
     (async () => {
       try {
-        const sub =
+        let sub =
           event.newSubscription ||
-          (await self.registration.pushManager.subscribe({
+          (await self.registration.pushManager.getSubscription());
+        // The replacement the browser hands us (or the one already on record)
+        // may still carry the rotated key — drop it so we re-create with ours.
+        if (sub && !subscriptionMatchesKey(sub, VAPID_PUBLIC_KEY)) {
+          try {
+            await sub.unsubscribe();
+          } catch {
+            /* ignore — subscribe() below replaces it */
+          }
+          sub = null;
+        }
+        if (!sub) {
+          sub = await self.registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-          }));
+          });
+        }
         await fetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -19,6 +19,25 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0))).buffer;
 }
 
+// True if the existing subscription was created with the same VAPID key we sign
+// with now. A subscription bound to a ROTATED (old) key 403s forever on the
+// backend ("VAPID credentials do not correspond to the credentials used to
+// create the subscriptions") and gets pruned then re-added in an endless loop —
+// so we must detect the mismatch and force a fresh subscribe. When the browser
+// doesn't expose options.applicationServerKey we can't compare, so we assume a
+// match to avoid needlessly churning the subscription on every load.
+function subscriptionMatchesKey(
+  sub: PushSubscription,
+  vapidKey: string,
+): boolean {
+  const existing = sub.options.applicationServerKey;
+  if (!existing) return true;
+  const current = new Uint8Array(urlBase64ToUint8Array(vapidKey));
+  const a = new Uint8Array(existing);
+  if (a.length !== current.length) return false;
+  return a.every((byte, i) => byte === current[i]);
+}
+
 // Resets the promotion cycle — called on uninstall detection.
 function resetInstallCycle() {
   localStorage.removeItem(WAS_INSTALLED_KEY);
@@ -95,11 +114,25 @@ export function usePushNotifications() {
   const resyncSubscription = useCallback(async () => {
     if (!isSupported || !user?.id) return;
     if (Notification.permission !== "granted") return;
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidKey) return;
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
+
+    // Stale-key repair: a subscription created with a rotated VAPID key can't be
+    // pushed to (backend 403), so drop it and let the block below re-create it
+    // with the current key. This is what makes a key rotation self-correct on
+    // the next app open instead of looping forever.
+    if (sub && !subscriptionMatchesKey(sub, vapidKey)) {
+      try {
+        await sub.unsubscribe();
+      } catch {
+        /* ignore — subscribe() below replaces it regardless */
+      }
+      sub = null;
+    }
+
     if (!sub) {
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidKey) return;
       try {
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
@@ -168,6 +201,14 @@ export function usePushNotifications() {
       const perm = await Notification.requestPermission();
       setPermission(perm as NotificationPermission);
       if (perm !== "granted") return;
+
+      // A subscription bound to a different (rotated) key must be removed first —
+      // subscribe() rejects with InvalidStateError if one already exists with a
+      // mismatched applicationServerKey.
+      const existing = await reg.pushManager.getSubscription();
+      if (existing && !subscriptionMatchesKey(existing, vapidKey)) {
+        await existing.unsubscribe();
+      }
 
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
