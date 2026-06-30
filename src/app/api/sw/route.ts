@@ -122,19 +122,38 @@ self.addEventListener("pushsubscriptionchange", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "/";
+  // Resolve to an absolute, same-origin URL so url comparison, navigate() and
+  // openWindow() all agree on the target.
+  const target = new URL(
+    event.notification.data?.url || "/",
+    self.location.origin,
+  ).href;
 
   event.waitUntil(
-    clients
+    self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
+        // 1. A window already on the target page — just focus it (no reload).
         for (const client of clientList) {
-          if (client.url.includes(url) && "focus" in client) {
+          if (client.url === target && "focus" in client) {
             return client.focus();
           }
         }
-        if (clients.openWindow) {
-          return clients.openWindow(url);
+        // 2. Any open app window — focus the installed PWA and steer it to the
+        //    order, instead of spawning a second window/tab.
+        for (const client of clientList) {
+          if ("focus" in client) {
+            return client.focus().then((c) => {
+              if (c && "navigate" in c) {
+                return c.navigate(target).catch(() => c);
+              }
+              return c;
+            });
+          }
+        }
+        // 3. Nothing open — launch the PWA at the target.
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(target);
         }
       }),
   );
