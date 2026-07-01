@@ -6,14 +6,9 @@ import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
 import {
   AlignLeft,
-  LayoutDashboard,
-  ShoppingBag,
-  Users,
-  CreditCard,
+  Wallet,
   PlusCircle,
   List,
-  Star,
-  Shield,
   Settings,
   LogOut,
   X,
@@ -99,36 +94,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const sections: NavSection[] = [
     {
-      title: "Main menu",
-      items: [
-        {
-          label: "Dashboard",
-          icon: <LayoutDashboard size={16} />,
-          href: "/dashboard",
-          mobile: false,
-        },
-        {
-          label: "Order Management",
-          icon: <ShoppingBag size={16} />,
-          href: "orders",
-          mobile: false,
-        },
-        {
-          label: "Customers",
-          icon: <Users size={16} />,
-          href: "customers",
-          mobile: false,
-        },
-        {
-          label: "Transaction",
-          icon: <CreditCard size={16} />,
-          href: "transactions",
-          mobile: true,
-          id: "transaction-nav",
-        },
-      ],
-    },
-    {
       title: isFood ? "My Menu" : "Products",
       items: [
         {
@@ -146,13 +111,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       ],
     },
     {
-      title: "Admin",
+      title: "Account",
       items: [
         {
-          label: "AI Set up",
-          icon: <Shield size={16} />,
-          href: "ai-setup",
-          id: "ai-settings-nav",
+          label: "Wallet",
+          icon: <Wallet size={16} />,
+          href: "wallet",
+          id: "wallet-nav",
           mobile: true,
         },
         {
@@ -161,12 +126,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           href: "settings",
           mobile: true,
           id: "settings-nav",
-        },
-        {
-          label: "Billing",
-          icon: <CreditCard size={16} />,
-          href: "billing",
-          mobile: true,
         },
       ],
     },

@@ -4,7 +4,6 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import Providers from "./providers";
 import { Toaster } from "sonner";
-import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -174,11 +173,6 @@ export const metadata: Metadata = {
   other: {
     "mobile-web-app-capable": "yes",
   },
-  verification: {
-    other: {
-      "facebook-domain-verification": "7q3uw3yspdq5xr4ieiougzye5oecxu",
-    },
-  },
 };
 
 // Black theme color so the OS chrome / PWA splash strip matches the dark launch
@@ -200,7 +194,6 @@ export default function RootLayout({
     <html lang="en" className={cn("font-sans antialiased", inter.variable)}>
       <body>
         <Providers>
-          <ServiceWorkerRegistrar />
           {children}
           <Toaster
             position="top-right"

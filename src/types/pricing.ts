@@ -1,4 +1,5 @@
-import type { SubscriptionTier } from "./subscription";
+/** Marketing plan tier ids. */
+export type SubscriptionTier = "basic" | "pro";
 
 export type BillingPeriod = "monthly" | "annual";
 

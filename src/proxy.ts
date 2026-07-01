@@ -79,30 +79,24 @@ export async function proxy(request: NextRequest) {
       return response;
     }
 
-    // 1) Logged-in user visits "/" -> "/:id/dashboard"
+    // 1) Logged-in user visits "/" -> "/:id/products"
     if (pathname === "/") {
-      return NextResponse.redirect(
-        new URL(`/${userId}/dashboard`, request.url),
-      );
+      return NextResponse.redirect(new URL(`/${userId}/products`, request.url));
     }
 
     // Break path into segments
     const segments = pathname.split("/").filter(Boolean);
 
-    // 2) Logged-in user visits "/:id" -> redirect to "/:id/dashboard"
+    // 2) Logged-in user visits "/:id" -> redirect to "/:id/products"
     if (segments.length === 1) {
-      // No need to compare with userId – just redirect to dashboard
-      return NextResponse.redirect(
-        new URL(`/${userId}/dashboard`, request.url),
-      );
+      // No need to compare with userId – just redirect to the products home
+      return NextResponse.redirect(new URL(`/${userId}/products`, request.url));
     }
 
     // 3) Logged-in user visits "/:id/anything" -> verify id matches token
     const routeId = segments[0];
     if (routeId !== userId) {
-      return NextResponse.redirect(
-        new URL(`/${userId}/dashboard`, request.url),
-      );
+      return NextResponse.redirect(new URL(`/${userId}/products`, request.url));
     }
 
     const response = NextResponse.next();

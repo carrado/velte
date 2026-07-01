@@ -2,15 +2,10 @@ import { api } from "@/lib/api-client";
 import { useUserStore } from "@/store/userStore";
 import type {
   User,
-  UserNotifications,
   UserCompany,
   UserPreferences,
   BusinessType,
 } from "@/types/user";
-import type { InvoiceReceiptSettings } from "@/types/invoice";
-import type { AiSettings } from "@/types/ai-settings";
-
-export type { UserNotifications };
 
 export interface UpdateProfileData {
   name?: string;
@@ -86,42 +81,6 @@ export const settingsApi = {
       data,
     );
     return { message: message ?? "" };
-  },
-
-  getNotificationSettings: async (): Promise<UserNotifications> => {
-    const { notifications } = await api.get<{
-      notifications: UserNotifications;
-    }>("/api/auth/notifications");
-    return notifications;
-  },
-
-  saveNotificationSettings: async (
-    data: Partial<UserNotifications>,
-  ): Promise<UserNotifications> => {
-    const { notifications } = await api.put<{
-      notifications: UserNotifications;
-    }>("/api/auth/notifications", data);
-    return notifications;
-  },
-
-  getInvoiceSettings: async (): Promise<InvoiceReceiptSettings> => {
-    return api.get<InvoiceReceiptSettings>("/api/auth/invoice-settings");
-  },
-
-  // Accepts a partial document (the UI saves one tab — `invoice` or `receipt` —
-  // at a time) and returns the full, merged settings.
-  saveInvoiceSettings: async (
-    data: Partial<InvoiceReceiptSettings>,
-  ): Promise<InvoiceReceiptSettings> => {
-    return api.put<InvoiceReceiptSettings>("/api/auth/invoice-settings", data);
-  },
-
-  getAiSettings: async (): Promise<AiSettings> => {
-    return api.get<AiSettings>("/api/auth/ai-settings");
-  },
-
-  saveAiSettings: async (data: Partial<AiSettings>): Promise<AiSettings> => {
-    return api.put<AiSettings>("/api/auth/ai-settings", data);
   },
 
   updateBusinessType: async (businessType: BusinessType): Promise<User> => {

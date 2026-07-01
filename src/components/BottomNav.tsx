@@ -2,13 +2,7 @@
 "use client";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
-import {
-  LayoutDashboard,
-  ShoppingBag,
-  Users,
-  LayoutGrid,
-  Menu,
-} from "lucide-react";
+import { LayoutGrid, Wallet, Settings, Menu } from "lucide-react";
 
 export default function BottomNav({
   onMenuClick,
@@ -21,14 +15,9 @@ export default function BottomNav({
   const userId = pathname.split("/")[1];
 
   const items = [
-    {
-      label: "Dashboard",
-      icon: <LayoutDashboard size={20} />,
-      segment: "dashboard",
-    },
-    { label: "Orders", icon: <ShoppingBag size={20} />, segment: "orders" },
-    { label: "Customers", icon: <Users size={20} />, segment: "customers" },
     { label: "Products", icon: <LayoutGrid size={20} />, segment: "products" },
+    { label: "Wallet", icon: <Wallet size={20} />, segment: "wallet" },
+    { label: "Settings", icon: <Settings size={20} />, segment: "settings" },
   ];
 
   const isActive = (segment: string) => pathname.includes(segment);

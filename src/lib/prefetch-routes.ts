@@ -1,28 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
-import {
-  fetchDashboardStats,
-  fetchWeeklyReport,
-  fetchUsersActivity,
-  fetchSalesByMonths,
-  fetchTransactions,
-  fetchTopProducts,
-  fetchBestSelling,
-  fetchAddableProducts,
-} from "@/services/dashboard";
-import { fetchOrders, fetchOrderStats, getOrder } from "@/services/orders";
-import type { OrdersPage } from "@/types/order";
 import { categoriesApi } from "@/services/products";
-import { fetchCustomers } from "@/services/customers";
-import { transactionService } from "@/services/transactions";
-import { getAISetupStatus } from "@/services/aiSetup";
-import { getSubscriptionStatus } from "@/services/subscription";
 import { settingsApi } from "@/services/settings";
-import { fetchWhatsAppProfile } from "@/services/whatsappProfile";
-import {
-  DEFAULT_ORDERS_LIST_QUERY,
-  DEFAULT_TRANSACTIONS_LIST_PARAMS,
-  queryKeys,
-} from "@/lib/query-keys";
+import { queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
 
 export type PrefetchTask = {
@@ -41,96 +20,7 @@ export function getRouteKey(href: string): string {
 }
 
 export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
-  // Dynamic route: single order detail (orders/<orderId>). Prefetch so the
-  // detail page renders from cache instead of fetching on mount.
-  const orderDetailMatch = routeKey.match(/^orders\/([^/]+)$/);
-  if (orderDetailMatch) {
-    const orderId = orderDetailMatch[1];
-    return [
-      {
-        queryKey: queryKeys.orders.detail(orderId),
-        queryFn: () => getOrder(orderId),
-      },
-    ];
-  }
-
   switch (routeKey) {
-    case "dashboard":
-      return [
-        {
-          queryKey: queryKeys.dashboard.stats,
-          queryFn: fetchDashboardStats,
-        },
-        {
-          queryKey: queryKeys.dashboard.bestSelling,
-          queryFn: fetchBestSelling,
-        },
-        {
-          queryKey: queryKeys.dashboard.monthlySales,
-          queryFn: fetchSalesByMonths,
-        },
-        {
-          queryKey: queryKeys.dashboard.topProducts,
-          queryFn: fetchTopProducts,
-        },
-        {
-          queryKey: queryKeys.dashboard.transactions,
-          queryFn: fetchTransactions,
-        },
-        {
-          queryKey: queryKeys.dashboard.usersActivity,
-          queryFn: fetchUsersActivity,
-        },
-        {
-          queryKey: queryKeys.dashboard.weeklyReport("this_week"),
-          queryFn: () => fetchWeeklyReport("this_week"),
-        },
-        {
-          queryKey: queryKeys.dashboard.addableProducts,
-          queryFn: fetchAddableProducts,
-        },
-      ];
-    case "orders":
-      return [
-        {
-          queryKey: queryKeys.orders.list(DEFAULT_ORDERS_LIST_QUERY),
-          queryFn: ({ pageParam } = {}) =>
-            fetchOrders({
-              ...DEFAULT_ORDERS_LIST_QUERY,
-              page: (pageParam as number) ?? 1,
-            }),
-          infinite: {
-            initialPageParam: 1,
-            getNextPageParam: (lastPage) => {
-              const p = (lastPage as OrdersPage).pageInfo;
-              return p.page < p.totalPages ? p.page + 1 : undefined;
-            },
-          },
-        },
-        {
-          queryKey: queryKeys.orders.stats,
-          queryFn: fetchOrderStats,
-        },
-      ];
-    case "customers":
-      return [
-        {
-          queryKey: queryKeys.customers.list,
-          queryFn: fetchCustomers,
-        },
-      ];
-    case "transactions":
-      return [
-        {
-          queryKey: queryKeys.transactions.list(
-            DEFAULT_TRANSACTIONS_LIST_PARAMS,
-          ),
-          queryFn: () =>
-            transactionService.getTransactions(
-              DEFAULT_TRANSACTIONS_LIST_PARAMS,
-            ),
-        },
-      ];
     case "products": {
       const defaultParams = {
         page: 1,
@@ -149,33 +39,11 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
         },
       ];
     }
-    case "ai-setup":
-      return [
-        {
-          queryKey: queryKeys.aiSetup.status,
-          queryFn: getAISetupStatus,
-        },
-      ];
-    case "billing":
-      return [
-        {
-          queryKey: queryKeys.subscription.status,
-          queryFn: getSubscriptionStatus,
-        },
-      ];
     case "settings":
       return [
         {
           queryKey: queryKeys.settings.profile,
           queryFn: settingsApi.fetchProfile,
-        },
-        {
-          queryKey: queryKeys.settings.notifications,
-          queryFn: settingsApi.getNotificationSettings,
-        },
-        {
-          queryKey: queryKeys.settings.whatsappProfile,
-          queryFn: fetchWhatsAppProfile,
         },
       ];
     default:

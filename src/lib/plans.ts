@@ -1,5 +1,4 @@
-import type { BillingPeriod, PricingPlan } from "@/types/pricing";
-import type { SubscriptionTier } from "@/types/subscription";
+import type { PricingPlan } from "@/types/pricing";
 
 /** Annual discount applied to (monthlyPrice × 12). */
 export const ANNUAL_DISCOUNT = 0.2;
@@ -60,11 +59,3 @@ export const annualTotal = (monthlyPrice: number) =>
 /** Effective monthly price when billed annually. */
 export const annualMonthly = (monthlyPrice: number) =>
   Math.round(monthlyPrice * (1 - ANNUAL_DISCOUNT));
-
-/** Charged amount for a plan over the chosen billing period. */
-export const planTotal = (monthlyPrice: number, period: BillingPeriod) =>
-  period === "annual" ? annualTotal(monthlyPrice) : monthlyPrice;
-
-/** Look up a plan by its tier id. */
-export const planByTier = (tier: SubscriptionTier | null) =>
-  tier ? (plans.find((p) => p.id === tier) ?? null) : null;

@@ -36,7 +36,7 @@ export default function Login() {
       usersApi.login(data),
     onSuccess: (response) => {
       toast.success("Welcome back!");
-      router.push(`/${response.user.id}/dashboard`);
+      router.push(`/${response.user.id}/products`);
     },
     onError: (error: unknown, variables) => {
       const message =
