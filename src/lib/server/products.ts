@@ -36,6 +36,8 @@ interface ApiModifier {
 interface ApiProduct {
   id: string;
   name: string;
+  kind?: "product" | "service";
+  price_from?: boolean;
   description: string | null;
   category_id: string;
   price: number;
@@ -143,6 +145,8 @@ function mapProduct(p: ApiProduct): CategoryProduct {
   return {
     id: p.id,
     name: p.name,
+    kind: p.kind ?? "product",
+    priceFrom: p.price_from ?? false,
     description: p.description,
     categoryId: p.category_id,
     price: p.price / 100,

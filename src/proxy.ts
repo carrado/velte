@@ -18,6 +18,7 @@ const publicRoutes = [
   "/payment/callback",
   "/api",
   "/track",
+  "/store",
 ];
 
 export async function proxy(request: NextRequest) {

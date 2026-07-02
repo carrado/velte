@@ -18,17 +18,14 @@ export default function Pricing() {
           className="text-center mb-16"
         >
           <span className="inline-block text-xs font-semibold tracking-widest text-[rgb(247,107,16)] uppercase mb-4">
-            Transparent pricing
+            Pay for results, not seats
           </span>
           <h2 className="text-4xl lg:text-5xl font-bold text-gray-950 tracking-tight mb-5 text-balance">
-            Two plans. Zero guesswork.
+            No subscription. Pay per lead.
           </h2>
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
-            Start free for 7 days. Pick{" "}
-            <span className="font-semibold text-gray-700">Basic</span> to let AI
-            run your WhatsApp sales — or go{" "}
-            <span className="font-semibold text-gray-700">Pro</span> and have AI
-            create and post your ads too.
+            Buyers searching nearby find you by meaning, distance and trust —
+            you only pay when we send you a real lead.
           </p>
         </motion.div>
 
@@ -41,7 +38,7 @@ export default function Pricing() {
             href="/pricing"
             className="inline-flex items-center gap-1.5 text-[rgb(247,107,16)] font-semibold text-sm hover:gap-2.5 transition-all"
           >
-            Compare all features
+            Learn more
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>

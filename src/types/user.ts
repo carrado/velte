@@ -7,17 +7,13 @@ export interface UserCompany {
   phone?: string;
 }
 
-export interface UserNotifications {
-  orders: boolean;
-  invoices: boolean;
-  invoiceThreshold: number;
-  productUpdates: boolean;
-  push: boolean;
+export interface UserPreferences {
+  defaultCurrency?: string;
 }
 
-export interface UserPreferences {
-  notifications: UserNotifications;
-  defaultCurrency?: string;
+export interface UserLocation {
+  lat: number;
+  lng: number;
 }
 
 export interface User {
@@ -35,4 +31,6 @@ export interface User {
   preferences?: UserPreferences;
   onboarding: boolean;
   businessType?: BusinessType;
+  area?: string;
+  location?: UserLocation | null;
 }

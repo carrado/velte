@@ -7,18 +7,20 @@ import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
 import { NavigationProgressProvider } from "@/components/NavigationProgressContext";
 import AppInitOverlay from "@/components/AppInitOverlay";
+import OnboardingTour from "@/components/OnboardingTour";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { usersApi } from "@/services/users";
 import { useUserStore } from "@/store/userStore";
+import { useOnboardingStore } from "@/store/onboardingStore";
 import { useIsFood } from "@/hooks/useBusinessType";
 
 const PATH_TITLES: Record<string, string> = {
   "products/add": "Add Products",
   "products/reviews": "Product Reviews",
   products: "Product List",
-  search: "Search",
   settings: "Settings",
   wallet: "Wallet",
+  store: "My Store",
 };
 
 function getTitle(pathname: string): string {
@@ -41,7 +43,6 @@ export default function DashboardRootLayout({
 }) {
   const pathname = usePathname();
   const isFood = useIsFood();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   // Seed from the store so we skip the overlay when the user is already loaded
   // (avoids a synchronous setState in the fetch effect below).
   const [meStatus, setMeStatus] = useState<"loading" | "ready" | "error">(() =>
@@ -55,19 +56,24 @@ export default function DashboardRootLayout({
 
   // Fetch current user on mount so the store is populated for the shell.
   useEffect(() => {
-    if (useUserStore.getState().user) return;
+    if (useUserStore.getState().user) {
+      useOnboardingStore.getState().markInitialized();
+      return;
+    }
     usersApi
       .getMe()
       .then(() => setMeStatus("ready"))
-      .catch(() => setMeStatus("error"));
+      .catch(() => setMeStatus("error"))
+      .finally(() => useOnboardingStore.getState().markInitialized());
   }, []);
 
   return (
     <NavigationProgressProvider>
       {meStatus !== "ready" && <AppInitOverlay status={meStatus} />}
+      <OnboardingTour />
       <div className="flex flex-col h-screen bg-[#F1F5F9] overflow-hidden">
         <div className="flex flex-1 min-h-0">
-          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <Sidebar />
 
           <main
             ref={mainRef}
@@ -85,13 +91,12 @@ export default function DashboardRootLayout({
                   };
                   return foodMap[t] ?? t;
                 })()}
-                onMenuClick={() => setSidebarOpen(true)}
               />
               <TooltipProvider>{children}</TooltipProvider>
             </div>
           </main>
 
-          <BottomNav onMenuClick={() => setSidebarOpen(true)} />
+          <BottomNav />
         </div>
       </div>
     </NavigationProgressProvider>

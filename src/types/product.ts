@@ -8,9 +8,15 @@ export interface Category {
 
 export type ProductTab = "all" | "featured" | "on-sale" | "out-of-stock";
 
+export type OfferingKind = "product" | "service";
+
 export interface CategoryProduct {
   id: string;
   name: string;
+  /** Offering identity — services carry no stock semantics. */
+  kind?: OfferingKind;
+  /** Price is a starting price ("from ₦X"). */
+  priceFrom?: boolean;
   description?: string | null;
   categoryId: string;
   price: number;
@@ -51,6 +57,29 @@ export interface ProductAttribute {
   id: string;
   name: string;
   value: string;
+}
+
+/** A suggested attribute / service detail: the name is fixed, the example
+ * seeds the value input's placeholder. */
+export interface AttributePreset {
+  name: string;
+  example: string;
+}
+
+export interface AttributePresetGroup {
+  group: string;
+  items: AttributePreset[];
+}
+
+export interface AttributePickerModalProps {
+  open: boolean;
+  title: string;
+  subtitle?: string;
+  groups: AttributePresetGroup[];
+  /** Names already on the offering — shown as added, not re-addable. */
+  existingNames: string[];
+  onClose: () => void;
+  onAdd: (details: { name: string; value: string }[]) => void;
 }
 
 export interface ModifierOption {
@@ -118,6 +147,8 @@ export interface CreateProductBasePayload {
 }
 
 export interface RetailProductPayload extends CreateProductBasePayload {
+  kind?: OfferingKind;
+  price_from?: boolean;
   stock_quantity: number;
   low_stock_threshold?: number | null;
   manufacturing_date?: string | null;

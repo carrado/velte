@@ -1,4 +1,5 @@
 import type { ProductListParams } from "@/types/product";
+import type { WalletTransactionsParams } from "@/types/wallet";
 
 export const queryKeys = {
   products: {
@@ -12,7 +13,13 @@ export const queryKeys = {
   settings: {
     profile: ["settings", "profile"] as const,
   },
-  search: {
-    results: (q: string) => ["search", "results", q] as const,
+  store: {
+    mine: ["store", "mine"] as const,
+  },
+  wallet: {
+    detail: ["wallet", "detail"] as const,
+    stats: (months?: number) => ["wallet", "stats", months ?? 6] as const,
+    transactions: (params?: WalletTransactionsParams) =>
+      ["wallet", "transactions", params ?? {}] as const,
   },
 };

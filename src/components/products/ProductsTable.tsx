@@ -73,6 +73,11 @@ function ProductCard({
           ) : (
             <div className="flex items-baseline gap-1.5">
               <p className="text-dash-heading font-black text-orange-500">
+                {product.priceFrom && (
+                  <span className="text-gray-400 font-medium text-dash-caption">
+                    from{" "}
+                  </span>
+                )}
                 {fmt(pricing.finalPrice, pricing.currencySymbol)}
               </p>
               {pricing.hasDiscount && (
@@ -108,29 +113,37 @@ function ProductCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={cn(
-              "inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold",
-              available > 0
-                ? "bg-green-100 text-green-700"
-                : "bg-red-100 text-red-700",
-            )}
-          >
-            {available > 0
-              ? isFood
-                ? "Available"
-                : "In Stock"
-              : isFood
-                ? "Not Available"
-                : "Out of Stock"}
-          </span>
+          {product.kind === "service" ? (
+            // Services have no stock — a red "Out of Stock" here would be
+            // misleading, so show a neutral identity badge instead.
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-teal-50 text-teal-700">
+              Service
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold",
+                available > 0
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700",
+              )}
+            >
+              {available > 0
+                ? isFood
+                  ? "Available"
+                  : "In Stock"
+                : isFood
+                  ? "Not Available"
+                  : "Out of Stock"}
+            </span>
+          )}
           {product.featured && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-amber-100 text-amber-700">
               <Star size={9} className="fill-amber-500 text-amber-500" />{" "}
               Featured
             </span>
           )}
-          {product.onSale && available > 0 && (
+          {product.onSale && (available > 0 || product.kind === "service") && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-blue-100 text-blue-700">
               On Sale
             </span>

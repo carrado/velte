@@ -13,14 +13,21 @@ import {
   RefreshCw,
   Shield,
   KeyRound,
+  MapPin,
+  LocateFixed,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUserStore } from "@/store/userStore";
+import { useOnboardingStore } from "@/store/onboardingStore";
 import { settingsApi } from "@/services/settings";
+import { usersApi } from "@/services/users";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
+import LogoutModal from "@/components/LogOutModal";
+import type { UserLocation } from "@/types/user";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +36,8 @@ interface UserProfile {
   email: string;
   phone: string;
   businessName: string;
+  area: string;
+  location: UserLocation | null;
 }
 
 interface PasswordConfig {
@@ -88,18 +97,23 @@ function InputField({
 // ── Section Card ──────────────────────────────────────────────────────────────
 
 function SectionCard({
+  id,
   icon: Icon,
   title,
   description,
   children,
 }: {
+  id?: string;
   icon: React.ElementType;
   title: string;
   description?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6">
+    <div
+      id={id}
+      className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6"
+    >
       <div className="flex items-center gap-3 mb-5">
         <div className="w-9 h-9 bg-orange-50 rounded-xl flex items-center justify-center flex-shrink-0">
           <Icon size={17} className="text-orange-500" />
@@ -172,9 +186,12 @@ function AccountSettingsPanel() {
     email: "",
     phone: "",
     businessName: "",
+    area: "",
+    location: null,
   });
   const [avatarPreview, setAvatarPreview] = useState("");
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [locating, setLocating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync form once profile arrives (from query or store)
@@ -186,12 +203,44 @@ function AccountSettingsPanel() {
       email: source.email ?? "",
       phone: source.phone ?? "",
       businessName: source.company?.name ?? "",
+      area: source.area ?? "",
+      location: source.location ?? null,
     });
     if (source.avatar && !avatarPreview) {
       setAvatarPreview(source.avatar);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileData, storeUser]);
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation isn't supported by this browser");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setProfile((p) => ({
+          ...p,
+          location: {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          },
+        }));
+        setLocating(false);
+        toast.success("Location captured — remember to save");
+      },
+      (err) => {
+        setLocating(false);
+        toast.error(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission denied"
+            : "Couldn't get your location",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  };
 
   const handleAvatarFileChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -230,6 +279,7 @@ function AccountSettingsPanel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.profile });
       toast.success("Profile updated");
+      useOnboardingStore.getState().completeStep(1);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -240,6 +290,8 @@ function AccountSettingsPanel() {
       email: profile.email,
       phone: profile.phone,
       businessName: profile.businessName,
+      area: profile.area,
+      ...(profile.location ? { location: profile.location } : {}),
     });
   };
 
@@ -330,6 +382,7 @@ function AccountSettingsPanel() {
     <div className="space-y-5">
       {/* Profile */}
       <SectionCard
+        id="profile-section"
         icon={UserCog}
         title="Profile Information"
         description="Your personal and business details"
@@ -417,6 +470,32 @@ function AccountSettingsPanel() {
             placeholder="+234 800 000 0000"
             icon={Phone}
           />
+          <InputField
+            label="Area / Neighbourhood"
+            value={profile.area}
+            onChange={(v) => setProfile((p) => ({ ...p, area: v }))}
+            placeholder="e.g. Ikeja, Lagos"
+            icon={MapPin}
+          />
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3.5 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <LocateFixed size={14} className="text-gray-400 shrink-0" />
+            <p className="text-dash-secondary text-gray-600 truncate">
+              {profile.location
+                ? `Location set — ${profile.location.lat.toFixed(4)}, ${profile.location.lng.toFixed(4)}`
+                : "No precise location set yet"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleUseCurrentLocation}
+            disabled={locating}
+            className="text-dash-secondary text-orange-500 font-semibold whitespace-nowrap cursor-pointer hover:text-orange-600 transition-colors disabled:opacity-60"
+          >
+            {locating ? "Locating…" : "Use my current location"}
+          </button>
         </div>
 
         <InlineSaveButton
@@ -574,6 +653,52 @@ function AccountSettingsPanel() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// LOGOUT — the mobile home for logout now that the nav drawer is gone
+// (desktop also has it in the Header avatar popover).
+// ══════════════════════════════════════════════════════════════════════════════
+
+function LogoutSection() {
+  const [showModal, setShowModal] = useState(false);
+
+  const logoutMutation = useMutation({
+    mutationFn: () => usersApi.logout(),
+    onSuccess: () => {
+      window.location.href = "/";
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "Logout failed");
+    },
+  });
+
+  return (
+    <>
+      <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-dash-body font-semibold text-gray-900">Log out</p>
+          <p className="text-dash-secondary text-gray-400 mt-0.5">
+            You&apos;ll need to sign in again to manage your catalog and wallet.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-4 py-2 text-dash-body font-medium text-red-500 border border-red-200 rounded-xl hover:bg-red-50 transition-colors cursor-pointer whitespace-nowrap"
+        >
+          <LogOut size={15} />
+          Log Out
+        </button>
+      </div>
+
+      <LogoutModal
+        isOpen={showModal}
+        disabled={logoutMutation.isPending}
+        onClose={() => setShowModal(false)}
+        onConfirm={() => logoutMutation.mutate()}
+      />
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // ROOT — Settings Page
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -584,6 +709,7 @@ export default function SettingsPage() {
         Manage your profile and account security
       </p>
       <AccountSettingsPanel />
+      <LogoutSection />
     </div>
   );
 }

@@ -5,10 +5,16 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
+import { useOnboardingStore } from "@/store/onboardingStore";
 import { queryKeys } from "@/lib/query-keys";
 import { categoriesApi } from "@/services/products";
 import { uploadProductMedia } from "@/lib/cloudinary";
 import { getErrorMessage } from "@/lib/error-message";
+import {
+  SERVICE_DETAIL_PRESETS,
+  getProductAttributePresets,
+} from "@/lib/attribute-presets";
+import AttributePickerModal from "./AttributePickerModal";
 import {
   Save,
   ChevronDown,
@@ -33,6 +39,7 @@ import {
   AlertCircle,
   CheckCircle2,
   ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -851,6 +858,72 @@ function PublishProgressModal({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Phased wizard building block ──────────────────────────────────────────────
+// Add mode walks the form block-by-block: everything past the frontier block is
+// blurred and inert until the vendor clicks Next on the current one. Edit mode
+// renders every block unlocked (wizard=false) — editing shouldn't re-walk the
+// wizard. Desktop gets the same single column, centered; a wizard gains
+// nothing from two columns.
+
+function PhaseBlock({
+  index,
+  frontier,
+  wizard,
+  isLast,
+  nextDisabled,
+  onNext,
+  publish,
+  blockRef,
+  hideNext = false,
+  children,
+}: {
+  index: number;
+  frontier: number;
+  wizard: boolean;
+  isLast: boolean;
+  nextDisabled: boolean;
+  onNext: () => void;
+  publish: React.ReactNode;
+  blockRef: (el: HTMLDivElement | null) => void;
+  /** For blocks whose own buttons drive the flow (e.g. the import choice). */
+  hideNext?: boolean;
+  children: React.ReactNode;
+}) {
+  const locked = wizard && index > frontier;
+  const isCurrent = wizard && index === frontier;
+  return (
+    <div ref={blockRef} className="scroll-mt-4">
+      <div
+        inert={locked || undefined}
+        aria-hidden={locked || undefined}
+        className={cn(
+          "transition-all duration-300",
+          locked && "blur-[3px] opacity-50 pointer-events-none select-none",
+        )}
+      >
+        {children}
+      </div>
+      {isCurrent && !hideNext && (
+        <div className="mt-3 flex justify-end px-5 sm:px-0">
+          {isLast ? (
+            publish
+          ) : (
+            <button
+              type="button"
+              onClick={onNext}
+              disabled={nextDisabled}
+              className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-6 h-10 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+              <ArrowRight size={15} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AddProductPage({
   mode,
   productId,
@@ -860,6 +933,12 @@ export default function AddProductPage({
 }) {
   const isEditMode = mode === "edit";
   const isFood = useIsFood();
+
+  // Offering identity (retail only) — a service is a catalog entry with no
+  // stock semantics and an optional "from" price. Fixed after creation.
+  const [kind, setKind] = useState<"product" | "service">("product");
+  const [priceFrom, setPriceFrom] = useState(false);
+  const isService = !isFood && kind === "service";
 
   // Basic
   const [productName, setProductName] = useState("");
@@ -899,6 +978,12 @@ export default function AddProductPage({
   const [attributeNameInput, setAttributeNameInput] = useState("");
   const [attributeValueInput, setAttributeValueInput] = useState("");
   const [attributeError, setAttributeError] = useState("");
+  const [presetPickerOpen, setPresetPickerOpen] = useState(false);
+
+  // Phased wizard (add mode): index of the currently-active block; everything
+  // beyond it stays blurred until Next is clicked.
+  const [frontier, setFrontier] = useState(0);
+  const phaseRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Food-specific
   const [estimatedPrepMins, setEstimatedPrepMins] = useState(20);
@@ -983,6 +1068,8 @@ export default function AddProductPage({
   // Pre-fill form once the product is loaded
   useEffect(() => {
     if (!existingProduct) return;
+    if (existingProduct.kind) setKind(existingProduct.kind);
+    setPriceFrom(existingProduct.priceFrom ?? false);
     setProductName(existingProduct.name);
     setDescription(existingProduct.description ?? "");
     setSelectedCategory(existingProduct.categoryId ?? "");
@@ -1087,6 +1174,19 @@ export default function AddProductPage({
     setAttributeValueInput("");
   };
 
+  const addPresetDetails = (details: { name: string; value: string }[]) => {
+    const existing = new Set(attributes.map((a) => a.name.toLowerCase()));
+    const fresh = details
+      .filter((d) => !existing.has(d.name.toLowerCase()))
+      .map((d, i) => ({
+        // eslint-disable-next-line react-hooks/purity
+        id: `${Date.now()}-${i}`,
+        name: d.name,
+        value: d.value,
+      }));
+    if (fresh.length) setAttributes([...fresh, ...attributes]);
+  };
+
   const addTemplateGroup = (tpl: NigerianTemplate) => {
     if (modifiers.some((m) => m.name === tpl.name)) return;
     const saved = savedTemplatePrices[tpl.id] ?? {};
@@ -1132,6 +1232,7 @@ export default function AddProductPage({
     parseFloat(price) > 0 &&
     (mainImage !== null || videoFile !== null) &&
     (isFood ||
+      isService || // services carry no stock/expiry requirements
       (stockQuantity !== "" &&
         threshold !== "" &&
         (!(isHealth || isElectronics) || expirationDate !== "")));
@@ -1276,11 +1377,17 @@ export default function AddProductPage({
       } else {
         payload = {
           ...base,
-          stock_quantity: parseInt(stockQuantity) || 0,
-          low_stock_threshold: threshold ? parseInt(threshold) : null,
-          manufacturing_date: isHealth ? manufacturingDate || null : null,
+          kind,
+          price_from: isService ? priceFrom : false,
+          stock_quantity: isService ? 0 : parseInt(stockQuantity) || 0,
+          low_stock_threshold:
+            !isService && threshold ? parseInt(threshold) : null,
+          manufacturing_date:
+            !isService && isHealth ? manufacturingDate || null : null,
           expiration_date:
-            isHealth || isElectronics ? expirationDate || null : null,
+            !isService && (isHealth || isElectronics)
+              ? expirationDate || null
+              : null,
           attributes: attributes.map(({ name, value }) => ({ name, value })),
         } as RetailProductPayload;
       }
@@ -1289,6 +1396,7 @@ export default function AddProductPage({
         await categoriesApi.updateProduct(productId, payload);
       } else {
         await categoriesApi.createProduct(payload);
+        useOnboardingStore.getState().completeStep(2);
       }
 
       setPublishModal((prev) => ({
@@ -1359,6 +1467,134 @@ export default function AddProductPage({
     );
   }
 
+  // ── Phased wizard definition (must match the blocks' DOM order) ────────────
+  const wizard = !isEditMode;
+  const phases = [
+    !isFood && { id: "type", label: "Type", valid: true },
+    // Import decision — products only, add mode only. Its own buttons drive
+    // the flow (import in bulk vs. add one by one), so it has no Next.
+    !isFood &&
+      wizard &&
+      kind === "product" && { id: "import", label: "Import", valid: true },
+    {
+      id: "basics",
+      label: "Basics",
+      valid: productName.trim().length > 0 && selectedCategory !== "",
+    },
+    {
+      id: "pricing",
+      label: "Pricing",
+      valid:
+        parseFloat(price) > 0 &&
+        (!isNegotiable || parseFloat(minimumPrice) > 0),
+    },
+    !isFood &&
+      !isService && {
+        id: "inventory",
+        label: "Inventory",
+        valid:
+          stockQuantity !== "" &&
+          threshold !== "" &&
+          (!(isHealth || isElectronics) || expirationDate !== ""),
+      },
+    isFood && { id: "preparation", label: "Prep", valid: true },
+    {
+      id: "media",
+      label: "Media",
+      valid: mainImage !== null || videoFile !== null,
+    },
+    !isFood && {
+      id: "tags",
+      label: isService ? "Details" : "Tags",
+      valid: true,
+    },
+    isFood && { id: "availability", label: "Availability", valid: true },
+    isFood && { id: "choices", label: "Extras", valid: true },
+  ].filter(Boolean) as { id: string; label: string; valid: boolean }[];
+
+  // Clamp: switching Product↔Service changes the phase count mid-flight.
+  const effFrontier = wizard
+    ? Math.min(frontier, phases.length - 1)
+    : phases.length - 1;
+  const phaseIndex = (id: string) => phases.findIndex((p) => p.id === id);
+  const scrollToPhase = (id: string) =>
+    phaseRefs.current[id]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  const goNext = (id: string) => {
+    const i = phaseIndex(id);
+    setFrontier((f) => Math.max(f, i + 1));
+    const nextId = phases[i + 1]?.id;
+    if (nextId) requestAnimationFrame(() => scrollToPhase(nextId));
+  };
+
+  // Switching to bulk import abandons manual entry: clear everything typed in
+  // the blocks below the decision and re-lock (re-blur) them, so a change of
+  // mind later starts the walk clean instead of resuming half-filled state.
+  const startBulkImport = () => {
+    setFrontier(phaseIndex("import"));
+    setProductName("");
+    setDescription("");
+    setSelectedCategory("");
+    setPrice("");
+    setDiscountedPrice("");
+    setTaxIncluded("yes");
+    setTaxType("percentage");
+    setTaxValue("");
+    setIsNegotiable(false);
+    setMinimumPrice("");
+    setPriceFrom(false);
+    setStockQuantity("");
+    setThreshold("");
+    setManufacturingDate("");
+    setExpirationDate("");
+    setIsFeatured(false);
+    setMediaType("image");
+    setMainImage(null);
+    setMainImageFile(null);
+    setThumbnails([]);
+    setThumbnailFiles([]);
+    setVideoFile(null);
+    setVideoFileObj(null);
+    setTags([]);
+    setTagInput("");
+    setAttributes([]);
+    setAttributeNameInput("");
+    setAttributeValueInput("");
+    setAttributeError("");
+    setImportModalOpen(true);
+  };
+
+  const publishButton = (
+    <button
+      onClick={handleSubmit}
+      disabled={isSubmitting || !canSubmit}
+      className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-6 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+    >
+      {isSubmitting
+        ? "Publishing…"
+        : isFood
+          ? "Publish Dish"
+          : isService
+            ? "Publish Service"
+            : "Publish Product"}
+    </button>
+  );
+
+  const phaseProps = (id: string) => ({
+    index: phaseIndex(id),
+    frontier: effFrontier,
+    wizard,
+    isLast: phaseIndex(id) === phases.length - 1,
+    nextDisabled: !phases[phaseIndex(id)]?.valid,
+    onNext: () => goNext(id),
+    publish: publishButton,
+    blockRef: (el: HTMLDivElement | null) => {
+      phaseRefs.current[id] = el;
+    },
+  });
+
   return (
     <>
       <ImportProductsModal
@@ -1392,29 +1628,125 @@ export default function AddProductPage({
               </p>
             </div>
           </div>
-          {!isEditMode && (
+          {/* Food has no Listing Type block, so its bulk upload stays in the
+              header; retail's import entry lives inside the type block, where
+              the product/service fork is made. */}
+          {!isEditMode && isFood && (
             <button
               onClick={() => setImportModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2.5 border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-600 text-dash-body font-semibold rounded-md transition-colors cursor-pointer"
             >
               <Upload size={15} />
-              {isFood ? "Bulk Upload Dishes" : "Import from CSV / CRM"}
+              Bulk Upload Dishes
             </button>
           )}
         </div>
 
-        {/* Two-column grid */}
-        <div className="flex flex-col lg:flex-row gap-5 items-start">
-          {/* ── Left column ── */}
-          <div className="flex-1 lg:min-w-0 w-full space-y-5">
-            {/* Basic Details */}
+        {/* Single phased column — desktop gets the same flow, centered */}
+        <div className="max-w-3xl mx-auto w-full space-y-5">
+          {/* Phase — listing type (retail only; identity fixed after creation) */}
+          {!isFood && (
+            <PhaseBlock {...phaseProps("type")}>
+              <FormSection title="Listing Type" icon={Package}>
+                <div>
+                  <FieldLabel required>What are you listing?</FieldLabel>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        ["product", "Product", "A physical item you stock"],
+                        [
+                          "service",
+                          "Service",
+                          "Work you do — repairs, tailoring…",
+                        ],
+                      ] as const
+                    ).map(([value, label, hint]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        disabled={isEditMode}
+                        onClick={() => setKind(value)}
+                        className={cn(
+                          "text-left px-3 py-2.5 rounded-md border transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+                          kind === value
+                            ? "border-orange-500 bg-orange-50"
+                            : "border-gray-200 bg-white hover:border-orange-300",
+                        )}
+                      >
+                        <p className="text-dash-body font-bold text-[#023337]">
+                          {label}
+                        </p>
+                        <p className="text-dash-caption text-gray-400 mt-0.5">
+                          {hint}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                  {isEditMode && (
+                    <p className="text-dash-caption text-gray-400 mt-1.5">
+                      The listing type can&apos;t be changed after creation.
+                    </p>
+                  )}
+                </div>
+              </FormSection>
+            </PhaseBlock>
+          )}
+
+          {/* Phase — import decision (products only, add mode only). A CSV
+                row is a stocked good, so services skip straight to Basics. */}
+          {!isFood && wizard && kind === "product" && (
+            <PhaseBlock {...phaseProps("import")} hideNext>
+              <FormSection title="Add Your Products" icon={Upload}>
+                <div>
+                  <FieldLabel required>
+                    How would you like to add them?
+                  </FieldLabel>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={startBulkImport}
+                      className="text-left px-3 py-2.5 rounded-md border border-gray-200 bg-white hover:border-orange-300 transition-colors cursor-pointer"
+                    >
+                      <p className="flex items-center gap-1.5 text-dash-body font-bold text-[#023337]">
+                        <Upload size={13} className="text-orange-500" />
+                        Bring in your catalog
+                      </p>
+                      <p className="text-dash-caption text-gray-400 mt-0.5">
+                        Upload a CSV — connecting your website is coming soon
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => goNext("import")}
+                      className="text-left px-3 py-2.5 rounded-md border border-gray-200 bg-white hover:border-orange-300 transition-colors cursor-pointer"
+                    >
+                      <p className="flex items-center gap-1.5 text-dash-body font-bold text-[#023337]">
+                        <PlusCircle size={13} className="text-orange-500" />
+                        Add one by one
+                      </p>
+                      <p className="text-dash-caption text-gray-400 mt-0.5">
+                        Fill in the form step by step
+                      </p>
+                    </button>
+                  </div>
+                </div>
+              </FormSection>
+            </PhaseBlock>
+          )}
+
+          {/* Basic Details */}
+          <PhaseBlock {...phaseProps("basics")}>
             <FormSection
               title="Basic Details"
               icon={isFood ? ChefHat : Package}
             >
               <div>
                 <FieldLabel required>
-                  {isFood ? "Dish Name" : "Product Name"}
+                  {isFood
+                    ? "Dish Name"
+                    : isService
+                      ? "Service Name"
+                      : "Product Name"}
                 </FieldLabel>
                 <Input
                   value={productName}
@@ -1422,7 +1754,9 @@ export default function AddProductPage({
                   placeholder={
                     isFood
                       ? "e.g., Jollof Rice, Egusi Soup, Suya…"
-                      : "e.g., Wireless Headphones"
+                      : isService
+                        ? "e.g., Phone Screen Repair, Home Cleaning…"
+                        : "e.g., Wireless Headphones"
                   }
                   className={`w-full h-11 px-3 bg-gray-50 border rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 ${fieldErrors.name ? "border-red-400" : "border-gray-200"}`}
                 />
@@ -1500,8 +1834,10 @@ export default function AddProductPage({
                 )}
               </div>
             </FormSection>
+          </PhaseBlock>
 
-            {/* Pricing */}
+          {/* Pricing */}
+          <PhaseBlock {...phaseProps("pricing")}>
             <FormSection title="Pricing" icon={BarChart3}>
               {/* Base price */}
               <div>
@@ -1560,6 +1896,22 @@ export default function AddProductPage({
                   </p>
                 )}
               </div>
+
+              {/* Starting price — services often quote per job */}
+              {isService && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-dash-body font-bold text-[#023337]">
+                      Starting Price
+                    </p>
+                    <p className="text-dash-caption text-gray-400 mt-0.5">
+                      Show as &quot;from {currSymbol}
+                      {price || "…"}&quot; — final quote depends on the job
+                    </p>
+                  </div>
+                  <Toggle value={priceFrom} onChange={setPriceFrom} />
+                </div>
+              )}
 
               {/* Negotiable Price */}
               <div className="space-y-3">
@@ -1770,9 +2122,11 @@ export default function AddProductPage({
                 );
               })()}
             </FormSection>
+          </PhaseBlock>
 
-            {/* Inventory — retail only */}
-            {!isFood && (
+          {/* Inventory — retail stocked goods only; services have no stock */}
+          {!isFood && !isService && (
+            <PhaseBlock {...phaseProps("inventory")}>
               <FormSection title="Inventory" icon={Layers}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
@@ -1857,10 +2211,12 @@ export default function AddProductPage({
                   label="Feature this product in a highlighted section"
                 />
               </FormSection>
-            )}
+            </PhaseBlock>
+          )}
 
-            {/* Preparation — food only */}
-            {isFood && (
+          {/* Preparation — food only */}
+          {isFood && (
+            <PhaseBlock {...phaseProps("preparation")}>
               <FormSection title="Preparation" icon={Clock}>
                 <div>
                   <FieldLabel>How long does it take to prepare?</FieldLabel>
@@ -1911,13 +2267,18 @@ export default function AddProductPage({
                   </p>
                 </div>
               </FormSection>
-            )}
-          </div>
+            </PhaseBlock>
+          )}
 
-          {/* ── Right column ── */}
-          <div className="w-full lg:w-[440px] flex-shrink-0 space-y-5">
-            {/* Media */}
+          {/* Media */}
+          <PhaseBlock {...phaseProps("media")}>
             <FormSection title="Media" icon={ImageIcon} required>
+              {isService && (
+                <p className="text-dash-caption text-gray-400 -mt-1">
+                  Show your work — photos of finished jobs or before/after shots
+                  are what convince buyers to reach out.
+                </p>
+              )}
               <div className="flex gap-2 mb-2 -mt-1">
                 {[
                   { key: "image" as const, icon: ImageIcon, label: "Images" },
@@ -2085,10 +2446,17 @@ export default function AddProductPage({
                 </div>
               )}
             </FormSection>
+          </PhaseBlock>
 
-            {/* Tags + attributes — retail only */}
-            {!isFood && (
-              <FormSection title="Tags & Attributes" icon={Tag}>
+          {/* Tags + attributes — retail only */}
+          {!isFood && (
+            <PhaseBlock {...phaseProps("tags")}>
+              <FormSection
+                title={
+                  isService ? "Tags & Service Details" : "Tags & Attributes"
+                }
+                icon={Tag}
+              >
                 <div>
                   <FieldLabel optional>Tags</FieldLabel>
 
@@ -2151,16 +2519,38 @@ export default function AddProductPage({
                     placeholder={
                       isFood
                         ? "Or type a custom tag and press Enter"
-                        : "Type a tag then press Enter or Space"
+                        : isService
+                          ? "e.g. home-service, same-day — press Enter"
+                          : "Type a tag then press Enter or Space"
                     }
                     className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                   />
                 </div>
 
-                {/* Attributes — retail only */}
+                {/* Attributes — retail only. For services these read as
+                    "service details" (Duration, Coverage, Warranty…) — same
+                    name/value structure, different vocabulary. */}
                 {!isFood && (
                   <div>
-                    <FieldLabel optional>Attributes</FieldLabel>
+                    <FieldLabel optional>
+                      {isService ? "Service Details" : "Attributes"}
+                    </FieldLabel>
+                    {isService && (
+                      <p className="text-dash-caption text-gray-400 mb-2">
+                        Things buyers ask before booking — duration, coverage
+                        area, warranty…
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPresetPickerOpen(true)}
+                      className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-50 text-orange-600 text-dash-body font-medium rounded-md transition-colors cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      {isService
+                        ? "Quick add — pick from common service details"
+                        : "Quick add — pick from common attributes"}
+                    </button>
                     <div className="flex gap-2">
                       <Input
                         type="text"
@@ -2169,7 +2559,11 @@ export default function AddProductPage({
                           setAttributeNameInput(e.target.value);
                           if (attributeError) setAttributeError("");
                         }}
-                        placeholder="Name (e.g., Size)"
+                        placeholder={
+                          isService
+                            ? "Name (e.g., Duration)"
+                            : "Name (e.g., Size)"
+                        }
                         className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                       />
                       <Input
@@ -2179,7 +2573,11 @@ export default function AddProductPage({
                           setAttributeValueInput(e.target.value);
                           if (attributeError) setAttributeError("");
                         }}
-                        placeholder="Value (e.g., Large)"
+                        placeholder={
+                          isService
+                            ? "Value (e.g., about 2 hours)"
+                            : "Value (e.g., Large)"
+                        }
                         className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                       />
                       <button
@@ -2227,10 +2625,12 @@ export default function AddProductPage({
                   </div>
                 )}
               </FormSection>
-            )}
+            </PhaseBlock>
+          )}
 
-            {/* Availability & Stock — food only */}
-            {isFood && (
+          {/* Availability & Stock — food only */}
+          {isFood && (
+            <PhaseBlock {...phaseProps("availability")}>
               <FormSection title="Availability & Stock" icon={Calendar}>
                 {/* Currently available toggle */}
                 <div className="flex items-center justify-between">
@@ -2285,10 +2685,12 @@ export default function AddProductPage({
                   <Toggle value={allowPreOrder} onChange={setAllowPreOrder} />
                 </div>
               </FormSection>
-            )}
+            </PhaseBlock>
+          )}
 
-            {/* Customer Choices & Extras — food only */}
-            {isFood && (
+          {/* Customer Choices & Extras — food only */}
+          {isFood && (
+            <PhaseBlock {...phaseProps("choices")}>
               <FormSection title="Customer Choices & Extras" icon={Layers}>
                 {/* Explainer */}
                 <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 -mt-1 space-y-1">
@@ -2528,49 +2930,34 @@ export default function AddProductPage({
                   </div>
                 )}
               </FormSection>
-            )}
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex justify-end absolute py-2 w-full bg-white px-5 bottom-0 right-0 gap-3">
-          {isEditMode ? (
-            <>
-              <button
-                onClick={() => navigate(`/${userId}/products`)}
-                disabled={isSubmitting}
-                className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !canSubmit}
-                className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isSubmitting
-                  ? "Saving…"
-                  : isFood
-                    ? "Update Dish"
-                    : "Save Changes"}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !canSubmit}
-                className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isSubmitting
-                  ? "Publishing…"
-                  : isFood
-                    ? "Publish Dish"
-                    : "Publish Product"}
-              </button>
-            </>
+            </PhaseBlock>
           )}
         </div>
+
+        {/* Edit mode keeps the classic bottom bar; in add mode the Publish
+            button lives inside the last phase block. */}
+        {isEditMode && (
+          <div className="flex justify-end absolute py-2 w-full bg-white px-5 bottom-0 right-0 gap-3">
+            <button
+              onClick={() => navigate(`/${userId}/products`)}
+              disabled={isSubmitting}
+              className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting || !canSubmit}
+              className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSubmitting
+                ? "Saving…"
+                : isFood
+                  ? "Update Dish"
+                  : "Save Changes"}
+            </button>
+          </div>
+        )}
       </div>
 
       <PublishProgressModal
@@ -2580,6 +2967,24 @@ export default function AddProductPage({
         done={publishModal.done}
         isFood={isFood}
         isEditMode={isEditMode}
+      />
+
+      <AttributePickerModal
+        open={presetPickerOpen}
+        title={isService ? "Add Service Details" : "Add Attributes"}
+        subtitle={
+          isService
+            ? "Fill in whatever applies to your service — buyers see these before they chat."
+            : "Fill in whatever applies to this product."
+        }
+        groups={
+          isService
+            ? SERVICE_DETAIL_PRESETS
+            : getProductAttributePresets(selectedCategory)
+        }
+        existingNames={attributes.map((a) => a.name)}
+        onClose={() => setPresetPickerOpen(false)}
+        onAdd={addPresetDetails}
       />
     </>
   );

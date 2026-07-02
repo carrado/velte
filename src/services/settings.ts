@@ -4,6 +4,7 @@ import type {
   User,
   UserCompany,
   UserPreferences,
+  UserLocation,
   BusinessType,
 } from "@/types/user";
 
@@ -13,6 +14,8 @@ export interface UpdateProfileData {
   phone?: string;
   businessName?: string;
   avatar?: string;
+  area?: string;
+  location?: UserLocation;
 }
 
 export interface RequestPasswordChangeData {
@@ -25,6 +28,16 @@ export interface ConfirmPasswordChangeData {
   otp: string;
   newPassword: string;
   confirmPassword: string;
+}
+
+// Backend returns geo as GeoJSON ({ type: "Point", coordinates: [lng, lat] })
+// from both /auth/me (raw Mongoose doc) and /auth/profile (custom response) —
+// normalise to { lat, lng } here so components never touch GeoJSON directly.
+function mapGeo(geo: unknown): UserLocation | null {
+  const coords = (geo as { coordinates?: unknown } | null)?.coordinates;
+  if (!Array.isArray(coords) || coords.length !== 2) return null;
+  const [lng, lat] = coords as [number, number];
+  return { lat, lng };
 }
 
 function mapRawUser(u: Record<string, unknown>): User {
@@ -40,6 +53,8 @@ function mapRawUser(u: Record<string, unknown>): User {
     preferences: (u.preferences as UserPreferences) ?? undefined,
     onboarding: (u.onboarding as boolean) ?? false,
     businessType: (u.businessType as BusinessType) ?? undefined,
+    area: (u.area as string) ?? undefined,
+    location: mapGeo(u.geo),
   };
 }
 

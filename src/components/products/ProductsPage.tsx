@@ -915,6 +915,7 @@ export default function ProductsPage() {
           </p>
         </div>
         <button
+          id="add-product-button"
           onClick={() => navigate(`/${userId}/products/add`)}
           className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
         >
