@@ -39,7 +39,7 @@ import type {
   ProductListParams,
 } from "@/types/product";
 import type { FilterField } from "@/types/common";
-import { useIsFood } from "@/hooks/useBusinessType";
+import { useBusinessType, isFoodBusiness } from "@/hooks/useBusinessType";
 import DeleteProductModal from "./DeleteProductModal";
 import ProductsTable from "./ProductsTable";
 import { Pagination } from "../Pagination";
@@ -512,7 +512,7 @@ function CategoryStrip({
               : "bg-white text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600",
           )}
         >
-          All {isFood ? "Dishes" : "Products"}
+          All {isFood ? "Dishes" : "Listings"}
         </button>
         {categories.map((cat) => (
           <div key={cat.id} className="relative flex-shrink-0">
@@ -611,7 +611,10 @@ export default function ProductsPage() {
   const pathSegments = pathname.split("/").filter(Boolean);
   const userId = pathSegments[0];
   const isProductsListPage = pathSegments.at(-1) === "products";
-  const isFood = useIsFood();
+  const businessType = useBusinessType();
+  const isFood = isFoodBusiness(businessType);
+  // Service-only accounts don't use categories — every listing is a service.
+  const isServiceOnly = businessType === "service";
 
   // Filter / sort / pagination state
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
@@ -783,7 +786,7 @@ export default function ProductsPage() {
     onSuccess: () => {
       invalidateAll();
       setDeleteModal({ open: false, product: null });
-      toast.success("Product deleted");
+      toast.success("Listing deleted");
     },
     onError: (err) =>
       toast.error(
@@ -859,19 +862,17 @@ export default function ProductsPage() {
     ? [
         { key: "all", label: "All Dishes" },
         { key: "featured", label: "Featured" },
-        { key: "on-sale", label: "On Sale" },
         { key: "out-of-stock", label: "Not Available" },
       ]
     : [
-        { key: "all", label: "All Products" },
+        { key: "all", label: "All Listings" },
         { key: "featured", label: "Featured" },
-        { key: "on-sale", label: "On Sale" },
         { key: "out-of-stock", label: "Out of Stock" },
       ];
 
   const stats = [
     {
-      label: isFood ? "Total Dishes" : "Total Products",
+      label: isFood ? "Total Dishes" : "Total Listings",
       value: totalCount,
       icon: isFood ? ChefHat : Package,
       color: "text-blue-500",
@@ -906,12 +907,12 @@ export default function ProductsPage() {
       <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-dash-title font-black text-[#023337]">
-            {isFood ? "My Menu" : "My Products"}
+            {isFood ? "My Menu" : "My Listings"}
           </h2>
           <p className="text-dash-body text-gray-400 mt-0.5">
             {isFood
               ? "Manage your dishes, drinks and menu items"
-              : "Manage and track your product catalogue"}
+              : "Manage and track your products and services"}
           </p>
         </div>
         <button
@@ -920,7 +921,7 @@ export default function ProductsPage() {
           className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
         >
           <Plus size={16} />
-          {isFood ? "Add Dish" : "Add Product"}
+          {isFood ? "Add Dish" : "Add Listing"}
         </button>
       </div>
 
@@ -951,27 +952,29 @@ export default function ProductsPage() {
         ))}
       </div>
 
-      {/* ── Category strip ───────────────────────────────────────────────── */}
-      <div className="bg-white sm:rounded-xl border border-gray-100 shadow-sm px-5 py-4">
-        <p className="text-dash-caption font-semibold text-gray-400 uppercase tracking-wider mb-3">
-          {isFood ? "Menu Sections" : "Categories"}
-        </p>
-        <CategoryStrip
-          categories={categories}
-          selectedId={selectedCategoryId}
-          onSelect={(id) => {
-            setSelectedCategoryId(id);
-            setActiveTab("all");
-            setSearchQuery("");
-          }}
-          onEdit={(cat) => {
-            setEditingCategory(cat);
-            setModalOpen(true);
-          }}
-          onDelete={handleDeleteCategory}
-          isFood={isFood}
-        />
-      </div>
+      {/* ── Category strip (hidden for service-only accounts) ────────────── */}
+      {!isServiceOnly && (
+        <div className="bg-white sm:rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+          <p className="text-dash-caption font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            {isFood ? "Menu Sections" : "Categories"}
+          </p>
+          <CategoryStrip
+            categories={categories}
+            selectedId={selectedCategoryId}
+            onSelect={(id) => {
+              setSelectedCategoryId(id);
+              setActiveTab("all");
+              setSearchQuery("");
+            }}
+            onEdit={(cat) => {
+              setEditingCategory(cat);
+              setModalOpen(true);
+            }}
+            onDelete={handleDeleteCategory}
+            isFood={isFood}
+          />
+        </div>
+      )}
 
       {/* ── Products panel ───────────────────────────────────────────────── */}
       <div className="bg-white sm:rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -994,7 +997,7 @@ export default function ProductsPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={isFood ? "Search dishes…" : "Search products…"}
+                placeholder={isFood ? "Search dishes…" : "Search listings…"}
                 className="pl-3 pr-9 h-9 text-dash-body bg-gray-50 border border-gray-200 rounded-lg w-full"
               />
               <Search

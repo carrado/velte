@@ -1,29 +1,25 @@
-import CallToAction from "@/components/landing/CallToAction";
-import Features from "@/components/landing/Features";
-import Footer from "@/components/landing/Footer";
-import Hero from "@/components/landing/Hero";
-import HowItWorks from "@/components/landing/HowItWorks";
+import type { Metadata } from "next";
 import Navbar from "@/components/landing/Navbar";
-import Pricing from "@/components/landing/Pricing";
-import Stats from "@/components/landing/Stats";
-import Testimonials from "@/components/landing/Testimonials";
-import UseCases from "@/components/landing/UseCases";
+import Hero from "@/components/landing/Hero";
+import VendorPitch from "@/components/landing/VendorPitch";
+import Footer from "@/components/landing/Footer";
 
-export default function Home() {
+// Velte's homepage — redesigned for the pivot (replaces the old
+// pre-pivot "WhatsApp AI Sales Rep" marketing site that used to live at
+// /vendors). The buyer search experience itself lives at /search.
+export const metadata: Metadata = {
+  title: "Velte | Find anything nearby",
+  description:
+    "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
+};
+
+export default function HomePage() {
   return (
-    <>
-      <div className="min-h-screen">
-        <Navbar />
-        <Hero />
-        <Stats />
-        <Features />
-        <UseCases />
-        <HowItWorks />
-        <Testimonials />
-        <Pricing />
-        <CallToAction />
-        <Footer />
-      </div>
-    </>
+    <div className="min-h-screen">
+      <Navbar />
+      <Hero />
+      <VendorPitch />
+      <Footer />
+    </div>
   );
 }

@@ -15,12 +15,11 @@ import { useOnboardingStore } from "@/store/onboardingStore";
 import { useIsFood } from "@/hooks/useBusinessType";
 
 const PATH_TITLES: Record<string, string> = {
-  "products/add": "Add Products",
-  "products/reviews": "Product Reviews",
-  products: "Product List",
+  "products/add": "Add Listing",
+  "products/reviews": "Reviews",
+  products: "My Listings",
   settings: "Settings",
   wallet: "Wallet",
-  store: "My Store",
 };
 
 function getTitle(pathname: string): string {
@@ -28,9 +27,9 @@ function getTitle(pathname: string): string {
   // segments[0] is the [id] param; everything after is the sub-path
   const subPath = segments.slice(1).join("/");
   if (PATH_TITLES[subPath]) return PATH_TITLES[subPath];
-  // Handle dynamic sub-paths: /products/[id]/edit → "Edit Product"
+  // Handle dynamic sub-paths: /products/[id]/edit → "Edit Listing"
   if (segments.at(-1) === "edit" && segments.at(-3) === "products")
-    return "Edit Product";
+    return "Edit Listing";
   return segments.at(-1)
     ? segments.at(-1)!.charAt(0).toUpperCase() + segments.at(-1)!.slice(1)
     : "";
@@ -85,9 +84,9 @@ export default function DashboardRootLayout({
                   const t = getTitle(pathname);
                   if (!isFood) return t;
                   const foodMap: Record<string, string> = {
-                    "Product List": "My Menu",
-                    "Add Products": "Add Dish",
-                    "Edit Product": "Edit Dish",
+                    "My Listings": "My Menu",
+                    "Add Listing": "Add Dish",
+                    "Edit Listing": "Edit Dish",
                   };
                   return foodMap[t] ?? t;
                 })()}

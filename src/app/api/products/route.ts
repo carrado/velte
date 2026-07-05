@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const result = await listProducts(req.nextUrl.searchParams, gate.cookie);
     return NextResponse.json(result);
   } catch (err) {
-    return fail(err, "Failed to load products.");
+    return fail(err, "Failed to load listings.");
   }
 }
 
@@ -30,6 +30,6 @@ export async function POST(req: NextRequest) {
     const product = await createProduct(payload, gate.cookie);
     return NextResponse.json({ product }, { status: 201 });
   } catch (err) {
-    return fail(err, "Failed to create product.");
+    return fail(err, "Failed to create listing.");
   }
 }

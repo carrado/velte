@@ -6,7 +6,7 @@ import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
- * Velte Connect drops subscription tiers for pay-per-lead — there's no fixed
+ * Velte drops subscription tiers for pay-per-lead — there's no fixed
  * plan to show yet (Wallet + lead pricing land later). This is an honest
  * holding placeholder, not a rewritten pricing table.
  */
@@ -47,7 +47,7 @@ export default function PricingCards({
             dark ? "text-white/60" : "text-gray-500"
           }`}
         >
-          Velte Connect matches buyers to your products by location — no monthly
+          Velte matches buyers to your products by location — no monthly
           subscription. You&apos;ll only pay for the leads you actually get.
           We&apos;re finalising exact pricing as we roll out.
         </p>

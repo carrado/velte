@@ -4,10 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { X, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { walletApi } from "@/services/wallet";
+import { walletApi, LEAD_COST_KOBO } from "@/services/wallet";
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000];
 const MIN_TOPUP_NAIRA = 1000;
+const LEAD_COST_NAIRA = LEAD_COST_KOBO / 100;
 
 export default function TopUpModal({
   open,
@@ -24,6 +25,8 @@ export default function TopUpModal({
   const numericAmount = Number(amount);
   const isValid =
     Number.isFinite(numericAmount) && numericAmount >= MIN_TOPUP_NAIRA;
+  const estimatedLeads =
+    numericAmount > 0 ? Math.floor(numericAmount / LEAD_COST_NAIRA) : 0;
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -77,6 +80,18 @@ export default function TopUpModal({
               </p>
             )}
           </div>
+
+          {numericAmount > 0 && (
+            <div className="flex items-center justify-between px-3.5 py-2.5 bg-orange-50 border border-orange-100 rounded-xl">
+              <span className="text-dash-caption text-orange-700">
+                Estimated leads at ₦{LEAD_COST_NAIRA.toLocaleString("en-NG")}
+                /lead
+              </span>
+              <span className="text-dash-body font-bold text-orange-600">
+                ≈ {estimatedLeads.toLocaleString("en-NG")}
+              </span>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             {QUICK_AMOUNTS.map((v) => (

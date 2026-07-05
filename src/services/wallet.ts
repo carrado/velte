@@ -9,6 +9,11 @@ import type {
   WalletStats,
 } from "@/types/wallet";
 
+/** Price charged per matched lead. Mirrors `debitWalletForLead`'s amount in
+ * velte-backend (currently unwired — nothing creates leads yet). Keep these
+ * in sync until the price is served from the wallet/stats response instead. */
+export const LEAD_COST_KOBO = 50_000; // ₦500
+
 export const walletApi = {
   getWallet: async (): Promise<Wallet> => {
     const { wallet } = await api.get<{ wallet: Wallet }>("/api/wallet");

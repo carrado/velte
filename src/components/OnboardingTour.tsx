@@ -24,19 +24,20 @@ const STEPS = {
     targetElementId: "profile-section",
     ctaLabel: "Go to Settings",
     instruction:
-      'Fill in your business name and area, then click "Use my current location" and Save Profile.',
+      'Fill in your business name and address, then click "Use my current location" and Save Profile.',
   },
   2: {
     Icon: PackagePlus,
     badge: "Final Step",
     stepLabel: "Step 2 of 2",
-    title: "Add Your First Product",
+    title: "Add Your First Listing",
     description:
-      "Buyers can only be matched to products you've listed. Add at least one product to your catalog to start appearing in search.",
+      "Buyers can only be matched to what you've listed. Add at least one product or service to start appearing in search.",
     targetPath: "products",
     targetElementId: "add-product-button",
-    ctaLabel: "Go to Products",
-    instruction: 'Click "Add Product" and fill in your first listing.',
+    ctaLabel: "Go to Listings",
+    instruction:
+      'Click "Add Listing" and fill in your first product or service.',
   },
 } as const;
 
@@ -181,11 +182,20 @@ export default function OnboardingTour() {
   ]);
 
   // ── Scroll target into view on arrival ───────────────────────────────────
+  // Only scroll if no part of the target is already on screen. Requiring the
+  // *entire* element (top AND bottom) to fit the viewport was still too
+  // strict — the profile section is taller than many viewports, so its
+  // bottom clips below the fold even when it's already sitting at the top of
+  // the page, and the unconditional "center" scroll still fired and made the
+  // page visibly jump.
   useEffect(() => {
     if (!onTargetPage) return;
     const timer = setTimeout(() => {
       const el = document.getElementById(stepConfig.targetElementId);
       if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const onScreen = rect.top < window.innerHeight && rect.bottom > 0;
+      if (onScreen) return;
       el.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 500);
     return () => clearTimeout(timer);

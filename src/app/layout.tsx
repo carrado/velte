@@ -97,20 +97,17 @@ const APPLE_SPLASH_SCREENS: { url: string; media: string }[] = [
 
 export const metadata: Metadata = {
   title: {
-    default: "Velte | WhatsApp AI Sales Rep | 24/7 Automated Sales Agent",
-    template: "%s | WhatsApp AI Sales Rep",
+    default: "Velte | Find anything nearby",
+    template: "%s | Velte",
   },
   description:
-    "Deploy an intelligent AI agent on your WhatsApp Business number that answers product questions, negotiates prices, checks inventory, and closes sales — 24 hours a day, 7 days a week.",
+    "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
   keywords: [
-    "WhatsApp AI",
-    "AI sales agent",
-    "WhatsApp Business automation",
-    "automated sales",
-    "AI chatbot",
-    "inventory check",
-    "price negotiation",
-    "24/7 sales",
+    "Velte",
+    "product search Nigeria",
+    "find vendors near me",
+    "AI shopping assistant",
+    "local marketplace search",
   ],
   authors: [{ name: "Your Company Name", url: "https://yourcompany.com" }],
   creator: "Your Company Name",
@@ -121,17 +118,17 @@ export const metadata: Metadata = {
     telephone: false,
   },
   openGraph: {
-    title: "Turn WhatsApp Into Your Smartest Sales Rep",
+    title: "Velte | Find anything nearby",
     description:
-      "Deploy an intelligent AI agent on your WhatsApp Business number that answers product questions, negotiates prices, checks inventory, and closes sales — 24/7.",
+      "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
     url: "https://yourdomain.com",
-    siteName: "WhatsApp AI Sales Rep",
+    siteName: "Velte",
     images: [
       {
         url: "https://yourdomain.com/og-image.jpg", // Replace with your actual image
         width: 1200,
         height: 630,
-        alt: "WhatsApp AI Sales Rep – 24/7 Automated Sales Agent",
+        alt: "Velte – find anything nearby",
       },
     ],
     locale: "en_US",
@@ -139,9 +136,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Turn WhatsApp Into Your Smartest Sales Rep",
+    title: "Velte | Find anything nearby",
     description:
-      "Deploy an intelligent AI agent on your WhatsApp Business number that answers product questions, negotiates prices, checks inventory, and closes sales — 24/7.",
+      "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
     images: ["https://yourdomain.com/twitter-image.jpg"], // Replace
     creator: "@yourtwitterhandle",
   },

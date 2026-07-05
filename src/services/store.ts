@@ -1,5 +1,9 @@
 import { api } from "@/lib/api-client";
-import type { Store, UpdateStorePayload } from "@/types/store";
+import type {
+  Store,
+  UpdateStorePayload,
+  ConnectedCatalog,
+} from "@/types/store";
 
 export const storeApi = {
   getMyStore: async (): Promise<Store> => {
@@ -10,5 +14,13 @@ export const storeApi = {
   updateMyStore: async (payload: UpdateStorePayload): Promise<Store> => {
     const { store } = await api.put<{ store: Store }>("/api/store", payload);
     return store;
+  },
+
+  connectCatalog: async (sourceUrl: string): Promise<ConnectedCatalog> => {
+    const { catalog } = await api.post<{ catalog: ConnectedCatalog }>(
+      "/api/store/connect-catalog",
+      { sourceUrl },
+    );
+    return catalog;
   },
 };

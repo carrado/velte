@@ -22,11 +22,20 @@ import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUserStore } from "@/store/userStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
-import { settingsApi } from "@/services/settings";
+import { settingsApi, ADDRESS_CHANGE_COOLDOWN_MS } from "@/services/settings";
 import { usersApi } from "@/services/users";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
 import LogoutModal from "@/components/LogOutModal";
+import { NIGERIA_STATES } from "@/lib/states";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { UserLocation } from "@/types/user";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -37,7 +46,9 @@ interface UserProfile {
   phone: string;
   businessName: string;
   area: string;
+  state: string;
   location: UserLocation | null;
+  addressChangedAt: string | null;
 }
 
 interface PasswordConfig {
@@ -57,6 +68,9 @@ function InputField({
   icon: Icon,
   className,
   hint,
+  disabled,
+  name,
+  autoComplete,
 }: {
   label: string;
   value: string | number;
@@ -66,6 +80,9 @@ function InputField({
   icon?: React.ElementType;
   className?: string;
   hint?: string;
+  disabled?: boolean;
+  name?: string;
+  autoComplete?: string;
 }) {
   return (
     <div className={className}>
@@ -84,9 +101,13 @@ function InputField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
+          disabled={disabled}
+          name={name}
+          autoComplete={autoComplete}
           className={cn(
             "w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow",
             Icon ? "pl-9 pr-3.5" : "px-3.5",
+            disabled && "bg-gray-50 text-gray-400 cursor-not-allowed",
           )}
         />
       </div>
@@ -187,7 +208,9 @@ function AccountSettingsPanel() {
     phone: "",
     businessName: "",
     area: "",
+    state: "",
     location: null,
+    addressChangedAt: null,
   });
   const [avatarPreview, setAvatarPreview] = useState("");
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -204,13 +227,24 @@ function AccountSettingsPanel() {
       phone: source.phone ?? "",
       businessName: source.company?.name ?? "",
       area: source.area ?? "",
+      state: source.state ?? "",
       location: source.location ?? null,
+      addressChangedAt: source.addressChangedAt ?? null,
     });
     if (source.avatar && !avatarPreview) {
       setAvatarPreview(source.avatar);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileData, storeUser]);
+
+  const addressLockedUntil = profile.addressChangedAt
+    ? new Date(
+        new Date(profile.addressChangedAt).getTime() +
+          ADDRESS_CHANGE_COOLDOWN_MS,
+      )
+    : null;
+  const addressLocked =
+    !!addressLockedUntil && addressLockedUntil.getTime() > Date.now();
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -276,9 +310,20 @@ function AccountSettingsPanel() {
 
   const profileMutation = useMutation({
     mutationFn: settingsApi.updateProfile,
-    onSuccess: () => {
+    onSuccess: ({ addressChangeBlocked, addressChangeAvailableAt }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.profile });
-      toast.success("Profile updated");
+      if (addressChangeBlocked && addressChangeAvailableAt) {
+        toast.success(
+          `Profile updated. Business address wasn't changed — you can update it again on ${new Date(
+            addressChangeAvailableAt,
+          ).toLocaleString("en-NG", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}.`,
+        );
+      } else {
+        toast.success("Profile updated");
+      }
       useOnboardingStore.getState().completeStep(1);
     },
     onError: (err: Error) => toast.error(err.message),
@@ -291,6 +336,7 @@ function AccountSettingsPanel() {
       phone: profile.phone,
       businessName: profile.businessName,
       area: profile.area,
+      state: profile.state,
       ...(profile.location ? { location: profile.location } : {}),
     });
   };
@@ -447,6 +493,8 @@ function AccountSettingsPanel() {
             onChange={(v) => setProfile((p) => ({ ...p, fullName: v }))}
             placeholder="John Doe"
             icon={User}
+            name="fullName"
+            autoComplete="name"
           />
           <InputField
             label="Business Name"
@@ -454,6 +502,8 @@ function AccountSettingsPanel() {
             onChange={(v) => setProfile((p) => ({ ...p, businessName: v }))}
             placeholder="My Store Ltd"
             icon={Building2}
+            name="businessName"
+            autoComplete="organization"
           />
           <InputField
             label="Email Address"
@@ -462,6 +512,8 @@ function AccountSettingsPanel() {
             placeholder="you@business.com"
             icon={Mail}
             type="email"
+            name="email"
+            autoComplete="email"
           />
           <InputField
             label="Phone Number"
@@ -469,15 +521,52 @@ function AccountSettingsPanel() {
             onChange={(v) => setProfile((p) => ({ ...p, phone: v }))}
             placeholder="+234 800 000 0000"
             icon={Phone}
-          />
-          <InputField
-            label="Area / Neighbourhood"
-            value={profile.area}
-            onChange={(v) => setProfile((p) => ({ ...p, area: v }))}
-            placeholder="e.g. Ikeja, Lagos"
-            icon={MapPin}
+            name="phone"
+            autoComplete="tel"
           />
         </div>
+
+        {/* State + Business Address — same layout/order as signup */}
+        <div className="mt-4">
+          <label className="text-dash-body font-semibold text-gray-900 block mb-1.5">
+            State
+          </label>
+          <Select
+            value={profile.state}
+            onValueChange={(v) => setProfile((p) => ({ ...p, state: v ?? "" }))}
+            disabled={addressLocked}
+          >
+            <SelectTrigger className="w-full h-11 bg-white border border-gray-200 rounded-xl text-dash-body text-gray-700 focus-visible:ring-2 focus-visible:ring-orange-300 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed">
+              <SelectValue placeholder="Select your state" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60">
+              <SelectGroup>
+                {NIGERIA_STATES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <InputField
+          className="mt-4"
+          label="Business Address"
+          value={profile.area}
+          onChange={(v) => setProfile((p) => ({ ...p, area: v }))}
+          placeholder="e.g. 12 Allen Avenue, Ikeja, Lagos"
+          icon={MapPin}
+          disabled={addressLocked}
+          name="velte-business-address"
+          autoComplete="off"
+          hint={
+            addressLocked && addressLockedUntil
+              ? `Locked until ${addressLockedUntil.toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })} — addresses can only change once a day so nearby-buyer matching stays trustworthy.`
+              : undefined
+          }
+        />
 
         <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3.5 py-3">
           <div className="flex items-center gap-2 min-w-0">
@@ -491,10 +580,14 @@ function AccountSettingsPanel() {
           <button
             type="button"
             onClick={handleUseCurrentLocation}
-            disabled={locating}
+            disabled={locating || addressLocked}
             className="text-dash-secondary text-orange-500 font-semibold whitespace-nowrap cursor-pointer hover:text-orange-600 transition-colors disabled:opacity-60"
           >
-            {locating ? "Locating…" : "Use my current location"}
+            {addressLocked
+              ? "Locked"
+              : locating
+                ? "Locating…"
+                : "Use my current location"}
           </button>
         </div>
 
@@ -522,6 +615,13 @@ function AccountSettingsPanel() {
               placeholder="Enter current password"
               icon={Shield}
               type="password"
+              name="currentPassword"
+              // "new-password" (not "current-password") is deliberate — it's
+              // the standard trick to stop browsers auto-populating this
+              // field with the saved site password on page load. The
+              // password-manager convenience of current-password autofill
+              // isn't worth it here.
+              autoComplete="new-password"
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <InputField
@@ -533,6 +633,8 @@ function AccountSettingsPanel() {
                 placeholder="Min. 8 characters"
                 icon={Lock}
                 type="password"
+                name="newPassword"
+                autoComplete="new-password"
               />
               <InputField
                 label="Confirm New Password"
@@ -543,6 +645,8 @@ function AccountSettingsPanel() {
                 placeholder="Repeat new password"
                 icon={Lock}
                 type="password"
+                name="confirmNewPassword"
+                autoComplete="new-password"
               />
             </div>
 

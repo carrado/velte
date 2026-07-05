@@ -1,10 +1,11 @@
-export type BusinessType = "retail" | "food";
+export type BusinessType = "retail" | "food" | "service" | "both" | "food_both";
 
 export interface UserCompany {
   name?: string;
   location?: string;
   services?: string[];
   phone?: string;
+  state?: string;
 }
 
 export interface UserPreferences {
@@ -32,5 +33,10 @@ export interface User {
   onboarding: boolean;
   businessType?: BusinessType;
   area?: string;
+  state?: string;
   location?: UserLocation | null;
+  /** When area/state/location was last changed — drives the address-change cooldown. */
+  addressChangedAt?: string | null;
+  sector?: string;
+  description?: string;
 }

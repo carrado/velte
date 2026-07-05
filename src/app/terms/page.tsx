@@ -6,7 +6,7 @@ import {
   FileCheck,
   Bot,
   UserCheck,
-  Smartphone,
+  MessageCircle,
   CreditCard,
   ShieldAlert,
   Copyright,
@@ -19,6 +19,7 @@ import {
   Mail,
   CheckCircle2,
   ScrollText,
+  Search,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
@@ -35,29 +36,29 @@ interface Section {
   blocks: Block[];
 }
 
-const lastUpdated = "June 10, 2026";
+const lastUpdated = "July 5, 2026";
 
 // Pillars shown in the "Terms at a glance" strip.
 const pillars: { icon: LucideIcon; title: string; text: string }[] = [
   {
-    icon: Bot,
+    icon: Search,
     title: "What Velte does",
-    text: "An AI sales agent on your WhatsApp Business number that answers, negotiates, and closes sales for you.",
-  },
-  {
-    icon: Smartphone,
-    title: "You own your number",
-    text: "You connect a number you control and remain responsible for how it's used under WhatsApp's policies.",
-  },
-  {
-    icon: CreditCard,
-    title: "Transparent billing",
-    text: "Plans are billed in advance, monthly or annually, with clear pricing and no hidden charges.",
+    text: "An AI discovery engine that matches what buyers describe to real, nearby vendor listings — then connects them directly.",
   },
   {
     icon: UserCheck,
-    title: "Cancel anytime",
-    text: "Cancel from your dashboard whenever you like — your access runs to the end of the paid period.",
+    title: "Free to search, free to list",
+    text: "Buyers search without an account; vendors list their business at no cost.",
+  },
+  {
+    icon: CreditCard,
+    title: "You control your sale",
+    text: "Velte isn't a party to the transaction — buyers and vendors deal directly, with Paystack handling any in-app payments.",
+  },
+  {
+    icon: Landmark,
+    title: "Governed by Nigerian law",
+    text: "These Terms are governed by the laws of the Federal Republic of Nigeria.",
   },
 ];
 
@@ -69,7 +70,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "These Terms and Conditions (“Terms”) govern your access to and use of the Velte platform, dashboard, and AI agent (collectively, the “Service”), provided by Velte Technologies (“Velte”, “we”, “us”). By creating an account or using the Service, you agree to be bound by these Terms.",
+        text: "These Terms and Conditions (“Terms”) govern your access to and use of Velte — the buyer-facing AI search experience and the vendor dashboard (collectively, the “Service”) — provided by Velte Technologies (“Velte”, “we”, “us”). By searching, creating an account, or otherwise using the Service, you agree to be bound by these Terms.",
       },
       {
         kind: "p",
@@ -84,11 +85,11 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Velte provides an AI-powered sales automation tool for WhatsApp Business. The AI agent connects to your WhatsApp Business number and can answer product questions, check inventory, negotiate within limits you set, generate payment links, and capture orders.",
+        text: "Velte is an AI-powered discovery engine. A buyer describes what they need — in text, a photo, or both — and our AI matches it against real vendor and product records already in our database, ranked by meaning, proximity, and vendor trust, then connects the buyer directly to the vendor.",
       },
       {
         kind: "p",
-        text: "The Service relies on the official WhatsApp Business Platform and other third-party providers. We continuously improve the Service and may add, modify, or discontinue features. We will give reasonable notice of material changes that significantly reduce core functionality.",
+        text: "Vendors use the Velte dashboard to list and manage their store and products, and to receive buyer inquiries. Search results reflect vendor-submitted data as-is — we do not verify or guarantee that listed prices, stock, or availability remain accurate after a vendor updates them, and Velte is not a party to any resulting sale.",
       },
     ],
   },
@@ -99,7 +100,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "You must be at least 18 years old and operating a legitimate business to use the Service. You are responsible for providing accurate registration information and for keeping it up to date.",
+        text: "Buyers do not need an account to search Velte. Vendors must be at least 18 years old and operating a legitimate business to create a dashboard account. You are responsible for providing accurate registration information and keeping it up to date.",
       },
       {
         kind: "list",
@@ -112,50 +113,44 @@ const sections: Section[] = [
     ],
   },
   {
-    id: "whatsapp",
-    icon: Smartphone,
-    title: "4. WhatsApp & Coexistence Responsibilities",
+    id: "buyer-vendor-communication",
+    icon: MessageCircle,
+    title: "4. Buyer–Vendor Communication",
     blocks: [
       {
         kind: "p",
-        text: "Velte operates on your WhatsApp Business number using Meta's Coexistence mode, so you can keep messaging from the WhatsApp Business app on your phone while the AI handles conversations on the same number. By connecting a number, you confirm and agree that:",
+        text: "When a buyer chooses to chat with a vendor, Velte opens a direct WhatsApp conversation between the buyer and the vendor's own WhatsApp number. Velte is not a party to, and does not read, store, or mediate, that conversation.",
       },
       {
         kind: "list",
         items: [
-          "You own or are authorised to operate the WhatsApp Business number you connect.",
-          "Your use complies with the WhatsApp Business Messaging Policy and Meta's Platform Terms.",
-          "You will obtain any consent required to message your customers and to use an automated assistant where applicable.",
-          "You will not use the Service to send unsolicited spam, deceptive, or prohibited content.",
+          "Vendors are responsible for how they represent their products and conduct themselves in that conversation.",
+          "Vendors must comply with WhatsApp's own policies for the number they use.",
+          "Neither party may use this channel to send unsolicited spam, deceptive, or prohibited content.",
         ],
-      },
-      {
-        kind: "p",
-        text: "Meta may suspend or restrict access to the WhatsApp Business Platform independently of Velte. We are not responsible for actions taken by Meta against your number or account where they result from policy violations or decisions outside our control.",
       },
     ],
   },
   {
     id: "fees",
     icon: CreditCard,
-    title: "5. Fees, Trials & Billing",
+    title: "5. Fees & Payments",
     blocks: [
       {
         kind: "p",
-        text: "Where offered, free trials give you temporary access to the Service. Once a trial ends, access is locked until you subscribe to a paid plan.",
+        text: "Searching Velte as a buyer is free, and listing a business as a vendor is free. Some optional features — such as paid placement or lead-based billing — may be introduced in the future and will always be disclosed clearly before they apply to you; nothing is charged for simply being discoverable to buyers.",
       },
       {
         kind: "list",
         items: [
-          "Subscription fees are billed in advance on the monthly or annual cycle you select.",
-          "Fees are non-refundable except where required by law.",
-          "We may change pricing with at least 30 days' notice before your next billing cycle.",
-          "If a subscription expires and is not renewed, your account is locked until you renew from the billing page.",
+          "Vendors may fund an in-app wallet to access optional paid features, when available.",
+          "Vendors may also use Velte's payment tools (payment links or manual bank transfer verification) to receive payment directly from their own customers, processed by our payment partner, Paystack.",
+          "Velte is not a party to the underlying sale between a vendor and their customer — that payment relationship is between them, with Paystack processing the transaction.",
         ],
       },
       {
         kind: "p",
-        text: "Payments are processed by third-party payment providers. We do not store your full card details.",
+        text: "We do not store your full card details. Any future pricing changes to paid features will be communicated with reasonable notice before they take effect.",
       },
     ],
   },
@@ -171,10 +166,11 @@ const sections: Section[] = [
       {
         kind: "list",
         items: [
-          "Use the Service for any unlawful, fraudulent, or deceptive purpose.",
-          "Send spam, harass, or message people without a lawful basis or consent.",
+          "As a vendor, submit fraudulent, counterfeit, prohibited, or intentionally misleading listings.",
+          "Misrepresent your identity, your business, or a product's availability.",
+          "Use text or image search to harass, spam, or probe the Service.",
           "Transmit malware or interfere with the integrity or performance of the Service.",
-          "Reverse-engineer, copy, or create derivative works from the software.",
+          "Reverse-engineer, scrape, or create derivative works from the software.",
           "Resell or provide access to the Service without our written permission.",
         ],
       },
@@ -187,7 +183,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Velte owns all rights, title, and interest in the Service, including the software, trademarks, logos, and content we provide. You retain ownership of the content you upload, such as your catalog, and you grant us a limited licence to host and process it solely to operate the Service for you.",
+        text: "Velte owns all rights, title, and interest in the Service, including the software, trademarks, logos, and content we provide. You retain ownership of the content you upload, such as your store's products and images, and you grant us a limited licence to host and process it solely to operate the Service for you.",
       },
     ],
   },
@@ -198,7 +194,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "The Service integrates with third-party providers such as Meta's WhatsApp Business Platform, AI model providers, and payment processors. Your use of those services is subject to their respective terms, and we are not responsible for their availability, accuracy, or actions.",
+        text: "The Service integrates with third-party providers such as AI model providers (to understand buyer search), Google (to suggest real nearby businesses when no Velte vendor matches), and Paystack (for payments). Your use of features involving those providers is subject to their respective terms, and we are not responsible for their availability, accuracy, or actions.",
       },
     ],
   },
@@ -209,7 +205,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "You may cancel your account at any time from the dashboard. We may suspend or terminate your access if you breach these Terms, if required by law, or to protect the Service or other users. On termination, your right to use the Service ends, and we will handle your data in line with our Privacy Policy.",
+        text: "Vendors may cancel their account at any time from the dashboard. We may suspend or terminate access if you breach these Terms, if required by law, or to protect the Service or other users. On termination, your right to use the Service ends, and we will handle your data in line with our Privacy Policy.",
       },
     ],
   },
@@ -220,7 +216,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "THE SERVICE IS PROVIDED “AS IS” AND “AS AVAILABLE” WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR SECURE, OR THAT AI-GENERATED RESPONSES WILL ALWAYS BE ACCURATE. YOU ARE RESPONSIBLE FOR REVIEWING THE LIMITS AND SETTINGS YOU CONFIGURE FOR YOUR AI AGENT.",
+        text: "THE SERVICE IS PROVIDED “AS IS” AND “AS AVAILABLE” WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR SECURE, OR THAT A LISTING'S PRICE, STOCK, OR AVAILABILITY REMAINS ACCURATE AFTER A VENDOR UPDATES IT. VELTE FACILITATES THE INTRODUCTION BETWEEN BUYER AND VENDOR AND IS NOT A PARTY TO, AND MAKES NO WARRANTY REGARDING, ANY RESULTING TRANSACTION.",
       },
     ],
   },
@@ -253,7 +249,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "We may revise these Terms from time to time. When we make material changes, we will post the updated version on this page and, where appropriate, notify you by email or in the dashboard. Your continued use of the Service after changes take effect constitutes acceptance of the revised Terms.",
+        text: "We may revise these Terms from time to time. When we make material changes, we will post the updated version on this page and, where appropriate, notify vendors by email or in the dashboard. Your continued use of the Service after changes take effect constitutes acceptance of the revised Terms.",
       },
     ],
   },
@@ -284,13 +280,13 @@ function SectionBlocks({ blocks }: { blocks: Block[] }) {
     <div className="space-y-4">
       {blocks.map((block, i) =>
         block.kind === "p" ? (
-          <p key={i} className="text-white/60 leading-relaxed">
+          <p key={i} className="text-gray-500 leading-relaxed">
             {block.text}
           </p>
         ) : (
           <ul key={i} className="space-y-2.5">
             {block.items.map((item, j) => (
-              <li key={j} className="flex gap-3 text-white/60 leading-relaxed">
+              <li key={j} className="flex gap-3 text-gray-500 leading-relaxed">
                 <CheckCircle2
                   className="w-4 h-4 mt-1 shrink-0"
                   style={{ color: ORANGE }}
@@ -309,14 +305,13 @@ export default function Terms() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#050d08] min-h-screen">
+      <main className="bg-[#F1F5F9] min-h-screen">
         {/* ---------- Hero ---------- */}
         <section className="relative overflow-hidden pt-32 pb-20">
           {/* Grid background */}
           <div
             className="absolute inset-0 opacity-[0.035]"
             style={{
-              backgroundImage: `linear-gradient(${ORANGE} 1px, transparent 1px), linear-gradient(90deg, ${ORANGE} 1px, transparent 1px)`,
               backgroundSize: "64px 64px",
             }}
           />
@@ -345,25 +340,24 @@ export default function Terms() {
                   The agreement between us
                 </span>
 
-                <h1 className="text-4xl sm:text-5xl font-bold text-white leading-[1.1] tracking-tight mb-5 text-balance">
+                <h1 className="text-4xl sm:text-5xl font-bold text-[#023337] leading-[1.1] tracking-tight mb-5 text-balance">
                   Terms &amp; Conditions
                 </h1>
-                <p className="text-lg text-white/55 leading-relaxed max-w-lg mb-7">
-                  The terms that govern your use of Velte&rsquo;s AI sales agent
-                  on WhatsApp Business &mdash; written to be clear, fair, and
-                  easy to follow.
+                <p className="text-lg text-gray-500 leading-relaxed max-w-lg mb-7">
+                  The terms that govern buyer search and vendor listings on
+                  Velte — written to be clear, fair, and easy to follow.
                 </p>
 
                 {/* Quick chips */}
                 <div className="flex flex-wrap gap-2.5 mb-6">
                   {[
                     "Plain-language terms",
-                    "Official WhatsApp API",
+                    "Free to list, free to search",
                     "Governed by Nigerian law",
                   ].map((chip) => (
                     <span
                       key={chip}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-white/70 bg-white/[0.04] border border-white/10 rounded-full px-3 py-1.5"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1.5"
                     >
                       <CheckCircle2
                         className="w-3.5 h-3.5"
@@ -374,33 +368,57 @@ export default function Terms() {
                   ))}
                 </div>
 
-                <p className="text-white/35 text-sm">
+                <p className="text-gray-400 text-sm">
                   Last updated: {lastUpdated}
                 </p>
               </motion.div>
 
-              {/* Hero image */}
+              {/* Hero image, with floating trust badges instead of a plain overlay */}
               <motion.div
                 initial={{ opacity: 0, x: 40 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-                className="relative"
+                className="relative w-full max-w-md mx-auto lg:mx-0 lg:ml-auto"
               >
                 <div
                   className="absolute -inset-6 rounded-[2.5rem] blur-3xl"
                   style={{ background: "rgba(247,107,16,0.1)" }}
                 />
-                <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl shadow-black/50">
+                <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden border border-gray-200 shadow-2xl shadow-gray-300/50">
                   <Image
                     src="https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=900&q=80&auto=format&fit=crop"
                     alt="Business partners agreeing on terms with a handshake"
                     fill
                     priority
-                    sizes="(max-width: 1024px) 90vw, 520px"
+                    sizes="(max-width: 1024px) 90vw, 480px"
                     className="object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#050d08] via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
                 </div>
+
+                {/* Floating badges */}
+                <motion.div
+                  initial={{ opacity: 0, x: 16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.9 }}
+                  className="absolute -right-3 top-6 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
+                >
+                  <ScrollText className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
+                    Plain-language terms
+                  </span>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 1.3 }}
+                  className="absolute -left-3 bottom-8 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
+                >
+                  <Landmark className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
+                    Governed by Nigerian law
+                  </span>
+                </motion.div>
               </motion.div>
             </div>
           </div>
@@ -416,7 +434,7 @@ export default function Terms() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: i * 0.08 }}
-                className="bg-white/[0.03] border border-white/10 rounded-2xl p-5 hover:border-white/20 transition-colors"
+                className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5 hover:border-gray-300 transition-colors"
               >
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
@@ -424,10 +442,10 @@ export default function Terms() {
                 >
                   <pillar.icon className="w-5 h-5" style={{ color: ORANGE }} />
                 </div>
-                <h3 className="text-white font-semibold mb-1.5">
+                <h3 className="text-[#023337] font-semibold mb-1.5">
                   {pillar.title}
                 </h3>
-                <p className="text-white/50 text-sm leading-relaxed">
+                <p className="text-gray-500 text-sm leading-relaxed">
                   {pillar.text}
                 </p>
               </motion.div>
@@ -442,7 +460,7 @@ export default function Terms() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-transparent"
+            className="relative overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
           >
             <div className="grid lg:grid-cols-2 gap-0 items-stretch">
               {/* Text */}
@@ -457,24 +475,25 @@ export default function Terms() {
                   <ShieldAlert className="w-3.5 h-3.5" />
                   Using Velte responsibly
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4 leading-tight">
-                  A simple deal: we power the AI, you message responsibly.
+                <h2 className="text-2xl sm:text-3xl font-bold text-[#023337] mb-4 leading-tight">
+                  A simple deal: we match honestly, you list honestly.
                 </h2>
-                <p className="text-white/55 leading-relaxed mb-6">
-                  Velte runs on the official WhatsApp Business Platform, so the
-                  way you message customers matters. Keeping to WhatsApp&rsquo;s
-                  policies protects your number, your customers, and your
-                  business.
+                <p className="text-gray-500 leading-relaxed mb-6">
+                  Our AI never invents a vendor, price, or stock level — it only
+                  ever surfaces what&rsquo;s really in the database. That only
+                  works if what vendors put in the database is accurate. Keeping
+                  listings honest and current protects buyers, other vendors,
+                  and your own reputation on Velte.
                 </p>
                 <ul className="space-y-3">
                   {[
-                    "Connect only a number you own or are authorised to use.",
-                    "Message customers with consent and a lawful basis.",
-                    "No spam, deception, or prohibited content.",
+                    "List only products or services you can actually fulfil.",
+                    "Keep prices and stock reasonably up to date.",
+                    "Buyers and vendors transact directly — Velte facilitates the introduction, not the sale.",
                   ].map((item) => (
                     <li
                       key={item}
-                      className="flex gap-3 text-white/70 text-sm leading-relaxed"
+                      className="flex gap-3 text-gray-600 text-sm leading-relaxed"
                     >
                       <CheckCircle2
                         className="w-4 h-4 mt-0.5 shrink-0"
@@ -495,7 +514,7 @@ export default function Terms() {
                   sizes="(max-width: 1024px) 100vw, 520px"
                   className="object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-[#050d08] via-[#050d08]/30 to-transparent lg:bg-gradient-to-l" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#F1F5F9] via-[#F1F5F9]/30 to-transparent lg:bg-gradient-to-l" />
               </div>
             </div>
           </motion.div>
@@ -507,7 +526,7 @@ export default function Terms() {
             {/* Table of contents */}
             <aside className="hidden lg:block">
               <div className="sticky top-28">
-                <p className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-4">
                   On this page
                 </p>
                 <nav className="space-y-1">
@@ -515,7 +534,7 @@ export default function Terms() {
                     <a
                       key={s.id}
                       href={`#${s.id}`}
-                      className="block text-sm text-white/45 hover:text-white border-l border-white/10 hover:border-[rgb(247,107,16)] pl-3 py-1.5 transition-colors"
+                      className="block text-sm text-gray-400 hover:text-[#023337] border-l border-gray-200 hover:border-orange-500 pl-3 py-1.5 transition-colors"
                     >
                       {s.title}
                     </a>
@@ -546,7 +565,7 @@ export default function Terms() {
                         style={{ color: ORANGE }}
                       />
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-semibold text-white">
+                    <h2 className="text-xl sm:text-2xl font-semibold text-[#023337]">
                       {section.title}
                     </h2>
                   </div>

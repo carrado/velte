@@ -14,7 +14,7 @@ const faqs = [
   },
   {
     q: "How much does a lead cost?",
-    a: "We're finalising exact pricing as Velte Connect rolls out. It'll be a small, predictable cost per lead — never a surprise charge.",
+    a: "We're finalising exact pricing as Velte rolls out. It'll be a small, predictable cost per lead — never a surprise charge.",
   },
   {
     q: "What counts as a lead?",

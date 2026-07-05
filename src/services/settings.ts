@@ -15,8 +15,22 @@ export interface UpdateProfileData {
   businessName?: string;
   avatar?: string;
   area?: string;
+  state?: string;
   location?: UserLocation;
 }
+
+export interface UpdateProfileResult {
+  user: User;
+  /** True when an area/location change in this request was rejected by the
+   * cooldown — the rest of the profile (name, phone, etc.) still saved. */
+  addressChangeBlocked: boolean;
+  addressChangeAvailableAt: string | null;
+}
+
+/** Mirrors ADDRESS_CHANGE_COOLDOWN_MS in velte-backend's updateProfile
+ * controller — lets the UI compute the same "locked until" window from
+ * `addressChangedAt` alone, without waiting on a save attempt to find out. */
+export const ADDRESS_CHANGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export interface RequestPasswordChangeData {
   currentPassword: string;
@@ -54,7 +68,9 @@ function mapRawUser(u: Record<string, unknown>): User {
     onboarding: (u.onboarding as boolean) ?? false,
     businessType: (u.businessType as BusinessType) ?? undefined,
     area: (u.area as string) ?? undefined,
+    state: (u.state as string) ?? undefined,
     location: mapGeo(u.geo),
+    addressChangedAt: (u.addressChangedAt as string) ?? null,
   };
 }
 
@@ -68,14 +84,21 @@ export const settingsApi = {
     return user;
   },
 
-  updateProfile: async (data: UpdateProfileData): Promise<User> => {
-    const { user: raw } = await api.put<{ user: Record<string, unknown> }>(
-      "/api/auth/profile",
-      data,
-    );
+  updateProfile: async (
+    data: UpdateProfileData,
+  ): Promise<UpdateProfileResult> => {
+    const {
+      user: raw,
+      addressChangeBlocked,
+      addressChangeAvailableAt,
+    } = await api.put<{
+      user: Record<string, unknown>;
+      addressChangeBlocked: boolean;
+      addressChangeAvailableAt: string | null;
+    }>("/api/auth/profile", data);
     const user = mapRawUser(raw);
     useUserStore.getState().updateUser(user);
-    return user;
+    return { user, addressChangeBlocked, addressChangeAvailableAt };
   },
 
   requestPasswordChange: async (

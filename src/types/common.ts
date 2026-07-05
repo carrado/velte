@@ -59,3 +59,9 @@ export interface LogoutModalProps {
 export interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<{ outcome: "accepted" | "dismissed" }>;
 }
+
+export interface WhatsAppButtonProps {
+  href: string;
+  label: string;
+  className?: string;
+}

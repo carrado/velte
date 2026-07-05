@@ -4,9 +4,7 @@ import { motion } from "motion/react";
 import Image from "next/image";
 import {
   Shield,
-  MessageCircle,
   Database,
-  Bot,
   Share2,
   Clock,
   Lock,
@@ -16,8 +14,10 @@ import {
   RefreshCw,
   Mail,
   CheckCircle2,
-  Phone,
-  Smartphone,
+  Search,
+  EyeOff,
+  MapPin,
+  ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
@@ -34,29 +34,29 @@ interface Section {
   blocks: Block[];
 }
 
-const lastUpdated = "June 10, 2026";
+const lastUpdated = "July 5, 2026";
 
 // Pillars shown in the "Privacy at a glance" strip.
 const pillars: { icon: LucideIcon; title: string; text: string }[] = [
   {
-    icon: MessageCircle,
-    title: "Coexistence-first",
-    text: "Your AI works alongside the WhatsApp Business app on your phone — we only touch the business number you connect.",
+    icon: EyeOff,
+    title: "Anonymous by design",
+    text: "Searching doesn't require an account — we don't build a profile or history tied to who you are.",
   },
   {
-    icon: Lock,
-    title: "Encrypted & secured",
-    text: "Conversations and credentials are encrypted in transit and at rest, with strict access controls.",
+    icon: Database,
+    title: "Real data only",
+    text: "Our AI never invents a vendor, price, or stock level — every result comes straight from the database.",
   },
   {
-    icon: Bot,
-    title: "Never sold, never spammed",
-    text: "We don't sell your data and never use your customers' conversations to train third-party models without consent.",
+    icon: MapPin,
+    title: "Location used only for matching",
+    text: "Your approximate location is used only to find nearby vendors — never sold or used for ads.",
   },
   {
     icon: UserCheck,
-    title: "You stay in control",
-    text: "Disconnect your number, export, or delete your data at any time — the choice is always yours.",
+    title: "Vendors stay in control",
+    text: "Edit, unpublish, or delete your store and products at any time from your dashboard.",
   },
 ];
 
@@ -68,31 +68,34 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Velte Technologies (“Velte”, “we”, “us”) builds an AI sales agent that lives on your WhatsApp Business number — answering product questions, negotiating, checking inventory, and closing sales on your behalf. Because that work happens inside private conversations, protecting your data and your customers' data is core to everything we do.",
+        text: "Velte Technologies (“Velte”, “we”, “us”) operates Velte — an AI-powered discovery engine that helps buyers describe what they need and find real, nearby vendors who actually have it, plus the dashboard vendors use to list and manage their business.",
       },
       {
         kind: "p",
-        text: "This Privacy Policy explains what information we collect, how the AI agent uses it, who we share it with, and the choices you have. It applies to our website, dashboard, and the AI agent connected to your WhatsApp Business account.",
+        text: "This Privacy Policy explains what information we collect, how our AI uses it, who we share it with, and the choices you have. It applies to our website, the buyer-facing search experience, and the vendor dashboard.",
       },
     ],
   },
   {
-    id: "coexistence",
-    icon: Smartphone,
-    title: "2. WhatsApp Business & Coexistence",
+    id: "how-search-works",
+    icon: Search,
+    title: "2. How Buyer Search Works",
     blocks: [
       {
         kind: "p",
-        text: "Velte connects to your WhatsApp Business number through the official WhatsApp Business Platform using Meta's Coexistence mode. Coexistence means you keep chatting with customers from the WhatsApp Business app on your phone exactly as you do today, while Velte's AI handles conversations in parallel on the very same number. You are never asked to migrate away from, or give up, your existing WhatsApp Business app.",
+        text: "Searching on Velte doesn't require an account. When you search, we may use:",
       },
       {
         kind: "list",
         items: [
-          "We access only the business conversations on the number you explicitly connect — never your personal WhatsApp chats or contacts.",
-          "Messages flow through Meta's secure, encrypted infrastructure. We process only the messages needed for the AI to read, understand, and reply.",
-          "You can pause the AI, disconnect the number, or revoke access from Meta Business settings at any time, returning the number to you alone.",
-          "We operate in line with the WhatsApp Business Messaging Policy and Meta's Platform Terms. Where required, your customers are made aware they may be chatting with an automated assistant.",
+          "Your approximate location (with your permission) — used only to rank vendors by proximity, never stored against a persistent profile.",
+          "The text you type describing what you need.",
+          "A photo you choose to upload instead of, or alongside, text — used only to identify what you're looking for.",
         ],
+      },
+      {
+        kind: "p",
+        text: "Because there's no buyer account, we don't build a search history or profile tied to who you are. Each search is treated as its own, independent request.",
       },
     ],
   },
@@ -103,69 +106,37 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Information you provide directly when you create an account, set up your AI, or contact us:",
+        text: "From buyers, only what's described above — no name, email, or account is required to search.",
+      },
+      {
+        kind: "p",
+        text: "From vendors, when you create an account and list your business:",
       },
       {
         kind: "list",
         items: [
-          "Account details — name, email address, business name, and the phone number you connect.",
-          "Catalog content you upload — products, descriptions, prices, images, and inventory.",
-          "Payment information, processed securely by our third-party payment providers (we do not store full card details).",
+          "Account details — name, phone/WhatsApp number, email address, and business location.",
+          "Store and product information you add — descriptions, sectors, prices, images, and stock.",
+          "Wallet and payment records processed by our payment partner, Paystack (we do not store full card details).",
         ],
       },
       {
         kind: "p",
-        text: "Information from your connected WhatsApp Business number, required to run the AI agent:",
-      },
-      {
-        kind: "list",
-        items: [
-          "Customer messages and the AI's replies on the connected business number.",
-          "Customer display names and phone numbers as supplied by WhatsApp.",
-          "Order, negotiation, and payment-link activity generated during a conversation.",
-        ],
-      },
-      {
-        kind: "p",
-        text: "Information collected automatically when you use our website and dashboard: log data (IP address, browser type, pages visited), device information, and usage data (features used, time spent, interactions).",
-      },
-    ],
-  },
-  {
-    id: "ai-use",
-    icon: Bot,
-    title: "4. How Your AI Agent Uses Conversation Data",
-    blocks: [
-      {
-        kind: "p",
-        text: "Conversation data is used solely to operate the service you signed up for — letting your AI agent respond accurately and close sales:",
-      },
-      {
-        kind: "list",
-        items: [
-          "Understanding customer questions and generating relevant, on-brand replies.",
-          "Checking your catalog and inventory so quotes and availability are correct.",
-          "Negotiating within the limits you set and issuing secure payment links.",
-          "Producing your sales analytics, order history, and conversation summaries.",
-        ],
-      },
-      {
-        kind: "p",
-        text: "We do not sell conversation data, and we do not use your customers' messages to train third-party AI models without your explicit consent. Where AI model providers process messages to generate a reply, they act as our processors under contractual confidentiality and data-protection terms.",
+        text: "Automatically, from anyone using our website or dashboard: basic log data (IP address, browser type, pages visited) and device information.",
       },
     ],
   },
   {
     id: "how-we-use",
     icon: CheckCircle2,
-    title: "5. How We Use Your Information",
+    title: "4. How We Use Your Information",
     blocks: [
       {
         kind: "list",
         items: [
-          "Provide, maintain, and improve the service and the quality of AI responses.",
-          "Process transactions and send related confirmations and receipts.",
-          "Communicate with you about updates, security notices, and support.",
+          "Operate and improve search matching and result quality.",
+          "Process vendor transactions and send related confirmations.",
+          "Communicate with vendors about updates, security notices, and support.",
           "Monitor usage to keep the platform reliable, secure, and fraud-free.",
           "Comply with legal obligations and enforce our terms.",
         ],
@@ -175,19 +146,17 @@ const sections: Section[] = [
   {
     id: "sharing",
     icon: Share2,
-    title: "6. Sharing of Information",
+    title: "5. Sharing of Information",
     blocks: [
       {
         kind: "p",
-        text: "We do not sell your personal information. We share data only with the partners required to deliver the service, each bound by data-protection agreements:",
+        text: "We do not sell your personal information. We share data only with the partners required to deliver the service:",
       },
       {
         kind: "list",
         items: [
-          "Meta Platforms — to send and receive messages via the WhatsApp Business Platform.",
-          "AI model providers — to generate the agent's replies, as our processors.",
-          "Payment processors — to issue payment links and process transactions securely.",
-          "Cloud hosting and analytics providers — to run and monitor the platform.",
+          "The vendor you choose to chat with — only if you tap “chat with vendor,” which opens a direct WhatsApp conversation between you and that vendor. Velte is not part of that conversation and doesn't read or store its content.",
+          "Paystack — to process vendor wallet top-ups and payments securely.",
           "Authorities — where required by law, regulation, or valid legal process.",
         ],
       },
@@ -196,33 +165,33 @@ const sections: Section[] = [
   {
     id: "retention",
     icon: Clock,
-    title: "7. Data Retention",
+    title: "6. Data Retention",
     blocks: [
       {
         kind: "p",
-        text: "We retain conversation and account data for as long as your account is active and the AI needs it to provide context and analytics. When you disconnect a number or close your account, we delete or anonymise the associated conversation data within a reasonable period, except where we must retain limited records to meet legal, tax, or fraud-prevention obligations.",
+        text: "Search queries and locations are logged to improve matching quality and to understand buyer demand — including which real, nearby businesses buyers were shown that aren't yet on Velte — and this log isn't tied to a buyer identity, since none is collected. Vendor account, store, and product data is retained while the account is active. When a vendor deletes a product or store, or closes their account, we remove or anonymise the associated data within a reasonable period, except where we must retain limited records for legal, tax, or fraud-prevention obligations.",
       },
     ],
   },
   {
     id: "security",
     icon: Lock,
-    title: "8. Data Security",
+    title: "7. Data Security",
     blocks: [
       {
         kind: "p",
-        text: "We apply industry-standard safeguards including encryption in transit and at rest, scoped access controls, and regular security reviews. WhatsApp access tokens are stored securely and used only to operate your agent. No method of transmission over the Internet is completely secure, so while we work hard to protect your data, we cannot guarantee absolute security.",
+        text: "We apply industry-standard safeguards including encryption in transit and at rest, scoped access controls, and regular security reviews. No method of transmission over the Internet is completely secure, so while we work hard to protect your data, we cannot guarantee absolute security.",
       },
     ],
   },
   {
     id: "your-rights",
     icon: UserCheck,
-    title: "9. Your Rights and Choices",
+    title: "8. Your Rights and Choices",
     blocks: [
       {
         kind: "p",
-        text: "Depending on your location, you may have the right to access, correct, delete, or export your personal information, to object to or restrict certain processing, and to withdraw consent. You can also disconnect your WhatsApp number at any time to stop further processing.",
+        text: "Vendors may access, correct, delete, or export their account and store data at any time from the dashboard, or by contacting us. Because buyer search requires no account, the main choices available to buyers are whether to grant location permission or upload a photo — both are optional, and search still works with text alone.",
       },
       {
         kind: "p",
@@ -233,40 +202,40 @@ const sections: Section[] = [
   {
     id: "international",
     icon: Globe,
-    title: "10. International Data Transfers",
+    title: "9. International Data Transfers",
     blocks: [
       {
         kind: "p",
-        text: "Velte and its providers may process your information in countries other than your own. When we transfer data internationally, we put appropriate safeguards in place, such as standard contractual clauses, to ensure it remains protected.",
+        text: "Some of our AI and infrastructure providers process data outside Nigeria. When we transfer data internationally, we put appropriate safeguards in place, such as standard contractual clauses, to keep it protected.",
       },
     ],
   },
   {
     id: "children",
     icon: Baby,
-    title: "11. Children's Privacy",
+    title: "10. Children's Privacy",
     blocks: [
       {
         kind: "p",
-        text: "Our services are intended for businesses and are not directed to individuals under 18. We do not knowingly collect personal information from children. If you believe a child has provided us with information, please contact us so we can remove it.",
+        text: "Our services are not directed to individuals under 18. We do not knowingly collect personal information from children. If you believe a child has provided us with information, please contact us so we can remove it.",
       },
     ],
   },
   {
     id: "changes",
     icon: RefreshCw,
-    title: "12. Changes to This Policy",
+    title: "11. Changes to This Policy",
     blocks: [
       {
         kind: "p",
-        text: "We may update this Privacy Policy from time to time. We will post the revised version on this page and, where changes are significant, notify you by email or in the dashboard.",
+        text: "We may update this Privacy Policy from time to time. We will post the revised version on this page and, where changes are significant, notify vendors by email or in the dashboard.",
       },
     ],
   },
   {
     id: "contact",
     icon: Mail,
-    title: "13. Contact Us",
+    title: "12. Contact Us",
     blocks: [
       {
         kind: "p",
@@ -290,13 +259,13 @@ function SectionBlocks({ blocks }: { blocks: Block[] }) {
     <div className="space-y-4">
       {blocks.map((block, i) =>
         block.kind === "p" ? (
-          <p key={i} className="text-white/60 leading-relaxed">
+          <p key={i} className="text-gray-500 leading-relaxed">
             {block.text}
           </p>
         ) : (
           <ul key={i} className="space-y-2.5">
             {block.items.map((item, j) => (
-              <li key={j} className="flex gap-3 text-white/60 leading-relaxed">
+              <li key={j} className="flex gap-3 text-gray-500 leading-relaxed">
                 <CheckCircle2
                   className="w-4 h-4 mt-1 shrink-0"
                   style={{ color: ORANGE }}
@@ -315,14 +284,13 @@ export default function Privacy() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#050d08] min-h-screen">
+      <main className="bg-[#F1F5F9] min-h-screen">
         {/* ---------- Hero ---------- */}
         <section className="relative overflow-hidden pt-32 pb-20">
           {/* Grid background */}
           <div
             className="absolute inset-0 opacity-[0.035]"
             style={{
-              backgroundImage: `linear-gradient(${ORANGE} 1px, transparent 1px), linear-gradient(90deg, ${ORANGE} 1px, transparent 1px)`,
               backgroundSize: "64px 64px",
             }}
           />
@@ -351,25 +319,24 @@ export default function Privacy() {
                   Your data, protected
                 </span>
 
-                <h1 className="text-4xl sm:text-5xl font-bold text-white leading-[1.1] tracking-tight mb-5 text-balance">
+                <h1 className="text-4xl sm:text-5xl font-bold text-[#023337] leading-[1.1] tracking-tight mb-5 text-balance">
                   Privacy Policy
                 </h1>
-                <p className="text-lg text-white/55 leading-relaxed max-w-lg mb-7">
-                  How we protect your business and your customers&rsquo;
-                  conversations when your AI agent coexists with your WhatsApp
-                  Business number.
+                <p className="text-lg text-gray-500 leading-relaxed max-w-lg mb-7">
+                  How we protect your data as a buyer using Velte&rsquo;s AI
+                  search, and as a vendor managing your store.
                 </p>
 
                 {/* Compliance chips */}
                 <div className="flex flex-wrap gap-2.5 mb-6">
                   {[
-                    "WhatsApp Business Platform",
-                    "Meta Coexistence",
+                    "No account needed to search",
+                    "Real data only — never invented",
                     "NDPR & GDPR aligned",
                   ].map((chip) => (
                     <span
                       key={chip}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-white/70 bg-white/[0.04] border border-white/10 rounded-full px-3 py-1.5"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1.5"
                     >
                       <CheckCircle2
                         className="w-3.5 h-3.5"
@@ -380,33 +347,57 @@ export default function Privacy() {
                   ))}
                 </div>
 
-                <p className="text-white/35 text-sm">
+                <p className="text-gray-400 text-sm">
                   Last updated: {lastUpdated}
                 </p>
               </motion.div>
 
-              {/* Hero image */}
+              {/* Hero image, with floating trust badges instead of a plain overlay */}
               <motion.div
                 initial={{ opacity: 0, x: 40 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-                className="relative"
+                className="relative w-full max-w-md mx-auto lg:mx-0 lg:ml-auto"
               >
                 <div
                   className="absolute -inset-6 rounded-[2.5rem] blur-3xl"
                   style={{ background: "rgba(247,107,16,0.1)" }}
                 />
-                <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl shadow-black/50">
+                <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden border border-gray-200 shadow-2xl shadow-gray-300/50">
                   <Image
                     src="https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=900&q=80&auto=format&fit=crop"
-                    alt="Business owner managing WhatsApp sales securely with Velte"
+                    alt="A vendor managing their store securely on Velte"
                     fill
                     priority
-                    sizes="(max-width: 1024px) 90vw, 520px"
+                    sizes="(max-width: 1024px) 90vw, 480px"
                     className="object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#050d08] via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
                 </div>
+
+                {/* Floating badges */}
+                <motion.div
+                  initial={{ opacity: 0, x: 16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.9 }}
+                  className="absolute -right-3 top-6 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
+                >
+                  <Lock className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
+                    Encrypted &amp; secure
+                  </span>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 1.3 }}
+                  className="absolute -left-3 bottom-8 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
+                >
+                  <EyeOff className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
+                    No account needed
+                  </span>
+                </motion.div>
               </motion.div>
             </div>
           </div>
@@ -422,7 +413,7 @@ export default function Privacy() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: i * 0.08 }}
-                className="bg-white/[0.03] border border-white/10 rounded-2xl p-5 hover:border-white/20 transition-colors"
+                className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5 hover:border-gray-300 transition-colors"
               >
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
@@ -430,10 +421,10 @@ export default function Privacy() {
                 >
                   <pillar.icon className="w-5 h-5" style={{ color: ORANGE }} />
                 </div>
-                <h3 className="text-white font-semibold mb-1.5">
+                <h3 className="text-[#023337] font-semibold mb-1.5">
                   {pillar.title}
                 </h3>
-                <p className="text-white/50 text-sm leading-relaxed">
+                <p className="text-gray-500 text-sm leading-relaxed">
                   {pillar.text}
                 </p>
               </motion.div>
@@ -441,14 +432,14 @@ export default function Privacy() {
           </div>
         </section>
 
-        {/* ---------- Coexistence highlight ---------- */}
+        {/* ---------- Real-data highlight ---------- */}
         <section className="relative max-w-6xl mx-auto px-5 sm:px-8 pb-20">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-transparent"
+            className="relative overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
           >
             <div className="grid lg:grid-cols-2 gap-0 items-stretch">
               {/* Text */}
@@ -460,28 +451,28 @@ export default function Privacy() {
                     color: ORANGE,
                   }}
                 >
-                  <Phone className="w-3.5 h-3.5" />
-                  Built for coexistence
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Built for real matches
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4 leading-tight">
-                  Keep your number. Keep your phone. Add an AI.
+                <h2 className="text-2xl sm:text-3xl font-bold text-[#023337] mb-4 leading-tight">
+                  Real vendors, real inventory — never invented.
                 </h2>
-                <p className="text-white/55 leading-relaxed mb-6">
-                  With Meta Coexistence, you carry on replying from the WhatsApp
-                  Business app whenever you like — your AI simply handles the
-                  rest on the same number. We never read your personal chats,
-                  and you can hand the number fully back to yourself in one
-                  click.
+                <p className="text-gray-500 leading-relaxed mb-6">
+                  Velte&rsquo;s AI never fabricates a vendor, price, or stock
+                  level. Every match comes from a live database record a vendor
+                  actually entered — the AI&rsquo;s job is to understand what
+                  you&rsquo;re asking for and find the closest real answer, not
+                  to guess one.
                 </p>
                 <ul className="space-y-3">
                   {[
-                    "Only the business number you connect is ever accessed.",
-                    "Your personal WhatsApp chats and contacts stay private.",
-                    "Pause the AI or disconnect anytime from Meta settings.",
+                    "Results are ranked by meaning, proximity, and vendor trust — not who paid the most.",
+                    "No real match nearby? We show real nearby businesses, clearly labelled as not yet on Velte — never disguised as a listing.",
+                    "Buyers stay anonymous throughout — no account, no persistent search history.",
                   ].map((item) => (
                     <li
                       key={item}
-                      className="flex gap-3 text-white/70 text-sm leading-relaxed"
+                      className="flex gap-3 text-gray-600 text-sm leading-relaxed"
                     >
                       <CheckCircle2
                         className="w-4 h-4 mt-0.5 shrink-0"
@@ -497,12 +488,12 @@ export default function Privacy() {
               <div className="relative min-h-[260px] lg:min-h-full">
                 <Image
                   src="https://images.unsplash.com/photo-1508243771214-6e95d137426b?w=900&q=80&auto=format&fit=crop"
-                  alt="Merchant chatting with customers on WhatsApp while the AI assists"
+                  alt="A buyer searching for a nearby vendor on Velte"
                   fill
                   sizes="(max-width: 1024px) 100vw, 520px"
                   className="object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-[#050d08] via-[#050d08]/30 to-transparent lg:bg-gradient-to-l" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#F1F5F9] via-[#F1F5F9]/30 to-transparent lg:bg-gradient-to-l" />
               </div>
             </div>
           </motion.div>
@@ -514,7 +505,7 @@ export default function Privacy() {
             {/* Table of contents */}
             <aside className="hidden lg:block">
               <div className="sticky top-28">
-                <p className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-4">
                   On this page
                 </p>
                 <nav className="space-y-1">
@@ -522,7 +513,7 @@ export default function Privacy() {
                     <a
                       key={s.id}
                       href={`#${s.id}`}
-                      className="block text-sm text-white/45 hover:text-white border-l border-white/10 hover:border-[rgb(247,107,16)] pl-3 py-1.5 transition-colors"
+                      className="block text-sm text-gray-400 hover:text-[#023337] border-l border-gray-200 hover:border-orange-500 pl-3 py-1.5 transition-colors"
                     >
                       {s.title}
                     </a>
@@ -553,7 +544,7 @@ export default function Privacy() {
                         style={{ color: ORANGE }}
                       />
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-semibold text-white">
+                    <h2 className="text-xl sm:text-2xl font-semibold text-[#023337]">
                       {section.title}
                     </h2>
                   </div>

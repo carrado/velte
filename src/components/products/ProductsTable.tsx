@@ -64,51 +64,20 @@ function ProductCard({
 
         {/* Price */}
         <div className="mb-3">
-          {pricing.isNegotiable ? (
+          {pricing.quoteOnRequest ? (
             <p className="text-dash-heading font-black text-orange-500">
-              {fmt(pricing.minFinalPrice!, pricing.currencySymbol)}{" "}
+              Contact for quote
+            </p>
+          ) : pricing.isRange ? (
+            <p className="text-dash-heading font-black text-orange-500">
+              {fmt(pricing.price, pricing.currencySymbol)}{" "}
               <span className="text-gray-400 font-medium">–</span>{" "}
-              {fmt(pricing.finalPrice, pricing.currencySymbol)}
+              {fmt(pricing.priceMax!, pricing.currencySymbol)}
             </p>
           ) : (
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-dash-heading font-black text-orange-500">
-                {product.priceFrom && (
-                  <span className="text-gray-400 font-medium text-dash-caption">
-                    from{" "}
-                  </span>
-                )}
-                {fmt(pricing.finalPrice, pricing.currencySymbol)}
-              </p>
-              {pricing.hasDiscount && (
-                <span className="text-dash-caption text-gray-400 line-through">
-                  {fmt(pricing.basePrice, pricing.currencySymbol)}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Breakdown */}
-          {(pricing.hasDiscount || pricing.hasTax || pricing.isNegotiable) && (
-            <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-              {pricing.hasDiscount && (
-                <span className="text-dash-caption text-green-600 font-medium">
-                  −{fmt(pricing.discountAmount!, pricing.currencySymbol)} off
-                </span>
-              )}
-              {pricing.hasTax && (
-                <span className="text-dash-caption text-gray-400">
-                  {product.taxType === "percentage"
-                    ? `+${product.taxValue}% tax`
-                    : `+${fmt(pricing.taxAmount, pricing.currencySymbol)} tax`}
-                </span>
-              )}
-              {pricing.isNegotiable && (
-                <span className="text-dash-caption text-blue-500 font-medium">
-                  Negotiable
-                </span>
-              )}
-            </div>
+            <p className="text-dash-heading font-black text-orange-500">
+              {fmt(pricing.price, pricing.currencySymbol)}
+            </p>
           )}
         </div>
 
@@ -143,11 +112,6 @@ function ProductCard({
               Featured
             </span>
           )}
-          {product.onSale && (available > 0 || product.kind === "service") && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-blue-100 text-blue-700">
-              On Sale
-            </span>
-          )}
           {product.estimatedPrepMins != null && (
             <span className="flex items-center gap-0.5 text-dash-caption text-gray-400 ml-auto">
               <Clock size={10} /> {product.estimatedPrepMins}m
@@ -166,7 +130,7 @@ function EmptyState({ isFood }: { isFood: boolean }) {
         <Package size={24} className="text-gray-300" />
       </div>
       <p className="text-dash-body font-semibold text-gray-400">
-        {isFood ? "No dishes found." : "No products found."}
+        {isFood ? "No dishes found." : "No listings found."}
       </p>
     </div>
   );

@@ -19,6 +19,7 @@ const publicRoutes = [
   "/api",
   "/track",
   "/store",
+  "/search",
 ];
 
 export async function proxy(request: NextRequest) {

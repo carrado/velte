@@ -29,8 +29,10 @@ import {
   Flame,
   Timer,
   ChefHat,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { computePrice, fmt } from "@/lib/product-price";
 import type { CategoryProduct, Category } from "@/types/product";
 import { useIsFood } from "@/hooks/useBusinessType";
 
@@ -298,20 +300,23 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           <XCircle size={28} className="text-red-400" />
         </div>
         <p className="text-dash-heading font-semibold text-gray-500">
-          Product not found
+          Listing not found
         </p>
         <button
           onClick={() => navigate(`/${userId}/products`)}
           className="flex items-center gap-2 text-dash-body text-orange-500 hover:underline cursor-pointer"
         >
           <ArrowLeft size={14} />
-          Back to Products
+          Back to Listings
         </button>
       </div>
     );
   }
 
+  // Services carry no stock — skip every quantity-shaped section for them.
+  const isService = product.kind === "service";
   const available = getAvailableStock(product);
+  const pricing = computePrice(product);
   const stockPercent =
     product.totalQuantity > 0
       ? Math.round((available / product.totalQuantity) * 100)
@@ -353,12 +358,6 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                   </span>
                 </div>
               )}
-              {product.onSale && (
-                <span className="inline-flex items-center mt-2 gap-1 bg-red-50 text-red-600 text-dash-caption font-bold px-2 py-0.5 rounded-full border border-red-100">
-                  <Tag size={10} />
-                  On Sale
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -372,112 +371,120 @@ export default function ViewProductPage({ productId }: { productId: string }) {
               <div className="flex flex-wrap items-end gap-4">
                 <div>
                   <p className="text-dash-caption text-gray-400 mb-0.5 uppercase tracking-wide font-semibold">
-                    Price
+                    {pricing.isRange ? "Price range" : "Price"}
                   </p>
                   <p className="text-[2rem] font-black text-[#023337] leading-none">
-                    ${product.price.toFixed(2)}
+                    {pricing.quoteOnRequest
+                      ? "Contact for quote"
+                      : pricing.isRange
+                        ? `${fmt(pricing.price, pricing.currencySymbol)} – ${fmt(
+                            pricing.priceMax!,
+                            pricing.currencySymbol,
+                          )}`
+                        : fmt(pricing.price, pricing.currencySymbol)}
                   </p>
                 </div>
-                {product.onSale && (
-                  <div className="mb-0.5">
-                    <p className="text-dash-caption text-gray-400 mb-0.5 uppercase tracking-wide font-semibold">
-                      Sale Price
-                    </p>
-                    <p className="text-dash-title font-bold text-red-500">
-                      On sale
-                    </p>
-                  </div>
-                )}
               </div>
 
-              {/* ── Stock badge (top-right of pricing card) ── */}
-              <div
-                className={cn(
-                  "flex items-center gap-1.5 text-dash-caption font-bold px-3 py-1.5 rounded-full shadow-sm flex-shrink-0",
-                  available > 0
-                    ? "bg-green-500 text-white"
-                    : "bg-red-500 text-white",
-                )}
-              >
-                {available > 0 ? (
-                  <CheckCircle2 size={12} />
-                ) : (
-                  <XCircle size={12} />
-                )}
-                {available > 0 ? "In Stock" : "Out of Stock"}
-              </div>
-            </div>
-          </SectionCard>
-
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatPill
-              icon={Layers}
-              label="Total Qty"
-              value={product.totalQuantity}
-              accent
-            />
-            <StatPill
-              icon={ShoppingCart}
-              label="Ordered"
-              value={product.orderedQuantity}
-            />
-            <StatPill icon={Package} label="Available" value={available} />
-            <StatPill icon={BarChart2} label="Reserved" value={reserved} />
-          </div>
-
-          {/* Stock bar */}
-          <SectionCard title="Stock Level" icon={BarChart2}>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-dash-body text-gray-500">
-                  {available} of {product.totalQuantity} units available
-                </span>
-                <span
-                  className={cn(
-                    "text-dash-body font-bold",
-                    stockPercent > 50
-                      ? "text-green-600"
-                      : stockPercent > 20
-                        ? "text-amber-500"
-                        : "text-red-500",
-                  )}
-                >
-                  {stockPercent}%
-                </span>
-              </div>
-              <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+              {/* ── Badge (top-right of pricing card) ── */}
+              {isService ? (
+                <div className="flex items-center gap-1.5 text-dash-caption font-bold px-3 py-1.5 rounded-full flex-shrink-0 bg-teal-50 text-teal-700">
+                  <Wrench size={12} />
+                  Service
+                </div>
+              ) : (
                 <div
                   className={cn(
-                    "h-full rounded-full transition-all",
-                    stockPercent > 50
-                      ? "bg-green-500"
-                      : stockPercent > 20
-                        ? "bg-amber-400"
-                        : "bg-red-500",
+                    "flex items-center gap-1.5 text-dash-caption font-bold px-3 py-1.5 rounded-full shadow-sm flex-shrink-0",
+                    available > 0
+                      ? "bg-green-500 text-white"
+                      : "bg-red-500 text-white",
                   )}
-                  style={{ width: `${stockPercent}%` }}
-                />
-              </div>
-              {product.lowStockThreshold != null &&
-                available <= product.lowStockThreshold &&
-                available > 0 && (
-                  <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                    <AlertTriangle
-                      size={14}
-                      className="text-amber-500 flex-shrink-0"
-                    />
-                    <p className="text-dash-caption text-amber-700 font-medium">
-                      Low stock — only {available} unit
-                      {available !== 1 ? "s" : ""} remaining.
-                    </p>
-                  </div>
-                )}
+                >
+                  {available > 0 ? (
+                    <CheckCircle2 size={12} />
+                  ) : (
+                    <XCircle size={12} />
+                  )}
+                  {available > 0 ? "In Stock" : "Out of Stock"}
+                </div>
+              )}
             </div>
           </SectionCard>
 
-          {/* ── Consolidated Product Info ── */}
-          <SectionCard title="Product Info" icon={Info}>
+          {/* Stats grid — quantity-based, products only */}
+          {!isService && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatPill
+                icon={Layers}
+                label="Total Qty"
+                value={product.totalQuantity}
+                accent
+              />
+              <StatPill
+                icon={ShoppingCart}
+                label="Ordered"
+                value={product.orderedQuantity}
+              />
+              <StatPill icon={Package} label="Available" value={available} />
+              <StatPill icon={BarChart2} label="Reserved" value={reserved} />
+            </div>
+          )}
+
+          {/* Stock bar — products only */}
+          {!isService && (
+            <SectionCard title="Stock Level" icon={BarChart2}>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-dash-body text-gray-500">
+                    {available} of {product.totalQuantity} units available
+                  </span>
+                  <span
+                    className={cn(
+                      "text-dash-body font-bold",
+                      stockPercent > 50
+                        ? "text-green-600"
+                        : stockPercent > 20
+                          ? "text-amber-500"
+                          : "text-red-500",
+                    )}
+                  >
+                    {stockPercent}%
+                  </span>
+                </div>
+                <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      stockPercent > 50
+                        ? "bg-green-500"
+                        : stockPercent > 20
+                          ? "bg-amber-400"
+                          : "bg-red-500",
+                    )}
+                    style={{ width: `${stockPercent}%` }}
+                  />
+                </div>
+                {product.lowStockThreshold != null &&
+                  available <= product.lowStockThreshold &&
+                  available > 0 && (
+                    <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                      <AlertTriangle
+                        size={14}
+                        className="text-amber-500 flex-shrink-0"
+                      />
+                      <p className="text-dash-caption text-amber-700 font-medium">
+                        Low stock — only {available} unit
+                        {available !== 1 ? "s" : ""} remaining.
+                      </p>
+                    </div>
+                  )}
+              </div>
+            </SectionCard>
+          )}
+
+          {/* ── Consolidated Listing Info ── */}
+          <SectionCard title="Listing Info" icon={Info}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
               {/* ID */}
               <div className="flex items-start gap-3">
@@ -486,7 +493,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 </div>
                 <div>
                   <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
-                    Product ID
+                    Listing ID
                   </p>
                   <p className="text-dash-body font-mono text-[#023337] font-semibold break-all">
                     {product.id}

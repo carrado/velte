@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
-import { Wallet, PlusCircle, List, Settings, Store } from "lucide-react";
+import { Wallet, PlusCircle, List, Settings } from "lucide-react";
 import { getInitial } from "@/lib/initials";
 import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
@@ -53,26 +53,15 @@ export default function Sidebar() {
 
   const sections: NavSection[] = [
     {
-      title: "Store",
+      title: isFood ? "My Menu" : "Listings",
       items: [
         {
-          label: "My Store",
-          icon: <Store size={16} />,
-          href: "store",
-          id: "store-nav",
-        },
-      ],
-    },
-    {
-      title: isFood ? "My Menu" : "Products",
-      items: [
-        {
-          label: isFood ? "Add a Dish" : "Add Products",
+          label: isFood ? "Add a Dish" : "Add Listing",
           icon: <PlusCircle size={16} />,
           href: "products/add",
         },
         {
-          label: isFood ? "View Menu" : "Product List",
+          label: isFood ? "View Menu" : "My Listings",
           icon: <List size={16} />,
           href: "products/",
         },

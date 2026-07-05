@@ -2,7 +2,7 @@
 "use client";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
-import { LayoutGrid, PlusCircle, Wallet, Settings, Store } from "lucide-react";
+import { LayoutGrid, PlusCircle, Wallet, Settings } from "lucide-react";
 import { useIsFood } from "@/hooks/useBusinessType";
 
 export default function BottomNav() {
@@ -16,7 +16,7 @@ export default function BottomNav() {
 
   const items = [
     {
-      label: isFood ? "Menu" : "Products",
+      label: isFood ? "Menu" : "Listings",
       icon: <LayoutGrid size={20} />,
       segment: "products",
       // "Add" owns the products/add route, so keep this tab off there.
@@ -27,12 +27,6 @@ export default function BottomNav() {
       icon: <PlusCircle size={20} />,
       segment: "products/add",
       active: subPath === "products/add",
-    },
-    {
-      label: "Store",
-      icon: <Store size={20} />,
-      segment: "store",
-      active: subPath.startsWith("store"),
     },
     {
       label: "Wallet",

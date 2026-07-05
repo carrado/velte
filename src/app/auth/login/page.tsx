@@ -69,7 +69,7 @@ export default function Login() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0d0804] flex items-center justify-center sm:p-5">
+    <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center sm:p-5">
       {/* Background effects */}
       <div
         className="absolute inset-0 opacity-[0.025]"

@@ -10,7 +10,7 @@ export default function Contact() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#050d08] min-h-screen pt-24 pb-20">
+      <main className="bg-[#F1F5F9] min-h-screen pt-24 pb-20">
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
           {/* Hero */}
           <motion.div
@@ -19,10 +19,10 @@ export default function Contact() {
             transition={{ duration: 0.6 }}
             className="text-center max-w-3xl mx-auto mb-16"
           >
-            <h1 className="text-5xl lg:text-6xl font-bold text-white mb-6">
-              Let’s <span className="text-[rgb(247,107,16)]">talk</span>
+            <h1 className="text-5xl lg:text-6xl font-bold text-[#023337] mb-6">
+              Let’s <span className="text-orange-500">talk</span>
             </h1>
-            <p className="text-white/60 text-lg">
+            <p className="text-gray-500 text-lg">
               Have questions? We’d love to hear from you. Send us a message and
               we’ll respond as soon as possible.
             </p>
@@ -35,40 +35,40 @@ export default function Contact() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
-              className="bg-white/5 border border-white/10 rounded-2xl p-8"
+              className="bg-white border border-gray-200 shadow-sm rounded-2xl p-8"
             >
-              <h2 className="text-2xl font-bold text-white mb-6">
+              <h2 className="text-2xl font-bold text-[#023337] mb-6">
                 Send a message
               </h2>
               <form className="space-y-5">
                 <div>
-                  <label className="text-white/60 text-sm block mb-1">
+                  <label className="text-gray-500 text-sm block mb-1">
                     Name
                   </label>
                   <input
                     type="text"
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-1 focus:ring-[rgb(247,107,16)]"
+                    className="w-full bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
                   />
                 </div>
                 <div>
-                  <label className="text-white/60 text-sm block mb-1">
+                  <label className="text-gray-500 text-sm block mb-1">
                     Email
                   </label>
                   <input
                     type="email"
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-1 focus:ring-[rgb(247,107,16)]"
+                    className="w-full bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
                   />
                 </div>
                 <div>
-                  <label className="text-white/60 text-sm block mb-1">
+                  <label className="text-gray-500 text-sm block mb-1">
                     Message
                   </label>
                   <textarea
                     rows={4}
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-1 focus:ring-[rgb(247,107,16)]"
+                    className="w-full bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
                   ></textarea>
                 </div>
-                <Button className="w-full bg-[rgb(247,107,16)] hover:bg-[rgb(247,107,16)]/90 text-white">
+                <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white">
                   Send Message
                 </Button>
               </form>
@@ -82,40 +82,40 @@ export default function Contact() {
               transition={{ duration: 0.5 }}
               className="space-y-6"
             >
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
-                <h2 className="text-2xl font-bold text-white mb-6">
+              <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-8">
+                <h2 className="text-2xl font-bold text-[#023337] mb-6">
                   Other ways to reach us
                 </h2>
                 <div className="space-y-4">
                   <div className="flex items-start gap-4">
-                    <Mail className="w-5 h-5 text-[rgb(247,107,16)] shrink-0 mt-0.5" />
+                    <Mail className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-white/40 text-sm">Email</p>
+                      <p className="text-gray-400 text-sm">Email</p>
                       <a
                         href="mailto:hello@velte.ai"
-                        className="text-white hover:text-[rgb(247,107,16)]"
+                        className="text-[#023337] hover:text-orange-500"
                       >
                         hello@velte.ng
                       </a>
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
-                    <Phone className="w-5 h-5 text-[rgb(247,107,16)] shrink-0 mt-0.5" />
+                    <Phone className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-white/40 text-sm">Phone</p>
+                      <p className="text-gray-400 text-sm">Phone</p>
                       <a
                         href="tel:+15551234567"
-                        className="text-white hover:text-[rgb(247,107,16)]"
+                        className="text-[#023337] hover:text-orange-500"
                       >
                         +234 (0) 816 327 6826
                       </a>
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
-                    <MapPin className="w-5 h-5 text-[rgb(247,107,16)] shrink-0 mt-0.5" />
+                    <MapPin className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-white/40 text-sm">Headquarters</p>
-                      <p className="text-white">
+                      <p className="text-gray-400 text-sm">Headquarters</p>
+                      <p className="text-[#023337]">
                         Plot XI, Republic Estate, Independence Layout, Enugu,
                         Nigeria
                       </p>

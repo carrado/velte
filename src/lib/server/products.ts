@@ -37,19 +37,13 @@ interface ApiProduct {
   id: string;
   name: string;
   kind?: "product" | "service";
-  price_from?: boolean;
+  quote_on_request?: boolean;
   description: string | null;
-  category_id: string;
+  category_id: string | null;
   price: number;
+  price_max: number | null;
   currency: "NGN" | "USD";
-  discounted_price: number | null;
-  tax_included: boolean;
-  tax_type: "percentage" | "fixed" | null;
-  tax_value: number | null;
-  is_negotiable: boolean;
-  minimum_price: number | null;
   is_featured: boolean;
-  on_sale: boolean;
   tags: string[];
   main_image_url: string | null;
   thumbnail_urls: string[];
@@ -146,20 +140,13 @@ function mapProduct(p: ApiProduct): CategoryProduct {
     id: p.id,
     name: p.name,
     kind: p.kind ?? "product",
-    priceFrom: p.price_from ?? false,
+    quoteOnRequest: p.quote_on_request ?? false,
     description: p.description,
-    categoryId: p.category_id,
+    categoryId: p.category_id ?? "",
     price: p.price / 100,
+    priceMax: p.price_max !== null ? p.price_max / 100 : null,
     currency: p.currency,
-    discountedPrice:
-      p.discounted_price !== null ? p.discounted_price / 100 : null,
-    taxIncluded: p.tax_included,
-    taxType: p.tax_type,
-    taxValue: p.tax_value,
-    isNegotiable: p.is_negotiable,
-    minimumPrice: p.minimum_price !== null ? p.minimum_price / 100 : null,
     featured: p.is_featured,
-    onSale: p.on_sale,
     tags: p.tags,
     mainImageUrl: p.main_image_url,
     thumbnailUrls: p.thumbnail_urls,
