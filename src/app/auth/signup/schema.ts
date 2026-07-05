@@ -55,8 +55,7 @@ const baseSchema = z.object({
   location: z.object({ lat: z.number(), lng: z.number() }).nullable(),
   sector: z.string().min(1, "Please select your business sector"),
   businessType: z.enum(["retail", "food", "service", "both", "food_both"], {
-    required_error: "Please select your business sector",
-    invalid_type_error: "Please select your business sector",
+    message: "Please select your business sector",
   }),
   description: z
     .string()
