@@ -11,8 +11,10 @@ interface SearchStreamHandlers {
 /**
  * Posts to /api/search and reads its newline-delimited JSON stream,
  * dispatching each parsed event to the matching handler. Plain fetch +
- * ReadableStream — no dependency on the Vercel AI SDK's chat protocol,
- * since this is a single-turn "staged reveal," not a chat thread.
+ * ReadableStream — no dependency on the Vercel AI SDK's chat protocol. Each
+ * call is one turn's "staged reveal"; SearchHome.tsx calls this once per
+ * message and supplies `body.history` for conversational context — this
+ * function itself has no notion of a thread.
  */
 export async function runSearchStream(
   body: SearchRequestBody,

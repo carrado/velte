@@ -47,7 +47,10 @@ export function StoreResultCard({ match }: { match: StoreMatch }) {
       <div className="flex items-center gap-1.5 text-xs text-gray-500">
         <MapPin size={13} className="shrink-0" />
         <span className="truncate">
-          {match.area ?? match.state ?? "Nearby"} · {match.distanceKm}km away
+          {match.area ??
+            match.state ??
+            (match.distanceKm != null ? "Nearby" : "Nigeria")}
+          {match.distanceKm != null && ` · ${match.distanceKm}km away`}
         </span>
       </div>
 

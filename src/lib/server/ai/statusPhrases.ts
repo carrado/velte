@@ -23,7 +23,17 @@ export function understandingRequestPhrase(hasImage: boolean): string {
       ]);
 }
 
-export function searchingPhrase(what: string, location: string): string {
+// `location` is undefined when there's no location signal at all (device
+// permission denied/unavailable AND the buyer named no place) — the search
+// runs nationwide instead, so the status line shouldn't claim proximity.
+export function searchingPhrase(what: string, location?: string): string {
+  if (!location) {
+    return pick([
+      `Searching for "${what}" across Velte…`,
+      `Looking for "${what}" nationwide…`,
+      `Checking all of Velte for "${what}"…`,
+    ]);
+  }
   return pick([
     `Searching for "${what}" near ${location}…`,
     `Looking for "${what}" near ${location}…`,
@@ -35,20 +45,37 @@ export function searchingPhrase(what: string, location: string): string {
 export function foundCountPhrase(
   count: number,
   noun: "product" | "vendor",
-  matchTier: "local" | "state",
+  // `null` shouldn't occur when count > 0 in practice, but is accepted here
+  // so callers can pass a MatchTier straight through without an unsafe cast
+  // — it's treated the same as "local" (the default phrasing below).
+  matchTier: "local" | "nearby" | "state" | "nationwide" | null,
 ): string {
   const plural = count === 1 ? noun : `${noun}s`;
-  return matchTier === "state"
-    ? pick([
-        `${count} ${plural} found elsewhere in the state — ranking…`,
-        `Nothing that close, but found ${count} ${plural} in the state…`,
-        `${count} ${plural} turned up further out — ranking…`,
-      ])
-    : pick([
-        `${count} ${plural} found — ranking the closest…`,
-        `Found ${count} ${plural} nearby — ranking…`,
-        `${count} ${plural} turned up close by…`,
-      ]);
+  if (matchTier === "nationwide") {
+    return pick([
+      `${count} ${plural} found across Velte — ranking by relevance…`,
+      `${count} ${plural} turned up nationwide — ranking…`,
+    ]);
+  }
+  if (matchTier === "state") {
+    return pick([
+      `${count} ${plural} found elsewhere in the state — ranking…`,
+      `Nothing that close, but found ${count} ${plural} in the state…`,
+      `${count} ${plural} turned up further out — ranking…`,
+    ]);
+  }
+  if (matchTier === "nearby") {
+    return pick([
+      `${count} ${plural} found a bit further out — ranking…`,
+      `Nothing right nearby, but found ${count} ${plural} in the area…`,
+      `${count} ${plural} turned up nearby — ranking…`,
+    ]);
+  }
+  return pick([
+    `${count} ${plural} found — ranking the closest…`,
+    `Found ${count} ${plural} nearby — ranking…`,
+    `${count} ${plural} turned up close by…`,
+  ]);
 }
 
 // Only used for image-derived product searches — narrates the
