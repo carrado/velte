@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { backendData } from "@/lib/server/backend";
-import { resolveBuyerCoords } from "@/lib/server/ai/resolveBuyerCoords";
+import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
 import {
   searchingPhrase,
   foundCountPhrase,
@@ -27,13 +27,16 @@ const inputSchema = z.object({
     .describe(
       "Specific attributes — color, size, brand, material, style, condition, etc. Include these whether the buyer typed them OR you can see them in an attached photo — for a photo, describe everything visually identifiable, not just the bare category, so matching can tell an exact match from a loosely related one.",
     ),
-  // Required on purpose: if the buyer's message has no location and none was
-  // supplied via buyerLocation, the model can't fill this and — per the
-  // system prompt — asks one clarifying question instead of guessing a city.
+  // Optional on purpose: set this ONLY when the buyer's own message names or
+  // clearly implies a specific place. Omit it entirely otherwise — the
+  // buyer's device location (if known) is used automatically, and if
+  // neither exists the search simply runs nationwide rather than asking a
+  // clarifying question.
   location: z
     .string()
+    .optional()
     .describe(
-      "The place name or area the buyer mentioned (e.g. 'Enugu' or 'Independence Layout, Enugu').",
+      "The place name or area the buyer's message itself named, if any (e.g. 'Enugu' or 'Independence Layout, Enugu'). Omit if the buyer didn't mention a place — do not guess or fill in a placeholder like 'unknown'.",
     ),
   radiusKm: z
     .number()
@@ -48,31 +51,46 @@ const inputSchema = z.object({
  * product-vs-vendor confusion this split fixes.
  *
  * `buyerLocation` — real coordinates from the request body (e.g. browser
- * geolocation) — takes priority over geocoding the model-extracted location
- * text; the tool result is the only vendor/price data the model ever sees.
+ * geolocation) — used only when the buyer didn't name a different place in
+ * their query; an explicit `location` always wins over it (see
+ * resolveSearchLocation). If neither exists, the search runs nationwide.
  * `push` reports progress text at the same two points spec §7 describes.
  * `isImageQuery` — true when the buyer's turn included a photo — turns on
  * the direct-vs-similar match tiering (backend-side) and its narration.
+ * `imageUrl` — the buyer's actual photo (not the LLM's text description of
+ * it) — passed straight through to the backend so it can be embedded via
+ * voyage-multimodal-3 and compared against product image embeddings, not
+ * just matched on a text paraphrase.
  */
 export function searchProductsTool(
   buyerLocation?: BuyerLocation,
   push?: (text: string) => void,
   isImageQuery = false,
+  imageUrl?: string,
 ) {
   return tool({
     description:
       "Search the live catalog for a SPECIFIC PRODUCT OR SERVICE by meaning, proximity, and trust — use this when the buyer names an item they want to buy (e.g. 'white sneakers', 'Tecno fast charger'). For a buyer describing a kind of business/vendor/shop instead of an item, use searchStores. Returns real listings only — never invent a vendor, price, or stock level beyond what this tool returns.",
     inputSchema,
     execute: async ({ product, attributes, location, radiusKm }) => {
-      push?.(searchingPhrase(product, location));
+      // Best-effort status text before we know the resolved coordinates —
+      // an explicit place is shown as-is; otherwise "your area" if a
+      // device location is known, or nothing (nationwide phrasing) if not.
+      push?.(
+        searchingPhrase(
+          product,
+          location ?? (buyerLocation ? "your area" : undefined),
+        ),
+      );
 
-      const coords = await resolveBuyerCoords(buyerLocation, location);
-      if (!coords) {
+      const resolved = await resolveSearchLocation(buyerLocation, location);
+      if (resolved.kind === "not-found") {
         return {
           error: "location-not-found" as const,
-          message: `Couldn't find "${location}" — ask the buyer for a more specific area.`,
+          message: `Couldn't find "${resolved.queriedText}" — ask the buyer for a more specific area.`,
         };
       }
+      const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
       const queryText = [product, ...(attributes ?? [])].join(" ");
       const { results, matchTier, matchQuality } = await backendData<{
@@ -83,10 +101,11 @@ export function searchProductsTool(
         method: "POST",
         body: {
           queryText,
-          lat: coords.lat,
-          lng: coords.lng,
+          lat: coords?.lat,
+          lng: coords?.lng,
           radiusKm: radiusKm ?? 10,
           isImageQuery,
+          imageUrl,
         },
       });
 
@@ -96,13 +115,7 @@ export function searchProductsTool(
         } else if (isImageQuery && matchQuality === "similar") {
           push?.(similarMatchPhrase(results.length));
         } else {
-          push?.(
-            foundCountPhrase(
-              results.length,
-              "product",
-              matchTier === "state" ? "state" : "local",
-            ),
-          );
+          push?.(foundCountPhrase(results.length, "product", matchTier));
         }
       } else {
         push?.(noProductMatchPhrase());
