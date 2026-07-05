@@ -175,7 +175,7 @@ export default function Step1BusinessAccount({
           validators={{
             onChange: ({ value }) => {
               const r = SIGNUP_FIELD_SCHEMAS.name.safeParse(value);
-              return r.success ? undefined : r.error.errors[0]?.message;
+              return r.success ? undefined : r.error.issues[0]?.message;
             },
           }}
         >
@@ -202,7 +202,7 @@ export default function Step1BusinessAccount({
           validators={{
             onChange: ({ value }) => {
               const r = SIGNUP_FIELD_SCHEMAS.businessName.safeParse(value);
-              return r.success ? undefined : r.error.errors[0]?.message;
+              return r.success ? undefined : r.error.issues[0]?.message;
             },
           }}
         >
@@ -231,7 +231,7 @@ export default function Step1BusinessAccount({
         validators={{
           onChange: ({ value }) => {
             const r = SIGNUP_FIELD_SCHEMAS.phone.safeParse(value);
-            return r.success ? undefined : r.error.errors[0]?.message;
+            return r.success ? undefined : r.error.issues[0]?.message;
           },
         }}
       >
@@ -269,7 +269,7 @@ export default function Step1BusinessAccount({
         validators={{
           onChange: ({ value }) => {
             const r = SIGNUP_FIELD_SCHEMAS.email.safeParse(value);
-            return r.success ? undefined : r.error.errors[0]?.message;
+            return r.success ? undefined : r.error.issues[0]?.message;
           },
         }}
       >
@@ -298,7 +298,7 @@ export default function Step1BusinessAccount({
         validators={{
           onChange: ({ value }) => {
             const r = SIGNUP_FIELD_SCHEMAS.state.safeParse(value);
-            return r.success ? undefined : r.error.errors[0]?.message;
+            return r.success ? undefined : r.error.issues[0]?.message;
           },
         }}
       >
@@ -336,7 +336,7 @@ export default function Step1BusinessAccount({
         validators={{
           onChange: ({ value }) => {
             const r = SIGNUP_FIELD_SCHEMAS.address.safeParse(value);
-            return r.success ? undefined : r.error.errors[0]?.message;
+            return r.success ? undefined : r.error.issues[0]?.message;
           },
         }}
       >
@@ -383,7 +383,7 @@ export default function Step1BusinessAccount({
         validators={{
           onChange: ({ value }) => {
             const r = SIGNUP_FIELD_SCHEMAS.username.safeParse(value);
-            return r.success ? undefined : r.error.errors[0]?.message;
+            return r.success ? undefined : r.error.issues[0]?.message;
           },
         }}
       >
@@ -404,7 +404,7 @@ export default function Step1BusinessAccount({
           validators={{
             onChange: ({ value }) => {
               const r = SIGNUP_FIELD_SCHEMAS.password.safeParse(value);
-              return r.success ? undefined : r.error.errors[0]?.message;
+              return r.success ? undefined : r.error.issues[0]?.message;
             },
           }}
         >

@@ -67,7 +67,7 @@ export default function Step2SectorDescription({
         validators={{
           onChange: ({ value }) => {
             const r = SIGNUP_FIELD_SCHEMAS.sector.safeParse(value);
-            return r.success ? undefined : r.error.errors[0]?.message;
+            return r.success ? undefined : r.error.issues[0]?.message;
           },
         }}
       >
@@ -100,7 +100,7 @@ export default function Step2SectorDescription({
         validators={{
           onChange: ({ value }) => {
             const r = SIGNUP_FIELD_SCHEMAS.description.safeParse(value);
-            return r.success ? undefined : r.error.errors[0]?.message;
+            return r.success ? undefined : r.error.issues[0]?.message;
           },
         }}
       >

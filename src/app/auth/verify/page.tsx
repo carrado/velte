@@ -121,7 +121,7 @@ function VerifyForm() {
                   .length(6, "Must be 6 digits")
                   .regex(/^\d+$/, "Only digits")
                   .safeParse(value);
-                return r.success ? undefined : r.error.errors[0]?.message;
+                return r.success ? undefined : r.error.issues[0]?.message;
               },
             }}
           >

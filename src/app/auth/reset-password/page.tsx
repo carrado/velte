@@ -132,7 +132,7 @@ function ResetPasswordForm() {
                   .string()
                   .min(6, "OTP must be at least 6 characters")
                   .safeParse(value);
-                return r.success ? undefined : r.error.errors[0]?.message;
+                return r.success ? undefined : r.error.issues[0]?.message;
               },
             }}
           >
@@ -163,7 +163,7 @@ function ResetPasswordForm() {
                 const result = passwordSchema.safeParse(value);
                 return result.success
                   ? undefined
-                  : result.error.errors[0]?.message;
+                  : result.error.issues[0]?.message;
               },
             }}
           >

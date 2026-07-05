@@ -114,7 +114,7 @@ export default function ForgotPassword() {
                       .string()
                       .email("Invalid email address")
                       .safeParse(value);
-                    return r.success ? undefined : r.error.errors[0]?.message;
+                    return r.success ? undefined : r.error.issues[0]?.message;
                   },
                 }}
               >
