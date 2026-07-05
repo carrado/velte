@@ -38,7 +38,6 @@ export interface NavItem {
   icon: React.ReactNode;
   href: string;
   id?: string;
-  mobile?: boolean;
 }
 
 export interface NavSection {
@@ -46,15 +45,8 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export interface SidebarProps {
-  isOpen: boolean;
-  onClose: () => void;
-  side?: "left" | "right";
-}
-
 export interface HeaderProps {
   title: string;
-  onMenuClick?: () => void;
 }
 
 export interface LogoutModalProps {
@@ -66,4 +58,10 @@ export interface LogoutModalProps {
 
 export interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+export interface WhatsAppButtonProps {
+  href: string;
+  label: string;
+  className?: string;
 }

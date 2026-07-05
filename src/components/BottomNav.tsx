@@ -2,36 +2,45 @@
 "use client";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
-import {
-  LayoutDashboard,
-  ShoppingBag,
-  Users,
-  LayoutGrid,
-  Menu,
-} from "lucide-react";
+import { LayoutGrid, PlusCircle, Wallet, Settings } from "lucide-react";
+import { useIsFood } from "@/hooks/useBusinessType";
 
-export default function BottomNav({
-  onMenuClick,
-}: {
-  onMenuClick: () => void;
-}) {
+export default function BottomNav() {
   const pathname = usePathname();
   const { navigate } = useNavigation();
+  const isFood = useIsFood();
 
-  const userId = pathname.split("/")[1];
+  const segments = pathname.split("/").filter(Boolean);
+  const userId = segments[0];
+  const subPath = segments.slice(1).join("/");
 
   const items = [
     {
-      label: "Dashboard",
-      icon: <LayoutDashboard size={20} />,
-      segment: "dashboard",
+      label: isFood ? "Menu" : "Listings",
+      icon: <LayoutGrid size={20} />,
+      segment: "products",
+      // "Add" owns the products/add route, so keep this tab off there.
+      active: subPath.startsWith("products") && subPath !== "products/add",
     },
-    { label: "Orders", icon: <ShoppingBag size={20} />, segment: "orders" },
-    { label: "Customers", icon: <Users size={20} />, segment: "customers" },
-    { label: "Products", icon: <LayoutGrid size={20} />, segment: "products" },
+    {
+      label: "Add",
+      icon: <PlusCircle size={20} />,
+      segment: "products/add",
+      active: subPath === "products/add",
+    },
+    {
+      label: "Wallet",
+      icon: <Wallet size={20} />,
+      segment: "wallet",
+      active: subPath.startsWith("wallet"),
+    },
+    {
+      label: "Settings",
+      icon: <Settings size={20} />,
+      segment: "settings",
+      active: subPath.startsWith("settings"),
+    },
   ];
-
-  const isActive = (segment: string) => pathname.includes(segment);
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-10 md:hidden pb-[env(safe-area-inset-bottom)]">
@@ -41,20 +50,13 @@ export default function BottomNav({
             key={item.label}
             onClick={() => navigate(`/${userId}/${item.segment}`)}
             className={`flex flex-col items-center gap-1 px-3 py-1 rounded-lg ${
-              isActive(item.segment) ? "text-orange-500" : "text-gray-500"
+              item.active ? "text-orange-500" : "text-gray-500"
             }`}
           >
             {item.icon}
             <span className="text-dash-caption font-medium">{item.label}</span>
           </button>
         ))}
-        <button
-          onClick={onMenuClick}
-          className="flex flex-col items-center gap-1 px-3 py-1 rounded-lg text-gray-500"
-        >
-          <Menu size={20} />
-          <span className="text-dash-caption font-medium">Menu</span>
-        </button>
       </div>
     </div>
   );

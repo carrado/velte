@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: Ctx) {
     const product = await getProduct(id, gate.cookie);
     return NextResponse.json({ product });
   } catch (err) {
-    return fail(err, "Failed to load product.");
+    return fail(err, "Failed to load listing.");
   }
 }
 
@@ -38,7 +38,7 @@ export async function PUT(req: Request, { params }: Ctx) {
     const product = await updateProduct(id, payload, gate.cookie);
     return NextResponse.json({ product });
   } catch (err) {
-    return fail(err, "Failed to update product.");
+    return fail(err, "Failed to update listing.");
   }
 }
 
@@ -51,6 +51,6 @@ export async function DELETE(_req: Request, { params }: Ctx) {
     await deleteProduct(id, gate.cookie);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return fail(err, "Failed to delete product.");
+    return fail(err, "Failed to delete listing.");
   }
 }

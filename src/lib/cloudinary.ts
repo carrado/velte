@@ -43,6 +43,7 @@ function compressImage(file: File, maxPx = 1200, quality = 0.8): Promise<File> {
 export async function uploadProductMedia(
   file: File,
   resourceType: "image" | "video" = "image",
+  folder = "velte/products",
 ): Promise<string> {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
     throw new Error(
@@ -56,7 +57,7 @@ export async function uploadProductMedia(
   const form = new FormData();
   form.append("file", uploadFile);
   form.append("upload_preset", UPLOAD_PRESET);
-  form.append("folder", "velte/products");
+  form.append("folder", folder);
 
   const res = await fetch(
     `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`,

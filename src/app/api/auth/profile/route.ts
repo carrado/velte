@@ -9,11 +9,17 @@ export async function PUT(req: Request) {
   if ("response" in gate) return gate.response;
   const body = await req.json().catch(() => ({}));
   try {
-    const { user } = await backendFetch<{ user: Record<string, unknown> }>(
-      "/auth/profile",
-      { method: "PUT", body, cookie: gate.cookie },
-    );
-    return NextResponse.json({ user });
+    const { user, addressChangeBlocked, addressChangeAvailableAt } =
+      await backendFetch<{
+        user: Record<string, unknown>;
+        addressChangeBlocked: boolean;
+        addressChangeAvailableAt: string | null;
+      }>("/auth/profile", { method: "PUT", body, cookie: gate.cookie });
+    return NextResponse.json({
+      user,
+      addressChangeBlocked,
+      addressChangeAvailableAt,
+    });
   } catch (err) {
     return fail(err, "Failed to update profile.");
   }

@@ -1,65 +1,25 @@
 import type { CategoryProduct } from "@/types/product";
 
 export interface PriceBreakdown {
-  finalPrice: number;
-  basePrice: number;
-  effectivePrice: number;
-  discountAmount: number | null;
-  taxAmount: number;
-  isNegotiable: boolean;
-  minFinalPrice: number | null;
-  hasDiscount: boolean;
-  hasTax: boolean;
+  /** Single price, or the low end of a range. */
+  price: number;
+  /** High end of a range, or null for a single price. */
+  priceMax: number | null;
+  /** True when the listing is a range (`priceMax` above `price`). */
+  isRange: boolean;
+  /** Service with no upfront price — show "Contact for quote". */
+  quoteOnRequest: boolean;
   currencySymbol: string;
 }
 
 export function computePrice(product: CategoryProduct): PriceBreakdown {
   const currencySymbol = product.currency === "USD" ? "$" : "₦";
-  const base = product.price;
-
-  const hasDiscount =
-    product.discountedPrice != null && product.discountedPrice < base;
-  const effectivePrice = hasDiscount ? product.discountedPrice! : base;
-  const discountAmount = hasDiscount ? base - product.discountedPrice! : null;
-
-  const hasTax =
-    product.taxIncluded === true &&
-    product.taxValue != null &&
-    product.taxValue > 0;
-
-  let taxAmount = 0;
-  if (hasTax) {
-    taxAmount =
-      product.taxType === "percentage"
-        ? (effectivePrice * product.taxValue!) / 100
-        : product.taxValue!;
-  }
-
-  const finalPrice = effectivePrice + taxAmount;
-
-  const isNegotiable =
-    product.isNegotiable === true && product.minimumPrice != null;
-
-  let minFinalPrice: number | null = null;
-  if (isNegotiable && product.minimumPrice != null) {
-    const minTax = hasTax
-      ? product.taxType === "percentage"
-        ? (product.minimumPrice * product.taxValue!) / 100
-        : product.taxValue!
-      : 0;
-    minFinalPrice = product.minimumPrice + minTax;
-  }
-
+  const priceMax = product.priceMax ?? null;
   return {
-    finalPrice,
-    basePrice: base,
-    effectivePrice,
-    discountAmount,
-    taxAmount,
-    isNegotiable,
-    minFinalPrice,
-    hasDiscount,
-    hasTax,
+    price: product.price,
+    priceMax,
+    isRange: priceMax != null && priceMax > product.price,
+    quoteOnRequest: product.quoteOnRequest === true,
     currencySymbol,
   };
 }

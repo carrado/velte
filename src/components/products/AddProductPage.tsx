@@ -5,10 +5,16 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
+import { useOnboardingStore } from "@/store/onboardingStore";
 import { queryKeys } from "@/lib/query-keys";
 import { categoriesApi } from "@/services/products";
 import { uploadProductMedia } from "@/lib/cloudinary";
 import { getErrorMessage } from "@/lib/error-message";
+import {
+  SERVICE_DETAIL_PRESETS,
+  getProductAttributePresets,
+} from "@/lib/attribute-presets";
+import AttributePickerModal from "./AttributePickerModal";
 import {
   Save,
   ChevronDown,
@@ -33,16 +39,28 @@ import {
   AlertCircle,
   CheckCircle2,
   ArrowLeft,
+  ArrowRight,
+  Globe,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
-  AddProductTaxOption,
   ProductModifier,
   ModifierOption,
   RetailProductPayload,
   FoodProductPayload,
+  CreateProductPayload,
+  Category,
 } from "@/types/product";
-import { useIsFood } from "@/hooks/useBusinessType";
+import { storeApi } from "@/services/store";
+import type { ConnectedCatalog, CatalogPlatform } from "@/types/store";
+import {
+  useBusinessType,
+  isFoodBusiness,
+  businessOffersProducts,
+  businessOffersServices,
+  businessShowsKindToggle,
+} from "@/hooks/useBusinessType";
 import { Input } from "../ui/input";
 import {
   Select,
@@ -53,7 +71,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
-type TaxType = "percentage" | "fixed";
 type MediaType = "image" | "video";
 
 interface ProductAttribute {
@@ -105,25 +122,25 @@ function downloadTemplate(isFood: boolean) {
     "Name",
     "Description",
     "Price",
-    "Discounted Price",
     "Category",
     "Tags",
     "Stock Quantity",
     "SKU",
     "Manufacturing Date",
     "Expiration Date",
+    "Image Filename",
   ];
   const retailExample = [
     '"Wireless Headphones"',
     '"Premium wireless audio with noise cancellation"',
     "15000",
-    "12000",
     "Electronics",
     '"bluetooth,audio,headphones"',
     "50",
     "WH-001",
     "2024-01-01",
     "2026-12-31",
+    "wireless-headphones.jpg",
   ];
 
   const foodHeaders = [
@@ -135,6 +152,7 @@ function downloadTemplate(isFood: boolean) {
     "Vegetarian",
     "Spicy",
     "Halal",
+    "Image Filename",
   ];
   const foodExamples = [
     [
@@ -146,6 +164,7 @@ function downloadTemplate(isFood: boolean) {
       "no",
       "no",
       "no",
+      "jollof-rice.jpg",
     ],
     [
       '"Egusi Soup"',
@@ -156,6 +175,7 @@ function downloadTemplate(isFood: boolean) {
       "no",
       "no",
       "yes",
+      "egusi-soup.jpg",
     ],
     [
       '"Pounded Yam"',
@@ -166,6 +186,7 @@ function downloadTemplate(isFood: boolean) {
       "yes",
       "no",
       "yes",
+      "pounded-yam.jpg",
     ],
     [
       '"Suya (Full Stick)"',
@@ -176,6 +197,7 @@ function downloadTemplate(isFood: boolean) {
       "no",
       "yes",
       "yes",
+      "suya.jpg",
     ],
     [
       '"Chin Chin (Pack)"',
@@ -186,6 +208,7 @@ function downloadTemplate(isFood: boolean) {
       "yes",
       "no",
       "yes",
+      "chin-chin.jpg",
     ],
   ];
 
@@ -199,6 +222,153 @@ function downloadTemplate(isFood: boolean) {
   a.download = isFood ? "menu_items_template.csv" : "products_template.csv";
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── Bulk-import row mapping ──────────────────────────────────────────────────
+// Reads a CSV row into a create payload. Header lookups are case/whitespace
+// insensitive since vendors retype template headers by hand.
+
+function getCell(row: ImportedRow, ...names: string[]): string {
+  const keys = Object.keys(row);
+  for (const name of names) {
+    const key = keys.find((k) => k.trim().toLowerCase() === name.toLowerCase());
+    if (key) return (row[key] ?? "").trim();
+  }
+  return "";
+}
+
+function stripExt(filename: string): string {
+  return filename.replace(/\.[^.]+$/, "");
+}
+
+function matchCategoryId(
+  value: string,
+  isFood: boolean,
+  retailCategories: Category[],
+): string | null {
+  if (!value) return null;
+  const v = value.trim().toLowerCase();
+  if (isFood) {
+    const found = NIGERIAN_FOOD_CATEGORIES.find(
+      (c) => c.label.toLowerCase() === v,
+    );
+    return found?.id ?? null;
+  }
+  const found = retailCategories.find((c) => c.name.toLowerCase() === v);
+  return found?.id ?? null;
+}
+
+/** Best-effort filename match: exact first, then extension-insensitive. */
+function findImageFile(
+  imageFilenameRaw: string,
+  imageFiles: Map<string, File>,
+): File | null {
+  if (!imageFilenameRaw) return null;
+  const key = imageFilenameRaw.trim().toLowerCase();
+  const exact = imageFiles.get(key);
+  if (exact) return exact;
+  const keyNoExt = stripExt(key);
+  for (const [fname, file] of imageFiles) {
+    if (stripExt(fname) === keyNoExt) return file;
+  }
+  return null;
+}
+
+interface RowResult {
+  index: number;
+  name: string;
+  payload: CreateProductPayload | null;
+  error: string | null;
+  imageFilenameRaw: string;
+  imageFile: File | null;
+}
+
+function buildRowResult(
+  row: ImportedRow,
+  index: number,
+  isFood: boolean,
+  retailCategories: Category[],
+  imageFiles: Map<string, File>,
+): RowResult {
+  const name = getCell(row, "Name");
+  const imageFilenameRaw = getCell(row, "Image Filename");
+  const imageFile = findImageFile(imageFilenameRaw, imageFiles);
+
+  const fail = (error: string): RowResult => ({
+    index,
+    name: name || `Row ${index + 2}`,
+    payload: null,
+    error,
+    imageFilenameRaw,
+    imageFile: null,
+  });
+
+  if (!name) return fail("Name is required");
+
+  const priceRaw = getCell(row, "Price");
+  const price = parseFloat(priceRaw);
+  if (!priceRaw || isNaN(price) || price <= 0)
+    return fail("Price must be greater than zero");
+
+  const categoryRaw = getCell(row, "Category");
+  if (!categoryRaw) return fail("Category is required");
+  const categoryId = matchCategoryId(categoryRaw, isFood, retailCategories);
+  if (!categoryId) return fail(`Unknown category "${categoryRaw}"`);
+
+  const description = getCell(row, "Description");
+  const base = {
+    name,
+    description: description || null,
+    category_id: categoryId,
+    price: Math.round(price * 100),
+    price_max: null,
+    currency: "NGN" as const,
+    is_featured: false,
+    main_image_url: null,
+    thumbnail_urls: [] as string[],
+    video_url: null,
+  };
+
+  if (isFood) {
+    const tags: string[] = [];
+    if (getCell(row, "Vegetarian").toLowerCase() === "yes")
+      tags.push("vegetarian");
+    if (getCell(row, "Spicy").toLowerCase() === "yes") tags.push("spicy");
+    if (getCell(row, "Halal").toLowerCase() === "yes") tags.push("halal");
+    const prepRaw = getCell(row, "Prep Time (mins)");
+    const payload: FoodProductPayload = {
+      ...base,
+      tags,
+      estimated_prep_mins: parseInt(prepRaw, 10) || 0,
+      is_currently_available: true,
+      daily_limit: null,
+      allow_pre_order: false,
+      modifiers: [],
+    };
+    return { index, name, payload, error: null, imageFilenameRaw, imageFile };
+  }
+
+  const tagsRaw = getCell(row, "Tags");
+  const tags = tagsRaw
+    ? tagsRaw
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [];
+  const sku = getCell(row, "SKU");
+  const stockRaw = getCell(row, "Stock Quantity");
+  const payload: RetailProductPayload = {
+    ...base,
+    tags,
+    kind: "product",
+    quote_on_request: false,
+    stock_quantity: parseInt(stockRaw, 10) || 0,
+    low_stock_threshold: null,
+    manufacturing_date: getCell(row, "Manufacturing Date") || null,
+    expiration_date: getCell(row, "Expiration Date") || null,
+    attributes: sku ? [{ name: "SKU", value: sku }] : [],
+  };
+  return { index, name, payload, error: null, imageFilenameRaw, imageFile };
 }
 
 // ── Nigerian food add-on templates ───────────────────────────────────────────
@@ -426,9 +596,20 @@ function CheckboxField({
   );
 }
 
-// ── Import modal ──────────────────────────────────────────────────────────────
+// ── Bring-in-your-catalogue modal ────────────────────────────────────────────
+// Two ways in: upload a spreadsheet (CSV), or connect the vendor's own website
+// so Velte sync-mirrors their catalog (spec §16.1).
 
-function ImportProductsModal({
+type CatalogMethod = "spreadsheet" | "website";
+
+const PLATFORM_LABEL: Record<CatalogPlatform, string> = {
+  woocommerce: "WooCommerce",
+  shopify: "Shopify",
+  feed: "Custom feed",
+  unknown: "Website",
+};
+
+function ImportCatalogModal({
   isOpen,
   onClose,
   isFood,
@@ -437,19 +618,103 @@ function ImportProductsModal({
   onClose: () => void;
   isFood: boolean;
 }) {
+  const [method, setMethod] = useState<CatalogMethod>("spreadsheet");
+  const queryClient = useQueryClient();
+
+  // Spreadsheet method
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [previewRows, setPreviewRows] = useState<ImportedRow[]>([]);
+  const [allRows, setAllRows] = useState<ImportedRow[]>([]);
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewRows = allRows.slice(0, 5);
+
+  // Photo matching (Step 3)
+  const [imageFiles, setImageFiles] = useState<Map<string, File>>(new Map());
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Import execution
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ done: 0, total: 0 });
+  const [importSummary, setImportSummary] = useState<{
+    success: number;
+    failed: { name: string; error: string }[];
+  } | null>(null);
+
+  const { data: retailCategories = [] } = useQuery({
+    queryKey: queryKeys.products.categories,
+    queryFn: categoriesApi.getCategories,
+    enabled: isOpen && !isFood,
+  });
+
+  const rowResults = allRows.map((row, i) =>
+    buildRowResult(row, i, isFood, retailCategories, imageFiles),
+  );
+  const validRows = rowResults.filter((r) => !r.error && r.payload);
+  const errorRows = rowResults.filter((r) => r.error);
+  const rowsWithImageRequested = rowResults.filter((r) => r.imageFilenameRaw);
+  const rowsWithImageMatched = rowResults.filter((r) => r.imageFile);
+
+  // Website method
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [connectResult, setConnectResult] = useState<ConnectedCatalog | null>(
+    null,
+  );
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   const resetFile = () => {
     setFileName(null);
-    setPreviewRows([]);
+    setAllRows([]);
     setPreviewHeaders([]);
     setParseError(null);
+    setImageFiles(new Map());
+    setImportSummary(null);
+    setImportProgress({ done: 0, total: 0 });
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  const resetWebsite = () => {
+    setWebsiteUrl("");
+    setConnecting(false);
+    setConnectResult(null);
+    setConnectError(null);
+  };
+
+  const closeAll = () => {
+    onClose();
+    resetFile();
+    resetWebsite();
+    setMethod("spreadsheet");
+  };
+
+  const handleConnect = async () => {
+    const url = websiteUrl.trim();
+    if (!url) {
+      setConnectError("Enter your website address.");
+      return;
+    }
+    setConnecting(true);
+    setConnectError(null);
+    try {
+      const catalog = await storeApi.connectCatalog(url);
+      setConnectResult(catalog);
+      if (catalog.status === "connected") {
+        toast.success(
+          `Connected — ${catalog.productCount} ${
+            catalog.productCount === 1 ? "product" : "products"
+          } found.`,
+        );
+      } else {
+        toast("We couldn't find a Shopify or WooCommerce store there.");
+      }
+    } catch (err) {
+      setConnectError(getErrorMessage(err));
+    } finally {
+      setConnecting(false);
+    }
   };
 
   const handleFile = (file: File) => {
@@ -465,6 +730,8 @@ function ImportProductsModal({
       return;
     }
     setFileName(file.name);
+    setImageFiles(new Map());
+    setImportSummary(null);
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
@@ -476,7 +743,7 @@ function ImportProductsModal({
         return;
       }
       setPreviewHeaders(Object.keys(rows[0]));
-      setPreviewRows(rows.slice(0, 5));
+      setAllRows(rows);
     };
     reader.readAsText(file);
   };
@@ -488,12 +755,69 @@ function ImportProductsModal({
     if (file) handleFile(file);
   };
 
-  const handleImport = () => {
-    toast.success(
-      `${previewRows.length}+ ${isFood ? "menu items" : "products"} queued for import. Processing now…`,
-    );
-    onClose();
-    resetFile();
+  const handleImageFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const next = new Map(imageFiles);
+    Array.from(files).forEach((f) => next.set(f.name.trim().toLowerCase(), f));
+    setImageFiles(next);
+  };
+
+  const handleImport = async () => {
+    if (validRows.length === 0) {
+      toast.error("No valid rows to import — fix the errors below first.");
+      return;
+    }
+
+    setImporting(true);
+    setImportSummary(null);
+    setImportProgress({ done: 0, total: validRows.length });
+
+    const failed: { name: string; error: string }[] = [];
+    let success = 0;
+
+    for (const row of validRows) {
+      try {
+        let payload = row.payload!;
+        if (row.imageFile) {
+          const url = await uploadProductMedia(row.imageFile, "image");
+          payload = { ...payload, main_image_url: url };
+        }
+        await categoriesApi.createProduct(payload);
+        success++;
+      } catch (err) {
+        failed.push({
+          name: row.name,
+          error: getErrorMessage(err, "Failed to create"),
+        });
+      }
+      setImportProgress((prev) => ({ ...prev, done: prev.done + 1 }));
+    }
+
+    setImporting(false);
+    setImportSummary({ success, failed });
+    queryClient.invalidateQueries({
+      queryKey: ["products", "list"],
+      refetchType: "none",
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["products", "stats"],
+      refetchType: "none",
+    });
+
+    if (success > 0) useOnboardingStore.getState().completeStep(2);
+
+    if (failed.length === 0) {
+      toast.success(
+        `Imported ${success} ${isFood ? "menu items" : "products"}.`,
+      );
+      closeAll();
+    } else if (success === 0) {
+      toast.error(`All ${failed.length} rows failed to import.`);
+    } else {
+      toast.error(
+        `Imported ${success}, but ${failed.length} row${failed.length === 1 ? "" : "s"} failed — see details below.`,
+      );
+    }
   };
 
   if (!isOpen) return null;
@@ -509,198 +833,496 @@ function ImportProductsModal({
             </div>
             <div>
               <h3 className="text-dash-heading font-bold text-[#023337]">
-                Import {isFood ? "Menu Items" : "Products"}
+                Bring in your catalogue
               </h3>
               <p className="text-dash-caption text-gray-400">
-                Bulk-add from a spreadsheet
+                Upload a spreadsheet or connect Shopify / WooCommerce
               </p>
             </div>
           </div>
           <button
-            onClick={() => {
-              onClose();
-              resetFile();
-            }}
+            onClick={closeAll}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 cursor-pointer"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
-          {/* Step 1 — template */}
-          <div className="flex items-center justify-between p-3.5 bg-blue-50 border border-blue-100 rounded-md">
-            <div className="flex items-center gap-2.5">
-              <FileSpreadsheet
-                size={16}
-                className="text-blue-500 flex-shrink-0"
-              />
-              <div>
-                <p className="text-dash-body font-semibold text-blue-700">
-                  Step 1 — Download our template
-                </p>
-                <p className="text-dash-caption text-blue-500">
-                  {isFood
-                    ? "Fill in your dishes — we included 5 examples to guide you"
-                    : "Fill in the CSV template, then upload it below"}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => downloadTemplate(isFood)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0"
-            >
-              <Download size={13} />
-              Template
-            </button>
+        {/* Method switcher */}
+        <div className="px-6 pt-4">
+          <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-md">
+            {(
+              [
+                ["spreadsheet", "Spreadsheet", FileSpreadsheet],
+                ["website", "Website", Globe],
+              ] as const
+            ).map(([value, label, Icon]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setMethod(value)}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-dash-body font-semibold transition-colors cursor-pointer",
+                  method === value
+                    ? "bg-white text-[#023337] shadow-sm"
+                    : "text-gray-500 hover:text-gray-700",
+                )}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
           </div>
+        </div>
 
-          {/* Step 2 — drop zone */}
-          {!previewRows.length && !parseError && (
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={cn(
-                "border-2 border-dashed rounded-2xl h-40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors",
-                dragOver
-                  ? "border-orange-400 bg-orange-50"
-                  : "border-gray-200 bg-gray-50 hover:border-orange-300 hover:bg-orange-50/50",
-              )}
-            >
-              <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200 flex items-center justify-center shadow-sm">
-                <Upload size={20} className="text-gray-400" />
-              </div>
-              <p className="text-dash-body font-semibold text-gray-600">
-                {isFood
-                  ? "Drop your menu CSV here, or "
-                  : "Drop your CSV here, or "}
-                <span className="text-orange-500">browse</span>
-              </p>
-              <p className="text-dash-caption text-gray-400">
-                {isFood
-                  ? "Step 2 — upload your filled template"
-                  : "Supports .csv files · Excel → save as CSV"}
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleFile(f);
-                }}
-              />
-            </div>
-          )}
-
-          {/* Error */}
-          {parseError && (
-            <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-md">
-              <AlertCircle
-                size={15}
-                className="text-red-500 mt-0.5 flex-shrink-0"
-              />
-              <div>
-                <p className="text-dash-body font-semibold text-red-700">
-                  Import failed
-                </p>
-                <p className="text-dash-caption text-red-600 mt-0.5">
-                  {parseError}
-                </p>
-                <button
-                  onClick={resetFile}
-                  className="text-dash-caption text-red-500 underline mt-1 cursor-pointer"
-                >
-                  Try again
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Preview */}
-          {previewRows.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-green-500" />
-                  <p className="text-dash-body font-semibold text-gray-700">
-                    {fileName} — {previewRows.length}+{" "}
-                    {isFood ? "dishes" : "products"} ready to import
+        {method === "spreadsheet" && (
+          <div className="px-6 py-5 space-y-4">
+            {/* Step 1 — template */}
+            <div className="flex items-center justify-between p-3.5 bg-blue-50 border border-blue-100 rounded-md">
+              <div className="flex items-center gap-2.5">
+                <FileSpreadsheet
+                  size={16}
+                  className="text-blue-500 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-dash-body font-semibold text-blue-700">
+                    Step 1 — Download our template
+                  </p>
+                  <p className="text-dash-caption text-blue-500">
+                    {isFood
+                      ? "Fill in your dishes — we included 5 examples to guide you"
+                      : "Fill in the CSV template, then upload it below"}
                   </p>
                 </div>
-                <button
-                  onClick={resetFile}
-                  className="text-dash-caption text-gray-400 hover:text-red-500 cursor-pointer"
-                >
-                  Change file
-                </button>
               </div>
-              <div className="border border-gray-200 rounded-md overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-dash-caption">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
-                        {previewHeaders.map((h) => (
-                          <th
-                            key={h}
-                            className="text-left px-3 py-2.5 font-semibold text-gray-500 whitespace-nowrap"
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {previewRows.map((row, i) => (
-                        <tr
-                          key={i}
-                          className="hover:bg-gray-50 transition-colors"
-                        >
+              <button
+                onClick={() => downloadTemplate(isFood)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0"
+              >
+                <Download size={13} />
+                Template
+              </button>
+            </div>
+
+            {/* Step 2 — drop zone */}
+            {!previewRows.length && !parseError && (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  "border-2 border-dashed rounded-2xl h-40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors",
+                  dragOver
+                    ? "border-orange-400 bg-orange-50"
+                    : "border-gray-200 bg-gray-50 hover:border-orange-300 hover:bg-orange-50/50",
+                )}
+              >
+                <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200 flex items-center justify-center shadow-sm">
+                  <Upload size={20} className="text-gray-400" />
+                </div>
+                <p className="text-dash-body font-semibold text-gray-600">
+                  {isFood
+                    ? "Drop your menu CSV here, or "
+                    : "Drop your CSV here, or "}
+                  <span className="text-orange-500">browse</span>
+                </p>
+                <p className="text-dash-caption text-gray-400">
+                  {isFood
+                    ? "Step 2 — upload your filled template"
+                    : "Supports .csv files · Excel → save as CSV"}
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFile(f);
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Error */}
+            {parseError && (
+              <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-md">
+                <AlertCircle
+                  size={15}
+                  className="text-red-500 mt-0.5 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-dash-body font-semibold text-red-700">
+                    Import failed
+                  </p>
+                  <p className="text-dash-caption text-red-600 mt-0.5">
+                    {parseError}
+                  </p>
+                  <button
+                    onClick={resetFile}
+                    className="text-dash-caption text-red-500 underline mt-1 cursor-pointer"
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Preview */}
+            {allRows.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={15} className="text-green-500" />
+                    <p className="text-dash-body font-semibold text-gray-700">
+                      {fileName} — {validRows.length} of {allRows.length}{" "}
+                      {isFood ? "dishes" : "products"} ready to import
+                    </p>
+                  </div>
+                  <button
+                    onClick={resetFile}
+                    disabled={importing}
+                    className="text-dash-caption text-gray-400 hover:text-red-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Change file
+                  </button>
+                </div>
+                <div className="border border-gray-200 rounded-md overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-dash-caption">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
                           {previewHeaders.map((h) => (
-                            <td
+                            <th
                               key={h}
-                              className="px-3 py-2.5 text-gray-700 max-w-[140px] truncate"
+                              className="text-left px-3 py-2.5 font-semibold text-gray-500 whitespace-nowrap"
                             >
-                              {row[h] || "—"}
-                            </td>
+                              {h}
+                            </th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {previewRows.map((row, i) => (
+                          <tr
+                            key={i}
+                            className="hover:bg-gray-50 transition-colors"
+                          >
+                            {previewHeaders.map((h) => (
+                              <td
+                                key={h}
+                                className="px-3 py-2.5 text-gray-700 max-w-[140px] truncate"
+                              >
+                                {row[h] || "—"}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-dash-caption text-gray-400 px-3 py-2 border-t border-gray-100">
+                    Showing first {previewRows.length} of {allRows.length} rows
+                    · check they look right before importing
+                  </p>
                 </div>
-                <p className="text-dash-caption text-gray-400 px-3 py-2 border-t border-gray-100">
-                  Showing first {previewRows.length} rows · check they look
-                  right before importing
-                </p>
+
+                {errorRows.length > 0 && (
+                  <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-md">
+                    <AlertCircle
+                      size={15}
+                      className="text-red-500 mt-0.5 flex-shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-dash-body font-semibold text-red-700">
+                        {errorRows.length} row
+                        {errorRows.length === 1 ? "" : "s"} will be skipped
+                      </p>
+                      <ul className="text-dash-caption text-red-600 mt-1 space-y-0.5">
+                        {errorRows.slice(0, 4).map((r) => (
+                          <li key={r.index}>
+                            Row {r.index + 2} ({r.name}): {r.error}
+                          </li>
+                        ))}
+                        {errorRows.length > 4 && (
+                          <li>and {errorRows.length - 4} more…</li>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3 — photos */}
+                <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-md space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ImageIcon
+                        size={16}
+                        className="text-gray-400 flex-shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-dash-body font-semibold text-gray-700">
+                          Step 3 — Add product photos
+                        </p>
+                        <p className="text-dash-caption text-gray-400">
+                          Optional. Select the photos named in the &quot;Image
+                          Filename&quot; column.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={importing}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 hover:border-orange-300 text-gray-700 text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ImageIcon size={13} />
+                      {imageFiles.size > 0
+                        ? "Add more photos"
+                        : "Select photos"}
+                    </button>
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => handleImageFiles(e.target.files)}
+                    />
+                  </div>
+                  {(imageFiles.size > 0 ||
+                    rowsWithImageRequested.length > 0) && (
+                    <p className="text-dash-caption text-gray-500">
+                      {imageFiles.size} photo
+                      {imageFiles.size === 1 ? "" : "s"} selected ·{" "}
+                      {rowsWithImageMatched.length} of{" "}
+                      {rowsWithImageRequested.length} referenced filenames
+                      matched
+                    </p>
+                  )}
+                </div>
+
+                {importing && (
+                  <div className="p-3.5 bg-orange-50 border border-orange-100 rounded-md space-y-2">
+                    <div className="flex items-center justify-between text-dash-caption text-orange-700 font-semibold">
+                      <span>
+                        Importing {importProgress.done} of{" "}
+                        {importProgress.total}…
+                      </span>
+                      <Loader2 size={14} className="animate-spin" />
+                    </div>
+                    <div className="h-1.5 bg-orange-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-orange-500 transition-all"
+                        style={{
+                          width: `${
+                            importProgress.total
+                              ? (importProgress.done / importProgress.total) *
+                                100
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {importSummary && importSummary.failed.length > 0 && (
+                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-md space-y-1.5">
+                    <p className="text-dash-body font-semibold text-amber-700">
+                      Imported {importSummary.success} ·{" "}
+                      {importSummary.failed.length} failed
+                    </p>
+                    <ul className="text-dash-caption text-amber-700 space-y-0.5">
+                      {importSummary.failed.slice(0, 4).map((f, i) => (
+                        <li key={i}>
+                          {f.name}: {f.error}
+                        </li>
+                      ))}
+                      {importSummary.failed.length > 4 && (
+                        <li>and {importSummary.failed.length - 4} more…</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
+
+        {/* Website — connect the vendor's own store (spec §16.1) */}
+        {method === "website" && (
+          <div className="px-6 py-5 space-y-4">
+            {!connectResult ? (
+              <>
+                <div className="flex items-start gap-2.5 p-3.5 bg-orange-50/70 border border-orange-100 rounded-md">
+                  <Globe
+                    size={16}
+                    className="text-orange-500 mt-0.5 flex-shrink-0"
+                  />
+                  <div>
+                    <p className="text-dash-body font-semibold text-[#023337]">
+                      Already sell on Shopify or WooCommerce?
+                    </p>
+                    <p className="text-dash-caption text-gray-500 mt-0.5 leading-relaxed">
+                      Connect your store and we&apos;ll keep your Velte listings
+                      in sync — your store stays the source of truth. We support
+                      Shopify and WooCommerce for now; other website builders
+                      are coming.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <FieldLabel required>Website address</FieldLabel>
+                  <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 focus-within:ring-2 focus-within:ring-orange-500/30">
+                    <Globe size={15} className="text-gray-400 flex-shrink-0" />
+                    <input
+                      type="url"
+                      inputMode="url"
+                      value={websiteUrl}
+                      onChange={(e) => {
+                        setWebsiteUrl(e.target.value);
+                        setConnectError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !connecting) handleConnect();
+                      }}
+                      placeholder="yourstore.com"
+                      className="flex-1 min-w-0 bg-transparent text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none"
+                    />
+                  </div>
+                  {connectError && (
+                    <p className="text-dash-caption text-red-500 mt-1.5 flex items-center gap-1">
+                      <AlertCircle size={12} className="flex-shrink-0" />
+                      {connectError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {["Shopify", "WooCommerce"].map((p) => (
+                    <span
+                      key={p}
+                      className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-dash-caption font-medium"
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                {connectResult.status === "connected" ? (
+                  <div className="flex items-start gap-2.5 p-4 bg-green-50 border border-green-200 rounded-md">
+                    <CheckCircle2
+                      size={16}
+                      className="text-green-500 mt-0.5 flex-shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-dash-body font-semibold text-green-700">
+                        Connected to {PLATFORM_LABEL[connectResult.platform]} —{" "}
+                        {connectResult.productCount}{" "}
+                        {connectResult.productCount === 1
+                          ? "product"
+                          : "products"}{" "}
+                        found
+                      </p>
+                      <p className="text-dash-caption text-green-600 mt-0.5 leading-relaxed break-all">
+                        {connectResult.sourceUrl}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2.5 p-4 bg-amber-50 border border-amber-200 rounded-md">
+                    <AlertCircle
+                      size={16}
+                      className="text-amber-500 mt-0.5 flex-shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-dash-body font-semibold text-amber-700">
+                        We couldn&apos;t find a Shopify or WooCommerce store
+                        there
+                      </p>
+                      <p className="text-dash-caption text-amber-600 mt-0.5 leading-relaxed break-all">
+                        Right now we can only connect stores built on Shopify or
+                        WooCommerce. Double-check you entered your store&apos;s
+                        web address ({connectResult.sourceUrl}) — or add your
+                        products with a spreadsheet instead.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {connectResult.status === "connected" && (
+                  <div className="flex items-start gap-2.5 p-3.5 bg-gray-50 border border-gray-100 rounded-md">
+                    <RefreshCcw
+                      size={15}
+                      className="text-gray-400 mt-0.5 flex-shrink-0"
+                    />
+                    <p className="text-dash-caption text-gray-500 leading-relaxed">
+                      Your store stays the source of truth. Connected products
+                      are read-only in Velte and re-sync automatically — update
+                      a price or stock on your store and it follows here.
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={resetWebsite}
+                  className="text-dash-caption text-orange-500 font-semibold underline cursor-pointer"
+                >
+                  Connect a different site
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
           <button
-            onClick={() => {
-              onClose();
-              resetFile();
-            }}
-            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors cursor-pointer"
+            onClick={closeAll}
+            disabled={importing}
+            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Cancel
+            {connectResult || importSummary ? "Close" : "Cancel"}
           </button>
-          {previewRows.length > 0 && (
+          {method === "spreadsheet" && allRows.length > 0 && !importSummary && (
             <button
               onClick={handleImport}
-              className="flex-1 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors cursor-pointer"
+              disabled={importing || validRows.length === 0}
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Import {previewRows.length}+ {isFood ? "Items" : "Products"}
+              {importing ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  Importing…
+                </>
+              ) : (
+                `Import ${validRows.length} ${isFood ? "Items" : "Products"}`
+              )}
+            </button>
+          )}
+          {method === "website" && !connectResult && (
+            <button
+              onClick={handleConnect}
+              disabled={connecting || !websiteUrl.trim()}
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {connecting ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  Checking your site…
+                </>
+              ) : (
+                "Connect website"
+              )}
             </button>
           )}
         </div>
@@ -792,14 +1414,14 @@ function PublishProgressModal({
                   : "Changes Saved!"
                 : isFood
                   ? "Dish is Live!"
-                  : "Product is Live!"
+                  : "Listing is Live!"
               : isEditMode
                 ? isFood
                   ? "Updating Your Dish"
                   : "Saving Your Changes"
                 : isFood
                   ? "Publishing Your Dish"
-                  : "Publishing Your Product"}
+                  : "Publishing Your Listing"}
           </h2>
           <p className="text-dash-caption text-gray-400 leading-relaxed">
             {done
@@ -807,8 +1429,8 @@ function PublishProgressModal({
                 ? "Your changes have been saved. Customers will see the updated listing right away."
                 : "Everything's set. Your customers can now find this listing on your store."
               : isEditMode
-                ? `Hang tight — we're uploading any new media and saving your ${isFood ? "dish" : "product"} changes. This usually takes a few seconds.`
-                : `Hang tight — we're uploading your media and saving your ${isFood ? "dish" : "product"} to your store. This usually takes a few seconds.`}
+                ? `Hang tight — we're uploading any new media and saving your ${isFood ? "dish" : "listing"} changes. This usually takes a few seconds.`
+                : `Hang tight — we're uploading your media and saving your ${isFood ? "dish" : "listing"} to your store. This usually takes a few seconds.`}
           </p>
         </div>
 
@@ -840,7 +1462,7 @@ function PublishProgressModal({
             <p className="text-dash-caption text-gray-500 leading-relaxed">
               {isFood
                 ? "Dishes with bright, clear photos get up to 3× more orders. A good cover photo makes all the difference."
-                : "Products with detailed descriptions and multiple images sell significantly faster than those with minimal info."}
+                : "Listings with detailed descriptions and multiple images sell significantly faster than those with minimal info."}
             </p>
           </div>
         )}
@@ -851,6 +1473,72 @@ function PublishProgressModal({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Phased wizard building block ──────────────────────────────────────────────
+// Add mode walks the form block-by-block: everything past the frontier block is
+// blurred and inert until the vendor clicks Next on the current one. Edit mode
+// renders every block unlocked (wizard=false) — editing shouldn't re-walk the
+// wizard. Desktop gets the same single column, centered; a wizard gains
+// nothing from two columns.
+
+function PhaseBlock({
+  index,
+  frontier,
+  wizard,
+  isLast,
+  nextDisabled,
+  onNext,
+  publish,
+  blockRef,
+  hideNext = false,
+  children,
+}: {
+  index: number;
+  frontier: number;
+  wizard: boolean;
+  isLast: boolean;
+  nextDisabled: boolean;
+  onNext: () => void;
+  publish: React.ReactNode;
+  blockRef: (el: HTMLDivElement | null) => void;
+  /** For blocks whose own buttons drive the flow (e.g. the import choice). */
+  hideNext?: boolean;
+  children: React.ReactNode;
+}) {
+  const locked = wizard && index > frontier;
+  const isCurrent = wizard && index === frontier;
+  return (
+    <div ref={blockRef} className="scroll-mt-4">
+      <div
+        inert={locked || undefined}
+        aria-hidden={locked || undefined}
+        className={cn(
+          "transition-all duration-300",
+          locked && "blur-[3px] opacity-50 pointer-events-none select-none",
+        )}
+      >
+        {children}
+      </div>
+      {isCurrent && !hideNext && (
+        <div className="mt-3 flex justify-end px-5 sm:px-0">
+          {isLast ? (
+            publish
+          ) : (
+            <button
+              type="button"
+              onClick={onNext}
+              disabled={nextDisabled}
+              className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-6 h-10 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+              <ArrowRight size={15} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AddProductPage({
   mode,
   productId,
@@ -859,22 +1547,45 @@ export default function AddProductPage({
   productId?: string;
 }) {
   const isEditMode = mode === "edit";
-  const isFood = useIsFood();
+  const businessType = useBusinessType();
+  // Account-level capabilities. `foodAccount` = the product side is a menu
+  // (dishes), not a stocked shelf. Only accounts that do both need the toggle;
+  // the rest have a fixed kind.
+  const foodAccount = isFoodBusiness(businessType);
+  const showKindToggle = businessShowsKindToggle(businessType);
+
+  // Offering identity — a service is a catalog entry with no stock semantics
+  // and an optional "from" price. Fixed after creation.
+  const [kind, setKind] = useState<"product" | "service">(
+    businessOffersProducts(businessType) ? "product" : "service",
+  );
+  // Services may skip an upfront price entirely — quoted per job in chat.
+  const [quoteOnRequest, setQuoteOnRequest] = useState(false);
+  // Listing-level: this listing is a service (kind), and so gets dish tooling
+  // only when it's a product on a food account.
+  const isService = kind === "service";
+  const isFood = foodAccount && !isService;
+  const isQuote = isService && quoteOnRequest;
+
+  // Keep fixed-kind accounts aligned even if businessType hydrates after mount.
+  // "both"/"food_both" are left alone — that vendor drives the toggle.
+  useEffect(() => {
+    if (isEditMode) return;
+    if (!businessOffersServices(businessType))
+      setKind("product"); // retail, food
+    else if (!businessOffersProducts(businessType)) setKind("service"); // service
+  }, [businessType, isEditMode]);
 
   // Basic
   const [productName, setProductName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
 
-  // Pricing
+  // Pricing — a single price, or a min–max range when the vendor opts in.
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState<"NGN" | "USD">("NGN");
-  const [discountedPrice, setDiscountedPrice] = useState("");
-  const [taxIncluded, setTaxIncluded] = useState<AddProductTaxOption>("yes");
-  const [taxType, setTaxType] = useState<TaxType>("percentage");
-  const [taxValue, setTaxValue] = useState("");
-  const [isNegotiable, setIsNegotiable] = useState(false);
-  const [minimumPrice, setMinimumPrice] = useState("");
+  const [isRange, setIsRange] = useState(false);
+  const [priceMax, setPriceMax] = useState("");
 
   // Inventory (retail)
   const [stockQuantity, setStockQuantity] = useState("");
@@ -899,6 +1610,12 @@ export default function AddProductPage({
   const [attributeNameInput, setAttributeNameInput] = useState("");
   const [attributeValueInput, setAttributeValueInput] = useState("");
   const [attributeError, setAttributeError] = useState("");
+  const [presetPickerOpen, setPresetPickerOpen] = useState(false);
+
+  // Phased wizard (add mode): index of the currently-active block; everything
+  // beyond it stays blurred until Next is clicked.
+  const [frontier, setFrontier] = useState(0);
+  const phaseRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Food-specific
   const [estimatedPrepMins, setEstimatedPrepMins] = useState(20);
@@ -983,19 +1700,17 @@ export default function AddProductPage({
   // Pre-fill form once the product is loaded
   useEffect(() => {
     if (!existingProduct) return;
+    if (existingProduct.kind) setKind(existingProduct.kind);
+    setQuoteOnRequest(existingProduct.quoteOnRequest === true);
     setProductName(existingProduct.name);
     setDescription(existingProduct.description ?? "");
     setSelectedCategory(existingProduct.categoryId ?? "");
     setPrice(String(existingProduct.price));
     if (existingProduct.currency) setCurrency(existingProduct.currency);
-    if (existingProduct.discountedPrice)
-      setDiscountedPrice(String(existingProduct.discountedPrice));
-    setTaxIncluded(existingProduct.taxIncluded ? "yes" : "no");
-    if (existingProduct.taxType) setTaxType(existingProduct.taxType as TaxType);
-    if (existingProduct.taxValue) setTaxValue(String(existingProduct.taxValue));
-    if (existingProduct.isNegotiable) setIsNegotiable(true);
-    if (existingProduct.minimumPrice)
-      setMinimumPrice(String(existingProduct.minimumPrice));
+    if (existingProduct.priceMax != null) {
+      setIsRange(true);
+      setPriceMax(String(existingProduct.priceMax));
+    }
     setStockQuantity(String(existingProduct.totalQuantity ?? ""));
     setThreshold(String(existingProduct.lowStockThreshold ?? ""));
     setManufacturingDate(existingProduct.manufacturingDate ?? "");
@@ -1035,10 +1750,18 @@ export default function AddProductPage({
 
   // ── handlers ──────────────────────────────────────────────────────────────
 
-  const handleNegotiableToggle = (v: boolean) => {
-    setIsNegotiable(v);
-    if (v) setDiscountedPrice("");
-    else setMinimumPrice("");
+  const handleRangeToggle = (v: boolean) => {
+    setIsRange(v);
+    if (!v) setPriceMax("");
+  };
+
+  const handleQuoteToggle = (v: boolean) => {
+    setQuoteOnRequest(v);
+    if (v) {
+      setPrice("");
+      setIsRange(false);
+      setPriceMax("");
+    }
   };
 
   const openDatePicker = (ref: React.RefObject<HTMLInputElement | null>) => {
@@ -1087,6 +1810,19 @@ export default function AddProductPage({
     setAttributeValueInput("");
   };
 
+  const addPresetDetails = (details: { name: string; value: string }[]) => {
+    const existing = new Set(attributes.map((a) => a.name.toLowerCase()));
+    const fresh = details
+      .filter((d) => !existing.has(d.name.toLowerCase()))
+      .map((d, i) => ({
+        // eslint-disable-next-line react-hooks/purity
+        id: `${Date.now()}-${i}`,
+        name: d.name,
+        value: d.value,
+      }));
+    if (fresh.length) setAttributes([...fresh, ...attributes]);
+  };
+
   const addTemplateGroup = (tpl: NigerianTemplate) => {
     if (modifiers.some((m) => m.name === tpl.name)) return;
     const saved = savedTemplatePrices[tpl.id] ?? {};
@@ -1128,10 +1864,12 @@ export default function AddProductPage({
   const isHealth = selectedCategory === "health";
   const canSubmit =
     productName.trim().length > 0 &&
-    selectedCategory !== "" &&
-    parseFloat(price) > 0 &&
+    (isService || selectedCategory !== "") && // services carry no category
+    (isQuote || parseFloat(price) > 0) && // quote services need no price
+    (isQuote || !isRange || parseFloat(priceMax) > parseFloat(price)) &&
     (mainImage !== null || videoFile !== null) &&
     (isFood ||
+      isService || // services carry no stock/expiry requirements
       (stockQuantity !== "" &&
         threshold !== "" &&
         (!(isHealth || isElectronics) || expirationDate !== "")));
@@ -1141,16 +1879,24 @@ export default function AddProductPage({
   const handleSubmit = async () => {
     if (!productName.trim()) {
       toast.error(
-        isFood ? "Dish name is required" : "Product name is required",
+        isFood
+          ? "Dish name is required"
+          : isService
+            ? "Service name is required"
+            : "Product name is required",
       );
       return;
     }
-    if (!selectedCategory) {
+    if (!isService && !selectedCategory) {
       toast.error("Please select a category");
       return;
     }
-    if (!price || parseFloat(price) <= 0) {
+    if (!isQuote && (!price || parseFloat(price) <= 0)) {
       toast.error("Price must be greater than zero");
+      return;
+    }
+    if (!isQuote && isRange && !(parseFloat(priceMax) > parseFloat(price))) {
+      toast.error("The maximum price must be greater than the price");
       return;
     }
 
@@ -1227,26 +1973,18 @@ export default function AddProductPage({
         step: "Saving to your store…",
       }));
 
-      const priceKobo = Math.round(parseFloat(price) * 100);
+      const priceKobo = isQuote ? 0 : Math.round(parseFloat(price) * 100);
+      const priceMaxKobo =
+        !isQuote && isRange && priceMax
+          ? Math.round(parseFloat(priceMax) * 100)
+          : null;
       const base = {
         name: productName.trim(),
         description: description.trim() || null,
         category_id: selectedCategory,
         price: priceKobo,
+        price_max: priceMaxKobo,
         currency,
-        discounted_price:
-          !isNegotiable && discountedPrice
-            ? Math.round(parseFloat(discountedPrice) * 100)
-            : null,
-        tax_included: taxIncluded === "yes",
-        tax_type: taxIncluded === "yes" ? taxType : null,
-        tax_value:
-          taxIncluded === "yes" && taxValue ? parseFloat(taxValue) : null,
-        is_negotiable: isNegotiable,
-        minimum_price:
-          isNegotiable && minimumPrice
-            ? Math.round(parseFloat(minimumPrice) * 100)
-            : null,
         is_featured: isFeatured,
         tags,
         main_image_url: mainImageUrl,
@@ -1276,11 +2014,18 @@ export default function AddProductPage({
       } else {
         payload = {
           ...base,
-          stock_quantity: parseInt(stockQuantity) || 0,
-          low_stock_threshold: threshold ? parseInt(threshold) : null,
-          manufacturing_date: isHealth ? manufacturingDate || null : null,
+          kind,
+          category_id: isService ? null : selectedCategory,
+          quote_on_request: isQuote,
+          stock_quantity: isService ? 0 : parseInt(stockQuantity) || 0,
+          low_stock_threshold:
+            !isService && threshold ? parseInt(threshold) : null,
+          manufacturing_date:
+            !isService && isHealth ? manufacturingDate || null : null,
           expiration_date:
-            isHealth || isElectronics ? expirationDate || null : null,
+            !isService && (isHealth || isElectronics)
+              ? expirationDate || null
+              : null,
           attributes: attributes.map(({ name, value }) => ({ name, value })),
         } as RetailProductPayload;
       }
@@ -1289,6 +2034,7 @@ export default function AddProductPage({
         await categoriesApi.updateProduct(productId, payload);
       } else {
         await categoriesApi.createProduct(payload);
+        useOnboardingStore.getState().completeStep(2);
       }
 
       setPublishModal((prev) => ({
@@ -1359,9 +2105,135 @@ export default function AddProductPage({
     );
   }
 
+  // ── Phased wizard definition (must match the blocks' DOM order) ────────────
+  const wizard = !isEditMode;
+  const phases = [
+    showKindToggle && { id: "type", label: "Type", valid: true },
+    // Import decision — products only, add mode only. Its own buttons drive
+    // the flow (import in bulk vs. add one by one), so it has no Next.
+    !isFood &&
+      wizard &&
+      kind === "product" && { id: "import", label: "Import", valid: true },
+    {
+      id: "basics",
+      label: "Basics",
+      valid:
+        productName.trim().length > 0 && (isService || selectedCategory !== ""),
+    },
+    {
+      id: "pricing",
+      label: "Pricing",
+      valid:
+        isQuote ||
+        (parseFloat(price) > 0 &&
+          (!isRange || parseFloat(priceMax) > parseFloat(price))),
+    },
+    !isFood &&
+      !isService && {
+        id: "inventory",
+        label: "Inventory",
+        valid:
+          stockQuantity !== "" &&
+          threshold !== "" &&
+          (!(isHealth || isElectronics) || expirationDate !== ""),
+      },
+    isFood && { id: "preparation", label: "Prep", valid: true },
+    {
+      id: "media",
+      label: "Media",
+      valid: mainImage !== null || videoFile !== null,
+    },
+    !isFood && {
+      id: "tags",
+      label: isService ? "Details" : "Tags",
+      valid: true,
+    },
+    isFood && { id: "availability", label: "Availability", valid: true },
+    isFood && { id: "choices", label: "Extras", valid: true },
+  ].filter(Boolean) as { id: string; label: string; valid: boolean }[];
+
+  // Clamp: switching Product↔Service changes the phase count mid-flight.
+  const effFrontier = wizard
+    ? Math.min(frontier, phases.length - 1)
+    : phases.length - 1;
+  const phaseIndex = (id: string) => phases.findIndex((p) => p.id === id);
+  const scrollToPhase = (id: string) =>
+    phaseRefs.current[id]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  const goNext = (id: string) => {
+    const i = phaseIndex(id);
+    setFrontier((f) => Math.max(f, i + 1));
+    const nextId = phases[i + 1]?.id;
+    if (nextId) requestAnimationFrame(() => scrollToPhase(nextId));
+  };
+
+  // Switching to bulk import abandons manual entry: clear everything typed in
+  // the blocks below the decision and re-lock (re-blur) them, so a change of
+  // mind later starts the walk clean instead of resuming half-filled state.
+  const startBulkImport = () => {
+    setFrontier(phaseIndex("import"));
+    setProductName("");
+    setDescription("");
+    setSelectedCategory("");
+    setPrice("");
+    setIsRange(false);
+    setPriceMax("");
+    setQuoteOnRequest(false);
+    setStockQuantity("");
+    setThreshold("");
+    setManufacturingDate("");
+    setExpirationDate("");
+    setIsFeatured(false);
+    setMediaType("image");
+    setMainImage(null);
+    setMainImageFile(null);
+    setThumbnails([]);
+    setThumbnailFiles([]);
+    setVideoFile(null);
+    setVideoFileObj(null);
+    setTags([]);
+    setTagInput("");
+    setAttributes([]);
+    setAttributeNameInput("");
+    setAttributeValueInput("");
+    setAttributeError("");
+    setImportModalOpen(true);
+  };
+
+  const publishButton = (
+    <button
+      onClick={handleSubmit}
+      disabled={isSubmitting || !canSubmit}
+      className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-6 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+    >
+      {isSubmitting
+        ? "Publishing…"
+        : isFood
+          ? "Publish Dish"
+          : isService
+            ? "Publish Service"
+            : "Publish Product"}
+    </button>
+  );
+
+  const phaseProps = (id: string) => ({
+    index: phaseIndex(id),
+    frontier: effFrontier,
+    wizard,
+    isLast: phaseIndex(id) === phases.length - 1,
+    nextDisabled: !phases[phaseIndex(id)]?.valid,
+    onNext: () => goNext(id),
+    publish: publishButton,
+    blockRef: (el: HTMLDivElement | null) => {
+      phaseRefs.current[id] = el;
+    },
+  });
+
   return (
     <>
-      <ImportProductsModal
+      <ImportCatalogModal
         isOpen={importModalOpen}
         onClose={() => setImportModalOpen(false)}
         isFood={isFood}
@@ -1376,45 +2248,150 @@ export default function AddProductPage({
                 {isEditMode
                   ? isFood
                     ? "Edit Dish"
-                    : "Edit Product"
+                    : "Edit Listing"
                   : isFood
                     ? "Add a Dish"
-                    : "Add Product"}
+                    : "Add Listing"}
               </h2>
               <p className="text-dash-body text-gray-400 mt-0.5">
                 {isEditMode
                   ? isFood
                     ? `Editing: ${existingProduct?.name ?? ""}`
                     : `Editing: ${existingProduct?.name ?? ""}`
-                  : isFood
-                    ? "Add a new dish, drink or snack to your menu"
-                    : "Create a new product for your store"}
+                  : foodAccount
+                    ? showKindToggle
+                      ? "Add a dish or list a service you offer"
+                      : "Add a new dish, drink or snack to your menu"
+                    : businessType === "service"
+                      ? "List a service you offer"
+                      : showKindToggle
+                        ? "List a product or service in your store"
+                        : "List a product in your store"}
               </p>
             </div>
           </div>
-          {!isEditMode && (
+          {/* Food has no Listing Type block, so its bulk upload stays in the
+              header; retail's import entry lives inside the type block, where
+              the product/service fork is made. */}
+          {!isEditMode && isFood && (
             <button
               onClick={() => setImportModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2.5 border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-600 text-dash-body font-semibold rounded-md transition-colors cursor-pointer"
             >
               <Upload size={15} />
-              {isFood ? "Bulk Upload Dishes" : "Import from CSV / CRM"}
+              Bulk Upload Dishes
             </button>
           )}
         </div>
 
-        {/* Two-column grid */}
-        <div className="flex flex-col lg:flex-row gap-5 items-start">
-          {/* ── Left column ── */}
-          <div className="flex-1 lg:min-w-0 w-full space-y-5">
-            {/* Basic Details */}
+        {/* Single phased column — desktop gets the same flow, centered */}
+        <div className="max-w-3xl mx-auto w-full space-y-5">
+          {/* Phase — listing type ("both" accounts only; retail/service have a
+              fixed kind. Identity is locked after creation either way). */}
+          {showKindToggle && (
+            <PhaseBlock {...phaseProps("type")}>
+              <FormSection title="Listing Type" icon={Package}>
+                <div>
+                  <FieldLabel required>What are you listing?</FieldLabel>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        foodAccount
+                          ? ["product", "Dish", "A menu item you cook & sell"]
+                          : ["product", "Product", "A physical item you stock"],
+                        [
+                          "service",
+                          "Service",
+                          "Work you do — catering, repairs…",
+                        ],
+                      ] as const
+                    ).map(([value, label, hint]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        disabled={isEditMode}
+                        onClick={() => setKind(value as "product" | "service")}
+                        className={cn(
+                          "text-left px-3 py-2.5 rounded-md border transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+                          kind === value
+                            ? "border-orange-500 bg-orange-50"
+                            : "border-gray-200 bg-white hover:border-orange-300",
+                        )}
+                      >
+                        <p className="text-dash-body font-bold text-[#023337]">
+                          {label}
+                        </p>
+                        <p className="text-dash-caption text-gray-400 mt-0.5">
+                          {hint}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                  {isEditMode && (
+                    <p className="text-dash-caption text-gray-400 mt-1.5">
+                      The listing type can&apos;t be changed after creation.
+                    </p>
+                  )}
+                </div>
+              </FormSection>
+            </PhaseBlock>
+          )}
+
+          {/* Phase — import decision (products only, add mode only). A CSV
+                row is a stocked good, so services skip straight to Basics. */}
+          {!isFood && wizard && kind === "product" && (
+            <PhaseBlock {...phaseProps("import")} hideNext>
+              <FormSection title="Add Your Products" icon={Upload}>
+                <div>
+                  <FieldLabel required>
+                    How would you like to add them?
+                  </FieldLabel>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={startBulkImport}
+                      className="text-left px-3 py-2.5 rounded-md border border-gray-200 bg-white hover:border-orange-300 transition-colors cursor-pointer"
+                    >
+                      <p className="flex items-center gap-1.5 text-dash-body font-bold text-[#023337]">
+                        <Upload size={13} className="text-orange-500" />
+                        Bring in your catalogue
+                      </p>
+                      <p className="text-dash-caption text-gray-400 mt-0.5">
+                        Upload a spreadsheet or connect Shopify / WooCommerce
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => goNext("import")}
+                      className="text-left px-3 py-2.5 rounded-md border border-gray-200 bg-white hover:border-orange-300 transition-colors cursor-pointer"
+                    >
+                      <p className="flex items-center gap-1.5 text-dash-body font-bold text-[#023337]">
+                        <PlusCircle size={13} className="text-orange-500" />
+                        Add one by one
+                      </p>
+                      <p className="text-dash-caption text-gray-400 mt-0.5">
+                        Fill in the form step by step
+                      </p>
+                    </button>
+                  </div>
+                </div>
+              </FormSection>
+            </PhaseBlock>
+          )}
+
+          {/* Basic Details */}
+          <PhaseBlock {...phaseProps("basics")}>
             <FormSection
               title="Basic Details"
               icon={isFood ? ChefHat : Package}
             >
               <div>
                 <FieldLabel required>
-                  {isFood ? "Dish Name" : "Product Name"}
+                  {isFood
+                    ? "Dish Name"
+                    : isService
+                      ? "Service Name"
+                      : "Product Name"}
                 </FieldLabel>
                 <Input
                   value={productName}
@@ -1422,7 +2399,9 @@ export default function AddProductPage({
                   placeholder={
                     isFood
                       ? "e.g., Jollof Rice, Egusi Soup, Suya…"
-                      : "e.g., Wireless Headphones"
+                      : isService
+                        ? "e.g., Phone Screen Repair, Home Cleaning…"
+                        : "e.g., Wireless Headphones"
                   }
                   className={`w-full h-11 px-3 bg-gray-50 border rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 ${fieldErrors.name ? "border-red-400" : "border-gray-200"}`}
                 />
@@ -1446,333 +2425,249 @@ export default function AddProductPage({
                   placeholder={
                     isFood
                       ? "e.g., Smoky party jollof rice served with fried plantain and your choice of protein. Contains tomatoes and peppers."
-                      : "Describe the product features and benefits…"
+                      : isService
+                        ? "Describe what the service includes and how it works…"
+                        : "Describe the product features and benefits…"
                   }
                   rows={4}
                   className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
                 />
               </div>
 
-              <div>
-                <FieldLabel required>
-                  {isFood ? "What type of dish is this?" : "Product Category"}
-                </FieldLabel>
-                {isFood ? (
-                  <div className="flex flex-wrap gap-2">
-                    {NIGERIAN_FOOD_CATEGORIES.map((cat) => {
-                      const active = selectedCategory === cat.id;
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() =>
-                            setSelectedCategory(active ? "" : cat.id)
-                          }
-                          className={cn(
-                            "flex items-center gap-1.5 px-3 py-2 rounded-md text-dash-body font-medium border transition-colors cursor-pointer",
-                            active
-                              ? "bg-orange-500 text-white border-orange-500"
-                              : "bg-white text-gray-700 border-gray-200 hover:border-orange-300 hover:bg-orange-50",
-                          )}
-                        >
-                          <span>{cat.emoji}</span>
-                          {cat.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <Select
-                    value={selectedCategory}
-                    onValueChange={(v) => setSelectedCategory(v ?? "")}
-                  >
-                    <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {retailCategories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.emoji} {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            </FormSection>
-
-            {/* Pricing */}
-            <FormSection title="Pricing" icon={BarChart3}>
-              {/* Base price */}
-              <div>
-                <FieldLabel required>
-                  {isFood ? "Dish Price" : "Product Price"}
-                </FieldLabel>
-                <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-md overflow-hidden">
-                  <Input
-                    type="number"
-                    step="any"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="flex-1 min-w-0 px-3 pt-3 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
-                  />
-                  <div className="relative">
-                    <button
-                      ref={currencyButtonRef}
-                      type="button"
-                      onClick={() =>
-                        setCurrencyPopoverOpen(!currencyPopoverOpen)
-                      }
-                      className="h-full pl-3 pr-8 text-dash-body bg-transparent border-l border-gray-200 flex items-center gap-1.5 cursor-pointer text-gray-600 font-medium"
-                    >
-                      {currSymbol}
-                      <ChevronDown size={13} className="text-gray-400" />
-                    </button>
-                    {currencyPopoverOpen && (
-                      <div
-                        ref={currencyDropdownRef}
-                        className="absolute right-0 top-full mt-1 z-50 bg-white rounded-md shadow-lg border border-gray-200 py-1 min-w-[100px]"
-                      >
-                        {[
-                          ["NGN", "₦ NGN"],
-                          ["USD", "$ USD"],
-                        ].map(([code, label]) => (
+              {/* Category — products & food only. Services are discovered by
+                  meaning (their description + sector), not a fixed category. */}
+              {!isService && (
+                <div>
+                  <FieldLabel required>
+                    {isFood ? "What type of dish is this?" : "Category"}
+                  </FieldLabel>
+                  {isFood ? (
+                    <div className="flex flex-wrap gap-2">
+                      {NIGERIAN_FOOD_CATEGORIES.map((cat) => {
+                        const active = selectedCategory === cat.id;
+                        return (
                           <button
-                            key={code}
+                            key={cat.id}
                             type="button"
-                            onClick={() => {
-                              setCurrency(code as "NGN" | "USD");
-                              setCurrencyPopoverOpen(false);
-                            }}
-                            className="w-full px-4 py-2 text-left text-dash-body hover:bg-orange-50 transition-colors cursor-pointer"
+                            onClick={() =>
+                              setSelectedCategory(active ? "" : cat.id)
+                            }
+                            className={cn(
+                              "flex items-center gap-1.5 px-3 py-2 rounded-md text-dash-body font-medium border transition-colors cursor-pointer",
+                              active
+                                ? "bg-orange-500 text-white border-orange-500"
+                                : "bg-white text-gray-700 border-gray-200 hover:border-orange-300 hover:bg-orange-50",
+                            )}
                           >
-                            {label}
+                            <span>{cat.emoji}</span>
+                            {cat.label}
                           </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <Select
+                      value={selectedCategory}
+                      onValueChange={(v) => setSelectedCategory(v ?? "")}
+                    >
+                      <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {retailCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.emoji} {cat.name}
+                          </SelectItem>
                         ))}
-                      </div>
-                    )}
-                  </div>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
-                {fieldErrors.price && (
-                  <p className="text-dash-caption text-red-500 mt-1">
-                    {fieldErrors.price}
-                  </p>
-                )}
-              </div>
+              )}
+            </FormSection>
+          </PhaseBlock>
 
-              {/* Negotiable Price */}
-              <div className="space-y-3">
+          {/* Pricing */}
+          <PhaseBlock {...phaseProps("pricing")}>
+            <FormSection title="Pricing" icon={BarChart3}>
+              {/* Quote on request — services can skip an upfront price */}
+              {isService && (
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-dash-body font-bold text-[#023337]">
-                      Negotiable Price
+                      Quote on request
                     </p>
                     <p className="text-dash-caption text-gray-400 mt-0.5">
-                      Allow customers to negotiate the price
+                      No set price — you&apos;ll quote each buyer in chat
                     </p>
                   </div>
-                  <Toggle
-                    value={isNegotiable}
-                    onChange={handleNegotiableToggle}
-                  />
-                </div>
-                {isNegotiable && (
-                  <div>
-                    <FieldLabel>Minimum Price</FieldLabel>
-                    <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3">
-                      <span className="bg-orange-50 rounded-lg px-2 py-1 text-dash-caption font-bold text-orange-600 flex-shrink-0">
-                        {currSymbol}
-                      </span>
-                      <Input
-                        type="number"
-                        step="any"
-                        value={minimumPrice}
-                        onChange={(e) => setMinimumPrice(e.target.value)}
-                        placeholder="0.00"
-                        className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
-                      />
-                    </div>
-                    <p className="text-dash-caption text-gray-400 mt-1.5">
-                      Lowest price you&apos;re willing to accept
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Discounted Price — full width, hidden when negotiable is on */}
-              {!isNegotiable && (
-                <div>
-                  <FieldLabel optional>Discounted Price</FieldLabel>
-                  <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3">
-                    <span className="bg-orange-50 rounded-lg px-2 py-1 text-dash-caption font-bold text-orange-600 flex-shrink-0">
-                      {currSymbol}
-                    </span>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={discountedPrice}
-                      onChange={(e) => setDiscountedPrice(e.target.value)}
-                      placeholder="0.00"
-                      className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
-                    />
-                  </div>
+                  <Toggle value={quoteOnRequest} onChange={handleQuoteToggle} />
                 </div>
               )}
 
-              {/* Tax */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-dash-body font-bold text-[#023337]">
-                      Tax Included
-                    </p>
-                    <p className="text-dash-caption text-gray-400 mt-0.5">
-                      Is tax included in the listed price?
-                    </p>
-                  </div>
-                  <Toggle
-                    value={taxIncluded === "yes"}
-                    onChange={(v) => setTaxIncluded(v ? "yes" : "no")}
-                  />
+              {/* Quote-on-request note — no price to enter */}
+              {isQuote && (
+                <div className="bg-orange-50/70 border border-orange-100 rounded-2xl p-4">
+                  <p className="text-dash-body font-bold text-[#023337]">
+                    Buyers will see &quot;Contact for quote&quot;
+                  </p>
+                  <p className="text-dash-caption text-gray-500 mt-1 leading-relaxed">
+                    You&apos;ll agree the final price with each buyer over
+                    WhatsApp. Add things like duration or coverage under Service
+                    Details so they know what to expect.
+                  </p>
                 </div>
-                {taxIncluded === "yes" && (
-                  <div>
-                    <FieldLabel>Tax Amount</FieldLabel>
-                    <div className="flex gap-2">
-                      <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-md overflow-hidden flex-1">
+              )}
+
+              {/* Base price — hidden for quote-on-request services */}
+              {!isQuote && (
+                <div>
+                  <FieldLabel required>
+                    {isFood
+                      ? "Dish Price"
+                      : isService
+                        ? "Service Price"
+                        : "Product Price"}
+                  </FieldLabel>
+                  <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-md overflow-hidden">
+                    <Input
+                      type="number"
+                      step="any"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="flex-1 min-w-0 px-3 pt-3 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                    />
+                    <div className="relative">
+                      <button
+                        ref={currencyButtonRef}
+                        type="button"
+                        onClick={() =>
+                          setCurrencyPopoverOpen(!currencyPopoverOpen)
+                        }
+                        className="h-full pl-3 pr-8 text-dash-body bg-transparent border-l border-gray-200 flex items-center gap-1.5 cursor-pointer text-gray-600 font-medium"
+                      >
+                        {currSymbol}
+                        <ChevronDown size={13} className="text-gray-400" />
+                      </button>
+                      {currencyPopoverOpen && (
+                        <div
+                          ref={currencyDropdownRef}
+                          className="absolute right-0 top-full mt-1 z-50 bg-white rounded-md shadow-lg border border-gray-200 py-1 min-w-[100px]"
+                        >
+                          {[
+                            ["NGN", "₦ NGN"],
+                            ["USD", "$ USD"],
+                          ].map(([code, label]) => (
+                            <button
+                              key={code}
+                              type="button"
+                              onClick={() => {
+                                setCurrency(code as "NGN" | "USD");
+                                setCurrencyPopoverOpen(false);
+                              }}
+                              className="w-full px-4 py-2 text-left text-dash-body hover:bg-orange-50 transition-colors cursor-pointer"
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {fieldErrors.price && (
+                    <p className="text-dash-caption text-red-500 mt-1">
+                      {fieldErrors.price}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Price range — turn the single price into a min–max band */}
+              {!isQuote && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-dash-body font-bold text-[#023337]">
+                        Set a price range
+                      </p>
+                      <p className="text-dash-caption text-gray-400 mt-0.5">
+                        Show a &quot;from – to&quot; band instead of one price
+                      </p>
+                    </div>
+                    <Toggle value={isRange} onChange={handleRangeToggle} />
+                  </div>
+                  {isRange && (
+                    <div>
+                      <FieldLabel required>Maximum Price</FieldLabel>
+                      <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3">
+                        <span className="bg-orange-50 rounded-lg px-2 py-1 text-dash-caption font-bold text-orange-600 flex-shrink-0">
+                          {currSymbol}
+                        </span>
                         <Input
                           type="number"
                           step="any"
-                          value={taxValue}
-                          onChange={(e) => setTaxValue(e.target.value)}
+                          value={priceMax}
+                          onChange={(e) => setPriceMax(e.target.value)}
                           placeholder="0.00"
-                          className="flex-1 px-3 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                          className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
                         />
                       </div>
-                      <div className="flex gap-1.5">
-                        {(["percentage", "fixed"] as const).map((type) => (
-                          <button
-                            key={type}
-                            type="button"
-                            onClick={() => setTaxType(type)}
-                            className={cn(
-                              "px-3.5 h-11 text-dash-body rounded-md transition-colors cursor-pointer font-medium",
-                              taxType === type
-                                ? "bg-orange-500 text-white"
-                                : "bg-gray-100 text-gray-700 hover:bg-gray-200",
-                            )}
-                          >
-                            {type === "percentage" ? "%" : "Fixed"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Total Price summary */}
-              {(() => {
-                const baseAmt = parseFloat(price) || 0;
-                const discAmt = parseFloat(discountedPrice) || 0;
-                const minAmt = parseFloat(minimumPrice) || 0;
-                const taxAmt = parseFloat(taxValue) || 0;
-                const hasDiscount =
-                  !isNegotiable && discAmt > 0 && discAmt < baseAmt;
-                const effectiveAmt = hasDiscount ? discAmt : baseAmt;
-                const fmt = (n: number) =>
-                  n.toLocaleString("en-NG", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  });
-                const hasTax = taxIncluded === "yes" && taxAmt > 0;
-                const taxComputed = hasTax
-                  ? taxType === "percentage"
-                    ? (effectiveAmt * taxAmt) / 100
-                    : taxAmt
-                  : 0;
-                const totalAmt = effectiveAmt + taxComputed;
-                const taxLabel = hasTax
-                  ? taxType === "percentage"
-                    ? `+${taxAmt}% (${currSymbol}${fmt(taxComputed)})`
-                    : `+${currSymbol}${fmt(taxAmt)}`
-                  : "None";
-                return (
-                  <div className="bg-orange-50/70 border border-orange-100 rounded-2xl p-4">
-                    <p className="text-dash-caption font-semibold text-orange-500 uppercase tracking-wider mb-3">
-                      Total Price
-                    </p>
-                    {isNegotiable ? (
-                      <div className="flex items-baseline gap-2 mb-3">
-                        <span className="text-[1.6rem] font-black text-[#023337] leading-none">
-                          {currSymbol}
-                          {minAmt > 0 ? fmt(minAmt) : "—"}
-                        </span>
-                        <span className="text-dash-body text-gray-400 font-medium">
-                          to
-                        </span>
-                        <span className="text-dash-heading font-bold text-gray-500">
-                          {currSymbol}
-                          {baseAmt > 0 ? fmt(baseAmt) : "—"}
-                        </span>
-                      </div>
-                    ) : (
-                      <p className="text-[1.6rem] font-black text-[#023337] leading-none mb-3">
-                        {currSymbol}
-                        {totalAmt > 0 ? fmt(totalAmt) : "—"}
+                      <p className="text-dash-caption text-gray-400 mt-1.5">
+                        The top of your range — must be above the price above
                       </p>
-                    )}
-                    <div className="space-y-1.5 pt-3 border-t border-orange-100">
-                      {hasDiscount && (
-                        <>
-                          <div className="flex justify-between text-dash-caption">
-                            <span className="text-gray-500">
-                              Original price
-                            </span>
-                            <span className="text-gray-400 line-through">
-                              {currSymbol}
-                              {fmt(baseAmt)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-dash-caption">
-                            <span className="text-gray-500">Saving</span>
-                            <span className="text-green-600 font-semibold">
-                              −{currSymbol}
-                              {fmt(baseAmt - discAmt)}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                      {hasTax && (
-                        <div className="flex justify-between text-dash-caption">
-                          <span className="text-gray-500">Subtotal</span>
-                          <span className="text-gray-500">
-                            {currSymbol}
-                            {fmt(effectiveAmt)}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-dash-caption">
-                        <span className="text-gray-500">Tax</span>
-                        <span
-                          className={
-                            hasTax
-                              ? "text-orange-500 font-semibold"
-                              : "text-gray-400"
-                          }
-                        >
-                          {taxLabel}
-                        </span>
-                      </div>
                     </div>
-                  </div>
-                );
-              })()}
-            </FormSection>
+                  )}
+                </div>
+              )}
 
-            {/* Inventory — retail only */}
-            {!isFood && (
+              {/* Price summary */}
+              {!isQuote &&
+                (() => {
+                  const lo = parseFloat(price) || 0;
+                  const hi = parseFloat(priceMax) || 0;
+                  const fmtAmt = (n: number) =>
+                    n.toLocaleString("en-NG", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    });
+                  const showRange = isRange && hi > lo;
+                  return (
+                    <div className="bg-orange-50/70 border border-orange-100 rounded-2xl p-4">
+                      <p className="text-dash-caption font-semibold text-orange-500 uppercase tracking-wider mb-3">
+                        Buyers will see
+                      </p>
+                      <p className="text-[1.6rem] font-black text-[#023337] leading-none">
+                        {lo > 0 ? (
+                          showRange ? (
+                            <>
+                              {currSymbol}
+                              {fmtAmt(lo)}
+                              <span className="mx-1.5 text-gray-400 font-medium">
+                                –
+                              </span>
+                              {currSymbol}
+                              {fmtAmt(hi)}
+                            </>
+                          ) : (
+                            <>
+                              {currSymbol}
+                              {fmtAmt(lo)}
+                            </>
+                          )
+                        ) : (
+                          "—"
+                        )}
+                      </p>
+                    </div>
+                  );
+                })()}
+            </FormSection>
+          </PhaseBlock>
+
+          {/* Inventory — retail stocked goods only; services have no stock */}
+          {!isFood && !isService && (
+            <PhaseBlock {...phaseProps("inventory")}>
               <FormSection title="Inventory" icon={Layers}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
@@ -1854,13 +2749,15 @@ export default function AddProductPage({
                 <CheckboxField
                   checked={isFeatured}
                   onChange={setIsFeatured}
-                  label="Feature this product in a highlighted section"
+                  label="Feature this listing in a highlighted section"
                 />
               </FormSection>
-            )}
+            </PhaseBlock>
+          )}
 
-            {/* Preparation — food only */}
-            {isFood && (
+          {/* Preparation — food only */}
+          {isFood && (
+            <PhaseBlock {...phaseProps("preparation")}>
               <FormSection title="Preparation" icon={Clock}>
                 <div>
                   <FieldLabel>How long does it take to prepare?</FieldLabel>
@@ -1911,13 +2808,18 @@ export default function AddProductPage({
                   </p>
                 </div>
               </FormSection>
-            )}
-          </div>
+            </PhaseBlock>
+          )}
 
-          {/* ── Right column ── */}
-          <div className="w-full lg:w-[440px] flex-shrink-0 space-y-5">
-            {/* Media */}
+          {/* Media */}
+          <PhaseBlock {...phaseProps("media")}>
             <FormSection title="Media" icon={ImageIcon} required>
+              {isService && (
+                <p className="text-dash-caption text-gray-400 -mt-1">
+                  Show your work — photos of finished jobs or before/after shots
+                  are what convince buyers to reach out.
+                </p>
+              )}
               <div className="flex gap-2 mb-2 -mt-1">
                 {[
                   { key: "image" as const, icon: ImageIcon, label: "Images" },
@@ -2085,10 +2987,17 @@ export default function AddProductPage({
                 </div>
               )}
             </FormSection>
+          </PhaseBlock>
 
-            {/* Tags + attributes — retail only */}
-            {!isFood && (
-              <FormSection title="Tags & Attributes" icon={Tag}>
+          {/* Tags + attributes — retail only */}
+          {!isFood && (
+            <PhaseBlock {...phaseProps("tags")}>
+              <FormSection
+                title={
+                  isService ? "Tags & Service Details" : "Tags & Attributes"
+                }
+                icon={Tag}
+              >
                 <div>
                   <FieldLabel optional>Tags</FieldLabel>
 
@@ -2151,16 +3060,38 @@ export default function AddProductPage({
                     placeholder={
                       isFood
                         ? "Or type a custom tag and press Enter"
-                        : "Type a tag then press Enter or Space"
+                        : isService
+                          ? "e.g. home-service, same-day — press Enter"
+                          : "Type a tag then press Enter or Space"
                     }
                     className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                   />
                 </div>
 
-                {/* Attributes — retail only */}
+                {/* Attributes — retail only. For services these read as
+                    "service details" (Duration, Coverage, Warranty…) — same
+                    name/value structure, different vocabulary. */}
                 {!isFood && (
                   <div>
-                    <FieldLabel optional>Attributes</FieldLabel>
+                    <FieldLabel optional>
+                      {isService ? "Service Details" : "Attributes"}
+                    </FieldLabel>
+                    {isService && (
+                      <p className="text-dash-caption text-gray-400 mb-2">
+                        Things buyers ask before booking — duration, coverage
+                        area, warranty…
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPresetPickerOpen(true)}
+                      className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-50 text-orange-600 text-dash-body font-medium rounded-md transition-colors cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      {isService
+                        ? "Quick add — pick from common service details"
+                        : "Quick add — pick from common attributes"}
+                    </button>
                     <div className="flex gap-2">
                       <Input
                         type="text"
@@ -2169,7 +3100,11 @@ export default function AddProductPage({
                           setAttributeNameInput(e.target.value);
                           if (attributeError) setAttributeError("");
                         }}
-                        placeholder="Name (e.g., Size)"
+                        placeholder={
+                          isService
+                            ? "Name (e.g., Duration)"
+                            : "Name (e.g., Size)"
+                        }
                         className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                       />
                       <Input
@@ -2179,7 +3114,11 @@ export default function AddProductPage({
                           setAttributeValueInput(e.target.value);
                           if (attributeError) setAttributeError("");
                         }}
-                        placeholder="Value (e.g., Large)"
+                        placeholder={
+                          isService
+                            ? "Value (e.g., about 2 hours)"
+                            : "Value (e.g., Large)"
+                        }
                         className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                       />
                       <button
@@ -2227,10 +3166,12 @@ export default function AddProductPage({
                   </div>
                 )}
               </FormSection>
-            )}
+            </PhaseBlock>
+          )}
 
-            {/* Availability & Stock — food only */}
-            {isFood && (
+          {/* Availability & Stock — food only */}
+          {isFood && (
+            <PhaseBlock {...phaseProps("availability")}>
               <FormSection title="Availability & Stock" icon={Calendar}>
                 {/* Currently available toggle */}
                 <div className="flex items-center justify-between">
@@ -2285,10 +3226,12 @@ export default function AddProductPage({
                   <Toggle value={allowPreOrder} onChange={setAllowPreOrder} />
                 </div>
               </FormSection>
-            )}
+            </PhaseBlock>
+          )}
 
-            {/* Customer Choices & Extras — food only */}
-            {isFood && (
+          {/* Customer Choices & Extras — food only */}
+          {isFood && (
+            <PhaseBlock {...phaseProps("choices")}>
               <FormSection title="Customer Choices & Extras" icon={Layers}>
                 {/* Explainer */}
                 <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 -mt-1 space-y-1">
@@ -2528,49 +3471,34 @@ export default function AddProductPage({
                   </div>
                 )}
               </FormSection>
-            )}
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex justify-end absolute py-2 w-full bg-white px-5 bottom-0 right-0 gap-3">
-          {isEditMode ? (
-            <>
-              <button
-                onClick={() => navigate(`/${userId}/products`)}
-                disabled={isSubmitting}
-                className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !canSubmit}
-                className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isSubmitting
-                  ? "Saving…"
-                  : isFood
-                    ? "Update Dish"
-                    : "Save Changes"}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !canSubmit}
-                className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isSubmitting
-                  ? "Publishing…"
-                  : isFood
-                    ? "Publish Dish"
-                    : "Publish Product"}
-              </button>
-            </>
+            </PhaseBlock>
           )}
         </div>
+
+        {/* Edit mode keeps the classic bottom bar; in add mode the Publish
+            button lives inside the last phase block. */}
+        {isEditMode && (
+          <div className="flex justify-end absolute py-2 w-full bg-white px-5 bottom-0 right-0 gap-3">
+            <button
+              onClick={() => navigate(`/${userId}/products`)}
+              disabled={isSubmitting}
+              className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting || !canSubmit}
+              className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSubmitting
+                ? "Saving…"
+                : isFood
+                  ? "Update Dish"
+                  : "Save Changes"}
+            </button>
+          </div>
+        )}
       </div>
 
       <PublishProgressModal
@@ -2580,6 +3508,24 @@ export default function AddProductPage({
         done={publishModal.done}
         isFood={isFood}
         isEditMode={isEditMode}
+      />
+
+      <AttributePickerModal
+        open={presetPickerOpen}
+        title={isService ? "Add Service Details" : "Add Attributes"}
+        subtitle={
+          isService
+            ? "Fill in whatever applies to your service — buyers see these before they chat."
+            : "Fill in whatever applies to this product."
+        }
+        groups={
+          isService
+            ? SERVICE_DETAIL_PRESETS
+            : getProductAttributePresets(selectedCategory)
+        }
+        existingNames={attributes.map((a) => a.name)}
+        onClose={() => setPresetPickerOpen(false)}
+        onAdd={addPresetDetails}
       />
     </>
   );

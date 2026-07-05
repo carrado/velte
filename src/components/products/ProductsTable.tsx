@@ -64,75 +64,52 @@ function ProductCard({
 
         {/* Price */}
         <div className="mb-3">
-          {pricing.isNegotiable ? (
+          {pricing.quoteOnRequest ? (
             <p className="text-dash-heading font-black text-orange-500">
-              {fmt(pricing.minFinalPrice!, pricing.currencySymbol)}{" "}
+              Contact for quote
+            </p>
+          ) : pricing.isRange ? (
+            <p className="text-dash-heading font-black text-orange-500">
+              {fmt(pricing.price, pricing.currencySymbol)}{" "}
               <span className="text-gray-400 font-medium">–</span>{" "}
-              {fmt(pricing.finalPrice, pricing.currencySymbol)}
+              {fmt(pricing.priceMax!, pricing.currencySymbol)}
             </p>
           ) : (
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-dash-heading font-black text-orange-500">
-                {fmt(pricing.finalPrice, pricing.currencySymbol)}
-              </p>
-              {pricing.hasDiscount && (
-                <span className="text-dash-caption text-gray-400 line-through">
-                  {fmt(pricing.basePrice, pricing.currencySymbol)}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Breakdown */}
-          {(pricing.hasDiscount || pricing.hasTax || pricing.isNegotiable) && (
-            <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-              {pricing.hasDiscount && (
-                <span className="text-dash-caption text-green-600 font-medium">
-                  −{fmt(pricing.discountAmount!, pricing.currencySymbol)} off
-                </span>
-              )}
-              {pricing.hasTax && (
-                <span className="text-dash-caption text-gray-400">
-                  {product.taxType === "percentage"
-                    ? `+${product.taxValue}% tax`
-                    : `+${fmt(pricing.taxAmount, pricing.currencySymbol)} tax`}
-                </span>
-              )}
-              {pricing.isNegotiable && (
-                <span className="text-dash-caption text-blue-500 font-medium">
-                  Negotiable
-                </span>
-              )}
-            </div>
+            <p className="text-dash-heading font-black text-orange-500">
+              {fmt(pricing.price, pricing.currencySymbol)}
+            </p>
           )}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={cn(
-              "inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold",
-              available > 0
-                ? "bg-green-100 text-green-700"
-                : "bg-red-100 text-red-700",
-            )}
-          >
-            {available > 0
-              ? isFood
-                ? "Available"
-                : "In Stock"
-              : isFood
-                ? "Not Available"
-                : "Out of Stock"}
-          </span>
+          {product.kind === "service" ? (
+            // Services have no stock — a red "Out of Stock" here would be
+            // misleading, so show a neutral identity badge instead.
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-teal-50 text-teal-700">
+              Service
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold",
+                available > 0
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700",
+              )}
+            >
+              {available > 0
+                ? isFood
+                  ? "Available"
+                  : "In Stock"
+                : isFood
+                  ? "Not Available"
+                  : "Out of Stock"}
+            </span>
+          )}
           {product.featured && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-amber-100 text-amber-700">
               <Star size={9} className="fill-amber-500 text-amber-500" />{" "}
               Featured
-            </span>
-          )}
-          {product.onSale && available > 0 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-blue-100 text-blue-700">
-              On Sale
             </span>
           )}
           {product.estimatedPrepMins != null && (
@@ -153,7 +130,7 @@ function EmptyState({ isFood }: { isFood: boolean }) {
         <Package size={24} className="text-gray-300" />
       </div>
       <p className="text-dash-body font-semibold text-gray-400">
-        {isFood ? "No dishes found." : "No products found."}
+        {isFood ? "No dishes found." : "No listings found."}
       </p>
     </div>
   );

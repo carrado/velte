@@ -2,15 +2,11 @@ import { api } from "@/lib/api-client";
 import { useUserStore } from "@/store/userStore";
 import type {
   User,
-  UserNotifications,
   UserCompany,
   UserPreferences,
+  UserLocation,
   BusinessType,
 } from "@/types/user";
-import type { InvoiceReceiptSettings } from "@/types/invoice";
-import type { AiSettings } from "@/types/ai-settings";
-
-export type { UserNotifications };
 
 export interface UpdateProfileData {
   name?: string;
@@ -18,7 +14,23 @@ export interface UpdateProfileData {
   phone?: string;
   businessName?: string;
   avatar?: string;
+  area?: string;
+  state?: string;
+  location?: UserLocation;
 }
+
+export interface UpdateProfileResult {
+  user: User;
+  /** True when an area/location change in this request was rejected by the
+   * cooldown — the rest of the profile (name, phone, etc.) still saved. */
+  addressChangeBlocked: boolean;
+  addressChangeAvailableAt: string | null;
+}
+
+/** Mirrors ADDRESS_CHANGE_COOLDOWN_MS in velte-backend's updateProfile
+ * controller — lets the UI compute the same "locked until" window from
+ * `addressChangedAt` alone, without waiting on a save attempt to find out. */
+export const ADDRESS_CHANGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export interface RequestPasswordChangeData {
   currentPassword: string;
@@ -30,6 +42,16 @@ export interface ConfirmPasswordChangeData {
   otp: string;
   newPassword: string;
   confirmPassword: string;
+}
+
+// Backend returns geo as GeoJSON ({ type: "Point", coordinates: [lng, lat] })
+// from both /auth/me (raw Mongoose doc) and /auth/profile (custom response) —
+// normalise to { lat, lng } here so components never touch GeoJSON directly.
+function mapGeo(geo: unknown): UserLocation | null {
+  const coords = (geo as { coordinates?: unknown } | null)?.coordinates;
+  if (!Array.isArray(coords) || coords.length !== 2) return null;
+  const [lng, lat] = coords as [number, number];
+  return { lat, lng };
 }
 
 function mapRawUser(u: Record<string, unknown>): User {
@@ -45,6 +67,10 @@ function mapRawUser(u: Record<string, unknown>): User {
     preferences: (u.preferences as UserPreferences) ?? undefined,
     onboarding: (u.onboarding as boolean) ?? false,
     businessType: (u.businessType as BusinessType) ?? undefined,
+    area: (u.area as string) ?? undefined,
+    state: (u.state as string) ?? undefined,
+    location: mapGeo(u.geo),
+    addressChangedAt: (u.addressChangedAt as string) ?? null,
   };
 }
 
@@ -58,14 +84,21 @@ export const settingsApi = {
     return user;
   },
 
-  updateProfile: async (data: UpdateProfileData): Promise<User> => {
-    const { user: raw } = await api.put<{ user: Record<string, unknown> }>(
-      "/api/auth/profile",
-      data,
-    );
+  updateProfile: async (
+    data: UpdateProfileData,
+  ): Promise<UpdateProfileResult> => {
+    const {
+      user: raw,
+      addressChangeBlocked,
+      addressChangeAvailableAt,
+    } = await api.put<{
+      user: Record<string, unknown>;
+      addressChangeBlocked: boolean;
+      addressChangeAvailableAt: string | null;
+    }>("/api/auth/profile", data);
     const user = mapRawUser(raw);
     useUserStore.getState().updateUser(user);
-    return user;
+    return { user, addressChangeBlocked, addressChangeAvailableAt };
   },
 
   requestPasswordChange: async (
@@ -86,42 +119,6 @@ export const settingsApi = {
       data,
     );
     return { message: message ?? "" };
-  },
-
-  getNotificationSettings: async (): Promise<UserNotifications> => {
-    const { notifications } = await api.get<{
-      notifications: UserNotifications;
-    }>("/api/auth/notifications");
-    return notifications;
-  },
-
-  saveNotificationSettings: async (
-    data: Partial<UserNotifications>,
-  ): Promise<UserNotifications> => {
-    const { notifications } = await api.put<{
-      notifications: UserNotifications;
-    }>("/api/auth/notifications", data);
-    return notifications;
-  },
-
-  getInvoiceSettings: async (): Promise<InvoiceReceiptSettings> => {
-    return api.get<InvoiceReceiptSettings>("/api/auth/invoice-settings");
-  },
-
-  // Accepts a partial document (the UI saves one tab — `invoice` or `receipt` —
-  // at a time) and returns the full, merged settings.
-  saveInvoiceSettings: async (
-    data: Partial<InvoiceReceiptSettings>,
-  ): Promise<InvoiceReceiptSettings> => {
-    return api.put<InvoiceReceiptSettings>("/api/auth/invoice-settings", data);
-  },
-
-  getAiSettings: async (): Promise<AiSettings> => {
-    return api.get<AiSettings>("/api/auth/ai-settings");
-  },
-
-  saveAiSettings: async (data: Partial<AiSettings>): Promise<AiSettings> => {
-    return api.put<AiSettings>("/api/auth/ai-settings", data);
   },
 
   updateBusinessType: async (businessType: BusinessType): Promise<User> => {

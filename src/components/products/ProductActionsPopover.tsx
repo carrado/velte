@@ -66,7 +66,7 @@ export default function ProductActionsPopover({
           <Edit2 size={14} className="text-blue-500" />
           Edit Product
         </button>
-        {!isFood && (
+        {!isFood && product.kind !== "service" && (
           <button
             onClick={() => {
               setPopoverOpen(false);

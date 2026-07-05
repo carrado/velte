@@ -18,7 +18,7 @@ export default function DeleteProductModal({
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-dash-heading font-semibold text-red-600">
-            Delete Product
+            Delete Listing
           </h2>
           <button
             onClick={onClose}

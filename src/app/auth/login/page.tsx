@@ -36,7 +36,7 @@ export default function Login() {
       usersApi.login(data),
     onSuccess: (response) => {
       toast.success("Welcome back!");
-      router.push(`/${response.user.id}/dashboard`);
+      router.push(`/${response.user.id}/products`);
     },
     onError: (error: unknown, variables) => {
       const message =
@@ -69,7 +69,7 @@ export default function Login() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0d0804] flex items-center justify-center sm:p-5">
+    <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center sm:p-5">
       {/* Background effects */}
       <div
         className="absolute inset-0 opacity-[0.025]"
@@ -127,7 +127,7 @@ export default function Login() {
                     .string()
                     .email("Invalid email address")
                     .safeParse(value);
-                  return r.success ? undefined : r.error.errors[0]?.message;
+                  return r.success ? undefined : r.error.issues[0]?.message;
                 },
               }}
             >
@@ -159,7 +159,7 @@ export default function Login() {
                     .string()
                     .min(1, "Password is required")
                     .safeParse(value);
-                  return r.success ? undefined : r.error.errors[0]?.message;
+                  return r.success ? undefined : r.error.issues[0]?.message;
                 },
               }}
             >

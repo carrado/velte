@@ -3,14 +3,6 @@ import Link from "next/link";
 
 const footerLinks = [
   {
-    heading: "Product",
-    links: [
-      { label: "Features", href: "/#features" },
-      { label: "How It Works", href: "/#how-it-works" },
-      { label: "Pricing", href: "/pricing" },
-    ],
-  },
-  {
     heading: "Company",
     links: [
       { label: "About", href: "/about" },
@@ -31,29 +23,28 @@ export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="bg-[#030a05] border-t border-white/[0.06]">
+    <footer className="bg-white border-t border-gray-200">
       <div className="max-w-7xl mx-auto px-5 sm:px-8 py-14">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
-          {/* Brand */}
-          <div className="col-span-1">
+          <div className="col-span-1 sm:col-span-2 lg:col-span-2">
             <Link href="/" className="flex items-center gap-2.5 mb-4">
               <Image
-                src="/velte_ijulb7ijulb7ijul_h3d6xw.png"
-                alt="Velte logo"
-                width={80}
-                height={10}
+                src="/velte_logo_esn5dj.png"
+                alt="Velte"
+                width={90}
+                height={12}
                 priority
               />
             </Link>
-            <p className="text-white/40 text-sm leading-relaxed max-w-[220px]">
-              AI-powered WhatsApp sales agents for modern businesses.
+            <p className="text-gray-500 text-sm leading-relaxed max-w-[280px]">
+              Describe what you need — we find the nearest real vendor who
+              actually has it.
             </p>
           </div>
 
-          {/* Links */}
           {footerLinks.map((col) => (
             <div key={col.heading}>
-              <p className="text-white/70 text-xs font-semibold tracking-widest uppercase mb-4">
+              <p className="text-gray-400 text-xs font-semibold tracking-widest uppercase mb-4">
                 {col.heading}
               </p>
               <ul className="space-y-3">
@@ -61,7 +52,7 @@ export default function Footer() {
                   <li key={link.label}>
                     <Link
                       href={link.href}
-                      className="text-white/40 hover:text-white/70 text-sm transition-colors duration-150"
+                      className="text-gray-500 hover:text-gray-900 text-sm transition-colors duration-150"
                     >
                       {link.label}
                     </Link>
@@ -72,13 +63,12 @@ export default function Footer() {
           ))}
         </div>
 
-        {/* Bottom bar */}
-        <div className="border-t border-white/[0.06] pt-7 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-white/30 text-sm">
+        <div className="border-t border-gray-200 pt-7 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-gray-400 text-sm">
             &copy; {year} Velte Technologies. All rights reserved.
           </p>
-          <p className="text-white/20 text-xs">
-            Helping businesses sell smarter with AI.
+          <p className="text-gray-400 text-xs">
+            Matched by meaning, proximity, and trust — not keywords.
           </p>
         </div>
       </div>

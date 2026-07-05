@@ -6,26 +6,28 @@ export interface Category {
   description?: string;
 }
 
-export type ProductTab = "all" | "featured" | "on-sale" | "out-of-stock";
+export type ProductTab = "all" | "featured" | "out-of-stock";
+
+export type OfferingKind = "product" | "service";
 
 export interface CategoryProduct {
   id: string;
   name: string;
+  /** Offering identity — services carry no stock semantics. */
+  kind?: OfferingKind;
+  /** Service priced per job — no upfront price; buyers see "Contact for quote". */
+  quoteOnRequest?: boolean;
   description?: string | null;
   categoryId: string;
+  /** The single price, or the low end of a range when `priceMax` is set. */
   price: number;
+  /** High end of a price range; null = single price. */
+  priceMax?: number | null;
   currency?: "NGN" | "USD";
-  discountedPrice?: number | null;
-  taxIncluded?: boolean;
-  taxType?: "percentage" | "fixed" | null;
-  taxValue?: number | null;
-  isNegotiable?: boolean;
-  minimumPrice?: number | null;
   totalQuantity: number;
   orderedQuantity: number;
   createdDate: string;
   featured: boolean;
-  onSale: boolean;
   inStock: number;
   colorClass: string;
   mainImageUrl?: string | null;
@@ -51,6 +53,29 @@ export interface ProductAttribute {
   id: string;
   name: string;
   value: string;
+}
+
+/** A suggested attribute / service detail: the name is fixed, the example
+ * seeds the value input's placeholder. */
+export interface AttributePreset {
+  name: string;
+  example: string;
+}
+
+export interface AttributePresetGroup {
+  group: string;
+  items: AttributePreset[];
+}
+
+export interface AttributePickerModalProps {
+  open: boolean;
+  title: string;
+  subtitle?: string;
+  groups: AttributePresetGroup[];
+  /** Names already on the offering — shown as added, not re-addable. */
+  existingNames: string[];
+  onClose: () => void;
+  onAdd: (details: { name: string; value: string }[]) => void;
 }
 
 export interface ModifierOption {
@@ -101,15 +126,12 @@ export interface ProductListResult {
 export interface CreateProductBasePayload {
   name: string;
   description?: string | null;
-  category_id: string;
+  /** Null for services — they carry no category. */
+  category_id: string | null;
   price: number;
+  /** High end of a price range; null/omitted = single price. */
+  price_max?: number | null;
   currency?: "NGN" | "USD";
-  discounted_price?: number | null;
-  tax_included?: boolean;
-  tax_type?: "percentage" | "fixed" | null;
-  tax_value?: number | null;
-  is_negotiable?: boolean;
-  minimum_price?: number | null;
   is_featured?: boolean;
   tags?: string[];
   main_image_url?: string | null;
@@ -118,6 +140,8 @@ export interface CreateProductBasePayload {
 }
 
 export interface RetailProductPayload extends CreateProductBasePayload {
+  kind?: OfferingKind;
+  quote_on_request?: boolean;
   stock_quantity: number;
   low_stock_threshold?: number | null;
   manufacturing_date?: string | null;

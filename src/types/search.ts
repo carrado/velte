@@ -1,146 +1,94 @@
-/**
- * Search schema — defines all searchable entities and the API contract.
- *
- * Backend endpoint: GET /search?q=<query>&limit=<n>
- *
- * Searchable fields per entity:
- *
- * ORDERS
- *   orderId       text    e.g. "#ORD0001" — display reference
- *   productName   text    name of the main product in the order
- *   status        enum    "Delivered" | "Pending" | "Shipped" | "Cancelled"
- *   payment       enum    "Paid" | "Unpaid"
- *   date          date    ISO string — enable range filtering
- *   price         number  — enable range filtering
- *
- * PRODUCTS
- *   name          text
- *   categoryName  text    name of the parent category
- *   tags          text[]  free-form product tags
- *   status        derived "In Stock" | "Out of Stock" | "Low Stock" (from inStock value)
- *   featured      boolean
- *   onSale        boolean
- *   price         number  — enable range filtering
- *
- * CUSTOMERS
- *   name          text
- *   phone         text    partial match (last 4+ digits)
- *   status        enum    "Active" | "Inactive" | "VIP"
- *
- * TRANSACTIONS
- *   name          text    customer name on the transaction
- *   total         text    formatted amount e.g. "₦5,000"
- *   status        enum    "Complete" | "Pending" | "Canceled"
- *   method        enum    "CC" | "PayPal" | "Bank"
- *   date          date    ISO string
- *
- * CATEGORIES
- *   name          text
- */
+// Velte AI search endpoint (build-order step c) — POST /api/search.
 
-export type SearchEntityType =
-  | "order"
-  | "product"
-  | "customer"
-  | "transaction"
-  | "category";
+export interface BuyerLocation {
+  lat: number;
+  lng: number;
+}
 
-// ---------------------------------------------------------------------------
-// Raw hit shapes returned by the backend
-// ---------------------------------------------------------------------------
+// "local" = within the tight radiusKm of the buyer's coordinates (the
+// common case). "state" = the wider fallback tier — nothing matched
+// locally, but a real match exists elsewhere in the buyer's state. `null`
+// when there are no results at all (nothing to tag).
+export type MatchTier = "local" | "state" | null;
 
-export interface OrderSearchHit {
-  id: string;
-  orderId: string;
-  productName: string;
-  status: "Delivered" | "Pending" | "Shipped" | "Cancelled";
-  payment: "Paid" | "Unpaid";
+// Only meaningful for image-derived product searches: "direct" means a
+// close/exact match to what was in the photo — merely-similar results are
+// dropped entirely when a direct match exists. "similar" is today's
+// existing behavior (everything that cleared the base relevance floor).
+// `undefined` for text-only searches, which don't apply this distinction.
+export type MatchQuality = "direct" | "similar" | undefined;
+
+export interface SearchRequestBody {
+  // Either message or imageUrl must be present — a bare photo with no
+  // caption is a first-class case (build-order step e).
+  message: string;
+  imageUrl?: string;
+  buyerLocation?: BuyerLocation;
+}
+
+// Mirrors the shape searchProducts() returns in velte-backend's
+// retrieval.service.js.
+export interface VendorMatch {
+  productId: string;
+  name: string;
   price: number;
-  date: string;
+  priceMax: number | null;
+  currency: string;
+  mainImageUrl: string | null;
+  vendorId: string;
+  vendorName: string;
+  area: string | null;
+  state: string | null;
+  whatsapp: string | null;
+  distanceKm: number;
+  score: number;
 }
 
-export interface ProductSearchHit {
-  id: string;
+// Mirrors the shape searchStores() returns in velte-backend's
+// retrieval.service.js — a business/vendor match, not a specific listing
+// (no price/image-per-product fields).
+export interface StoreMatch {
+  storeId: string;
+  handle: string;
   name: string;
-  categoryName: string;
-  price: number;
-  inStock: number;
-  featured: boolean;
-  onSale: boolean;
+  description: string;
+  sectors: string[];
+  whatsapp: string | null;
+  area: string | null;
+  state: string | null;
+  distanceKm: number;
+  score: number;
 }
 
-export interface CustomerSearchHit {
-  id: string;
+// A real nearby business from Google Places — Tier 3 of searchStores, only
+// populated when no Velte vendor matched at all. Deliberately thin (no
+// handle, no whatsapp, no trust) since it's not a Velte entity: no
+// relationship to hand a "chat with vendor" CTA off to.
+export interface NearbyBusiness {
+  placeId: string;
   name: string;
-  phone: string;
-  status: "Active" | "Inactive" | "VIP";
-  orders: number;
-  spend: string;
+  address: string;
+  lat: number;
+  lng: number;
+  distanceKm: number;
 }
 
-export interface TransactionSearchHit {
-  id: string;
-  name: string;
-  total: string;
-  status: "Complete" | "Pending" | "Canceled";
-  method: "CC" | "PayPal" | "Bank";
-  date: string;
-}
-
-export interface CategorySearchHit {
-  id: string;
-  name: string;
-  productCount?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Backend response
-// ---------------------------------------------------------------------------
-
-export interface RawSearchResponse {
-  success: boolean;
-  data: {
-    orders: OrderSearchHit[];
-    products: ProductSearchHit[];
-    customers: CustomerSearchHit[];
-    transactions: TransactionSearchHit[];
-    categories: CategorySearchHit[];
-  };
-  query: string;
-  totalCount: number;
-}
-
-// ---------------------------------------------------------------------------
-// Frontend-ready result item (adapted by the service layer)
-// ---------------------------------------------------------------------------
-
-export type SearchBadgeVariant =
-  | "success"
-  | "warning"
-  | "error"
-  | "info"
-  | "neutral"
-  | "purple";
-
-export interface SearchResultItem {
-  type: SearchEntityType;
-  id: string;
-  title: string;
-  subtitle?: string;
-  badge?: string;
-  badgeVariant?: SearchBadgeVariant;
-  href: string;
-}
-
-export type SearchResultsByType = {
-  orders: SearchResultItem[];
-  products: SearchResultItem[];
-  customers: SearchResultItem[];
-  transactions: SearchResultItem[];
-  categories: SearchResultItem[];
-};
-
-export interface SearchParams {
-  q: string;
-  limit?: number;
-}
+// Build-order step d — /api/search streams a sequence of these as
+// newline-delimited JSON: zero or more "status" events while the model +
+// tool call are in flight, then exactly one "final" (or "error"). `products`
+// and `stores` are independent — a turn may populate either, both, or
+// neither, depending on whether the buyer named an item or a kind of
+// business (or the model asked a clarifying question instead of searching).
+export type SearchStreamEvent =
+  | { type: "status"; text: string }
+  | {
+      type: "final";
+      reply: string;
+      products: VendorMatch[];
+      stores: StoreMatch[];
+      productsMatchTier: MatchTier;
+      storesMatchTier: MatchTier;
+      productsMatchQuality: MatchQuality;
+      externalStoreSuggestions: NearbyBusiness[];
+    }
+  | { type: "error"; message: string };

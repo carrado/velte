@@ -11,7 +11,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useTrialStore } from "@/store/trialStore";
 import {
   getPrefetchFailureMessage,
   getPrefetchTasks,
@@ -38,9 +37,6 @@ export function NavigationProgressProvider({
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
-
-  const { isMedium, isUrgent } = useTrialStore();
-  const darkBar = isMedium || isUrgent;
 
   const [progress, setProgress] = useState(0);
   const [visible, setVisible] = useState(false);
@@ -112,10 +108,7 @@ export function NavigationProgressProvider({
         <div className="fixed top-0 left-0 right-0 z-[200] h-[3px]">
           <div
             className={cn(
-              "h-full",
-              darkBar
-                ? "bg-black shadow-[0_0_6px_rgba(0,0,0,0.55)]"
-                : "bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.55)]",
+              "h-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.55)]",
               completing
                 ? "transition-[width] duration-200 ease-out"
                 : "transition-[width] duration-100 ease-out",

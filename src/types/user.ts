@@ -1,23 +1,20 @@
-export type BusinessType = "retail" | "food";
+export type BusinessType = "retail" | "food" | "service" | "both" | "food_both";
 
 export interface UserCompany {
   name?: string;
   location?: string;
   services?: string[];
   phone?: string;
-}
-
-export interface UserNotifications {
-  orders: boolean;
-  invoices: boolean;
-  invoiceThreshold: number;
-  productUpdates: boolean;
-  push: boolean;
+  state?: string;
 }
 
 export interface UserPreferences {
-  notifications: UserNotifications;
   defaultCurrency?: string;
+}
+
+export interface UserLocation {
+  lat: number;
+  lng: number;
 }
 
 export interface User {
@@ -35,4 +32,11 @@ export interface User {
   preferences?: UserPreferences;
   onboarding: boolean;
   businessType?: BusinessType;
+  area?: string;
+  state?: string;
+  location?: UserLocation | null;
+  /** When area/state/location was last changed — drives the address-change cooldown. */
+  addressChangedAt?: string | null;
+  sector?: string;
+  description?: string;
 }
