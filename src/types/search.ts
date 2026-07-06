@@ -127,6 +127,12 @@ export type SearchStreamEvent =
       reply: string;
       products: VendorMatch[];
       stores: StoreMatch[];
+      // The storefront of each matched product's own vendor — deterministic
+      // enrichment (a plain lookup by vendorId, not a searchStores tool call)
+      // so a photo/text match for a specific item still surfaces the actual
+      // store selling it, not just the WhatsApp contact already on the
+      // product card. One entry per unique vendor represented in `products`.
+      productStores: StoreMatch[];
       productsMatchTier: MatchTier;
       storesMatchTier: MatchTier;
       productsMatchQuality: MatchQuality;
