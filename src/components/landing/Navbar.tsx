@@ -34,6 +34,7 @@ export default function Navbar() {
               alt="Velte"
               width={110}
               height={20}
+              className="w-20 sm:w-[110px] h-auto"
               priority
             />
           </Link>

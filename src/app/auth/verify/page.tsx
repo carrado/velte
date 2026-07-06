@@ -201,7 +201,7 @@ function VerifyForm() {
 // Main page component with Suspense
 export default function VerifyPage() {
   return (
-    <div className="h-screen bg-[#0d0804] overflow-hidden">
+    <div className="h-screen bg-[#F1F5F9] overflow-hidden">
       {/* Background effects */}
       <div
         className="absolute inset-0 opacity-[0.025]"

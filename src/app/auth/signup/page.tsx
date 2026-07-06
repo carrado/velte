@@ -87,7 +87,7 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center sm:p-5">
+    <div className="relative min-h-screen bg-[#F1F5F9] flex items-center justify-center sm:p-5 overflow-x-hidden">
       {/* Background effects */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-orange-500/[0.07] rounded-full blur-[120px] pointer-events-none" />
       <div

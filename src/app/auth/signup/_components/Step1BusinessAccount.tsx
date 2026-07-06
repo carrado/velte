@@ -157,11 +157,18 @@ export default function Step1BusinessAccount({
       },
       (err) => {
         setLocating(false);
-        toast.error(
-          err.code === err.PERMISSION_DENIED
-            ? "Location permission denied"
-            : "Couldn't get your location",
-        );
+        if (err.code === err.PERMISSION_DENIED) {
+          // A browser that's already denied location won't re-prompt no
+          // matter how many times we call getCurrentPosition — only the
+          // person can undo that, from the site's own permission settings.
+          toast.error("Location access is blocked", {
+            description:
+              "Tap the lock icon next to the address bar, allow Location, then try again — or just type your address below.",
+            duration: 8000,
+          });
+        } else {
+          toast.error("Couldn't get your location");
+        }
       },
     );
   };
@@ -342,11 +349,18 @@ export default function Step1BusinessAccount({
       >
         {(field) => (
           <div>
-            <div className="flex items-center justify-between gap-3 mb-1.5">
-              <Label className="text-black/70 text-sm flex items-center gap-2">
-                <MapPin className="w-3.5 h-3.5 text-orange-400" />
-                Business Address
-              </Label>
+            <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+              <MapPin className="w-3.5 h-3.5 text-orange-400" />
+              Business Address
+            </Label>
+            <Input
+              value={field.state.value}
+              onChange={(e) => field.handleChange(e.target.value)}
+              onBlur={field.handleBlur}
+              placeholder="123 Main St, Ikeja"
+              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
+            />
+            <div className="flex justify-end mt-1.5">
               <button
                 type="button"
                 onClick={handleUseCurrentLocation}
@@ -365,13 +379,6 @@ export default function Step1BusinessAccount({
                     : "Use my current location"}
               </button>
             </div>
-            <Input
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-              onBlur={field.handleBlur}
-              placeholder="123 Main St, Ikeja"
-              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
-            />
             <FieldError message={field.state.meta.errors[0]} />
           </div>
         )}
