@@ -72,7 +72,7 @@ export default function LeadGenerationCard() {
   const hasActivity = (stats?.totalLeads ?? 0) > 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+    <div className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
           <h2 className="text-dash-heading font-semibold text-gray-900">

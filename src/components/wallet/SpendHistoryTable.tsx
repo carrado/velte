@@ -119,7 +119,7 @@ export default function SpendHistoryTable() {
   ];
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <h2 className="text-dash-heading font-semibold text-gray-900">
           Spend History

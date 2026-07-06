@@ -2,6 +2,7 @@
 import { Store as StoreIcon } from "lucide-react";
 import { fmt } from "@/lib/product-price";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { reportLead } from "@/lib/reportLead";
 import type { StoreProductItem } from "@/types/search";
 
 // One item from getVendorProductsTool — a SPECIFIC, already-identified
@@ -13,10 +14,12 @@ export function StoreProductCard({
   match,
   storeName,
   storeWhatsapp,
+  vendorId,
 }: {
   match: StoreProductItem;
   storeName: string;
   storeWhatsapp: string | null;
+  vendorId: string;
 }) {
   const symbol = match.currency === "USD" ? "$" : "₦";
   const isRange = match.priceMax != null && match.priceMax > match.price;
@@ -66,6 +69,7 @@ export function StoreProductCard({
             href={chatHref}
             label="Chat about this"
             className="w-full mt-1"
+            onClick={() => reportLead(vendorId, match.productId)}
           />
         )}
       </div>

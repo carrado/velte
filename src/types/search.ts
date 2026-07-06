@@ -125,8 +125,21 @@ export type SearchStreamEvent =
   | {
       type: "final";
       reply: string;
+      // False when the model asked a clarifying question instead of
+      // searching (see systemPrompt.ts) — no tool ran this turn at all, so
+      // every array below is trivially empty. Distinguishes that from a
+      // tool genuinely returning zero results, which the frontend renders
+      // very differently (a dead-end "market suggestion" card vs. just the
+      // question itself, awaiting the buyer's answer).
+      toolCalled: boolean;
       products: VendorMatch[];
       stores: StoreMatch[];
+      // The businessType the model actually searched stores for this turn
+      // (e.g. "phone repair shop", "tailor") — null when searchStores wasn't
+      // called. Lets a pure vendor/store card (no product attached) send a
+      // WhatsApp message customized to what the buyer was looking for,
+      // instead of a generic "interested in what you offer."
+      storesQuery: string | null;
       // The storefront of each matched product's own vendor — deterministic
       // enrichment (a plain lookup by vendorId, not a searchStores tool call)
       // so a photo/text match for a specific item still surfaces the actual
@@ -145,6 +158,7 @@ export type SearchStreamEvent =
         name: string;
         handle: string;
         whatsapp: string | null;
+        vendorId: string;
       } | null;
     }
   | { type: "error"; message: string };

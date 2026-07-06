@@ -64,4 +64,8 @@ export interface WhatsAppButtonProps {
   href: string;
   label: string;
   className?: string;
+  // Fired synchronously on click, alongside the anchor's own navigation —
+  // never gates or delays opening WhatsApp. Search result cards use this to
+  // bill the vendor's wallet for the lead (see reportLead.ts).
+  onClick?: () => void;
 }

@@ -99,7 +99,7 @@ export default function WalletPage() {
   return (
     <div className="flex flex-col gap-5">
       {(isEmpty || isLow) && (
-        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-none sm:rounded-xl px-4 py-3">
           <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="text-dash-body font-semibold text-amber-800">
@@ -123,7 +123,7 @@ export default function WalletPage() {
       )}
 
       {/* Hero balance card */}
-      <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm p-6 sm:p-7">
+      <div className="relative overflow-hidden rounded-none sm:rounded-2xl bg-white border border-gray-100 shadow-sm p-6 sm:p-7">
         {/* soft warm glow — pure ambience, no data */}
         <div className="pointer-events-none absolute -top-24 -right-20 w-72 h-72 bg-orange-100/70 rounded-full blur-3xl" />
 
@@ -185,7 +185,7 @@ export default function WalletPage() {
         {kpis.map(({ key, label, value, sub, icon: Icon, iconClass }) => (
           <div
             key={key}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+            className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5"
           >
             <div className="flex items-center gap-2 mb-3">
               <div
