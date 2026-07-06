@@ -54,7 +54,7 @@ export default function ForgotPassword() {
   });
 
   return (
-    <div className="h-screen bg-[#0d0804] overflow-hidden sm:p-5">
+    <div className="h-screen bg-[#F1F5F9] overflow-hidden sm:p-5">
       {/* Background effects */}
       <div
         className="absolute inset-0 opacity-[0.025]"

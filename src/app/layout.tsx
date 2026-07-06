@@ -201,6 +201,16 @@ export default function RootLayout({
           <Toaster
             position="top-right"
             richColors
+            // Sonner's default mobile offset is a flat 16px from every edge —
+            // it doesn't know about the iOS notch/status bar or Android's
+            // cutouts. With viewportFit:"cover" this app draws under those
+            // areas, so the toast needs the same env(safe-area-inset-*)
+            // padding already used for the header/bottom bars elsewhere,
+            // or it renders clipped/overlapping the status bar on mobile.
+            mobileOffset={{
+              top: "calc(env(safe-area-inset-top) + 16px)",
+              right: "calc(env(safe-area-inset-right) + 16px)",
+            }}
             toastOptions={{
               classNames: {
                 error: "bg-red-600 text-white border-red-600",

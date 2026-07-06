@@ -281,7 +281,7 @@ function ResetPasswordForm() {
 // Main page component – wraps the form in Suspense
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen bg-[#0d0804] flex items-center justify-center p-5">
+    <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center p-5">
       <Suspense fallback={<div>Loading...</div>}>
         <ResetPasswordForm />
       </Suspense>
