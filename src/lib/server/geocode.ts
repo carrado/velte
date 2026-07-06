@@ -15,6 +15,9 @@ interface NominatimSearchResult {
    * Named `category` in Nominatim's jsonv2 response — the older `class` field
    * name (used in some Nominatim docs/examples) doesn't exist on this shape. */
   category: string;
+  /** e.g. "city", "suburb", "state", "country". Used to reject a
+   * country-level match outright — see the filter below. */
+  addresstype: string;
 }
 
 /** Returns null if the place name couldn't be resolved — the caller should
@@ -40,7 +43,16 @@ export async function geocodeArea(
     if (!res.ok) return null;
 
     const results: NominatimSearchResult[] = await res.json();
-    const best = results.find((r) => r.category === "place") ?? results[0];
+    // A whole country is never a useful "near me" anchor — found live: the
+    // model set `location: "Nigeria"` (should have omitted it entirely) and
+    // Nominatim's own top result for that query is the country's geographic
+    // centroid, ~200km from a real vendor in Enugu. That silently turned
+    // what should have been a nationwide search into a "local" one filtered
+    // around a point nowhere near any buyer, and failed a genuine match
+    // outright. Reject any country-level result rather than ever accepting
+    // one as a usable location.
+    const usable = results.filter((r) => r.addresstype !== "country");
+    const best = usable.find((r) => r.category === "place") ?? usable[0];
     if (!best) return null;
 
     const lat = Number(best.lat);

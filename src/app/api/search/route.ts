@@ -1,11 +1,12 @@
 import { stepCountIs, type ModelMessage, type UserContent } from "ai";
 
 import { callLLM } from "@/lib/server/ai/router";
-import { backendFetch } from "@/lib/server/backend";
+import { backendData, backendFetch } from "@/lib/server/backend";
 import { searchProductsTool } from "@/lib/server/ai/searchProductsTool";
 import { searchStoresTool } from "@/lib/server/ai/searchStoresTool";
 import { getVendorProductsTool } from "@/lib/server/ai/getVendorProductsTool";
 import { understandingRequestPhrase } from "@/lib/server/ai/statusPhrases";
+import { buildSystemPrompt } from "@/lib/server/ai/systemPrompt";
 import type {
   MatchQuality,
   MatchTier,
@@ -51,60 +52,14 @@ import type {
 // searched products, which was itself the root of the product/vendor
 // confusion.
 
-// A function of whether buyerLocation was supplied, not a constant — the
-// model only knows what's in its context. Silently resolving buyerLocation
-// inside a tool's execute() is invisible to the model itself: without this
-// paragraph, an image-only query with a real buyerLocation still gets asked
-// "where are you?" because nothing ever told the model a location was
-// already available. Found live while validating step (e).
-function buildSystemPrompt(hasBuyerLocation: boolean): string {
-  const locationNote = hasBuyerLocation
-    ? `\n\nThe buyer's device location is already known server-side and is used automatically whenever they haven't named a different place.`
-    : "";
-
-  return `You are Velte, a buyer-facing product discovery assistant for a Nigerian marketplace.
-
-A buyer describes something they need, sometimes with a photo attached instead of (or alongside) text. If a photo is attached, identify the likely product/category from it before deciding what to search for — treat that identification with the same discipline as text: describe only what you can actually see, and if the photo is genuinely unclear, ask one short clarifying question rather than guess. Don't stop at the bare category (e.g. just "sneakers") — pass every visually identifiable detail (color, style, material, brand markings, pattern, etc.) into the tool's attributes field too. This isn't optional polish: a vague category-only description can only ever turn up loosely related items, while a specific one lets the system tell an exact match from a merely similar one.
-
-You have three tools — pick based on what the buyer actually described:
-- If they name a SPECIFIC PRODUCT OR SERVICE (e.g. "white sneakers", "Tecno fast charger", "a haircut"), use searchProducts.
-- If they describe a KIND OF BUSINESS/VENDOR/SHOP instead of an item (e.g. "a phone repair shop", "an electronics store near me", "a tailor"), use searchStores.
-- If they want to see what's actually inside a SPECIFIC store you already found for them (e.g. "what do they sell", "show me their products", "what's inside"), use getVendorProducts with that store's handle — never searchProducts or searchStores again for this, since a fresh search could return a completely different vendor's items instead of the one store the buyer actually means.
-You MUST call one of these whenever the buyer names or shows something to look for. Never invent a vendor, store, price, or stock level: the tool result is the only source of truth for what's available.
-
-Location works like this, and you never need to ask about it — never ask the buyer where they are just to be able to search:
-- Only set the tool's \`location\` field when the buyer's own words name or clearly imply a specific place (a city, area, or landmark). That ALWAYS wins as the search location, even when their device location is already known — they're deliberately asking about somewhere else (buying for someone in another city, planning a trip, etc.).
-- Otherwise, omit \`location\` entirely. If the buyer's device location is known, it's used automatically. If it isn't, the search simply runs across the whole of Velte, matched by meaning and vendor trust rather than distance.
-- Never fill \`location\` with a placeholder like "unknown" or "not specified" — omitting the field is how you say "no place was named."${locationNote}
-
-Only call BOTH searchProducts and searchStores in the same turn when the buyer's own words separately name two different things — a specific item AND a kind of business (e.g. "a phone repair shop that also sells iPhone chargers", "a bakery that does birthday cakes"). Do NOT call both just because a product could plausibly be bought from some kind of shop — "where can I get this shoe" (with or without a photo) names only the shoe, so it's searchProducts alone, even though a shoe is obviously sold at a shoe store. When you do call both because the buyer genuinely asked for both, any vendor that shows up in both is deduplicated automatically before the buyer sees it, so don't hold back out of a concern about repeating a vendor.
-
-After a tool returns, you MUST always end your turn with a short closing note in plain text — never stop right after a tool call with no text at all, even if you already have everything you need. Write only a brief closing note — one short sentence wrapping up the search, like a conclusion, not a rundown. The result cards shown below your reply already display each product/vendor's name, price, location, and distance, so do NOT restate any of that — don't name individual products/vendors, don't repeat prices, don't repeat locations. Just acknowledge what was found in general terms (e.g. "Found a couple of options near you — take a look below." or "Here's what's available close by."). The cards are the answer; your text is just the hand-off to them.
-
-If a broad category search genuinely turns up several different kinds of things (e.g. "electronics" matching chargers, earbuds, AND phone cases), a short list naming the kinds found (not individual products) is fine — but format it as real markdown so it renders cleanly: "- item" per line for a bullet list, "1. item" for a numbered one, "**word**" only around something that genuinely needs emphasis. Never use a bare "*" or "•" or any other ad hoc symbol outside of that. Most replies don't need a list at all — one plain sentence is still the default.
-
-The tool result's matchTier tells you how the results relate to the buyer's location — reflect it honestly in your closing note, never implying something is closer than it really is:
-- "local" or "nearby": genuinely close to the buyer — an ordinary "found some options nearby" note is fine.
-- "state": nothing that close, but a real match exists elsewhere in the buyer's state — say so (e.g. "nothing right around you, but here's an option elsewhere in [state]").
-- "nationwide": there was no location to search near at all (device location unavailable and no place named), so these are ranked purely by relevance across all of Velte, not by distance — say so honestly (e.g. "here's what matched best across Velte — we don't have a location for you yet") rather than implying they're nearby.
-
-For a photo search, searchProducts' result also indicates matchQuality: "direct" (a close/exact match to what's in the photo — only those are returned, similar-but-not-matching items are already excluded) or "similar" (nothing that close, so the closest related items are shown instead). Reflect this honestly and plainly in your closing note — e.g. "Found an exact match!" for direct, or "Nothing identical, but here's something similar nearby." for similar. Never call a similar result an exact match.
-
-If searchProducts returns zero results (no direct, no similar):
-- If the buyer sent a photo, don't jump to a general market suggestion yet — call searchStores next, using a general business-type description for the photographed item's category (e.g. a photo of sneakers → businessType "shoe store" or "sneaker vendor"), to check for real nearby businesses — Velte vendors or otherwise — that might carry something like it.
-- If the buyer only sent text (no photo), or searchStores was just called per the point above and it also came back with zero results AND no external suggestions, work out what category the item belongs to (e.g. "a phone charger" → electronics/accessories, "ankara fabric" → textiles, "a haircut" → grooming/salon services) and suggest 1-2 well-known physical markets or shopping clusters in Nigeria where that category is typically sold (e.g. Computer Village for phones/electronics, Alaba International Market for electronics, Balogun or Idumota for fabrics/textiles) — from your own general knowledge, clearly framed as a general suggestion, never as a specific listed vendor or a claim that anyone there has it in stock. Never claim a match the tool didn't return.
-
-If searchStores found no Velte vendor but returned real nearby businesses (externalSuggestions, also shown as cards), note that these aren't yet listed on Velte and there's no "chat with vendor" for them — but don't repeat their name/address, the cards already show that. If you called searchStores as a fallback after an empty photo-based searchProducts, make that clear too — e.g. "Couldn't find that exact item, but here are nearby businesses that might have something like it."
-
-Earlier turns in this conversation may appear before the buyer's latest message. Use them to understand a follow-up ("cheaper", "in red instead", "what about closer to me") — but every tool call must still be fully self-contained: the tools have no memory of their own, so combine the earlier context with the new request into one complete description (e.g. after searching "white sneakers" then hearing "in red", call searchProducts with product "sneakers" and attributes including "red", not just "red" alone). Don't call a tool again just to repeat an unchanged prior search — only search again if the buyer is actually asking for something new or refined.
-
-An earlier assistant turn may end with a bracketed note like "[Stores found: "Acme Electronics" (handle: acme-electronics)]" — that's metadata for you only, never something the buyer saw or wrote themselves, listing the real handle(s) of stores already surfaced so you can call getVendorProducts precisely later. Never invent a handle that wasn't given to you this way, and never mention or quote this bracketed note to the buyer.
-
-A follow-up like "where can I buy it/this/one" or "what do they sell/have" after you've already shown results needs its own read of what the buyer means, not just the default tool-selection rule above:
-- If the earlier turn was about ONE clearly identified specific product, "it" still means that one product — that's still searchProducts, same as a fresh "where can I get this shoe" would be.
-- If the earlier turn was a broad category search that turned up several different, unrelated things (so there's no single "it" to point back to), the buyer asking where to buy isn't asking for more product options — they're asking for a PLACE. Call searchStores instead, using the general category as the business type (e.g. earlier search was "kitchen appliances" → businessType "kitchen appliance store").
-- If the earlier turn was a searchStores result (a specific store was already found) and the buyer now asks what that store sells/has/carries, that's getVendorProducts with that store's handle from the bracketed note — not searchStores again, and not a fresh searchProducts search.`;
-}
+// This app runs on Vercel — a route with no explicit maxDuration falls back
+// to the platform default (10s Hobby / 15s Pro), which a single Voyage call
+// alone could already exceed even before accounting for retries. A turn can
+// call both searchProducts and searchStores (each internally budgeted to
+// ~22s of Voyage retries via retrieval.service.js's SEARCH_DEADLINE_MS) plus
+// the LLM call itself, so 60s gives real headroom for that worst case
+// without assuming a plan tier beyond Hobby's own 60s hard ceiling.
+export const maxDuration = 60;
 
 function encodeEvent(event: SearchStreamEvent): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(event) + "\n");
@@ -116,10 +71,86 @@ function encodeEvent(event: SearchStreamEvent): Uint8Array {
 // already-documented "calls the tool with a bad argument" failure modes.
 // Never let a buyer see raw model-internal syntax.
 const LEAKED_FUNCTION_CALL = /<\/?function[.=]/i;
+
+// The system prompt above explicitly forbids restating a card's photo/link,
+// but a model can still do it anyway (found live: gpt-4o-mini emitting
+// `![name](cloudinary-url)` inline for every matched product) — the result
+// cards already render the real photo, so a second, unrendered copy is just
+// visible markdown clutter to the buyer. Strip images entirely; collapse a
+// plain link down to its anchor text instead of dropping it, since that text
+// is more likely to be meaningful prose than an image's alt text is.
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\([^)]*\)/g;
+const MARKDOWN_LINK = /\[([^\]]*)\]\([^)]*\)/g;
+function stripRestatedMedia(text: string): string {
+  return text
+    .replace(MARKDOWN_IMAGE, "")
+    .replace(MARKDOWN_LINK, "$1")
+    .replace(/[ \t]+\n/g, "\n") // trailing whitespace left by a removed image
+    .replace(/\n{3,}/g, "\n\n") // collapse blank lines left behind
+    .trim();
+}
+
 function sanitizeReply(text: string): string {
-  return LEAKED_FUNCTION_CALL.test(text)
+  const cleaned = stripRestatedMedia(text);
+  return LEAKED_FUNCTION_CALL.test(cleaned)
     ? "Sorry, I had trouble processing that. Please try rephrasing your search."
-    : text;
+    : cleaned;
+}
+
+// A buyer asking "where can I find this" (photo or text) wants both the item
+// AND who sells it — the product card already carries the vendor's name/
+// contact, but not their actual storefront (description, sectors, other
+// offerings). This is a plain lookup by vendorId, deliberately NOT a
+// searchStores tool call: the model never decides whether to fetch it, so it
+// can never burn tool-call budget retrying it (see stepCountIs above). One
+// entry per unique vendor already represented in `products` — best-effort,
+// since a missing storefront shouldn't take down the whole search result.
+async function getVendorStoresForProducts(
+  products: VendorMatch[],
+): Promise<StoreMatch[]> {
+  const seenVendors = new Set<string>();
+  const uniqueMatches = products.filter((p) => {
+    if (seenVendors.has(p.vendorId)) return false;
+    seenVendors.add(p.vendorId);
+    return true;
+  });
+
+  const stores = await Promise.all(
+    uniqueMatches.map(async (match) => {
+      try {
+        const store = await backendData<{
+          storeId: string;
+          handle: string;
+          name: string;
+          description: string;
+          sectors: string[];
+          whatsapp: string | null;
+        }>(`/store/by-vendor/${match.vendorId}`);
+        const result: StoreMatch = {
+          storeId: store.storeId,
+          vendorId: match.vendorId,
+          handle: store.handle,
+          name: store.name,
+          description: store.description,
+          sectors: store.sectors,
+          whatsapp: store.whatsapp,
+          area: match.area,
+          state: match.state,
+          distanceKm: match.distanceKm,
+          score: match.score,
+        };
+        return result;
+      } catch (err) {
+        console.error(
+          `[search] vendor store lookup failed for ${match.vendorId}:`,
+          err,
+        );
+        return null;
+      }
+    }),
+  );
+
+  return stores.filter((s): s is StoreMatch => s !== null);
 }
 
 export async function POST(req: Request) {
@@ -178,14 +209,17 @@ export async function POST(req: Request) {
               searchStores: searchStoresTool(body?.buyerLocation, push),
               getVendorProducts: getVendorProductsTool(push),
             },
-            // 3, not 2: with two tools now available, a step budget of 2
-            // (call → final text) leaves no room for a final text step when
-            // the model's second step is itself another tool call (e.g. a
-            // redundant repeat call, or trying both searchProducts and
-            // searchStores) — found live as `result.text` coming back empty
-            // roughly half the time. 3 steps (call → possible second call →
-            // final text) gives text generation a guaranteed last step.
-            stopWhen: stepCountIs(3),
+            // 4, not 3: a zero-match searchProducts now always falls through
+            // to searchStores before the model is allowed to write its final
+            // note (see the system prompt above) — call → call → text is
+            // already 3 steps with zero room left for a redundant repeat call
+            // (documented below as real, observed Groq behavior). That's the
+            // same "no room for text" failure this budget already exists to
+            // avoid, just one call deeper now that two tools chain together
+            // on the common zero-match path instead of only occasionally.
+            // 4 steps (call → call → possible redundant call → final text)
+            // keeps a guaranteed last step for text generation.
+            stopWhen: stepCountIs(4),
           },
           // Groq is text-only — never route an image query to it.
           imageUrl ? ["openai"] : ["openai", "groq"],
@@ -235,6 +269,9 @@ export async function POST(req: Request) {
         const externalStoreSuggestions = storeResult?.externalSuggestions ?? [];
         const vendorProducts = vendorProductsResult?.results ?? [];
         const vendorProductsStore = vendorProductsResult?.store ?? null;
+        const productStores = products.length
+          ? await getVendorStoresForProducts(products)
+          : [];
 
         controller.enqueue(
           encodeEvent({
@@ -242,6 +279,7 @@ export async function POST(req: Request) {
             reply: sanitizeReply(result.text),
             products,
             stores,
+            productStores,
             productsMatchTier,
             storesMatchTier,
             productsMatchQuality,

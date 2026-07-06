@@ -153,6 +153,10 @@ interface ConversationTurn {
   reply: string;
   products: VendorMatch[];
   stores: StoreMatch[];
+  // The storefront of each matched product's own vendor (see route.ts) — one
+  // per unique vendor already in `products`, so a matched item also surfaces
+  // who actually sells it, not just the WhatsApp contact already on its card.
+  productStores: StoreMatch[];
   productsMatchTier: MatchTier;
   storesMatchTier: MatchTier;
   productsMatchQuality: MatchQuality;
@@ -246,6 +250,20 @@ function ConversationTurnView({ turn }: { turn: ConversationTurn }) {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {turn.products.map((match) => (
                       <VendorResultCard key={match.productId} match={match} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {turn.productStores.length > 0 && (
+                <div className="space-y-3">
+                  <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                    {turn.productStores.length === 1
+                      ? "Sold by"
+                      : "Sold by these vendors"}
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {turn.productStores.map((match) => (
+                      <StoreResultCard key={match.storeId} match={match} />
                     ))}
                   </div>
                 </div>
@@ -365,7 +383,19 @@ export function SearchHome() {
               buyerLocationRef.current = loc;
               resolve(loc);
             },
-            () => resolve(null),
+            (err) => {
+              // Swallowed to null either way (search still runs nationwide
+              // rather than blocking on location), but the specific reason
+              // matters for debugging "why did this go nationwide" — code 1
+              // is a real permission denial, 2 is the OS/browser reporting
+              // no location fix at all (e.g. Windows' own Location Services
+              // toggle is off, independent of the browser's own permission
+              // being granted), 3 is just the 8s timeout expiring.
+              console.warn(
+                `[search] geolocation failed (code ${err.code}): ${err.message}`,
+              );
+              resolve(null);
+            },
             { timeout: 8000 },
           );
         },
@@ -455,6 +485,7 @@ export function SearchHome() {
         reply: "",
         products: [],
         stores: [],
+        productStores: [],
         productsMatchTier: null,
         storesMatchTier: null,
         productsMatchQuality: undefined,
@@ -496,8 +527,12 @@ export function SearchHome() {
           // model resolve a future "what do they sell" back to this exact
           // store via getVendorProducts, without needing the buyer-facing
           // reply text to ever name the vendor (it deliberately doesn't).
-          const contextNote = dedupedStores.length
-            ? `[Stores found: ${dedupedStores
+          // Includes productStores too (guaranteed disjoint from
+          // dedupedStores by vendor) — a store surfaced only via its
+          // matched product's own card should still resolve the same way.
+          const allStoresFound = [...dedupedStores, ...event.productStores];
+          const contextNote = allStoresFound.length
+            ? `[Stores found: ${allStoresFound
                 .map((s) => `"${s.name}" (handle: ${s.handle})`)
                 .join(", ")}]`
             : null;
@@ -506,6 +541,7 @@ export function SearchHome() {
             reply: event.reply,
             products: event.products,
             stores: dedupedStores,
+            productStores: event.productStores,
             productsMatchTier: event.productsMatchTier,
             storesMatchTier: event.storesMatchTier,
             productsMatchQuality: event.productsMatchQuality,
@@ -603,6 +639,7 @@ export function SearchHome() {
           alt="Velte"
           width={120}
           height={18}
+          className="w-24 sm:w-[120px] h-auto"
         />
         <div className="flex items-center gap-4 text-sm font-medium">
           <Link
