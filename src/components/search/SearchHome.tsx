@@ -151,8 +151,17 @@ interface ConversationTurn {
   phase: "loading" | "done";
   status: string;
   reply: string;
+  // False when the model asked a clarifying question instead of searching
+  // (see systemPrompt.ts) — renders as a plain reply, not the "nothing
+  // found anywhere" suggestion card, since the conversation is still open.
+  toolCalled: boolean;
   products: VendorMatch[];
   stores: StoreMatch[];
+  // The businessType actually searched for this turn (e.g. "tailor") — null
+  // when searchStores wasn't called. Passed to StoreResultCard only for a
+  // pure vendor/store result (turn.products empty), so its WhatsApp message
+  // reflects what the buyer was actually looking for.
+  storesQuery: string | null;
   // The storefront of each matched product's own vendor (see route.ts) — one
   // per unique vendor already in `products`, so a matched item also surfaces
   // who actually sells it, not just the WhatsApp contact already on its card.
@@ -166,6 +175,7 @@ interface ConversationTurn {
     name: string;
     handle: string;
     whatsapp: string | null;
+    vendorId: string;
   } | null;
   // A machine-only breadcrumb (e.g. store handles just found) appended to
   // this turn's text in `history` so a LATER turn's model call can resolve
@@ -229,6 +239,7 @@ function ConversationTurnView({ turn }: { turn: ConversationTurn }) {
                         match={item}
                         storeName={turn.vendorProductsStore!.name}
                         storeWhatsapp={turn.vendorProductsStore!.whatsapp}
+                        vendorId={turn.vendorProductsStore!.vendorId}
                       />
                     ))}
                   </div>
@@ -279,7 +290,16 @@ function ConversationTurnView({ turn }: { turn: ConversationTurn }) {
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {turn.stores.map((match) => (
-                      <StoreResultCard key={match.storeId} match={match} />
+                      <StoreResultCard
+                        key={match.storeId}
+                        match={match}
+                        // Only when this is a pure vendor/store result (no
+                        // product attached) — a dual-intent turn already has
+                        // a product for the buyer to reference instead.
+                        searchQuery={
+                          turn.products.length === 0 ? turn.storesQuery : null
+                        }
+                      />
                     ))}
                   </div>
                 </div>
@@ -300,9 +320,15 @@ function ConversationTurnView({ turn }: { turn: ConversationTurn }) {
                 ))}
               </div>
             </>
+          ) : !turn.toolCalled ? (
+            // The model asked a clarifying question instead of searching
+            // (see systemPrompt.ts) — a plain reply, same as the text above
+            // a result grid, never the "nothing found anywhere" card below:
+            // the conversation is still open, not a dead end.
+            <FormattedReply text={turn.reply} />
           ) : (
-            // No listed vendor has this yet — an AI suggestion card
-            // (spec §3.5), not a bare empty state.
+            // A real search ran and came up completely empty — an AI
+            // suggestion card (spec §3.5), not a bare empty state.
             <div className="flex items-start gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <Compass size={20} className="text-orange-500 shrink-0 mt-0.5" />
               <FormattedReply text={turn.reply} />
@@ -483,8 +509,10 @@ export function SearchHome() {
           ? "Looking at your photo…"
           : "Understanding your request…",
         reply: "",
+        toolCalled: false,
         products: [],
         stores: [],
+        storesQuery: null,
         productStores: [],
         productsMatchTier: null,
         storesMatchTier: null,
@@ -539,8 +567,10 @@ export function SearchHome() {
           updateTurn(turnId, {
             phase: "done",
             reply: event.reply,
+            toolCalled: event.toolCalled,
             products: event.products,
             stores: dedupedStores,
+            storesQuery: event.storesQuery,
             productStores: event.productStores,
             productsMatchTier: event.productsMatchTier,
             storesMatchTier: event.storesMatchTier,
@@ -633,7 +663,7 @@ export function SearchHome() {
 
   return (
     <div className="h-dvh bg-[#F1F5F9] flex flex-col overflow-hidden">
-      <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:pb-3 shrink-0 bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-sm z-10">
+      <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:pt-1.5 sm:pb-1.5 shrink-0 bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-sm z-10">
         <Link href="/" className="shrink-0">
           <Image
             src="/velte_logo_esn5dj.png"
@@ -653,7 +683,7 @@ export function SearchHome() {
           </Link>
           <Link
             href="/auth/signup"
-            className="flex items-center h-8 sm:h-auto px-3 sm:px-4 sm:py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-semibold sm:font-medium transition-colors whitespace-nowrap"
+            className="flex items-center h-8 sm:h-auto px-3 sm:px-4 sm:py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-semibold sm:font-medium transition-colors whitespace-nowrap"
           >
             <span className="sm:hidden">List business</span>
             <span className="hidden sm:inline">List your business</span>

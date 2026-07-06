@@ -1,16 +1,36 @@
-import Link from "next/link";
-import { MapPin, Store as StoreIcon, ExternalLink } from "lucide-react";
+import { MapPin, Store as StoreIcon } from "lucide-react";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { reportLead } from "@/lib/reportLead";
 import type { StoreMatch } from "@/types/search";
+
+// Prefix "phone repair shop" → "a phone repair shop", "electronics store" →
+// "an electronics store" — a light grammar touch for the WhatsApp message
+// below, not real NLP; good enough for the short noun phrases businessType
+// actually contains (see systemPrompt.ts's searchStores examples).
+function withArticle(phrase: string): string {
+  return /^[aeiou]/i.test(phrase) ? `an ${phrase}` : `a ${phrase}`;
+}
 
 // A business/vendor match — distinct from VendorResultCard (a specific
 // product listing): no price/image-per-product fields, since this is a
-// storefront, not a listing. Links through to the existing public
-// /store/[handle] page, a CTA a product match doesn't have.
-export function StoreResultCard({ match }: { match: StoreMatch }) {
+// storefront, not a listing.
+export function StoreResultCard({
+  match,
+  // The businessType actually searched for (e.g. "tailor") — only passed
+  // when this card is a PURE vendor/store result (no product attached to
+  // the same turn); customizes the WhatsApp message instead of the generic
+  // "interested in what you offer." Omit/null for every other usage
+  // (productStores, or a dual-intent turn that already has a product).
+  searchQuery = null,
+}: {
+  match: StoreMatch;
+  searchQuery?: string | null;
+}) {
   const chatHref = match.whatsapp
     ? `https://wa.me/${match.whatsapp}?text=${encodeURIComponent(
-        `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.`,
+        searchQuery
+          ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(searchQuery)}, are you able to help?`
+          : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.`,
       )}`
     : null;
 
@@ -54,19 +74,14 @@ export function StoreResultCard({ match }: { match: StoreMatch }) {
         </span>
       </div>
 
-      <div className="flex items-center gap-2 pt-1">
-        {chatHref && (
-          <WhatsAppButton href={chatHref} label="Chat" className="flex-1" />
-        )}
-        <Link
-          href={`/store/${match.handle}`}
-          target="_blank"
-          className="flex items-center justify-center gap-1.5 px-3 h-11 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-semibold transition-colors shrink-0"
-        >
-          Visit
-          <ExternalLink size={14} />
-        </Link>
-      </div>
+      {chatHref && (
+        <WhatsAppButton
+          href={chatHref}
+          label="Chat on WhatsApp"
+          className="w-full mt-1"
+          onClick={() => reportLead(match.vendorId)}
+        />
+      )}
     </div>
   );
 }

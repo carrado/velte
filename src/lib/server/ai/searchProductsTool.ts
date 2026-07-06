@@ -14,6 +14,7 @@ import type {
   BuyerLocation,
   MatchTier,
   MatchQuality,
+  NearbyBusiness,
   VendorMatch,
 } from "@/types/search";
 
@@ -93,21 +94,23 @@ export function searchProductsTool(
       const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
       const queryText = [product, ...(attributes ?? [])].join(" ");
-      const { results, matchTier, matchQuality } = await backendData<{
-        results: VendorMatch[];
-        matchTier: MatchTier;
-        matchQuality: MatchQuality;
-      }>("/search/products", {
-        method: "POST",
-        body: {
-          queryText,
-          lat: coords?.lat,
-          lng: coords?.lng,
-          radiusKm: radiusKm ?? 10,
-          isImageQuery,
-          imageUrl,
-        },
-      });
+      const { results, matchTier, matchQuality, externalSuggestions } =
+        await backendData<{
+          results: VendorMatch[];
+          matchTier: MatchTier;
+          matchQuality: MatchQuality;
+          externalSuggestions: NearbyBusiness[] | null;
+        }>("/search/products", {
+          method: "POST",
+          body: {
+            queryText,
+            lat: coords?.lat,
+            lng: coords?.lng,
+            radiusKm: radiusKm ?? 10,
+            isImageQuery,
+            imageUrl,
+          },
+        });
 
       if (results.length) {
         if (isImageQuery && matchQuality === "direct") {
@@ -118,10 +121,15 @@ export function searchProductsTool(
           push?.(foundCountPhrase(results.length, "product", matchTier));
         }
       } else {
-        push?.(noProductMatchPhrase());
+        push?.(noProductMatchPhrase(Boolean(externalSuggestions?.length)));
       }
 
-      return { results, matchTier, matchQuality };
+      return {
+        results,
+        matchTier,
+        matchQuality,
+        externalSuggestions: externalSuggestions ?? [],
+      };
     },
   });
 }

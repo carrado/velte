@@ -98,12 +98,18 @@ export function similarMatchPhrase(count: number): string {
   ]);
 }
 
-export function noProductMatchPhrase(): string {
-  return pick([
-    "No listings matched yet.",
-    "Nothing matched this search yet.",
-    "Couldn't find a match yet.",
-  ]);
+export function noProductMatchPhrase(hasExternal: boolean): string {
+  return hasExternal
+    ? pick([
+        "No listing on Velte yet — checking nearby businesses…",
+        "Nothing on Velte yet — checking what's nearby…",
+        "No match on Velte — looking at nearby options…",
+      ])
+    : pick([
+        "No listings matched yet.",
+        "Nothing matched this search yet.",
+        "Couldn't find a match yet.",
+      ]);
 }
 
 export function noVendorMatchPhrase(hasExternal: boolean): string {

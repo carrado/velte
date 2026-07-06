@@ -26,6 +26,7 @@ interface PublicStoreResponse {
   handle: string;
   name: string;
   whatsapp: string | null;
+  vendorId: string;
   products: PublicStoreProduct[];
 }
 
@@ -66,6 +67,7 @@ export function getVendorProductsTool(push?: (text: string) => void) {
             name: store.name,
             handle: store.handle,
             whatsapp: store.whatsapp,
+            vendorId: store.vendorId,
           },
         };
       } catch {

@@ -242,6 +242,7 @@ export async function POST(req: Request) {
               results?: VendorMatch[];
               matchTier?: MatchTier;
               matchQuality?: MatchQuality;
+              externalSuggestions?: NearbyBusiness[];
             }
           | undefined;
         const storeResult = result.toolResults.findLast(
@@ -258,7 +259,12 @@ export async function POST(req: Request) {
         )?.output as
           | {
               results?: StoreProductItem[];
-              store?: { name: string; handle: string; whatsapp: string | null };
+              store?: {
+                name: string;
+                handle: string;
+                whatsapp: string | null;
+                vendorId: string;
+              };
             }
           | undefined;
         const products = productResult?.results ?? [];
@@ -266,19 +272,47 @@ export async function POST(req: Request) {
         const productsMatchTier = productResult?.matchTier ?? null;
         const storesMatchTier = storeResult?.matchTier ?? null;
         const productsMatchQuality = productResult?.matchQuality;
-        const externalStoreSuggestions = storeResult?.externalSuggestions ?? [];
+        // What the model actually searched stores FOR this turn (e.g. "phone
+        // repair shop", "tailor") — used to customize the WhatsApp
+        // pre-filled message on a pure vendor/store card (no product
+        // attached) instead of the generic "interested in what you offer."
+        // Only meaningful when it's the sole intent, never for
+        // productStores (a real product already names itself on that card).
+        const storesQuery =
+          (storeCall?.input as { businessType?: string } | undefined)
+            ?.businessType ?? null;
+        // Either tool can surface its own Google Places fallback (Tier 4) —
+        // a dual-intent turn ("a phone repair shop that also sells white
+        // sneakers") could in principle call both and get overlapping
+        // nearby businesses back from each, so dedupe by placeId rather
+        // than assuming only one tool ever populates this.
+        const externalStoreSuggestions = Array.from(
+          new Map(
+            [
+              ...(productResult?.externalSuggestions ?? []),
+              ...(storeResult?.externalSuggestions ?? []),
+            ].map((b) => [b.placeId, b]),
+          ).values(),
+        );
         const vendorProducts = vendorProductsResult?.results ?? [];
         const vendorProductsStore = vendorProductsResult?.store ?? null;
         const productStores = products.length
           ? await getVendorStoresForProducts(products)
           : [];
+        // Did the model actually search this turn, or just reply in plain
+        // text (a clarifying question — see systemPrompt.ts)? Every array
+        // above is empty either way, so the frontend needs this to tell the
+        // two apart.
+        const toolCalled = result.toolCalls.length > 0;
 
         controller.enqueue(
           encodeEvent({
             type: "final",
             reply: sanitizeReply(result.text),
+            toolCalled,
             products,
             stores,
+            storesQuery,
             productStores,
             productsMatchTier,
             storesMatchTier,

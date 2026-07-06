@@ -9,12 +9,14 @@ export function WhatsAppButton({
   href,
   label,
   className,
+  onClick,
 }: WhatsAppButtonProps) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
+      onClick={onClick}
       className={cn(
         "inline-flex items-center justify-center gap-2 px-5 py-3 bg-green-600 hover:bg-green-700 active:bg-green-700 text-white text-sm font-semibold rounded-xl transition-colors",
         className,

@@ -2,6 +2,7 @@
 import { MapPin, ShieldCheck, Store as StoreIcon } from "lucide-react";
 import { fmt } from "@/lib/product-price";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { reportLead } from "@/lib/reportLead";
 import type { VendorMatch } from "@/types/search";
 
 export function VendorResultCard({ match }: { match: VendorMatch }) {
@@ -60,6 +61,7 @@ export function VendorResultCard({ match }: { match: VendorMatch }) {
             href={chatHref}
             label="Chat with vendor"
             className="w-full mt-1"
+            onClick={() => reportLead(match.vendorId, match.productId)}
           />
         )}
       </div>
