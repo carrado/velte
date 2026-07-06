@@ -91,7 +91,7 @@ export default function Login() {
           className="flex items-center gap-2.5 justify-center mb-1"
         >
           <Image
-            src="/velte_ijulb7ijulb7ijul_h3d6xw.png"
+            src="/velte_logo_esn5dj.png"
             alt="Velte logo"
             width={100}
             height={20}
@@ -107,7 +107,7 @@ export default function Login() {
               Log in to Velte
             </h1>
             <p className="text-black/45 text-sm">
-              Access your AI sales dashboard
+              Manage your store and reach more buyers
             </p>
           </div>
 

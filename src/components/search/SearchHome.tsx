@@ -632,27 +632,31 @@ export function SearchHome() {
   );
 
   return (
-    <div className="h-screen bg-[#F1F5F9] flex flex-col overflow-hidden">
-      <header className="flex items-center justify-between px-5 sm:px-8 py-4 shrink-0">
-        <Image
-          src="/velte_logo_esn5dj.png"
-          alt="Velte"
-          width={120}
-          height={18}
-          className="w-24 sm:w-[120px] h-auto"
-        />
-        <div className="flex items-center gap-4 text-sm font-medium">
+    <div className="h-dvh bg-[#F1F5F9] flex flex-col overflow-hidden">
+      <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:pb-3 shrink-0 bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-sm z-10">
+        <Link href="/" className="shrink-0">
+          <Image
+            src="/velte_logo_esn5dj.png"
+            alt="Velte"
+            width={120}
+            height={18}
+            className="w-20 sm:w-[120px] h-auto"
+            priority
+          />
+        </Link>
+        <div className="flex items-center gap-1.5 sm:gap-4 text-sm font-medium shrink-0">
           <Link
             href="/auth/login"
-            className="text-gray-600 hover:text-gray-900"
+            className="text-gray-600 hover:text-gray-900 transition-colors px-2 py-2 sm:px-1 sm:py-0"
           >
             Log in
           </Link>
           <Link
-            href="/"
-            className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white transition-colors"
+            href="/auth/signup"
+            className="flex items-center h-8 sm:h-auto px-3 sm:px-4 sm:py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-semibold sm:font-medium transition-colors whitespace-nowrap"
           >
-            List your business
+            <span className="sm:hidden">List business</span>
+            <span className="hidden sm:inline">List your business</span>
           </Link>
         </div>
       </header>
@@ -682,7 +686,7 @@ export function SearchHome() {
               <div ref={bottomRef} />
             </div>
           </div>
-          <div className="shrink-0 px-5 sm:px-8 py-4">
+          <div className="shrink-0 px-5 sm:px-8 pt-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
             <div className="max-w-4xl mx-auto">{inputForm}</div>
           </div>
         </>

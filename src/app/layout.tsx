@@ -179,6 +179,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // resizes-content: on-screen keyboard shrinks the layout viewport itself
+  // (so 100dvh containers reflow), instead of the default resizes-visual
+  // where the keyboard overlays a full-height layout and the browser just
+  // scrolls the visual viewport — that scroll is what was pushing the
+  // header off the top and the search input off the bottom on mobile.
+  interactiveWidget: "resizes-content",
   themeColor: "#000000",
 };
 

@@ -47,17 +47,9 @@ export default function Navbar() {
                 Sign In
               </Button>
             </Link>
-            <Link href="/auth/signup">
-              <Button
-                variant="ghost"
-                className="hidden sm:inline-flex text-gray-600 cursor-pointer hover:text-gray-900 hover:bg-gray-100 text-sm px-4"
-              >
-                List your business
-              </Button>
-            </Link>
             <Link href="/search">
               <Button className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 text-xs sm:text-sm px-3 sm:px-5">
-                Search Velte
+                Try Velte
               </Button>
             </Link>
           </div>

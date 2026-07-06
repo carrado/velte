@@ -78,7 +78,7 @@ function VerifyForm() {
       {/* Logo */}
       <Link href="/" className="flex items-center gap-2.5 justify-center mb-3">
         <Image
-          src="/velte_ijulb7ijulb7ijul_h3d6xw.png"
+          src="/velte_logo_esn5dj.png"
           alt="Velte logo"
           width={100}
           height={20}
