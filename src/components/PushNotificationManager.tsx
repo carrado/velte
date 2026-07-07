@@ -30,8 +30,14 @@ function useInstallPrompt() {
   return { prompt, isInstalled, canInstall: !!prompt && !isInstalled };
 }
 
+// Separate from push-banner-skipped-at (the "Not now"/36h cooldown on the
+// enable-alerts flow) — this is a one-time, permanent dismiss for the
+// standalone battery tip below, unrelated to whether alerts are enabled.
+const BATTERY_TIP_DISMISSED_KEY = "transsion-battery-tip-dismissed";
+
 export default function PushNotificationManager() {
-  const { showBanner, isLoading, subscribe, dismiss } = usePushNotifications();
+  const { showBanner, isLoading, subscribe, dismiss, permission } =
+    usePushNotifications();
   const { prompt: installPrompt, canInstall, isInstalled } = useInstallPrompt();
   const [isActioning, setIsActioning] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -50,6 +56,23 @@ export default function PushNotificationManager() {
   // XOS (Tecno/Infinix/itel) kills backgrounded apps aggressively, which silently
   // drops the push subscription — surfaced nowhere else the user would see it.
   const [isTranssion] = useState(() => isTranssionDevice());
+  // The embedded battery step below only ever fires inside handlePrimary, i.e.
+  // during a first-time "Enable alerts" tap (permission === "default"). Anyone
+  // who already granted permission before this tip shipped — or who granted it
+  // on a non-Transsion install and later moved SIM/app to a Transsion phone —
+  // would otherwise never see it. This standalone flag reaches them instead,
+  // independent of that gesture flow, once, ever (persisted in localStorage).
+  const [standaloneDismissed, setStandaloneDismissed] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      localStorage.getItem(BATTERY_TIP_DISMISSED_KEY) === "1",
+  );
+  const showStandaloneBatteryTip =
+    isTranssion && permission === "granted" && !standaloneDismissed;
+  const dismissStandaloneTip = () => {
+    localStorage.setItem(BATTERY_TIP_DISMISSED_KEY, "1");
+    setStandaloneDismissed(true);
+  };
 
   useEffect(() => {
     const sync = () => setIsMobile(window.innerWidth < 768);
@@ -113,7 +136,12 @@ export default function PushNotificationManager() {
   // showBanner off.
   const onBatteryStep = step === "battery";
   const onInstallStep = step === "install" && !isInstalled;
-  const open = showBanner || onBatteryStep || onInstallStep;
+  // Both onBatteryStep (mid-flow) and showStandaloneBatteryTip (already-
+  // subscribed) render the same battery-warning content, just with different
+  // dismiss wiring below.
+  const showingBatteryContent = onBatteryStep || showStandaloneBatteryTip;
+  const open =
+    showBanner || onBatteryStep || onInstallStep || showStandaloneBatteryTip;
 
   return (
     <AnimatePresence>
@@ -154,7 +182,9 @@ export default function PushNotificationManager() {
 
               {/* Dismiss */}
               <button
-                onClick={close}
+                onClick={
+                  showStandaloneBatteryTip ? dismissStandaloneTip : close
+                }
                 aria-label="Dismiss"
                 className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >
@@ -165,7 +195,7 @@ export default function PushNotificationManager() {
                 {/* Header */}
                 <div className="mb-4 flex items-center gap-3 pr-6">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 shadow-sm shadow-orange-200">
-                    {onBatteryStep ? (
+                    {showingBatteryContent ? (
                       <BatteryWarning className="h-5 w-5 text-white" />
                     ) : (
                       <Bell className="h-5 w-5 text-white" />
@@ -176,7 +206,7 @@ export default function PushNotificationManager() {
                       Velte
                     </p>
                     <h3 className="text-[15px] font-semibold leading-tight text-slate-900">
-                      {onBatteryStep
+                      {showingBatteryContent
                         ? "Keep alerts working on this phone"
                         : onInstallStep
                           ? "Alerts on — add to home screen"
@@ -187,7 +217,7 @@ export default function PushNotificationManager() {
 
                 {/* Body */}
                 <p className="text-[13px] leading-relaxed text-slate-500">
-                  {onBatteryStep
+                  {showingBatteryContent
                     ? "Your phone's battery saver can silently stop notifications once Velte is in the background. Open Settings → Apps → Chrome → Battery, choose “No restrictions” / “Allow background activity”, and avoid swiping Velte away from your recent apps."
                     : !onInstallStep
                       ? "Install Velte on your device and enable notifications to get instant alerts for new orders and messages."
@@ -198,9 +228,9 @@ export default function PushNotificationManager() {
                           : "Notifications are enabled. To install: open your browser menu (⋮) and choose “Install app” / “Add to Home screen”."}
                 </p>
 
-                {/* Feature pills — skip on the battery step, it's settings
-                    guidance, not a feature callout */}
-                {!onBatteryStep && (
+                {/* Feature pills — skip on any battery-tip content, it's
+                    settings guidance, not a feature callout */}
+                {!showingBatteryContent && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
                       <Download className="h-3 w-3" />
@@ -219,9 +249,11 @@ export default function PushNotificationManager() {
                     onClick={
                       onBatteryStep
                         ? advancePastBattery
-                        : onInstallStep
-                          ? handleInstall
-                          : handlePrimary
+                        : showStandaloneBatteryTip
+                          ? dismissStandaloneTip
+                          : onInstallStep
+                            ? handleInstall
+                            : handlePrimary
                     }
                     disabled={busy}
                     className={cn(
@@ -237,7 +269,7 @@ export default function PushNotificationManager() {
                         <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                         {onInstallStep ? "Installing…" : "Enabling…"}
                       </>
-                    ) : onBatteryStep ? (
+                    ) : showingBatteryContent ? (
                       "Got it"
                     ) : !onInstallStep ? (
                       <>
@@ -254,12 +286,16 @@ export default function PushNotificationManager() {
                     )}
                   </button>
 
-                  <button
-                    onClick={onBatteryStep ? advancePastBattery : close}
-                    className="shrink-0 text-[13px] font-medium text-slate-400 transition-colors hover:text-slate-600"
-                  >
-                    {onBatteryStep || onInstallStep ? "Skip" : "Not now"}
-                  </button>
+                  {/* Standalone tip has nothing to "skip" past — the X and
+                      the primary "Got it" already cover dismissal. */}
+                  {!showStandaloneBatteryTip && (
+                    <button
+                      onClick={onBatteryStep ? advancePastBattery : close}
+                      className="shrink-0 text-[13px] font-medium text-slate-400 transition-colors hover:text-slate-600"
+                    >
+                      {onBatteryStep || onInstallStep ? "Skip" : "Not now"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
