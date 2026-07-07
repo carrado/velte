@@ -16,6 +16,7 @@ import {
   Phone,
   LocateFixed,
   Loader2,
+  Gift,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -401,6 +402,36 @@ export default function Step1BusinessAccount({
             onBlur={field.handleBlur}
             error={field.state.meta.errors[0]}
           />
+        )}
+      </form.Field>
+
+      {/* Referral code — optional. Prefilled from localStorage (see
+          page.tsx's effect) when the vendor arrived via a shared referral
+          link, but always editable in case a friend just told them the code
+          instead of sending a link. */}
+      <form.Field name="referralCode">
+        {(field) => (
+          <div>
+            <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+              <Gift className="w-3.5 h-3.5 text-orange-400" />
+              Referral Code{" "}
+              <span className="text-black/35 font-normal">(optional)</span>
+            </Label>
+            <Input
+              value={field.state.value ?? ""}
+              onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
+              onBlur={field.handleBlur}
+              placeholder="e.g. VLT7K2M"
+              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 uppercase"
+            />
+            <div className="flex items-center gap-1 mt-1">
+              <Info className="w-3 h-3 text-black/40 shrink-0" />
+              <p className="text-black/40 text-xs">
+                Got invited by another vendor? Enter their code and they’ll earn
+                a referral bonus once you verify your account.
+              </p>
+            </div>
+          </div>
         )}
       </form.Field>
 

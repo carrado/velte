@@ -3,6 +3,8 @@ export type NotificationType =
   | "product"
   | "payment"
   | "wallet"
+  | "referral"
+  | "lead"
   | "system";
 
 export interface AppNotification {

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import Providers from "./providers";
 import { Toaster } from "sonner";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import ReferralCapture from "@/components/ReferralCapture";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -199,6 +200,7 @@ export default function RootLayout({
       <body>
         <Providers>
           <ServiceWorkerRegistrar />
+          <ReferralCapture />
           {children}
           <Toaster
             position="top-right"

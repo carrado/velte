@@ -11,12 +11,15 @@ import {
   Zap,
   ArrowDownLeft,
   CreditCard,
+  Gift,
+  ChevronRight,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira } from "@/lib/utils";
+import { useNavigation } from "@/components/NavigationProgressContext";
 import TopUpModal from "./TopUpModal";
 import FundingMethodModal from "./FundingMethodModal";
 import LeadGenerationCard from "./LeadGenerationCard";
@@ -31,6 +34,9 @@ const LOW_BALANCE_KOBO = 50_000; // ₦500
 export default function WalletPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const { navigate } = useNavigation();
+  const userId = pathname.split("/")[1];
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [fundingOpen, setFundingOpen] = useState(false);
 
@@ -179,6 +185,38 @@ export default function WalletPage() {
           </div>
         </div>
       </div>
+
+      {/* Referrals entry point — mobile-only (lg:hidden matches the exact
+          breakpoint Sidebar itself uses to appear, `hidden lg:flex` in
+          Sidebar.tsx) since the Sidebar nav already covers this on desktop
+          and showing both would just be a duplicate link. The BottomNav is
+          deliberately capped at 4 items with no drawer, so mobile still
+          needs its own way in — placed right after the hero card (not
+          after the KPI row) so it's visible without scrolling. */}
+      <button
+        onClick={() => navigate(`/${userId}/referrals`)}
+        className="lg:hidden flex items-center gap-3 rounded-none sm:rounded-2xl bg-white border border-gray-100 shadow-sm p-4 sm:p-5 text-left hover:bg-gray-50 transition-colors cursor-pointer"
+      >
+        <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
+          <Gift size={16} className="text-orange-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-dash-body font-semibold text-gray-900">
+            Refer a vendor, earn ₦1,000
+          </p>
+          <p className="text-dash-caption text-gray-400">
+            Share your code — get paid when they verify their account
+          </p>
+        </div>
+        {/* A styled span, not a nested <button> (invalid HTML inside the
+            card's own button) — gives the tap target a clear, labeled
+            affordance instead of relying on a bare chevron to read as
+            clickable. */}
+        <span className="flex items-center gap-1 shrink-0 px-3 py-1.5 bg-orange-500 text-white text-dash-caption font-semibold rounded-lg">
+          View
+          <ChevronRight size={13} />
+        </span>
+      </button>
 
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

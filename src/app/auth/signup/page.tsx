@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -11,6 +11,10 @@ import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { usersApi } from "@/services/users";
+import {
+  getStoredReferralCode,
+  clearStoredReferralCode,
+} from "@/lib/referralCode";
 import { step1Schema, signupSchema } from "./schema";
 import type { SignupForm } from "./schema";
 import WizardProgress from "./_components/WizardProgress";
@@ -27,6 +31,7 @@ const STEP1_FIELDS = [
   "username",
   "password",
   "confirmPassword",
+  "referralCode",
 ] as const;
 
 export default function Signup() {
@@ -37,6 +42,10 @@ export default function Signup() {
     mutationFn: (data: Omit<SignupForm, "confirmPassword">) =>
       usersApi.create(data),
     onSuccess: (_response, variables) => {
+      // Done its job — a leftover code in storage after a real signup would
+      // otherwise silently reattach to a completely unrelated future signup
+      // on this same browser.
+      clearStoredReferralCode();
       toast.success("Account created! Welcome to Velte.");
       router.push(`/auth/verify?email=${variables.email}`);
     },
@@ -60,6 +69,7 @@ export default function Signup() {
       sector: "",
       businessType: "" as SignupForm["businessType"],
       description: "",
+      referralCode: "",
     } satisfies SignupForm,
     onSubmit: async ({ value }) => {
       const parsed = signupSchema.safeParse(value);
@@ -72,6 +82,19 @@ export default function Signup() {
       signupMutation.mutate(apiData);
     },
   });
+
+  // Deliberately in an effect, not `defaultValues` — defaultValues is
+  // evaluated during SSR too (where localStorage doesn't exist), so reading
+  // it there would either always be empty or risk a hydration mismatch
+  // against whatever the client actually has stored. Only prefills if the
+  // buyer hasn't already typed something in themselves.
+  useEffect(() => {
+    const stored = getStoredReferralCode();
+    if (stored && !form.store.state.values.referralCode) {
+      form.setFieldValue("referralCode", stored);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleContinue = async () => {
     // Surface inline errors on any untouched step-1 fields, then gate advance.
