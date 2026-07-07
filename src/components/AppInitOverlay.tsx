@@ -10,14 +10,14 @@ interface AppInitOverlayProps {
 export default function AppInitOverlay({ status }: AppInitOverlayProps) {
   return (
     <div
-      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-black"
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-white"
       style={{
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       {/* Warm brand glow behind the mark */}
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-500/20 blur-3xl" />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-500/10 blur-3xl" />
 
       <div className="relative flex flex-col items-center">
         {/* Logo: scales in, then breathes */}
@@ -29,34 +29,34 @@ export default function AppInitOverlay({ status }: AppInitOverlayProps) {
               width={132}
               height={116}
               priority
-              className="drop-shadow-[0_0_24px_rgba(249,115,22,0.25)]"
+              className="drop-shadow-[0_0_24px_rgba(249,115,22,0.15)]"
             />
           </div>
         </div>
 
         {status === "loading" && (
-          <div className="mt-9 h-1 w-36 overflow-hidden rounded-full bg-zinc-800">
+          <div className="mt-9 h-1 w-36 overflow-hidden rounded-full bg-gray-200">
             <div className="h-full w-2/5 rounded-full bg-gradient-to-r from-orange-400 to-orange-600 animate-[splash-bar_1.1s_ease-in-out_infinite]" />
           </div>
         )}
 
         {status === "error" && (
           <div className="mt-9 flex max-w-xs flex-col items-center gap-4 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/15">
-              <WifiOff className="h-5 w-5 text-red-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+              <WifiOff className="h-5 w-5 text-red-500" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-gray-100">
+              <p className="text-sm font-semibold text-gray-900">
                 Connection problem
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 We couldn&apos;t reach the server. Check your internet
                 connection and try again.
               </p>
             </div>
             <button
               onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-200"
+              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-600"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Retry
@@ -67,10 +67,10 @@ export default function AppInitOverlay({ status }: AppInitOverlayProps) {
 
       {/* Wordmark pinned near the bottom — the classic app-launch signature */}
       <div className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+2rem)] flex flex-col items-center gap-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-gray-400">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-gray-500">
           Velte
         </p>
-        <p className="text-[10px] text-gray-500">Your AI sales rep</p>
+        <p className="text-[10px] text-gray-400">Your AI sales rep</p>
       </div>
     </div>
   );

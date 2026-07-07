@@ -1,6 +1,14 @@
 "use client";
 
-import { Bell, CreditCard, Package, ShoppingCart, Wallet } from "lucide-react";
+import {
+  Bell,
+  CreditCard,
+  Package,
+  ShoppingCart,
+  Wallet,
+  Gift,
+  MessageCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { useNavigation } from "@/components/NavigationProgressContext";
@@ -31,6 +39,8 @@ const TYPE_CONFIG: Record<
   product: { icon: Package, bg: "bg-orange-100", color: "text-orange-600" },
   payment: { icon: CreditCard, bg: "bg-green-100", color: "text-green-600" },
   wallet: { icon: Wallet, bg: "bg-amber-100", color: "text-amber-600" },
+  referral: { icon: Gift, bg: "bg-orange-100", color: "text-orange-600" },
+  lead: { icon: MessageCircle, bg: "bg-green-100", color: "text-green-600" },
   system: { icon: Bell, bg: "bg-gray-100", color: "text-gray-500" },
 };
 

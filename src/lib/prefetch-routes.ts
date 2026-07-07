@@ -1,6 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { categoriesApi } from "@/services/products";
 import { settingsApi } from "@/services/settings";
+import { walletApi } from "@/services/wallet";
+import { fetchMyReferrals } from "@/services/referrals";
 import { queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
 
@@ -44,6 +46,24 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
         {
           queryKey: queryKeys.settings.profile,
           queryFn: settingsApi.fetchProfile,
+        },
+      ];
+    case "wallet":
+      return [
+        {
+          queryKey: queryKeys.wallet.detail,
+          queryFn: walletApi.getWallet,
+        },
+        {
+          queryKey: queryKeys.wallet.stats(),
+          queryFn: () => walletApi.getStats(),
+        },
+      ];
+    case "referrals":
+      return [
+        {
+          queryKey: queryKeys.referrals.mine,
+          queryFn: fetchMyReferrals,
         },
       ];
     default:

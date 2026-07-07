@@ -61,6 +61,16 @@ const baseSchema = z.object({
     .string()
     .min(10, "Please write a short description (at least 10 characters)")
     .max(600, "Description must be under 600 characters"),
+  // Plain (not `.optional()`): form state always initializes this to `""`,
+  // never `undefined` — same "no value yet" idea as `location`'s `.nullable()`
+  // above, just with an empty string as the sentinel instead of null, which
+  // keeps SignupForm's inferred type a plain `string` (TanStack Form's
+  // invariant generics make an optional-vs-required mismatch here a real
+  // pain to unwind). An empty string is a legitimate, always-valid "skipped
+  // this field" value — whether the code actually belongs to a real vendor
+  // is a server-side check on submit (see backend auth.js register), which
+  // silently ignores an invalid/typo'd code rather than blocking signup.
+  referralCode: z.string(),
 });
 
 const passwordsMatch = (
@@ -78,6 +88,7 @@ export const step1Schema = baseSchema
     phone: true,
     state: true,
     address: true,
+    referralCode: true,
   })
   .refine(passwordsMatch, {
     message: "Passwords don't match",

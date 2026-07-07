@@ -25,4 +25,7 @@ export const queryKeys = {
   notifications: {
     list: ["notifications", "list"] as const,
   },
+  referrals: {
+    mine: ["referrals", "mine"] as const,
+  },
 };
