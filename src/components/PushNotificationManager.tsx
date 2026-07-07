@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Bell, BellOff, Download, X } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { cn } from "@/lib/utils";
 import { installPromptStore } from "@/lib/installPromptStore";
 
@@ -16,21 +17,13 @@ function useInstallPrompt() {
     installPromptStore.get,
     () => null,
   );
-  const [isInstalled, setIsInstalled] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(display-mode: standalone)").matches,
-  );
+  const isInstalled = useIsInstalled();
 
+  // installPromptStore is specific to this component's own install flow
+  // (not something useIsInstalled should know about) — clear the captured
+  // prompt once installed so a stale one never lingers.
   useEffect(() => {
-    if (isInstalled) return;
-    const onInstalled = () => {
-      setIsInstalled(true);
-      installPromptStore.clear();
-      localStorage.setItem("pwa-was-installed", "1");
-    };
-    window.addEventListener("appinstalled", onInstalled);
-    return () => window.removeEventListener("appinstalled", onInstalled);
+    if (isInstalled) installPromptStore.clear();
   }, [isInstalled]);
 
   return { prompt, isInstalled, canInstall: !!prompt && !isInstalled };
@@ -108,14 +101,19 @@ export default function PushNotificationManager() {
     <AnimatePresence>
       {open && (
         <>
-          {/* Mobile backdrop */}
+          {/* Full-screen backdrop, every breakpoint — not just mobile. It has
+              no onClick (see below): its job is purely to intercept/absorb
+              stray clicks on the page underneath so they can never reach
+              anything there, not to dismiss the modal itself. Only the X and
+              "Not now"/"Skip" buttons (both wired to the same `dismiss`) are
+              allowed to close it. */}
           <motion.div
             key="pnm-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] md:hidden"
+            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]"
             aria-hidden
           />
 

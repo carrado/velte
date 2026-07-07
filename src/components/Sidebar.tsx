@@ -160,7 +160,7 @@ export default function Sidebar() {
           <p className="text-lg font-bold text-[#023337]">
             {wallet ? formatNaira(wallet.balanceKobo) : "—"}
           </p>
-          {wallet && wallet.balanceKobo < LOW_BALANCE_KOBO && (
+          {wallet && wallet.balanceKobo <= LOW_BALANCE_KOBO && (
             <p className="text-dash-caption text-amber-600 mt-0.5">
               Balance is running low
             </p>
@@ -169,7 +169,7 @@ export default function Sidebar() {
             onClick={() => navigate(getFullPath("wallet"))}
             className="mt-2.5 w-full py-1.5 text-dash-caption font-semibold text-orange-600 bg-white border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors cursor-pointer"
           >
-            {wallet && wallet.balanceKobo < LOW_BALANCE_KOBO
+            {wallet && wallet.balanceKobo <= LOW_BALANCE_KOBO
               ? "Top Up"
               : "Manage Wallet"}
           </button>
