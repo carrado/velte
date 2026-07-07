@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Bell, BellOff, Download, X } from "lucide-react";
+import { Bell, BellOff, BatteryWarning, Download, X } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { cn } from "@/lib/utils";
 import { installPromptStore } from "@/lib/installPromptStore";
+import { isTranssionDevice } from "@/lib/deviceDetection";
 
 function useInstallPrompt() {
   // The captured beforeinstallprompt lives in installPromptStore (filled by
@@ -36,15 +37,19 @@ export default function PushNotificationManager() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   // The browser allows only ONE gesture-gated action per click, and both
   // Notification.requestPermission() and installPrompt.prompt() are gated. So we
-  // split into two taps: tap 1 enables alerts, then we advance to an "install"
-  // step whose button uses its own fresh gesture for tap 2.
-  const [step, setStep] = useState<"main" | "install">("main");
+  // split into taps: tap 1 enables alerts, then (on a Transsion/XOS device) a
+  // "battery" step warns about background-kill before the "install" step,
+  // whose own button uses its own fresh gesture for its tap.
+  const [step, setStep] = useState<"main" | "battery" | "install">("main");
   // iOS Safari has no beforeinstallprompt — install is manual via the Share sheet.
   const [isIOS] = useState(
     () =>
       typeof navigator !== "undefined" &&
       /iphone|ipad|ipod/i.test(navigator.userAgent),
   );
+  // XOS (Tecno/Infinix/itel) kills backgrounded apps aggressively, which silently
+  // drops the push subscription — surfaced nowhere else the user would see it.
+  const [isTranssion] = useState(() => isTranssionDevice());
 
   useEffect(() => {
     const sync = () => setIsMobile(window.innerWidth < 768);
@@ -57,6 +62,13 @@ export default function PushNotificationManager() {
     dismiss();
   };
 
+  // After the battery tip (or skipping it), fall through to the same
+  // install-or-close decision handlePrimary would have made.
+  const advancePastBattery = () => {
+    if (!isInstalled) setStep("install");
+    else close();
+  };
+
   const handlePrimary = async () => {
     setIsActioning(true);
     try {
@@ -64,10 +76,14 @@ export default function PushNotificationManager() {
       // ever shows when permission is still "default", so a fresh prompt is
       // always required — and it must run on a live gesture.)
       await subscribe();
+      // Transsion/XOS devices silently drop push in the background — warn
+      // before the install step, since that's the step most likely to leave
+      // the user thinking alerts "just work" from here on.
+      if (isTranssion) setStep("battery");
       // Advance to the install step unless the app is already installed. We show
       // it even when no native prompt was captured (Chrome suppresses it after
       // prior dismissals; iOS never fires it) and fall back to instructions.
-      if (!isInstalled) setStep("install");
+      else if (!isInstalled) setStep("install");
       else close();
     } finally {
       setIsActioning(false);
@@ -93,9 +109,11 @@ export default function PushNotificationManager() {
   };
 
   const busy = isActioning || isLoading;
-  // Stay open for the install step even though subscribing flips showBanner off.
+  // Stay open for the battery/install steps even though subscribing flips
+  // showBanner off.
+  const onBatteryStep = step === "battery";
   const onInstallStep = step === "install" && !isInstalled;
-  const open = showBanner || onInstallStep;
+  const open = showBanner || onBatteryStep || onInstallStep;
 
   return (
     <AnimatePresence>
@@ -147,47 +165,64 @@ export default function PushNotificationManager() {
                 {/* Header */}
                 <div className="mb-4 flex items-center gap-3 pr-6">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 shadow-sm shadow-orange-200">
-                    <Bell className="h-5 w-5 text-white" />
+                    {onBatteryStep ? (
+                      <BatteryWarning className="h-5 w-5 text-white" />
+                    ) : (
+                      <Bell className="h-5 w-5 text-white" />
+                    )}
                   </div>
                   <div>
                     <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-orange-500">
                       Velte
                     </p>
                     <h3 className="text-[15px] font-semibold leading-tight text-slate-900">
-                      {onInstallStep
-                        ? "Alerts on — add to home screen"
-                        : "Get the full experience"}
+                      {onBatteryStep
+                        ? "Keep alerts working on this phone"
+                        : onInstallStep
+                          ? "Alerts on — add to home screen"
+                          : "Get the full experience"}
                     </h3>
                   </div>
                 </div>
 
                 {/* Body */}
                 <p className="text-[13px] leading-relaxed text-slate-500">
-                  {!onInstallStep
-                    ? "Install Velte on your device and enable notifications to get instant alerts for new orders and messages."
-                    : canInstall
-                      ? "Notifications are enabled. Add Velte to your home screen for one-tap access and reliable alerts."
-                      : isIOS
-                        ? "Notifications are enabled. To install: tap the Share icon in Safari, then choose “Add to Home Screen”."
-                        : "Notifications are enabled. To install: open your browser menu (⋮) and choose “Install app” / “Add to Home screen”."}
+                  {onBatteryStep
+                    ? "Your phone's battery saver can silently stop notifications once Velte is in the background. Open Settings → Apps → Chrome → Battery, choose “No restrictions” / “Allow background activity”, and avoid swiping Velte away from your recent apps."
+                    : !onInstallStep
+                      ? "Install Velte on your device and enable notifications to get instant alerts for new orders and messages."
+                      : canInstall
+                        ? "Notifications are enabled. Add Velte to your home screen for one-tap access and reliable alerts."
+                        : isIOS
+                          ? "Notifications are enabled. To install: tap the Share icon in Safari, then choose “Add to Home Screen”."
+                          : "Notifications are enabled. To install: open your browser menu (⋮) and choose “Install app” / “Add to Home screen”."}
                 </p>
 
-                {/* Feature pills — always visible */}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
-                    <Download className="h-3 w-3" />
-                    Install app
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
-                    <Bell className="h-3 w-3" />
-                    Push notifications
-                  </span>
-                </div>
+                {/* Feature pills — skip on the battery step, it's settings
+                    guidance, not a feature callout */}
+                {!onBatteryStep && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
+                      <Download className="h-3 w-3" />
+                      Install app
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
+                      <Bell className="h-3 w-3" />
+                      Push notifications
+                    </span>
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="mt-5 flex items-center gap-3">
                   <button
-                    onClick={onInstallStep ? handleInstall : handlePrimary}
+                    onClick={
+                      onBatteryStep
+                        ? advancePastBattery
+                        : onInstallStep
+                          ? handleInstall
+                          : handlePrimary
+                    }
                     disabled={busy}
                     className={cn(
                       "flex flex-1 items-center justify-center gap-2 rounded-xl",
@@ -202,6 +237,8 @@ export default function PushNotificationManager() {
                         <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                         {onInstallStep ? "Installing…" : "Enabling…"}
                       </>
+                    ) : onBatteryStep ? (
+                      "Got it"
                     ) : !onInstallStep ? (
                       <>
                         <Bell className="h-3.5 w-3.5" />
@@ -218,10 +255,10 @@ export default function PushNotificationManager() {
                   </button>
 
                   <button
-                    onClick={close}
+                    onClick={onBatteryStep ? advancePastBattery : close}
                     className="shrink-0 text-[13px] font-medium text-slate-400 transition-colors hover:text-slate-600"
                   >
-                    {onInstallStep ? "Skip" : "Not now"}
+                    {onBatteryStep || onInstallStep ? "Skip" : "Not now"}
                   </button>
                 </div>
               </div>
