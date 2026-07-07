@@ -90,11 +90,30 @@ function stripRestatedMedia(text: string): string {
     .trim();
 }
 
+// Same class of problem as LEAKED_FUNCTION_CALL below: the system prompt now
+// tells the model never to write out a vendor's phone/WhatsApp number, but a
+// prompt is a request, not a guarantee — found live, an assistant reply
+// closing with "you can reach them via WhatsApp at +234…". The WhatsApp
+// button on the card is meant to be the ONLY contact channel, so this can't
+// be a surgical strip-and-continue (a mangled "reach them at ." is still a
+// visible tell something's wrong) — any match nukes the whole reply, same as
+// a leaked function call. Matches a run of 9-16 digits with optional +,
+// spaces, or dashes between them — long enough to catch a real phone number,
+// short enough to leave a price ("₦25,000") or a distance ("3.2km") alone.
+const LEAKED_PHONE_NUMBER = /\+?(?:\d[\s-]?){9,16}\d/;
+
 function sanitizeReply(text: string): string {
   const cleaned = stripRestatedMedia(text);
-  return LEAKED_FUNCTION_CALL.test(cleaned)
-    ? "Sorry, I had trouble processing that. Please try rephrasing your search."
-    : cleaned;
+  if (LEAKED_FUNCTION_CALL.test(cleaned)) {
+    return "Sorry, I had trouble processing that. Please try rephrasing your search.";
+  }
+  // Unlike a leaked function call, the search itself didn't fail — the
+  // results/cards below are still real and still rendering, so the
+  // replacement note has to read like a normal closing line, not an error.
+  if (LEAKED_PHONE_NUMBER.test(cleaned)) {
+    return "Found some options for you — take a look below and reach out using the chat button.";
+  }
+  return cleaned;
 }
 
 // A buyer asking "where can I find this" (photo or text) wants both the item

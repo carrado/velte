@@ -2,7 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Bell, LogOut, Search } from "lucide-react";
 import { useUserStore } from "@/store/userStore";
 import { useMutation } from "@tanstack/react-query";
 import { usersApi } from "@/services/users";
@@ -14,9 +16,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { HeaderProps } from "@/types/common";
+import { useNavigation } from "@/components/NavigationProgressContext";
+import { useNotificationsStore } from "@/store/notificationsStore";
+import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 
 export default function Header({ title }: HeaderProps) {
   const userDetails = useUserStore((state) => state.user);
+  const { navigate } = useNavigation();
+  const pathname = usePathname();
+  const hasUnread = useNotificationsStore((s) =>
+    s.notifications.some((n) => !n.read),
+  );
+  const userId = pathname.split("/")[1];
 
   const logoutMutation = useMutation({
     mutationFn: () => usersApi.logout(),
@@ -48,6 +59,35 @@ export default function Header({ title }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-3 md:gap-4">
+        {/* A vendor is also a buyer sometimes — this hands them off to the
+            buyer-facing search (Velte Connect) instead of leaving no way
+            back to it once they're inside their own dashboard. */}
+        <Link
+          href="/search"
+          title="Looking to buy something yourself?"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3.5 h-8 sm:h-9 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors text-dash-caption sm:text-dash-body font-semibold shrink-0"
+        >
+          <Search size={15} className="shrink-0" />
+          <span className="leading-none">Buy on Velte</span>
+        </Link>
+
+        {/* Mobile: navigate to notifications page */}
+        <button
+          className="relative md:hidden text-[#6B7280] hover:text-[#111827] cursor-pointer"
+          onClick={() => navigate(`/${userId}/notifications`)}
+          aria-label="Notifications"
+        >
+          <Bell size={20} />
+          {hasUnread && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
+          )}
+        </button>
+
+        {/* Desktop: dropdown popover */}
+        <div className="hidden md:block">
+          <NotificationDropdown />
+        </div>
+
         {/* Mobile avatar — plain, no popover */}
         <div className="md:hidden w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold flex-shrink-0 overflow-hidden">
           {avatarInner}

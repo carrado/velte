@@ -14,7 +14,7 @@ import type { NavItem, NavSection } from "@/types/common";
 import { useIsFood } from "@/hooks/useBusinessType";
 
 // Mirrors the wallet page's low-balance nudge threshold.
-const LOW_BALANCE_KOBO = 50_000; // ₦500
+const LOW_BALANCE_KOBO = 160_000; // ₦1,600 — matches the backend's hourly wallet-low notification cron
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const { navigate } = useNavigation();

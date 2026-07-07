@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
@@ -13,6 +14,14 @@ import { usersApi } from "@/services/users";
 import { useUserStore } from "@/store/userStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useIsFood } from "@/hooks/useBusinessType";
+import { useNotificationsSync } from "@/hooks/useNotificationsSync";
+
+// Needs client-only browser APIs (Notification, PushManager) at module init —
+// ssr:false keeps it out of the server render entirely.
+const PushNotificationManager = dynamic(
+  () => import("@/components/PushNotificationManager"),
+  { ssr: false },
+);
 
 const PATH_TITLES: Record<string, string> = {
   "products/add": "Add Listing",
@@ -48,6 +57,8 @@ export default function DashboardRootLayout({
     useUserStore.getState().user ? "ready" : "loading",
   );
   const mainRef = useRef<HTMLElement>(null);
+  const userId = useUserStore((state) => state.user?.id);
+  useNotificationsSync(userId);
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });
@@ -91,6 +102,7 @@ export default function DashboardRootLayout({
                   return foodMap[t] ?? t;
                 })()}
               />
+              <PushNotificationManager />
               <TooltipProvider>{children}</TooltipProvider>
             </div>
           </main>
