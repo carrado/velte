@@ -67,6 +67,22 @@ export const usersApi = {
     return user;
   },
 
+  // For public pages (e.g. the marketing Navbar) that must render fine for
+  // a logged-out visitor — a plain `fetch`, not `api.get`, because api-client
+  // treats any 401 as a session that needs recovering and force-redirects to
+  // /auth/login, which would hijack anonymous visitors off the homepage.
+  getMeSilent: async (): Promise<User | null> => {
+    try {
+      const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+      if (!res.ok) return null;
+      const { user } = (await res.json()) as { user: User };
+      useUserStore.getState().setUser(user);
+      return user;
+    } catch {
+      return null;
+    }
+  },
+
   updateOnboarding: async () => {
     const user = useUserStore.getState().user;
     if (!user) return;

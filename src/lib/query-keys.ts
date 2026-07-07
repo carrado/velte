@@ -22,4 +22,7 @@ export const queryKeys = {
     transactions: (params?: WalletTransactionsParams) =>
       ["wallet", "transactions", params ?? {}] as const,
   },
+  notifications: {
+    list: ["notifications", "list"] as const,
+  },
 };
