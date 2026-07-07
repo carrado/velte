@@ -1,16 +1,28 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useUserStore } from "@/store/userStore";
+import { useIsInstalled } from "@/hooks/useIsInstalled";
 
 export type NotificationPermission = "default" | "granted" | "denied";
 
-const DISMISSED_KEY = "push-notification-dismissed";
-const FIRST_VISIT_KEY = "push-banner-first-visit";
+// Persists across sessions — when the user last dismissed (X or "Not now"/
+// "Skip", both count the same) — drives the 36h cooldown below.
+const SKIPPED_AT_KEY = "push-banner-skipped-at";
+// sessionStorage, not localStorage — cleared each time the browser/tab is
+// fully closed, so "5 minutes after every login" restarts each fresh
+// session instead of only ever counting from the very first visit.
+const SESSION_STARTED_KEY = "push-banner-session-started";
 const WAS_INSTALLED_KEY = "pwa-was-installed";
 
-const BANNER_DELAY_MS = 5 * 60 * 1000; // 5 minutes before first prompt
-const DISMISS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours after "Not now"
+// Two mutually exclusive timing rules, decided by whether the user has ever
+// dismissed the banner:
+//  - Never dismissed: wait 5 minutes after this session/login starts.
+//  - Previously dismissed: wait 36 hours after that dismissal instead —
+//    replaces the 5-minute rule entirely until the cooldown clears, at which
+//    point the banner is due immediately (no extra 5-minute wait on top).
+const LOGIN_DELAY_MS = 5 * 60 * 1000;
+const SKIP_COOLDOWN_MS = 36 * 60 * 60 * 1000;
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -41,65 +53,71 @@ function subscriptionMatchesKey(
 // Resets the promotion cycle — called on uninstall detection.
 function resetInstallCycle() {
   localStorage.removeItem(WAS_INSTALLED_KEY);
-  localStorage.removeItem(DISMISSED_KEY);
-  localStorage.removeItem(FIRST_VISIT_KEY);
+  localStorage.removeItem(SKIPPED_AT_KEY);
+  sessionStorage.removeItem(SESSION_STARTED_KEY);
 }
 
-// Returns how long to wait (ms) before showing the banner.
-// If the first-visit timestamp doesn't exist yet it is created here.
-function getBannerDelay(): number {
-  let stored = localStorage.getItem(FIRST_VISIT_KEY);
-  if (!stored) {
-    stored = Date.now().toString();
-    localStorage.setItem(FIRST_VISIT_KEY, stored);
+// Returns how long to wait (ms) before the banner is next due — picks
+// whichever timing rule applies (see the constants above) and creates
+// whatever timestamp it needs on first read.
+function computeRemainingDelayMs(): number {
+  const skippedAtRaw = localStorage.getItem(SKIPPED_AT_KEY);
+  if (skippedAtRaw) {
+    const elapsed = Date.now() - parseInt(skippedAtRaw, 10);
+    return Math.max(0, SKIP_COOLDOWN_MS - elapsed);
   }
-  const elapsed = Date.now() - parseInt(stored, 10);
-  return Math.max(0, BANNER_DELAY_MS - elapsed);
-}
 
-// Returns true if the user dismissed within the 24-hour cooldown window.
-function isDismissedRecently(): boolean {
-  const raw = localStorage.getItem(DISMISSED_KEY);
-  if (!raw) return false;
-  const elapsed = Date.now() - parseInt(raw, 10);
-  if (elapsed >= DISMISS_COOLDOWN_MS) {
-    localStorage.removeItem(DISMISSED_KEY);
-    return false;
+  let sessionStart = sessionStorage.getItem(SESSION_STARTED_KEY);
+  if (!sessionStart) {
+    sessionStart = Date.now().toString();
+    sessionStorage.setItem(SESSION_STARTED_KEY, sessionStart);
   }
-  return true;
+  const elapsed = Date.now() - parseInt(sessionStart, 10);
+  return Math.max(0, LOGIN_DELAY_MS - elapsed);
 }
 
 export function usePushNotifications() {
   const user = useUserStore((s) => s.user);
+  const isInstalled = useIsInstalled();
   const [permission, setPermission] =
     useState<NotificationPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDismissed, setIsDismissed] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [delayPassed, setDelayPassed] = useState(false);
+  // Holds the cleanup for whatever delay timer is currently armed, so
+  // re-arming (on dismiss, or on uninstall detection below) never leaks a
+  // stale timeout still pending from before.
+  const clearDelayTimerRef = useRef<() => void>(() => {});
 
-  // Mount: resolve all state from browser APIs + localStorage
+  const armDelayTimer = useCallback(() => {
+    clearDelayTimerRef.current();
+    const remaining = computeRemainingDelayMs();
+    if (remaining === 0) {
+      setDelayPassed(true);
+      clearDelayTimerRef.current = () => {};
+      return;
+    }
+    setDelayPassed(false);
+    const timer = setTimeout(() => setDelayPassed(true), remaining);
+    clearDelayTimerRef.current = () => clearTimeout(timer);
+  }, []);
+
+  // Mount: resolve all state from browser APIs + localStorage/sessionStorage
   useEffect(() => {
     const supported = "serviceWorker" in navigator && "PushManager" in window;
     setIsSupported(supported);
     if (!supported) return;
 
     setPermission(Notification.permission as NotificationPermission);
-    setIsDismissed(isDismissedRecently());
 
     navigator.serviceWorker.ready.then((reg) => {
       reg.pushManager.getSubscription().then((sub) => setIsSubscribed(!!sub));
     });
 
-    const remaining = getBannerDelay();
-    if (remaining === 0) {
-      setDelayPassed(true);
-      return;
-    }
-    const timer = setTimeout(() => setDelayPassed(true), remaining);
-    return () => clearTimeout(timer);
-  }, []);
+    armDelayTimer();
+    return () => clearDelayTimerRef.current();
+  }, [armDelayTimer]);
 
   // Self-heal: with permission already granted, make sure a live subscription
   // exists AND the backend has it. Two desyncs to repair:
@@ -170,21 +188,17 @@ export function usePushNotifications() {
   // Uninstall detection: beforeinstallprompt fires again after the user
   // removes the PWA. If we had recorded a successful install, treat this as
   // an uninstall event and reset the whole promotion cycle so the banner
-  // can appear again after the 5-minute delay.
+  // can appear again after the 5-minute (never-skipped) delay.
   useEffect(() => {
     const handle = () => {
       if (localStorage.getItem(WAS_INSTALLED_KEY) !== "1") return;
       resetInstallCycle();
-      setIsDismissed(false);
-      setDelayPassed(false);
-      // Start a fresh 5-minute timer
-      const timer = setTimeout(() => setDelayPassed(true), BANNER_DELAY_MS);
-      return () => clearTimeout(timer);
+      armDelayTimer();
     };
 
     window.addEventListener("beforeinstallprompt", handle);
     return () => window.removeEventListener("beforeinstallprompt", handle);
-  }, []);
+  }, [armDelayTimer]);
 
   const subscribe = useCallback(async () => {
     if (!isSupported || !user?.id) return;
@@ -256,19 +270,21 @@ export function usePushNotifications() {
     }
   }, [isSupported, user?.id]);
 
-  // Stores a timestamp so the cooldown check (isDismissedRecently) can
-  // expire it after 24 hours and re-show the banner automatically.
+  // X and "Not now"/"Skip" both call this (see PushNotificationManager) —
+  // deliberately the same action, both starting the 36-hour cooldown.
+  // Re-arms the timer immediately (rather than waiting for a future mount)
+  // so a tab left open past the 36h mark still flips delayPassed on its own.
   const dismiss = useCallback(() => {
-    localStorage.setItem(DISMISSED_KEY, Date.now().toString());
-    setIsDismissed(true);
-  }, []);
+    localStorage.setItem(SKIPPED_AT_KEY, Date.now().toString());
+    armDelayTimer();
+  }, [armDelayTimer]);
 
   const showBanner =
     isSupported &&
     delayPassed &&
     permission === "default" &&
-    !isDismissed &&
     !isSubscribed &&
+    !isInstalled &&
     !!user;
 
   return {
