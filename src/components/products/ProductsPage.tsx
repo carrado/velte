@@ -1031,7 +1031,7 @@ export default function ProductsPage() {
 
         {/* Product list */}
         {productsLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-4 p-5">
             {Array.from({ length: 8 }).map((_, i) => (
               <div
                 key={i}
