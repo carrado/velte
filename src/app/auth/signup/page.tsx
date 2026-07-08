@@ -37,6 +37,11 @@ const STEP1_FIELDS = [
 export default function Signup() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
+  // True once a code was actually prefilled from a referral link (see the
+  // effect below) — locks the field so it can't be edited/cleared, since it
+  // came from a trusted source. Stays false (field stays editable, empty)
+  // when nothing was captured, e.g. a friend just told them the code.
+  const [referralLocked, setReferralLocked] = useState(false);
 
   const signupMutation = useMutation({
     mutationFn: (data: Omit<SignupForm, "confirmPassword">) =>
@@ -92,6 +97,7 @@ export default function Signup() {
     const stored = getStoredReferralCode();
     if (stored && !form.store.state.values.referralCode) {
       form.setFieldValue("referralCode", stored);
+      setReferralLocked(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -172,7 +178,10 @@ export default function Signup() {
                 transition={{ duration: 0.25 }}
               >
                 {step === 1 ? (
-                  <Step1BusinessAccount form={form} />
+                  <Step1BusinessAccount
+                    form={form}
+                    referralLocked={referralLocked}
+                  />
                 ) : (
                   <Step2SectorDescription form={form} />
                 )}

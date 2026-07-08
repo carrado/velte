@@ -117,16 +117,14 @@ interface ReverseGeocodeResult {
 
 export default function Step1BusinessAccount({
   form,
+  referralLocked = false,
 }: {
   form: SignupFormApi;
+  referralLocked?: boolean;
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [stateMismatch, setStateMismatch] = useState<{
-    detected: string;
-    selected: string;
-  } | null>(null);
 
   const reverseGeocodeMutation = useMutation({
     mutationFn: async (coords: { lat: number; lng: number }) => {
@@ -144,19 +142,19 @@ export default function Step1BusinessAccount({
       form.setFieldValue("location", coords);
 
       const selectedState = form.store.state.values.state;
-      if (!data.state || !selectedState) {
-        // Nothing to reconcile yet — either Nominatim couldn't resolve a
-        // state, or the dropdown is still empty, so just adopt it.
+      if (!data.state || !selectedState || data.state === selectedState) {
+        // Nothing to reconcile — either Nominatim couldn't resolve a state,
+        // the dropdown was still empty, or it already agrees. Adopt it.
         if (data.state) form.setFieldValue("state", data.state);
         toast.success("Location captured — review the address below");
-      } else if (data.state === selectedState) {
-        toast.success("Location captured — matches your selected state");
       } else {
-        // Detected state differs from what's picked — don't silently
-        // overwrite a deliberate choice, ask which one should win.
-        setStateMismatch({ detected: data.state, selected: selectedState });
-        toast.message("Detected location doesn't match your selected state", {
-          description: "Check the note under the State field below.",
+        // Detected state differs from what's picked — the dropdown was
+        // wrong for where they actually are, so clear it rather than leave
+        // a stale, contradicted value sitting there unnoticed.
+        form.setFieldValue("state", "");
+        toast.message("Your selected state didn't match your location", {
+          description: `We reset it — your location looks like ${data.state}. Please pick your state again.`,
+          duration: 8000,
         });
       }
     },
@@ -168,7 +166,6 @@ export default function Step1BusinessAccount({
       toast.error("Geolocation isn't supported by this browser");
       return;
     }
-    setStateMismatch(null);
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -355,34 +352,6 @@ export default function Step1BusinessAccount({
                 </SelectGroup>
               </SelectContent>
             </Select>
-            {stateMismatch && (
-              <div className="mt-2 rounded-lg border border-orange-500/30 bg-orange-50 p-3 text-xs text-black/70 space-y-2">
-                <p>
-                  Your current location looks like{" "}
-                  <strong>{stateMismatch.detected}</strong>, but you selected{" "}
-                  <strong>{stateMismatch.selected}</strong>.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      field.handleChange(stateMismatch.detected);
-                      setStateMismatch(null);
-                    }}
-                    className="rounded-md bg-orange-500 px-2.5 py-1 font-medium text-white hover:bg-orange-600 cursor-pointer"
-                  >
-                    Use {stateMismatch.detected}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStateMismatch(null)}
-                    className="rounded-md border border-black/[0.2] px-2.5 py-1 font-medium text-black/70 hover:bg-black/5 cursor-pointer"
-                  >
-                    Keep {stateMismatch.selected}
-                  </button>
-                </div>
-              </div>
-            )}
             <FieldError message={field.state.meta.errors[0]} />
           </div>
         )}
@@ -455,10 +424,11 @@ export default function Step1BusinessAccount({
         )}
       </form.Field>
 
-      {/* Referral code — optional. Prefilled from localStorage (see
-          page.tsx's effect) when the vendor arrived via a shared referral
-          link, but always editable in case a friend just told them the code
-          instead of sending a link. */}
+      {/* Referral code — optional. Prefilled + locked (see page.tsx's effect)
+          when the vendor arrived via a shared referral link — it came from a
+          trusted source, so it isn't left open to being edited/cleared.
+          Otherwise stays empty and editable in case a friend just told them
+          the code instead of sending a link. */}
       <form.Field name="referralCode">
         {(field) => (
           <div>
@@ -471,14 +441,16 @@ export default function Step1BusinessAccount({
               value={field.state.value ?? ""}
               onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
               onBlur={field.handleBlur}
+              disabled={referralLocked}
               placeholder="e.g. VLT7K2M"
-              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 uppercase"
+              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 uppercase disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <div className="flex items-center gap-1 mt-1">
               <Info className="w-3 h-3 text-black/40 shrink-0" />
               <p className="text-black/40 text-xs">
-                Got invited by another vendor? Enter their code and they’ll earn
-                a referral bonus once you verify your account.
+                {referralLocked
+                  ? "Applied from your invite link."
+                  : "Got invited by another vendor? Enter their code and they’ll earn a referral bonus once you verify your account."}
               </p>
             </div>
           </div>
@@ -508,6 +480,7 @@ export default function Step1BusinessAccount({
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
+                  autoComplete="new-password"
                   placeholder="••••••••"
                   className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
                 />
@@ -552,6 +525,7 @@ export default function Step1BusinessAccount({
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
+                  autoComplete="new-password"
                   placeholder="••••••••"
                   className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
                 />
