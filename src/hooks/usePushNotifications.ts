@@ -279,7 +279,14 @@ export function usePushNotifications() {
     armDelayTimer();
   }, [armDelayTimer]);
 
-  const showBanner =
+  // Two mutually exclusive nudges sharing one cooldown/delay: push notifications
+  // are unreliable (or on iOS Safari, entirely unavailable) outside an installed,
+  // standalone PWA — so ask to install FIRST, and only ask for alert permission
+  // once the app is actually running installed. isInstalled is reactive (see
+  // useIsInstalled's `appinstalled` listener), so on Android where install
+  // resolves synchronously this flips straight to showAlertsBanner in the same
+  // session; on iOS (no such event) it naturally waits for the next standalone launch.
+  const showInstallBanner =
     isSupported &&
     delayPassed &&
     permission === "default" &&
@@ -287,12 +294,21 @@ export function usePushNotifications() {
     !isInstalled &&
     !!user;
 
+  const showAlertsBanner =
+    isSupported &&
+    delayPassed &&
+    permission === "default" &&
+    !isSubscribed &&
+    isInstalled &&
+    !!user;
+
   return {
     isSupported,
     permission,
     isSubscribed,
     isLoading,
-    showBanner,
+    showInstallBanner,
+    showAlertsBanner,
     subscribe,
     unsubscribe,
     dismiss,

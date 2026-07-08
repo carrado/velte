@@ -36,17 +36,22 @@ function useInstallPrompt() {
 const BATTERY_TIP_DISMISSED_KEY = "transsion-battery-tip-dismissed";
 
 export default function PushNotificationManager() {
-  const { showBanner, isLoading, subscribe, dismiss, permission } =
-    usePushNotifications();
-  const { prompt: installPrompt, canInstall, isInstalled } = useInstallPrompt();
+  const {
+    showInstallBanner,
+    showAlertsBanner,
+    isLoading,
+    subscribe,
+    dismiss,
+    permission,
+  } = usePushNotifications();
+  const { prompt: installPrompt, canInstall } = useInstallPrompt();
   const [isActioning, setIsActioning] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-  // The browser allows only ONE gesture-gated action per click, and both
-  // Notification.requestPermission() and installPrompt.prompt() are gated. So we
-  // split into taps: tap 1 enables alerts, then (on a Transsion/XOS device) a
-  // "battery" step warns about background-kill before the "install" step,
-  // whose own button uses its own fresh gesture for its tap.
-  const [step, setStep] = useState<"main" | "battery" | "install">("main");
+  // Push is unreliable (or on iOS Safari, unavailable) outside an installed,
+  // standalone PWA — so install comes first (showInstallBanner) and alerts are
+  // only asked for once already installed (showAlertsBanner). The battery step
+  // is reached only from the alerts flow, i.e. only once isInstalled is true.
+  const [step, setStep] = useState<"main" | "battery">("main");
   // iOS Safari has no beforeinstallprompt — install is manual via the Share sheet.
   const [isIOS] = useState(
     () =>
@@ -85,37 +90,20 @@ export default function PushNotificationManager() {
     dismiss();
   };
 
-  // After the battery tip (or skipping it), fall through to the same
-  // install-or-close decision handlePrimary would have made.
-  const advancePastBattery = () => {
-    if (!isInstalled) setStep("install");
-    else close();
-  };
+  // Battery step is only ever entered from handleAlerts, which only runs once
+  // isInstalled is true — so there's nothing left to chain to afterwards.
+  const dismissBatteryStep = () => close();
 
-  const handlePrimary = async () => {
-    setIsActioning(true);
-    try {
-      // Subscribe to push using this click's user activation. (The banner only
-      // ever shows when permission is still "default", so a fresh prompt is
-      // always required — and it must run on a live gesture.)
-      await subscribe();
-      // Transsion/XOS devices silently drop push in the background — warn
-      // before the install step, since that's the step most likely to leave
-      // the user thinking alerts "just work" from here on.
-      if (isTranssion) setStep("battery");
-      // Advance to the install step unless the app is already installed. We show
-      // it even when no native prompt was captured (Chrome suppresses it after
-      // prior dismissals; iOS never fires it) and fall back to instructions.
-      else if (!isInstalled) setStep("install");
-      else close();
-    } finally {
-      setIsActioning(false);
-    }
-  };
-
+  // Pre-install phase: no permission request here at all — installing first is
+  // the whole point (push doesn't work reliably, or at all on iOS Safari,
+  // outside a standalone PWA). Deliberately doesn't call dismiss()/close() on
+  // a successful or native-declined prompt — isInstalled flipping true (via
+  // the appinstalled listener in useIsInstalled) is what should advance the
+  // flow to showAlertsBanner, not an explicit close.
   const handleInstall = async () => {
     // No captured prompt (suppressed / iOS) — the body shows manual steps, so
-    // this button just acknowledges and closes.
+    // this button just acknowledges. That's a real dismissal (nothing else to
+    // wait for reactively), so it does start the cooldown.
     if (!canInstall) {
       close();
       return;
@@ -124,24 +112,41 @@ export default function PushNotificationManager() {
     try {
       await installPrompt!.prompt();
     } catch {
-      /* user dismissed or browser blocked it — close either way */
+      /* user dismissed or browser blocked it — banner just stays open */
     } finally {
       setIsActioning(false);
-      close();
+    }
+  };
+
+  // Post-install phase: ask for alert permission using this click's user
+  // activation (the banner only ever shows when permission is still
+  // "default", so a fresh prompt is always required, and it must run on a
+  // live gesture). Deliberately doesn't close() on success — isSubscribed
+  // flipping true is what naturally hides the banner (see showAlertsBanner),
+  // without starting the "skipped" cooldown for something the user said yes to.
+  const handleAlerts = async () => {
+    setIsActioning(true);
+    try {
+      await subscribe();
+      // Transsion/XOS devices silently drop push in the background — warn
+      // right after granting, while attention is already on this card.
+      if (isTranssion) setStep("battery");
+    } finally {
+      setIsActioning(false);
     }
   };
 
   const busy = isActioning || isLoading;
-  // Stay open for the battery/install steps even though subscribing flips
-  // showBanner off.
   const onBatteryStep = step === "battery";
-  const onInstallStep = step === "install" && !isInstalled;
   // Both onBatteryStep (mid-flow) and showStandaloneBatteryTip (already-
   // subscribed) render the same battery-warning content, just with different
   // dismiss wiring below.
   const showingBatteryContent = onBatteryStep || showStandaloneBatteryTip;
   const open =
-    showBanner || onBatteryStep || onInstallStep || showStandaloneBatteryTip;
+    showInstallBanner ||
+    showAlertsBanner ||
+    onBatteryStep ||
+    showStandaloneBatteryTip;
 
   return (
     <AnimatePresence>
@@ -208,9 +213,9 @@ export default function PushNotificationManager() {
                     <h3 className="text-[15px] font-semibold leading-tight text-slate-900">
                       {showingBatteryContent
                         ? "Keep alerts working on this phone"
-                        : onInstallStep
-                          ? "Alerts on — add to home screen"
-                          : "Get the full experience"}
+                        : showInstallBanner
+                          ? "Get the full experience"
+                          : "Turn on alerts"}
                     </h3>
                   </div>
                 </div>
@@ -219,13 +224,13 @@ export default function PushNotificationManager() {
                 <p className="text-[13px] leading-relaxed text-slate-500">
                   {showingBatteryContent
                     ? "Your phone's battery saver can silently stop notifications once Velte is in the background. Open Settings → Apps → Chrome → Battery, choose “No restrictions” / “Allow background activity”, and avoid swiping Velte away from your recent apps."
-                    : !onInstallStep
-                      ? "Install Velte on your device and enable notifications to get instant alerts for new orders and messages."
-                      : canInstall
-                        ? "Notifications are enabled. Add Velte to your home screen for one-tap access and reliable alerts."
+                    : showInstallBanner
+                      ? canInstall
+                        ? "Install Velte on your device for one-tap access — you'll be asked to enable alerts for new leads and low wallet balance right after."
                         : isIOS
-                          ? "Notifications are enabled. To install: tap the Share icon in Safari, then choose “Add to Home Screen”."
-                          : "Notifications are enabled. To install: open your browser menu (⋮) and choose “Install app” / “Add to Home screen”."}
+                          ? "Add Velte to your home screen for one-tap access and reliable alerts: tap the Share icon in Safari, then choose “Add to Home Screen”."
+                          : "Add Velte to your home screen for one-tap access and reliable alerts: open your browser menu (⋮) and choose “Install app” / “Add to Home screen”."
+                      : "Turn on alerts to get notified the moment a buyer reaches out or your wallet balance runs low."}
                 </p>
 
                 {/* Feature pills — skip on any battery-tip content, it's
@@ -248,12 +253,12 @@ export default function PushNotificationManager() {
                   <button
                     onClick={
                       onBatteryStep
-                        ? advancePastBattery
+                        ? dismissBatteryStep
                         : showStandaloneBatteryTip
                           ? dismissStandaloneTip
-                          : onInstallStep
+                          : showInstallBanner
                             ? handleInstall
-                            : handlePrimary
+                            : handleAlerts
                     }
                     disabled={busy}
                     className={cn(
@@ -267,22 +272,24 @@ export default function PushNotificationManager() {
                     {busy ? (
                       <>
                         <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                        {onInstallStep ? "Installing…" : "Enabling…"}
+                        {showInstallBanner ? "Installing…" : "Enabling…"}
                       </>
                     ) : showingBatteryContent ? (
                       "Got it"
-                    ) : !onInstallStep ? (
+                    ) : showInstallBanner ? (
+                      canInstall ? (
+                        <>
+                          <Download className="h-3.5 w-3.5" />
+                          Install app
+                        </>
+                      ) : (
+                        "Got it"
+                      )
+                    ) : (
                       <>
                         <Bell className="h-3.5 w-3.5" />
                         Enable alerts
                       </>
-                    ) : canInstall ? (
-                      <>
-                        <Download className="h-3.5 w-3.5" />
-                        Add to home screen
-                      </>
-                    ) : (
-                      "Got it"
                     )}
                   </button>
 
@@ -290,10 +297,10 @@ export default function PushNotificationManager() {
                       the primary "Got it" already cover dismissal. */}
                   {!showStandaloneBatteryTip && (
                     <button
-                      onClick={onBatteryStep ? advancePastBattery : close}
+                      onClick={onBatteryStep ? dismissBatteryStep : close}
                       className="shrink-0 text-[13px] font-medium text-slate-400 transition-colors hover:text-slate-600"
                     >
-                      {onBatteryStep || onInstallStep ? "Skip" : "Not now"}
+                      {onBatteryStep || showInstallBanner ? "Skip" : "Not now"}
                     </button>
                   )}
                 </div>
