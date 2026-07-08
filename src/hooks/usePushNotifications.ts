@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useUserStore } from "@/store/userStore";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
+import { useIsStandalone } from "@/hooks/useIsStandalone";
 
 export type NotificationPermission = "default" | "granted" | "denied";
 
@@ -79,6 +80,7 @@ function computeRemainingDelayMs(): number {
 export function usePushNotifications() {
   const user = useUserStore((s) => s.user);
   const isInstalled = useIsInstalled();
+  const isStandalone = useIsStandalone();
   const [permission, setPermission] =
     useState<NotificationPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -282,10 +284,12 @@ export function usePushNotifications() {
   // Two mutually exclusive nudges sharing one cooldown/delay: push notifications
   // are unreliable (or on iOS Safari, entirely unavailable) outside an installed,
   // standalone PWA — so ask to install FIRST, and only ask for alert permission
-  // once the app is actually running installed. isInstalled is reactive (see
-  // useIsInstalled's `appinstalled` listener), so on Android where install
-  // resolves synchronously this flips straight to showAlertsBanner in the same
-  // session; on iOS (no such event) it naturally waits for the next standalone launch.
+  // once the app is actually RUNNING standalone (isStandalone), not merely once
+  // installed (isInstalled flips true the moment the browser's install prompt is
+  // accepted, even though that same tab is still ordinary browser chrome — the
+  // alerts ask must wait for the user to actually open the installed app, not
+  // fire right there in the browser). isInstalled hides the install banner
+  // immediately once accepted either way, so the two nudges never overlap.
   const showInstallBanner =
     isSupported &&
     delayPassed &&
@@ -299,7 +303,7 @@ export function usePushNotifications() {
     delayPassed &&
     permission === "default" &&
     !isSubscribed &&
-    isInstalled &&
+    isStandalone &&
     !!user;
 
   return {

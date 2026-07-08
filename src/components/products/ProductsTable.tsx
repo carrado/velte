@@ -147,7 +147,7 @@ export default function ProductsTable({
   if (products.length === 0) return <EmptyState isFood={isFood} />;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 p-5">
+    <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-4 p-5">
       {products.map((product) => (
         <ProductCard
           key={product.id}
