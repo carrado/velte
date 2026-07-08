@@ -39,3 +39,15 @@ export const NIGERIA_STATES = [
 ] as const;
 
 export type NigeriaState = (typeof NIGERIA_STATES)[number];
+
+// Nominatim returns state names like "Lagos State" or "Federal Capital
+// Territory" — normalize against our canonical list so a geolocation result
+// can be compared against (or written into) the signup form's state field.
+export function normalizeNigeriaState(raw?: string): NigeriaState | undefined {
+  if (!raw) return undefined;
+  const cleaned = raw
+    .trim()
+    .replace(/\s+state$/i, "")
+    .toLowerCase();
+  return NIGERIA_STATES.find((s) => s.toLowerCase() === cleaned);
+}
