@@ -122,12 +122,12 @@ function SearchPreview() {
 
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden bg-[#F1F5F9] pt-24">
+    <section className="relative min-h-screen flex items-center overflow-hidden bg-[#F1F5F9] pt-20 sm:pt-24">
       {/* Soft glows */}
       <div className="absolute top-1/4 left-1/4 w-[420px] h-[420px] bg-orange-400/[0.08] rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] bg-orange-400/[0.06] rounded-full blur-[80px] pointer-events-none" />
 
-      <div className="relative max-w-7xl mx-auto px-5 sm:px-8 py-16 w-full">
+      <div className="relative max-w-7xl mx-auto px-5 sm:px-8 pt-8 pb-16 sm:py-16 w-full">
         <motion.div
           variants={stagger}
           initial="hidden"
