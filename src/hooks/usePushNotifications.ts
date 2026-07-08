@@ -22,7 +22,7 @@ const WAS_INSTALLED_KEY = "pwa-was-installed";
 //  - Previously dismissed: wait 36 hours after that dismissal instead —
 //    replaces the 5-minute rule entirely until the cooldown clears, at which
 //    point the banner is due immediately (no extra 5-minute wait on top).
-const LOGIN_DELAY_MS = 5 * 60 * 1000;
+const LOGIN_DELAY_MS = 30 * 1000;
 const SKIP_COOLDOWN_MS = 36 * 60 * 60 * 1000;
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
