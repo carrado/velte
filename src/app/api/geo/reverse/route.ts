@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jsonError } from "@/lib/server/guards";
+import { normalizeNigeriaState } from "@/lib/states";
 
 // GET /api/geo/reverse?lat=&lng=   (public — used pre-account, during signup)
 //
@@ -61,7 +62,9 @@ export async function GET(req: NextRequest) {
 
     if (!address)
       return jsonError(404, "Couldn't determine an address for that location.");
-    return NextResponse.json({ address });
+
+    const state = normalizeNigeriaState(a.state);
+    return NextResponse.json({ address, state });
   } catch {
     return jsonError(502, "Couldn't reach the geocoding service.");
   }
