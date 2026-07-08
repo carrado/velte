@@ -117,8 +117,10 @@ interface ReverseGeocodeResult {
 
 export default function Step1BusinessAccount({
   form,
+  referralLocked = false,
 }: {
   form: SignupFormApi;
+  referralLocked?: boolean;
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -422,10 +424,11 @@ export default function Step1BusinessAccount({
         )}
       </form.Field>
 
-      {/* Referral code — optional. Prefilled from localStorage (see
-          page.tsx's effect) when the vendor arrived via a shared referral
-          link, but always editable in case a friend just told them the code
-          instead of sending a link. */}
+      {/* Referral code — optional. Prefilled + locked (see page.tsx's effect)
+          when the vendor arrived via a shared referral link — it came from a
+          trusted source, so it isn't left open to being edited/cleared.
+          Otherwise stays empty and editable in case a friend just told them
+          the code instead of sending a link. */}
       <form.Field name="referralCode">
         {(field) => (
           <div>
@@ -438,14 +441,16 @@ export default function Step1BusinessAccount({
               value={field.state.value ?? ""}
               onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
               onBlur={field.handleBlur}
+              disabled={referralLocked}
               placeholder="e.g. VLT7K2M"
-              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 uppercase"
+              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 uppercase disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <div className="flex items-center gap-1 mt-1">
               <Info className="w-3 h-3 text-black/40 shrink-0" />
               <p className="text-black/40 text-xs">
-                Got invited by another vendor? Enter their code and they’ll earn
-                a referral bonus once you verify your account.
+                {referralLocked
+                  ? "Applied from your invite link."
+                  : "Got invited by another vendor? Enter their code and they’ll earn a referral bonus once you verify your account."}
               </p>
             </div>
           </div>
@@ -475,6 +480,7 @@ export default function Step1BusinessAccount({
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
+                  autoComplete="new-password"
                   placeholder="••••••••"
                   className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
                 />
@@ -519,6 +525,7 @@ export default function Step1BusinessAccount({
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
+                  autoComplete="new-password"
                   placeholder="••••••••"
                   className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
                 />
