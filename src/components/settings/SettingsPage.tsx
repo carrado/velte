@@ -21,7 +21,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUserStore } from "@/store/userStore";
-import { useOnboardingStore } from "@/store/onboardingStore";
 import { settingsApi, ADDRESS_CHANGE_COOLDOWN_MS } from "@/services/settings";
 import { usersApi } from "@/services/users";
 import { queryKeys } from "@/lib/query-keys";
@@ -324,7 +323,6 @@ function AccountSettingsPanel() {
       } else {
         toast.success("Profile updated");
       }
-      useOnboardingStore.getState().completeStep(1);
     },
     onError: (err: Error) => toast.error(err.message),
   });

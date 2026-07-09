@@ -8,11 +8,9 @@ import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
 import { NavigationProgressProvider } from "@/components/NavigationProgressContext";
 import AppInitOverlay from "@/components/AppInitOverlay";
-import OnboardingTour from "@/components/OnboardingTour";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { usersApi } from "@/services/users";
 import { useUserStore } from "@/store/userStore";
-import { useOnboardingStore } from "@/store/onboardingStore";
 import { useIsFood } from "@/hooks/useBusinessType";
 import { useNotificationsSync } from "@/hooks/useNotificationsSync";
 
@@ -66,21 +64,16 @@ export default function DashboardRootLayout({
 
   // Fetch current user on mount so the store is populated for the shell.
   useEffect(() => {
-    if (useUserStore.getState().user) {
-      useOnboardingStore.getState().markInitialized();
-      return;
-    }
+    if (useUserStore.getState().user) return;
     usersApi
       .getMe()
       .then(() => setMeStatus("ready"))
-      .catch(() => setMeStatus("error"))
-      .finally(() => useOnboardingStore.getState().markInitialized());
+      .catch(() => setMeStatus("error"));
   }, []);
 
   return (
     <NavigationProgressProvider>
       {meStatus !== "ready" && <AppInitOverlay status={meStatus} />}
-      <OnboardingTour />
       <div className="flex flex-col h-screen bg-[#F1F5F9] overflow-hidden">
         <div className="flex flex-1 min-h-0">
           <Sidebar />

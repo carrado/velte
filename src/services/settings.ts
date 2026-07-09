@@ -65,7 +65,6 @@ function mapRawUser(u: Record<string, unknown>): User {
     avatar: (u.avatar as string) ?? undefined,
     company: (u.company as UserCompany) ?? undefined,
     preferences: (u.preferences as UserPreferences) ?? undefined,
-    onboarding: (u.onboarding as boolean) ?? false,
     businessType: (u.businessType as BusinessType) ?? undefined,
     area: (u.area as string) ?? undefined,
     state: (u.state as string) ?? undefined,
