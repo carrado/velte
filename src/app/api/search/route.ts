@@ -300,7 +300,7 @@ export async function POST(req: Request) {
         const storesQuery =
           (storeCall?.input as { businessType?: string } | undefined)
             ?.businessType ?? null;
-        // Either tool can surface its own Google Places fallback (Tier 4) —
+        // Either tool can surface its own Google Places fallback (Tier 5) —
         // a dual-intent turn ("a phone repair shop that also sells white
         // sneakers") could in principle call both and get overlapping
         // nearby businesses back from each, so dedupe by placeId rather

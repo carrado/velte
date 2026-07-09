@@ -312,7 +312,7 @@ function ConversationTurnView({ turn }: { turn: ConversationTurn }) {
             </>
           ) : turn.externalStoreSuggestions.length > 0 ? (
             // No Velte vendor matched — real nearby businesses via Google
-            // Places (searchStores Tier 4), visibly distinct from an actual
+            // Places (searchStores Tier 5), visibly distinct from an actual
             // Velte listing (see ExternalBusinessCard).
             <>
               <FormattedReply text={turn.reply} />

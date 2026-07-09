@@ -1,7 +1,7 @@
 import { MapPin, Store as StoreIcon, ExternalLink } from "lucide-react";
 import type { NearbyBusiness } from "@/types/search";
 
-// A real nearby business from Google Places (searchStores Tier 3) — no
+// A real nearby business from Google Places (searchStores Tier 5) — no
 // Velte relationship, so deliberately NOT styled like VendorResultCard/
 // StoreResultCard: no WhatsApp button (nothing to chat with), a visible
 // "Not yet on Velte" label so it's never mistaken for an actual listing,
