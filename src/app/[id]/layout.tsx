@@ -63,12 +63,17 @@ export default function DashboardRootLayout({
   }, [pathname]);
 
   // Fetch current user on mount so the store is populated for the shell.
+  // Always refetch (even if login already seeded a user) since that seed can
+  // carry stale derived fields like businessType — getMe() is the source of
+  // truth. Only fall back to the error overlay if we had nothing cached.
   useEffect(() => {
-    if (useUserStore.getState().user) return;
+    const hadUser = !!useUserStore.getState().user;
     usersApi
       .getMe()
       .then(() => setMeStatus("ready"))
-      .catch(() => setMeStatus("error"));
+      .catch(() => {
+        if (!hadUser) setMeStatus("error");
+      });
   }, []);
 
   return (

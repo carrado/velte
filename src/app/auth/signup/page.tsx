@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { usersApi } from "@/services/users";
 import {
   getStoredReferralCode,
+  storeReferralCode,
   clearStoredReferralCode,
 } from "@/lib/referralCode";
 import { step1Schema, signupSchema } from "./schema";
@@ -93,8 +94,18 @@ export default function Signup() {
   // it there would either always be empty or risk a hydration mismatch
   // against whatever the client actually has stored. Only prefills if the
   // buyer hasn't already typed something in themselves.
+  //
+  // Read the URL's own `?ref=` directly rather than only trusting localStorage
+  // — <ReferralCapture> (root layout) writes that same storage, but it's a
+  // separate Suspense boundary with no ordering guarantee against this effect,
+  // so a referral link pointed straight at /auth/signup could otherwise lose
+  // the race and land here before the code is persisted.
   useEffect(() => {
-    const stored = getStoredReferralCode();
+    const urlRef = new URLSearchParams(window.location.search).get("ref");
+    if (urlRef) storeReferralCode(urlRef);
+    const stored = urlRef
+      ? urlRef.trim().toUpperCase()
+      : getStoredReferralCode();
     if (stored && !form.store.state.values.referralCode) {
       form.setFieldValue("referralCode", stored);
       setReferralLocked(true);
@@ -113,6 +124,7 @@ export default function Signup() {
       return;
     }
     setStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -206,7 +218,10 @@ export default function Signup() {
                     type="button"
                     variant="outline"
                     size="lg"
-                    onClick={() => setStep(1)}
+                    onClick={() => {
+                      setStep(1);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     className="cursor-pointer border-black/[0.15] text-black/70 hover:bg-black/[0.03] gap-2"
                   >
                     <ArrowLeft className="w-4 h-4" />

@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SECTOR_TAXONOMY, SECTOR_BY_VALUE } from "@/lib/sectors";
+import { SECTOR_TAXONOMY, SECTOR_BY_VALUE, ALL_SECTORS } from "@/lib/sectors";
 import { cn } from "@/lib/utils";
 import type { SectorPickerProps } from "@/types/sectors";
 
@@ -25,7 +25,8 @@ export default function SectorPicker({
   return (
     <div>
       <Select
-        value={value || undefined}
+        items={ALL_SECTORS}
+        value={value}
         onValueChange={(v) => {
           const leaf = v ? SECTOR_BY_VALUE[v] : undefined;
           if (leaf) onSelect(leaf);
