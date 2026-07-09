@@ -5,7 +5,6 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
-import { useOnboardingStore } from "@/store/onboardingStore";
 import { queryKeys } from "@/lib/query-keys";
 import { categoriesApi } from "@/services/products";
 import { uploadProductMedia } from "@/lib/cloudinary";
@@ -803,8 +802,6 @@ function ImportCatalogModal({
       queryKey: ["products", "stats"],
       refetchType: "none",
     });
-
-    if (success > 0) useOnboardingStore.getState().completeStep(2);
 
     if (failed.length === 0) {
       toast.success(
@@ -2034,7 +2031,6 @@ export default function AddProductPage({
         await categoriesApi.updateProduct(productId, payload);
       } else {
         await categoriesApi.createProduct(payload);
-        useOnboardingStore.getState().completeStep(2);
       }
 
       setPublishModal((prev) => ({

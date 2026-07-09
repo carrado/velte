@@ -30,7 +30,6 @@ export interface User {
   services?: string[];
   company?: UserCompany;
   preferences?: UserPreferences;
-  onboarding: boolean;
   businessType?: BusinessType;
   area?: string;
   state?: string;

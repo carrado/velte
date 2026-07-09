@@ -82,11 +82,4 @@ export const usersApi = {
       return null;
     }
   },
-
-  updateOnboarding: async () => {
-    const user = useUserStore.getState().user;
-    if (!user) return;
-    await api.patch(`/api/users/${user.id}`, { onboarding: false });
-    useUserStore.getState().updateUser({ onboarding: false });
-  },
 };
