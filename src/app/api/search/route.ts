@@ -5,9 +5,14 @@ import { backendData, backendFetch } from "@/lib/server/backend";
 import { searchProductsTool } from "@/lib/server/ai/searchProductsTool";
 import { searchStoresTool } from "@/lib/server/ai/searchStoresTool";
 import { getVendorProductsTool } from "@/lib/server/ai/getVendorProductsTool";
-import { understandingRequestPhrase } from "@/lib/server/ai/statusPhrases";
+import { askClarifyingQuestionTool } from "@/lib/server/ai/askClarifyingQuestionTool";
+import {
+  understandingRequestPhrase,
+  pickAvoiding,
+} from "@/lib/server/ai/statusPhrases";
 import { buildSystemPrompt } from "@/lib/server/ai/systemPrompt";
 import type {
+  Clarification,
   MatchQuality,
   MatchTier,
   NearbyBusiness,
@@ -208,10 +213,23 @@ export async function POST(req: Request) {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const push = (text: string) =>
+      // Tracks the last few status lines actually shown THIS turn (capped,
+      // most-recent-last) so `push` can steer away from repeating one back-
+      // to-back across the understanding → searching → found sequence (and
+      // any zero-result cascade into a second tool call) — see
+      // pickAvoiding's own comment for why the avoidance has to live here
+      // rather than inside each phrase pool.
+      const recentStatuses: string[] = [];
+      const RECENT_STATUS_MEMORY = 4;
+      const push = (candidates: string[]) => {
+        const text = pickAvoiding(candidates, recentStatuses);
+        recentStatuses.push(text);
+        if (recentStatuses.length > RECENT_STATUS_MEMORY)
+          recentStatuses.shift();
         controller.enqueue(encodeEvent({ type: "status", text }));
+      };
 
-      push(understandingRequestPhrase(Boolean(imageUrl)));
+      push(understandingRequestPhrase(Boolean(imageUrl), message));
 
       try {
         const result = await callLLM(
@@ -227,6 +245,7 @@ export async function POST(req: Request) {
               ),
               searchStores: searchStoresTool(body?.buyerLocation, push),
               getVendorProducts: getVendorProductsTool(push),
+              askClarifyingQuestion: askClarifyingQuestionTool(),
             },
             // 4, not 3: a zero-match searchProducts now always falls through
             // to searchStores before the model is allowed to write its final
@@ -243,6 +262,38 @@ export async function POST(req: Request) {
           // Groq is text-only — never route an image query to it.
           imageUrl ? ["openai"] : ["openai", "groq"],
         );
+
+        // askClarifyingQuestion's own tool description explicitly forbids
+        // calling it alongside another tool, but gpt-4o-mini has been
+        // observed doing exactly that anyway (found live: it reaches for
+        // this tool almost reflexively, INCLUDING on turns where nothing
+        // was actually missing — e.g. device location already known, a
+        // search that would have returned real results regardless). So its
+        // presence is a candidate, not automatically authoritative — the
+        // real decision (below, once search results are known) is: did the
+        // co-called search find anything genuinely useful? If yes, a
+        // spurious clarify call is ignored entirely and the real results
+        // win; only a search that came back with nothing at all (or no
+        // search call happened) defers to the clarification.
+        const clarifyCall = result.toolCalls.findLast(
+          (c) => c.toolName === "askClarifyingQuestion",
+        );
+        const clarifyInput = clarifyCall?.input as
+          | { question: string; kind: "choice" | "text"; options?: string[] }
+          | undefined;
+        // Downgrades a malformed "choice" (missing/too-few options) to
+        // "text" server-side, so the frontend's discriminated Clarification
+        // type never has to re-validate what the model actually sent.
+        const clarifyCandidate: Clarification | null = !clarifyInput
+          ? null
+          : clarifyInput.kind === "choice" &&
+              (clarifyInput.options?.length ?? 0) >= 2
+            ? {
+                kind: "choice",
+                question: clarifyInput.question,
+                options: clarifyInput.options!,
+              }
+            : { kind: "text", question: clarifyInput.question };
 
         // .findLast, not .find: a fallback model (Groq) occasionally calls a
         // tool more than once for one turn — the last call is what its
@@ -315,20 +366,42 @@ export async function POST(req: Request) {
         );
         const vendorProducts = vendorProductsResult?.results ?? [];
         const vendorProductsStore = vendorProductsResult?.store ?? null;
-        const productStores = products.length
-          ? await getVendorStoresForProducts(products)
-          : [];
-        // Did the model actually search this turn, or just reply in plain
-        // text (a clarifying question — see systemPrompt.ts)? Every array
-        // above is empty either way, so the frontend needs this to tell the
-        // two apart.
-        const toolCalled = result.toolCalls.length > 0;
+
+        // The real decision: a spurious clarify call is dropped entirely
+        // when the co-called search actually found something useful — the
+        // buyer already has a real, actionable answer, and a pointless
+        // question on top of it is worse than the original bug of silently
+        // dropping the clarification. Only defers to the clarification when
+        // the search came back with genuinely nothing (or no search ran at
+        // all this turn).
+        const hasUsefulResults =
+          products.length > 0 ||
+          stores.length > 0 ||
+          vendorProducts.length > 0 ||
+          externalStoreSuggestions.length > 0;
+        const clarification = hasUsefulResults ? null : clarifyCandidate;
+
+        // Skipped (not just discarded) when the clarification actually won
+        // — no point spending an extra lookup on data that's about to be
+        // suppressed below anyway.
+        const productStores =
+          products.length && !clarification
+            ? await getVendorStoresForProducts(products)
+            : [];
+
+        // A real SEARCH tool's results are what the buyer sees this turn
+        // whenever any exist — see hasUsefulResults above. Only a genuinely
+        // empty outcome (or no search tool call at all) falls through to
+        // the clarification, in which case toolCalled is false so the
+        // frontend renders the paused question instead of a dead-end card.
+        const toolCalled = !clarification;
 
         controller.enqueue(
           encodeEvent({
             type: "final",
             reply: sanitizeReply(result.text),
             toolCalled,
+            clarification,
             products,
             stores,
             storesQuery,

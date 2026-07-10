@@ -53,7 +53,7 @@ const inputSchema = z.object({
  */
 export function searchStoresTool(
   buyerLocation?: BuyerLocation,
-  push?: (text: string) => void,
+  push?: (candidates: string[]) => void,
 ) {
   return tool({
     description:

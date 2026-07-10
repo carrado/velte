@@ -65,7 +65,7 @@ const inputSchema = z.object({
  */
 export function searchProductsTool(
   buyerLocation?: BuyerLocation,
-  push?: (text: string) => void,
+  push?: (candidates: string[]) => void,
   isImageQuery = false,
   imageUrl?: string,
 ) {
