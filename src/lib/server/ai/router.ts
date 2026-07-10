@@ -59,6 +59,7 @@ interface GenerateTextOpts {
   messages: ModelMessage[];
   tools?: Parameters<typeof generateText>[0]["tools"];
   stopWhen?: Parameters<typeof generateText>[0]["stopWhen"];
+  providerOptions?: Parameters<typeof generateText>[0]["providerOptions"];
 }
 
 /**

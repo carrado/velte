@@ -13,11 +13,13 @@ import { VendorResultCard } from "@/components/search/VendorResultCard";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
+import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { getInitial } from "@/lib/initials";
 import type {
   BuyerLocation,
+  Clarification,
   MatchQuality,
   MatchTier,
   NearbyBusiness,
@@ -160,6 +162,10 @@ interface ConversationTurn {
   // (see systemPrompt.ts) — renders as a plain reply, not the "nothing
   // found anywhere" suggestion card, since the conversation is still open.
   toolCalled: boolean;
+  // Non-null when the model called askClarifyingQuestion this turn — only
+  // actionable (rendered as a live widget) while this is the LATEST turn;
+  // see the `isLatest` prop on ConversationTurnView.
+  clarification: Clarification | null;
   products: VendorMatch[];
   stores: StoreMatch[];
   // The businessType actually searched for this turn (e.g. "tailor") — null
@@ -190,7 +196,15 @@ interface ConversationTurn {
   error: string | null;
 }
 
-function ConversationTurnView({ turn }: { turn: ConversationTurn }) {
+function ConversationTurnView({
+  turn,
+  isLatest,
+  onAnswerClarification,
+}: {
+  turn: ConversationTurn;
+  isLatest: boolean;
+  onAnswerClarification: (text: string) => void;
+}) {
   return (
     <div className="space-y-3">
       {/* The buyer's own message — right-aligned, shaded with the app's
@@ -338,6 +352,18 @@ function ConversationTurnView({ turn }: { turn: ConversationTurn }) {
               <Compass size={20} className="text-orange-500 shrink-0 mt-0.5" />
               <FormattedReply text={turn.reply} />
             </div>
+          )}
+          {/* Sits after, not inside, the chain above — so the rare turn
+              where the model both ran a real search AND asked a follow-up
+              question still shows the results AND this widget, rather than
+              one silently suppressing the other. Only actionable (rendered
+              at all) while this is still the latest turn — once answered,
+              a new turn is appended and this one's isLatest flips false. */}
+          {turn.clarification && isLatest && (
+            <ClarificationPrompt
+              clarification={turn.clarification}
+              onAnswer={onAnswerClarification}
+            />
           )}
         </div>
       )}
@@ -489,13 +515,18 @@ export function SearchHome() {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const message = query.trim();
-    if ((!message && !imageUrl) || isSending || uploadingImage) return;
-
+  // Shared by the main composer (handleSubmit) and a clarification answer
+  // (handleClarificationAnswer, via ClarificationPrompt) — both are just "the
+  // buyer sent a message," the only difference is where the text came from
+  // and whether an image rides along. Callers are responsible for their own
+  // send-guard (isSending/uploadingImage/hasPendingClarification) and for
+  // clearing their own input state before calling this.
+  async function submitMessage(
+    message: string,
+    currentImageUrl: string | null,
+    currentImagePreview: string | null,
+  ): Promise<void> {
     const turnId = crypto.randomUUID();
-    const currentImageUrl = imageUrl;
 
     // Text-only history from prior completed turns (see SearchHistoryTurn) —
     // built before the new turn is appended, so it doesn't include itself.
@@ -518,13 +549,14 @@ export function SearchHome() {
       {
         id: turnId,
         query: message,
-        imagePreview,
+        imagePreview: currentImagePreview,
         phase: "loading",
         status: currentImageUrl
           ? "Looking at your photo…"
           : "Understanding your request…",
         reply: "",
         toolCalled: false,
+        clarification: null,
         products: [],
         stores: [],
         storesQuery: null,
@@ -539,9 +571,6 @@ export function SearchHome() {
         error: null,
       },
     ]);
-    setQuery("");
-    setImagePreview(null);
-    setImageUrl(null);
 
     const location = await getBuyerLocationOnce();
 
@@ -583,6 +612,7 @@ export function SearchHome() {
             phase: "done",
             reply: event.reply,
             toolCalled: event.toolCalled,
+            clarification: event.clarification,
             products: event.products,
             stores: dedupedStores,
             storesQuery: event.storesQuery,
@@ -602,6 +632,43 @@ export function SearchHome() {
       },
     );
   }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const message = query.trim();
+    if (
+      (!message && !imageUrl) ||
+      isSending ||
+      uploadingImage ||
+      hasPendingClarification
+    )
+      return;
+
+    const currentImageUrl = imageUrl;
+    const currentImagePreview = imagePreview;
+    setQuery("");
+    setImagePreview(null);
+    setImageUrl(null);
+    await submitMessage(message, currentImageUrl, currentImagePreview);
+  }
+
+  // A clarification answer — button click or the dedicated input's own
+  // submit (see ClarificationPrompt) — is just the buyer's next message.
+  // Never resends a prior image: each turn's image is per-submission only
+  // (same as any other typed follow-up already works — history is
+  // text-only, see SearchHistoryTurn).
+  function handleClarificationAnswer(text: string) {
+    void submitMessage(text, null, null);
+  }
+
+  const lastTurn = turns[turns.length - 1];
+  // Only the LATEST turn's clarification is actionable — once answered, a
+  // new turn is appended and this naturally flips back to false.
+  const hasPendingClarification =
+    !!lastTurn &&
+    lastTurn.phase === "done" &&
+    !lastTurn.error &&
+    !!lastTurn.clarification;
 
   const collapsed = turns.length > 0;
 
@@ -641,12 +708,15 @@ export function SearchHome() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          disabled={hasPendingClarification}
           placeholder={
-            collapsed
-              ? "Ask a follow-up, or search for something else…"
-              : "e.g. 'Tecno fast charger near me'"
+            hasPendingClarification
+              ? "Answer the question above to continue…"
+              : collapsed
+                ? "Ask a follow-up, or search for something else…"
+                : "e.g. 'Tecno fast charger near me'"
           }
-          className="flex-1 min-w-0 h-full outline-none text-[15px] bg-transparent"
+          className="flex-1 min-w-0 h-full outline-none text-[15px] bg-transparent disabled:opacity-50"
         />
         <input
           ref={fileInputRef}
@@ -658,7 +728,7 @@ export function SearchHome() {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={uploadingImage}
+          disabled={uploadingImage || hasPendingClarification}
           title="Search with a photo"
           className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
         >
@@ -666,7 +736,12 @@ export function SearchHome() {
         </button>
         <button
           type="submit"
-          disabled={(!query.trim() && !imageUrl) || isSending || uploadingImage}
+          disabled={
+            (!query.trim() && !imageUrl) ||
+            isSending ||
+            uploadingImage ||
+            hasPendingClarification
+          }
           title="Send"
           className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:hover:bg-orange-500 text-white transition-colors"
         >
@@ -752,8 +827,13 @@ export function SearchHome() {
               thread grows, so scrolling reads bottom-up like a chat. */}
           <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-6">
             <div className="max-w-4xl mx-auto space-y-6">
-              {turns.map((turn) => (
-                <ConversationTurnView key={turn.id} turn={turn} />
+              {turns.map((turn, i) => (
+                <ConversationTurnView
+                  key={turn.id}
+                  turn={turn}
+                  isLatest={i === turns.length - 1}
+                  onAnswerClarification={handleClarificationAnswer}
+                />
               ))}
               <div ref={bottomRef} />
             </div>

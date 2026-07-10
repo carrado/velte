@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { backendData } from "@/lib/server/backend";
+import { fetchingCatalogPhrase } from "@/lib/server/ai/statusPhrases";
 import type { StoreProductItem } from "@/types/search";
 
 const inputSchema = z.object({
@@ -41,13 +42,13 @@ interface PublicStoreResponse {
  * product source); divided by 100 here to match VendorMatch/StoreProductItem
  * convention.
  */
-export function getVendorProductsTool(push?: (text: string) => void) {
+export function getVendorProductsTool(push?: (candidates: string[]) => void) {
   return tool({
     description:
       "Fetch a SPECIFIC vendor's own product/offering listings, by the store `handle` from a prior searchStores result — use this when the buyer wants to see what a particular store sells/has 'inside', after that store was already found. Do NOT use this to run a fresh general product search — that's searchProducts, and could return a completely different vendor's items instead of the one the buyer actually means.",
     inputSchema,
     execute: async ({ storeHandle }) => {
-      push?.("Checking their catalog…");
+      push?.(fetchingCatalogPhrase());
       try {
         const store = await backendData<PublicStoreResponse>(
           `/store/by-handle/${encodeURIComponent(storeHandle)}`,

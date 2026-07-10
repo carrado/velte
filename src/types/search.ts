@@ -114,6 +114,16 @@ export interface StoreProductItem {
   quoteOnRequest: boolean;
 }
 
+// A structured clarifying question from askClarifyingQuestionTool — the
+// model's own `reply` text for the turn IS the question itself; this just
+// carries the widget metadata needed to render it as buttons or a dedicated
+// input instead of plain prose. route.ts guarantees a "choice" clarification
+// always has >=2 options (downgrading to "text" server-side otherwise), so
+// the frontend never has to re-validate that itself.
+export type Clarification =
+  | { kind: "text"; question: string }
+  | { kind: "choice"; question: string; options: string[] };
+
 // Build-order step d — /api/search streams a sequence of these as
 // newline-delimited JSON: zero or more "status" events while the model +
 // tool call are in flight, then exactly one "final" (or "error"). `products`
@@ -125,13 +135,21 @@ export type SearchStreamEvent =
   | {
       type: "final";
       reply: string;
-      // False when the model asked a clarifying question instead of
-      // searching (see systemPrompt.ts) — no tool ran this turn at all, so
-      // every array below is trivially empty. Distinguishes that from a
-      // tool genuinely returning zero results, which the frontend renders
-      // very differently (a dead-end "market suggestion" card vs. just the
-      // question itself, awaiting the buyer's answer).
+      // True when a SEARCH tool (searchProducts/searchStores/
+      // getVendorProducts) ran this turn — deliberately excludes
+      // askClarifyingQuestion, which asks rather than searches, so every
+      // array below is trivially empty in that case even though a tool
+      // call did happen. Distinguishes a real "nothing found anywhere"
+      // dead end (this is true, everything's empty) from the model just
+      // asking a question instead of searching (this is false) — the
+      // frontend renders those very differently (a dead-end "market
+      // suggestion" card vs. the paused clarification widget below).
       toolCalled: boolean;
+      // Non-null only when askClarifyingQuestion was called this turn — the
+      // frontend renders this as a paused, awaiting-reply widget (buttons
+      // or a dedicated input) below the reply, and disables the main
+      // composer while it's the latest turn's still-unanswered question.
+      clarification: Clarification | null;
       products: VendorMatch[];
       stores: StoreMatch[];
       // The businessType the model actually searched stores for this turn
