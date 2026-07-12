@@ -60,3 +60,21 @@ export interface SectorPickerProps {
   onSelect: (leaf: SectorLeaf) => void;
   error?: string;
 }
+
+/** One candidate detail to ask the buyer about — `name` is the underlying
+ * preset field (e.g. "Turnaround Time"), `example` seeds a natural phrasing. */
+export interface ClarifierField {
+  name: string;
+  example?: string;
+}
+
+/** Output of getSectorClarifiers(query) — a search-turn's detected sector
+ * plus the 2-3 fields worth asking the buyer about, if the query is thin.
+ * Never a hard filter: only ever used to pick clarifying questions and
+ * enrich the query text (see sectorClarifiers.ts). */
+export interface SectorClarifiers {
+  sectorValue: string;
+  sectorLabel: string;
+  businessType: SectorClassification;
+  fields: ClarifierField[];
+}

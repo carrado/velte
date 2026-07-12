@@ -147,7 +147,7 @@ export function getServiceDetailPresets(
 
 // ── Products — keyed by retail category id, General always appended ──────────
 
-const GENERAL_PRODUCT_PRESETS: AttributePresetGroup = {
+export const GENERAL_PRODUCT_PRESETS: AttributePresetGroup = {
   group: "General",
   items: [
     { name: "Brand", example: "e.g. Samsung" },
@@ -161,92 +161,93 @@ const GENERAL_PRODUCT_PRESETS: AttributePresetGroup = {
   ],
 };
 
-const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> = {
-  electronics: {
-    group: "Electronics",
-    items: [
-      { name: "Model", example: "e.g. Spark 10 Pro" },
-      { name: "Storage", example: "e.g. 128GB" },
-      { name: "RAM", example: "e.g. 8GB" },
-      { name: "Screen Size", example: "e.g. 6.5 inches" },
-      { name: "Battery", example: "e.g. 5000mAh" },
-      { name: "Connectivity", example: "e.g. Wi-Fi, Bluetooth 5.0" },
-      { name: "Power", example: "e.g. 220V" },
-      { name: "What's in the Box", example: "e.g. charger, earphones" },
-    ],
-  },
-  fashion: {
-    group: "Fashion",
-    items: [
-      { name: "Sizes Available", example: "e.g. S, M, L, XL" },
-      { name: "Fabric", example: "e.g. 100% cotton" },
-      { name: "Gender", example: "men / women / unisex" },
-      { name: "Fit", example: "e.g. slim fit" },
-      { name: "Occasion", example: "e.g. casual, formal" },
-      { name: "Care", example: "e.g. hand wash only" },
-      { name: "Length", example: "e.g. ankle length" },
-    ],
-  },
-  accessories: {
-    group: "Accessories",
-    items: [
-      { name: "Compatibility", example: "e.g. fits iPhone 13–15" },
-      { name: "Dimensions", example: "e.g. 20cm × 12cm" },
-      { name: "Strap Type", example: "e.g. adjustable leather" },
-      { name: "Water Resistance", example: "e.g. splash-proof" },
-    ],
-  },
-  "home-kitchen": {
-    group: "Home & Kitchen",
-    items: [
-      { name: "Dimensions", example: "e.g. 60cm × 40cm" },
-      { name: "Capacity", example: "e.g. 5 litres" },
-      { name: "Power", example: "e.g. 1500W" },
-      { name: "Pieces in Set", example: "e.g. 6 pieces" },
-      { name: "Care Instructions", example: "e.g. dishwasher safe" },
-    ],
-  },
-  sports: {
-    group: "Sports",
-    items: [
-      { name: "Sport Type", example: "e.g. football" },
-      { name: "Sizes Available", example: "e.g. 40–45" },
-      { name: "Age Range", example: "e.g. adults" },
-      { name: "Set Includes", example: "e.g. pump included" },
-    ],
-  },
-  toys: {
-    group: "Toys",
-    items: [
-      { name: "Age Range", example: "e.g. 3–7 years" },
-      { name: "Batteries", example: "e.g. 2× AA, included" },
-      { name: "Pieces", example: "e.g. 120 pieces" },
-      { name: "Safety", example: "e.g. non-toxic plastic" },
-    ],
-  },
-  health: {
-    group: "Health",
-    items: [
-      { name: "Strength", example: "e.g. 500mg" },
-      { name: "Pack Size", example: "e.g. 30 tablets" },
-      { name: "Form", example: "tablet / syrup / cream" },
-      { name: "Age Suitability", example: "e.g. adults only" },
-      { name: "Storage", example: "e.g. store below 25°C" },
-      { name: "NAFDAC Number", example: "e.g. A4-1234" },
-    ],
-  },
-  books: {
-    group: "Books",
-    items: [
-      { name: "Author", example: "e.g. Chimamanda Adichie" },
-      { name: "Format", example: "paperback / hardcover" },
-      { name: "Pages", example: "e.g. 320" },
-      { name: "Language", example: "e.g. English" },
-      { name: "Publisher", example: "e.g. Farafina" },
-      { name: "ISBN", example: "e.g. 978-…" },
-    ],
-  },
-};
+export const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> =
+  {
+    electronics: {
+      group: "Electronics",
+      items: [
+        { name: "Model", example: "e.g. Spark 10 Pro" },
+        { name: "Storage", example: "e.g. 128GB" },
+        { name: "RAM", example: "e.g. 8GB" },
+        { name: "Screen Size", example: "e.g. 6.5 inches" },
+        { name: "Battery", example: "e.g. 5000mAh" },
+        { name: "Connectivity", example: "e.g. Wi-Fi, Bluetooth 5.0" },
+        { name: "Power", example: "e.g. 220V" },
+        { name: "What's in the Box", example: "e.g. charger, earphones" },
+      ],
+    },
+    fashion: {
+      group: "Fashion",
+      items: [
+        { name: "Sizes Available", example: "e.g. S, M, L, XL" },
+        { name: "Fabric", example: "e.g. 100% cotton" },
+        { name: "Gender", example: "men / women / unisex" },
+        { name: "Fit", example: "e.g. slim fit" },
+        { name: "Occasion", example: "e.g. casual, formal" },
+        { name: "Care", example: "e.g. hand wash only" },
+        { name: "Length", example: "e.g. ankle length" },
+      ],
+    },
+    accessories: {
+      group: "Accessories",
+      items: [
+        { name: "Compatibility", example: "e.g. fits iPhone 13–15" },
+        { name: "Dimensions", example: "e.g. 20cm × 12cm" },
+        { name: "Strap Type", example: "e.g. adjustable leather" },
+        { name: "Water Resistance", example: "e.g. splash-proof" },
+      ],
+    },
+    "home-kitchen": {
+      group: "Home & Kitchen",
+      items: [
+        { name: "Dimensions", example: "e.g. 60cm × 40cm" },
+        { name: "Capacity", example: "e.g. 5 litres" },
+        { name: "Power", example: "e.g. 1500W" },
+        { name: "Pieces in Set", example: "e.g. 6 pieces" },
+        { name: "Care Instructions", example: "e.g. dishwasher safe" },
+      ],
+    },
+    sports: {
+      group: "Sports",
+      items: [
+        { name: "Sport Type", example: "e.g. football" },
+        { name: "Sizes Available", example: "e.g. 40–45" },
+        { name: "Age Range", example: "e.g. adults" },
+        { name: "Set Includes", example: "e.g. pump included" },
+      ],
+    },
+    toys: {
+      group: "Toys",
+      items: [
+        { name: "Age Range", example: "e.g. 3–7 years" },
+        { name: "Batteries", example: "e.g. 2× AA, included" },
+        { name: "Pieces", example: "e.g. 120 pieces" },
+        { name: "Safety", example: "e.g. non-toxic plastic" },
+      ],
+    },
+    health: {
+      group: "Health",
+      items: [
+        { name: "Strength", example: "e.g. 500mg" },
+        { name: "Pack Size", example: "e.g. 30 tablets" },
+        { name: "Form", example: "tablet / syrup / cream" },
+        { name: "Age Suitability", example: "e.g. adults only" },
+        { name: "Storage", example: "e.g. store below 25°C" },
+        { name: "NAFDAC Number", example: "e.g. A4-1234" },
+      ],
+    },
+    books: {
+      group: "Books",
+      items: [
+        { name: "Author", example: "e.g. Chimamanda Adichie" },
+        { name: "Format", example: "paperback / hardcover" },
+        { name: "Pages", example: "e.g. 320" },
+        { name: "Language", example: "e.g. English" },
+        { name: "Publisher", example: "e.g. Farafina" },
+        { name: "ISBN", example: "e.g. 978-…" },
+      ],
+    },
+  };
 
 /** Category-specific suggestions first (when we have them), General always
  * available below. */

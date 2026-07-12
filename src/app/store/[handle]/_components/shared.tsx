@@ -60,7 +60,7 @@ export function OfferingCard({
     : null;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md">
+    <div className="bg-white border border-gray-100 shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md">
       <div className="relative w-full aspect-[4/3] bg-gray-50 flex items-center justify-center overflow-hidden">
         {product.mainImageUrl ? (
           <img

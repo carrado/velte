@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { MapPin, MessageCircle, Package, Wrench } from "lucide-react";
+import { MapPin, Package, Wrench } from "lucide-react";
 import { getPublicStore } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
 import type {
@@ -154,13 +154,12 @@ export default async function PublicStorePage({
         gallery={store.gallery}
         area={store.area}
         sectors={store.sectors}
-        whatsappHref={whatsappHref}
         goodsCount={goods.length}
         servicesCount={services.length}
         goodsUnit={goodsUnit}
       />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8">
+      <div className="max-w-6xl mx-auto sm:px-6 pt-8">
         {/* ── Tabs + content ─────────────────────────────────────────────── */}
         <StoreTabs
           goods={goods}
@@ -179,30 +178,6 @@ export default async function PublicStorePage({
             />
           }
         />
-
-        {/* ── Closing CTA ────────────────────────────────────────────────── */}
-        {(goods.length > 0 || services.length > 0) && whatsappHref && (
-          <section className="bg-orange-50 border border-orange-100 rounded-2xl p-6 sm:p-8 mt-8">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="hidden sm:flex w-12 h-12 rounded-xl bg-white items-center justify-center flex-shrink-0">
-                  <MessageCircle size={20} className="text-orange-500" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-base font-bold text-[#023337]">
-                    Don&apos;t see what you need?
-                  </p>
-                  <p className="text-sm text-gray-600 mt-0.5">
-                    {servicesFirst
-                      ? `Describe the job to ${store.name} and get a quote in chat.`
-                      : `Ask ${store.name} directly — prices are negotiable in chat.`}
-                  </p>
-                </div>
-              </div>
-              <WhatsAppButton href={whatsappHref} label="Start a chat" />
-            </div>
-          </section>
-        )}
       </div>
 
       <StoreFooter
