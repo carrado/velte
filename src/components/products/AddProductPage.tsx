@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
@@ -806,7 +807,10 @@ function ImportCatalogModal({
 
   if (!isOpen) return null;
 
-  return (
+  // Portaled to document.body — rendered inline this backdrop only ever
+  // covered its scrollable ancestor's box, not the real viewport (same
+  // clipping bug already fixed for dropdowns via AnchoredPopover).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-start h-full justify-center bg-black/50 backdrop-blur-sm px-4 pt-12 pb-6 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
         {/* Header */}
@@ -1311,7 +1315,8 @@ function ImportCatalogModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1369,7 +1374,10 @@ function PublishProgressModal({
 }) {
   if (!open) return null;
 
-  return (
+  // Portaled to document.body — rendered inline this backdrop only ever
+  // covered its scrollable ancestor's box, not the real viewport (same
+  // clipping bug already fixed for dropdowns via AnchoredPopover).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm flex flex-col items-center gap-5">
         {/* Icon */}
@@ -1451,7 +1459,8 @@ function PublishProgressModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1522,6 +1531,16 @@ function PhaseBlock({
     </div>
   );
 }
+
+// New listings no longer collect a real stock count in this wizard — stock
+// tracking now lives entirely in the dedicated Restock action on the
+// products list. This sentinel just keeps a fresh product reading as "in
+// stock" instead of defaulting to 0 and looking sold out immediately.
+// Editing an EXISTING product still round-trips its real
+// totalQuantity/lowStockThreshold untouched (see the edit-mode prefill
+// effect and the submit payload below), so this only ever applies to
+// brand-new listings that were never given a real quantity.
+const UNTRACKED_STOCK_QUANTITY = 999999;
 
 export default function AddProductPage({
   mode,
@@ -2013,7 +2032,11 @@ export default function AddProductPage({
           kind,
           category_id: isService ? null : selectedCategory,
           quote_on_request: isQuote,
-          stock_quantity: isService ? 0 : parseInt(stockQuantity) || 0,
+          stock_quantity: isService
+            ? 0
+            : stockQuantity === ""
+              ? UNTRACKED_STOCK_QUANTITY
+              : parseInt(stockQuantity) || 0,
           low_stock_threshold:
             !isService && threshold ? parseInt(threshold) : null,
           manufacturing_date:
@@ -2129,11 +2152,8 @@ export default function AddProductPage({
     !isFood &&
       !isService && {
         id: "inventory",
-        label: "Inventory",
-        valid:
-          stockQuantity !== "" &&
-          threshold !== "" &&
-          (!(isHealth || isElectronics) || expirationDate !== ""),
+        label: "Additional Details",
+        valid: !(isHealth || isElectronics) || expirationDate !== "",
       },
     isFood && { id: "preparation", label: "Prep", valid: true },
     {
@@ -2674,40 +2694,13 @@ export default function AddProductPage({
             </FormSection>
           </PhaseBlock>
 
-          {/* Inventory — retail stocked goods only; services have no stock */}
+          {/* Additional details — retail only; services skip straight past
+              this (no stock/expiry semantics). Stock quantity/threshold are
+              no longer collected here — stock tracking now happens entirely
+              via the dedicated Restock action on the products list. */}
           {!isFood && !isService && (
             <PhaseBlock {...phaseProps("inventory")}>
-              <FormSection title="Inventory" icon={Layers}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <FieldLabel required>Stock Quantity</FieldLabel>
-                    <Input
-                      type="number"
-                      step="1"
-                      min="0"
-                      value={stockQuantity}
-                      onChange={(e) => setStockQuantity(e.target.value)}
-                      placeholder="e.g., 100"
-                      className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel required>Low Stock Threshold</FieldLabel>
-                    <Input
-                      type="number"
-                      step="1"
-                      min="0"
-                      value={threshold}
-                      onChange={(e) => setThreshold(e.target.value)}
-                      placeholder="e.g., 10"
-                      className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                    />
-                    <p className="text-dash-caption text-gray-400 mt-1.5">
-                      Notify me when stock drops to this level
-                    </p>
-                  </div>
-                </div>
-
+              <FormSection title="Additional Details" icon={Layers}>
                 {(isHealth || isElectronics) && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {isHealth && (
@@ -2989,7 +2982,24 @@ export default function AddProductPage({
                   <Input
                     type="text"
                     value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
+                    onChange={(e) => {
+                      // Mobile virtual keyboards routinely skip a real
+                      // keydown for character keys (space included),
+                      // routing input through the `input` event instead —
+                      // the same reason Enter is unreliable there. Watching
+                      // onChange for a trailing space is what actually
+                      // works cross-platform; onKeyDown below stays for
+                      // Enter and hardware keyboards.
+                      const value = e.target.value;
+                      if (value.endsWith(" ")) {
+                        const trimmed = value.trim();
+                        if (trimmed && !tags.includes(trimmed))
+                          setTags([...tags, trimmed]);
+                        setTagInput("");
+                        return;
+                      }
+                      setTagInput(value);
+                    }}
                     onKeyDown={handleTagKeyDown}
                     placeholder={
                       isFood

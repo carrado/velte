@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { X, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -105,7 +106,10 @@ export default function FundingMethodModal({
     topupNum >= MIN_AMOUNT_NAIRA;
   const isValid = thresholdValid && topupValid;
 
-  return (
+  // Portaled to document.body — rendered inline this backdrop only ever
+  // covered its scrollable ancestor's box, not the real viewport (same
+  // clipping bug already fixed for dropdowns via AnchoredPopover).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10 max-h-[90vh] overflow-y-auto">
@@ -317,6 +321,7 @@ export default function FundingMethodModal({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Bell, BellOff, BatteryWarning, Download, X } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -148,7 +149,12 @@ export default function PushNotificationManager() {
     onBatteryStep ||
     showStandaloneBatteryTip;
 
-  return (
+  // Portaled to document.body (same fix as AnchoredPopover) — this was
+  // previously rendered inline inside the dashboard's scrollable <main>,
+  // so its "fixed inset-0" backdrop only ever covered that ancestor's box
+  // instead of the real browser viewport, exactly the clipping bug this
+  // app already solved for dropdowns.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -309,7 +315,8 @@ export default function PushNotificationManager() {
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 

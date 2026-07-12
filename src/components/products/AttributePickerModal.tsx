@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Search, Check, Plus } from "lucide-react";
 import type { AttributePickerModalProps } from "@/types/product";
 
@@ -79,7 +80,10 @@ export default function AttributePickerModal({
     onClose();
   };
 
-  return (
+  // Portaled to document.body — rendered inline this backdrop only ever
+  // covered its scrollable ancestor's box, not the real viewport (same
+  // clipping bug already fixed for dropdowns via AnchoredPopover).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 z-10 flex flex-col max-h-[85vh]">
@@ -230,6 +234,7 @@ export default function AttributePickerModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

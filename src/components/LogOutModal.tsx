@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { LogoutModalProps } from "@/types/common";
 
@@ -11,7 +12,10 @@ export default function LogoutModal({
 }: LogoutModalProps) {
   if (!isOpen) return null;
 
-  return (
+  // Portaled to document.body — rendered inline this backdrop only ever
+  // covered its scrollable ancestor's box, not the real viewport (same
+  // clipping bug already fixed for dropdowns via AnchoredPopover).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
         <div className="flex justify-between items-center px-6 py-4 border-b border-[#E5E7EB]">
@@ -49,6 +53,7 @@ export default function LogoutModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

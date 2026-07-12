@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { getAvailableStock } from "@/services/products";
 import type { DeleteProductModalProps } from "@/types/product";
 import { X } from "lucide-react";
@@ -12,7 +13,10 @@ export default function DeleteProductModal({
   const available = getAvailableStock(product);
   const canDelete = available <= 0;
 
-  return (
+  // Portaled to document.body — rendered inline this backdrop only ever
+  // covered its scrollable ancestor's box, not the real viewport (same
+  // clipping bug already fixed for dropdowns via AnchoredPopover).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
@@ -55,6 +59,7 @@ export default function DeleteProductModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
