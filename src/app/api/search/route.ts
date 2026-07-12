@@ -11,6 +11,7 @@ import {
   pickAvoiding,
 } from "@/lib/server/ai/statusPhrases";
 import { buildSystemPrompt } from "@/lib/server/ai/systemPrompt";
+import { getSectorClarifiers } from "@/lib/server/ai/sectorClarifiers";
 import type {
   Clarification,
   MatchQuality,
@@ -231,10 +232,25 @@ export async function POST(req: Request) {
 
       push(understandingRequestPhrase(Boolean(imageUrl), message));
 
+      // Computed once, server-side, before the model ever sees anything —
+      // never a tool the model calls itself (see systemPrompt.ts's comment
+      // on buildSystemPrompt for why). Scoped to a FRESH, text-only turn:
+      // an image query already has its own identify-then-clarify path, and
+      // a turn with history is a follow-up (refinement, decline, or answer
+      // to a clarifying question already asked) — injecting a second sector
+      // note there could re-trigger a question the one-round rule forbids.
+      const sectorClarifiers =
+        message && !imageUrl && !body?.history?.length
+          ? getSectorClarifiers(message)
+          : null;
+
       try {
         const result = await callLLM(
           {
-            system: buildSystemPrompt(Boolean(body?.buyerLocation)),
+            system: buildSystemPrompt(
+              Boolean(body?.buyerLocation),
+              sectorClarifiers,
+            ),
             messages,
             tools: {
               searchProducts: searchProductsTool(

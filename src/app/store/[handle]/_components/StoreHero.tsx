@@ -6,7 +6,6 @@ import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStoreHeroTheme } from "@/lib/sectorHeroThemes";
 import { optimizedImageUrl } from "@/lib/cloudinary";
-import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { ShareButton } from "@/components/ShareButton";
 
 const AUTOPLAY_MS = 4500;
@@ -18,7 +17,6 @@ export interface StoreHeroProps {
   gallery: string[];
   area: string | null;
   sectors: string[];
-  whatsappHref: string | null;
   goodsCount: number;
   servicesCount: number;
   goodsUnit: string;
@@ -27,8 +25,8 @@ export interface StoreHeroProps {
 // Full-bleed hero: real gallery photos auto-sliding when the vendor has any,
 // otherwise a generated sector-themed gradient (see sectorHeroThemes) so an
 // empty gallery never reads as a broken/placeholder page. Store identity
-// (logo, name, area, sectors, WhatsApp CTA) overlays either background the
-// same way, so the vendor never has to have photos to look complete.
+// (logo, name, area, sectors) overlays either background the same way, so
+// the vendor never has to have photos to look complete.
 export default function StoreHero({
   handle,
   name,
@@ -36,7 +34,6 @@ export default function StoreHero({
   gallery,
   area,
   sectors,
-  whatsappHref,
   goodsCount,
   servicesCount,
   goodsUnit,
@@ -197,11 +194,6 @@ export default function StoreHero({
                 )}
               </div>
             </div>
-            {whatsappHref && (
-              <div className="hidden sm:block shrink-0">
-                <WhatsAppButton href={whatsappHref} label="Chat on WhatsApp" />
-              </div>
-            )}
           </div>
 
           <div className="hidden sm:flex flex-wrap items-center gap-2 mt-2.5">
@@ -214,16 +206,6 @@ export default function StoreHero({
               </span>
             ))}
           </div>
-
-          {whatsappHref && (
-            <div className="sm:hidden mt-2.5">
-              <WhatsAppButton
-                href={whatsappHref}
-                label="Chat on WhatsApp"
-                className="w-full"
-              />
-            </div>
-          )}
         </div>
       </div>
     </div>
