@@ -383,10 +383,15 @@ export async function POST(req: Request) {
 
         // Skipped (not just discarded) when the clarification actually won
         // — no point spending an extra lookup on data that's about to be
-        // suppressed below anyway.
+        // suppressed below anyway. Product-kind results only: a service
+        // result's own card already shows everything the vendor uploaded
+        // (see VendorResultCard) and its own WhatsApp CTA, so a companion
+        // "Sold by" store card would just be a redundant second contact
+        // point for the same vendor.
+        const productKindResults = products.filter((p) => p.kind !== "service");
         const productStores =
-          products.length && !clarification
-            ? await getVendorStoresForProducts(products)
+          productKindResults.length && !clarification
+            ? await getVendorStoresForProducts(productKindResults)
             : [];
 
         // A real SEARCH tool's results are what the buyer sees this turn

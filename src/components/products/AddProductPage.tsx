@@ -10,9 +10,12 @@ import { categoriesApi } from "@/services/products";
 import { uploadProductMedia } from "@/lib/cloudinary";
 import { getErrorMessage } from "@/lib/error-message";
 import {
-  SERVICE_DETAIL_PRESETS,
+  getServiceDetailPresets,
   getProductAttributePresets,
 } from "@/lib/attribute-presets";
+import { SECTOR_BY_VALUE } from "@/lib/sectors";
+import { NIGERIAN_FOOD_CATEGORIES } from "@/lib/food-categories";
+import { useUserStore } from "@/store/userStore";
 import AttributePickerModal from "./AttributePickerModal";
 import {
   Save,
@@ -23,7 +26,6 @@ import {
   ImageIcon,
   X,
   Trash2,
-  Video,
   Plus,
   ChevronUp,
   Upload,
@@ -69,8 +71,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-
-type MediaType = "image" | "video";
 
 interface ProductAttribute {
   id: string;
@@ -425,19 +425,6 @@ const NIGERIAN_TEMPLATES: NigerianTemplate[] = [
 ];
 
 // ── Nigerian food constants ───────────────────────────────────────────────────
-
-const NIGERIAN_FOOD_CATEGORIES = [
-  { id: "rice", label: "Rice Dishes", emoji: "🍚" },
-  { id: "soups", label: "Soups & Stews", emoji: "🍲" },
-  { id: "swallow", label: "Swallows", emoji: "🫙" },
-  { id: "grilled", label: "Grilled & BBQ", emoji: "🔥" },
-  { id: "protein", label: "Proteins", emoji: "🍗" },
-  { id: "snacks", label: "Snacks & Street", emoji: "🥘" },
-  { id: "drinks", label: "Drinks", emoji: "🥤" },
-  { id: "breakfast", label: "Breakfast", emoji: "🌅" },
-  { id: "desserts", label: "Desserts & Sweets", emoji: "🍨" },
-  { id: "party", label: "Party Packs", emoji: "🎉" },
-];
 
 const POPULAR_FOOD_TAGS = [
   "popular",
@@ -1551,6 +1538,13 @@ export default function AddProductPage({
   const foodAccount = isFoodBusiness(businessType);
   const showKindToggle = businessShowsKindToggle(businessType);
 
+  // Sector-level tailoring (preset groups, category pre-fill, placeholder
+  // copy) — content inside blocks only; block structure stays businessType's.
+  const sectorValue = useUserStore((s) => s.user?.sector);
+  const sectorConfig = sectorValue
+    ? SECTOR_BY_VALUE[sectorValue]?.listingConfig
+    : undefined;
+
   // Offering identity — a service is a catalog entry with no stock semantics
   // and an optional "from" price. Fixed after creation.
   const [kind, setKind] = useState<"product" | "service">(
@@ -1592,13 +1586,10 @@ export default function AddProductPage({
   const [isFeatured, setIsFeatured] = useState(false);
 
   // Media — preview URLs (blob) + backing File objects for upload
-  const [mediaType, setMediaType] = useState<MediaType>("image");
   const [mainImage, setMainImage] = useState<string | null>(null);
   const [mainImageFile, setMainImageFile] = useState<File | null>(null);
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
-  const [videoFile, setVideoFile] = useState<string | null>(null);
-  const [videoFileObj, setVideoFileObj] = useState<File | null>(null);
 
   // Tags + attributes
   const [tagInput, setTagInput] = useState("");
@@ -1649,7 +1640,6 @@ export default function AddProductPage({
   const expirationDateRef = useRef<HTMLInputElement>(null);
   const mainImageRef = useRef<HTMLInputElement>(null);
   const thumbRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -1681,6 +1671,20 @@ export default function AddProductPage({
     queryFn: categoriesApi.getCategories,
     enabled: !isFood,
   });
+
+  // Sector-driven default for the category dropdown — one-shot, add mode only,
+  // and only when the vendor's own category list actually contains the
+  // configured id (retailCategories are per-account, not a fixed taxonomy).
+  const categoryPrefilled = useRef(false);
+  useEffect(() => {
+    if (isEditMode || categoryPrefilled.current) return;
+    const preset = sectorConfig?.productCategoryId;
+    if (!preset || selectedCategory !== "") return;
+    if (retailCategories.some((c) => c.id === preset)) {
+      categoryPrefilled.current = true;
+      setSelectedCategory(preset);
+    }
+  }, [isEditMode, sectorConfig, retailCategories, selectedCategory]);
 
   // Edit mode: fetch single product by ID
   const pathname = usePathname();
@@ -1862,9 +1866,12 @@ export default function AddProductPage({
   const canSubmit =
     productName.trim().length > 0 &&
     (isService || selectedCategory !== "") && // services carry no category
+    // Services have no category — the description is what search matches on,
+    // so it's required there (and only there).
+    (!isService || description.trim().length > 0) &&
     (isQuote || parseFloat(price) > 0) && // quote services need no price
     (isQuote || !isRange || parseFloat(priceMax) > parseFloat(price)) &&
-    (mainImage !== null || videoFile !== null) &&
+    mainImage !== null &&
     (isFood ||
       isService || // services carry no stock/expiry requirements
       (stockQuantity !== "" &&
@@ -1888,6 +1895,10 @@ export default function AddProductPage({
       toast.error("Please select a category");
       return;
     }
+    if (isService && !description.trim()) {
+      toast.error("Describe your service — it's how buyers find you");
+      return;
+    }
     if (!isQuote && (!price || parseFloat(price) <= 0)) {
       toast.error("Price must be greater than zero");
       return;
@@ -1908,10 +1919,7 @@ export default function AddProductPage({
 
     try {
       // Calculate how many uploads we'll do so each gets an equal share of 0–75%
-      const uploadCount =
-        (mainImageFile ? 1 : 0) +
-        thumbnailFiles.length +
-        (videoFileObj ? 1 : 0);
+      const uploadCount = (mainImageFile ? 1 : 0) + thumbnailFiles.length;
       const uploadShare = uploadCount > 0 ? Math.floor(75 / uploadCount) : 0;
       let uploadsCompleted = 0;
 
@@ -1955,14 +1963,6 @@ export default function AddProductPage({
       const remoteThumbUrls = thumbnails.filter((u) => !u.startsWith("blob:"));
       thumbnailUrls = [...remoteThumbUrls, ...thumbnailUrls].slice(0, 5);
 
-      // Upload video
-      let videoUrl: string | null = null;
-      if (videoFileObj) {
-        setPublishModal((prev) => ({ ...prev, step: "Uploading video…" }));
-        videoUrl = await uploadProductMedia(videoFileObj, "video");
-        advanceUpload("Video ready");
-      }
-
       // Save to backend
       setPublishModal((prev) => ({
         ...prev,
@@ -1986,7 +1986,6 @@ export default function AddProductPage({
         tags,
         main_image_url: mainImageUrl,
         thumbnail_urls: thumbnailUrls,
-        video_url: videoUrl,
       };
 
       let payload: RetailProductPayload | FoodProductPayload;
@@ -2105,16 +2104,19 @@ export default function AddProductPage({
   const wizard = !isEditMode;
   const phases = [
     showKindToggle && { id: "type", label: "Type", valid: true },
-    // Import decision — products only, add mode only. Its own buttons drive
-    // the flow (import in bulk vs. add one by one), so it has no Next.
-    !isFood &&
-      wizard &&
+    // Import decision — add mode only, product/dish kind only (a CSV row is
+    // a stocked good or menu item, not a service). Its own buttons drive the
+    // flow (import in bulk vs. add one by one), so it has no Next.
+    wizard &&
       kind === "product" && { id: "import", label: "Import", valid: true },
     {
       id: "basics",
       label: "Basics",
       valid:
-        productName.trim().length > 0 && (isService || selectedCategory !== ""),
+        productName.trim().length > 0 &&
+        (isService || selectedCategory !== "") &&
+        // Services have no category — description is the matching signal.
+        (!isService || description.trim().length > 0),
     },
     {
       id: "pricing",
@@ -2137,7 +2139,7 @@ export default function AddProductPage({
     {
       id: "media",
       label: "Media",
-      valid: mainImage !== null || videoFile !== null,
+      valid: mainImage !== null,
     },
     !isFood && {
       id: "tags",
@@ -2182,19 +2184,21 @@ export default function AddProductPage({
     setManufacturingDate("");
     setExpirationDate("");
     setIsFeatured(false);
-    setMediaType("image");
     setMainImage(null);
     setMainImageFile(null);
     setThumbnails([]);
     setThumbnailFiles([]);
-    setVideoFile(null);
-    setVideoFileObj(null);
     setTags([]);
     setTagInput("");
     setAttributes([]);
     setAttributeNameInput("");
     setAttributeValueInput("");
     setAttributeError("");
+    setEstimatedPrepMins(20);
+    setIsCurrentlyAvailable(true);
+    setDailyLimit("");
+    setAllowPreOrder(false);
+    setModifiers([]);
     setImportModalOpen(true);
   };
 
@@ -2266,18 +2270,6 @@ export default function AddProductPage({
               </p>
             </div>
           </div>
-          {/* Food has no Listing Type block, so its bulk upload stays in the
-              header; retail's import entry lives inside the type block, where
-              the product/service fork is made. */}
-          {!isEditMode && isFood && (
-            <button
-              onClick={() => setImportModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-600 text-dash-body font-semibold rounded-md transition-colors cursor-pointer"
-            >
-              <Upload size={15} />
-              Bulk Upload Dishes
-            </button>
-          )}
         </div>
 
         {/* Single phased column — desktop gets the same flow, centered */}
@@ -2333,11 +2325,16 @@ export default function AddProductPage({
             </PhaseBlock>
           )}
 
-          {/* Phase — import decision (products only, add mode only). A CSV
-                row is a stocked good, so services skip straight to Basics. */}
-          {!isFood && wizard && kind === "product" && (
+          {/* Phase — import decision (add mode only, product/dish kind only).
+                A CSV row is a stocked good or menu item, so services skip
+                straight to Basics. Same flow for food and retail — only the
+                copy adapts. */}
+          {wizard && kind === "product" && (
             <PhaseBlock {...phaseProps("import")} hideNext>
-              <FormSection title="Add Your Products" icon={Upload}>
+              <FormSection
+                title={isFood ? "Add Your Dishes" : "Add Your Products"}
+                icon={Upload}
+              >
                 <div>
                   <FieldLabel required>
                     How would you like to add them?
@@ -2350,7 +2347,9 @@ export default function AddProductPage({
                     >
                       <p className="flex items-center gap-1.5 text-dash-body font-bold text-[#023337]">
                         <Upload size={13} className="text-orange-500" />
-                        Bring in your catalogue
+                        {isFood
+                          ? "Bring in your menu"
+                          : "Bring in your catalogue"}
                       </p>
                       <p className="text-dash-caption text-gray-400 mt-0.5">
                         Upload a spreadsheet or connect Shopify / WooCommerce
@@ -2396,8 +2395,10 @@ export default function AddProductPage({
                     isFood
                       ? "e.g., Jollof Rice, Egusi Soup, Suya…"
                       : isService
-                        ? "e.g., Phone Screen Repair, Home Cleaning…"
-                        : "e.g., Wireless Headphones"
+                        ? (sectorConfig?.serviceNamePlaceholder ??
+                          "e.g., Phone Screen Repair, Home Cleaning…")
+                        : (sectorConfig?.productNamePlaceholder ??
+                          "e.g., Wireless Headphones")
                   }
                   className={`w-full h-11 px-3 bg-gray-50 border rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 ${fieldErrors.name ? "border-red-400" : "border-gray-200"}`}
                 />
@@ -2414,7 +2415,11 @@ export default function AddProductPage({
               </div>
 
               <div>
-                <FieldLabel optional>Description</FieldLabel>
+                {/* Required for services: no category there, so the
+                    description is what buyer search matches against. */}
+                <FieldLabel required={isService} optional={!isService}>
+                  Description
+                </FieldLabel>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -2422,12 +2427,20 @@ export default function AddProductPage({
                     isFood
                       ? "e.g., Smoky party jollof rice served with fried plantain and your choice of protein. Contains tomatoes and peppers."
                       : isService
-                        ? "Describe what the service includes and how it works…"
-                        : "Describe the product features and benefits…"
+                        ? (sectorConfig?.serviceDescriptionPlaceholder ??
+                          "Describe what the service includes and how it works…")
+                        : (sectorConfig?.productDescriptionPlaceholder ??
+                          "Describe the product features and benefits…")
                   }
                   rows={4}
                   className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
                 />
+                {isService && (
+                  <p className="text-dash-caption text-gray-400 mt-1.5">
+                    Buyers find your service through this description — the more
+                    specific, the better your matches
+                  </p>
+                )}
               </div>
 
               {/* Category — products & food only. Services are discovered by
@@ -2816,172 +2829,97 @@ export default function AddProductPage({
                   are what convince buyers to reach out.
                 </p>
               )}
-              <div className="flex gap-2 mb-2 -mt-1">
-                {[
-                  { key: "image" as const, icon: ImageIcon, label: "Images" },
-                  { key: "video" as const, icon: Video, label: "Video" },
-                ].map(({ key, icon: Icon, label }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setMediaType(key)}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-md text-dash-body font-medium transition-colors cursor-pointer",
-                      mediaType === key
-                        ? "bg-orange-500 text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200",
-                    )}
-                  >
-                    <Icon size={14} />
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {mediaType === "image" ? (
-                <>
-                  {/* Main image */}
-                  <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
-                    {mainImage ? (
-                      <img
-                        src={mainImage}
-                        alt="Product"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                          <ImageIcon size={20} className="text-gray-300" />
-                        </div>
-                        <span className="text-dash-body text-gray-400">
-                          No image selected
-                        </span>
-                      </div>
-                    )}
+              {/* Main image */}
+              <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
+                {mainImage ? (
+                  <img
+                    src={mainImage}
+                    alt="Product"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                      <ImageIcon size={20} className="text-gray-300" />
+                    </div>
+                    <span className="text-dash-body text-gray-400">
+                      No image selected
+                    </span>
+                  </div>
+                )}
+                <button
+                  onClick={() => mainImageRef.current?.click()}
+                  className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <ImageIcon size={13} /> Browse
+                </button>
+                {mainImage && (
+                  <>
                     <button
                       onClick={() => mainImageRef.current?.click()}
-                      className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                      className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                     >
-                      <ImageIcon size={13} /> Browse
+                      <RefreshCcw size={12} /> Replace
                     </button>
-                    {mainImage && (
-                      <>
-                        <button
-                          onClick={() => mainImageRef.current?.click()}
-                          className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-                        >
-                          <RefreshCcw size={12} /> Replace
-                        </button>
-                        <button
-                          onClick={clearMainImage}
-                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={12} /> Clear
-                        </button>
-                      </>
-                    )}
-                    <input
-                      ref={mainImageRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleMainImage}
-                    />
-                  </div>
-
-                  {/* Thumbnails */}
-                  <div className="flex gap-2.5 flex-wrap">
-                    {thumbnails.map((url, i) => (
-                      <div
-                        key={i}
-                        className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
-                      >
-                        <img
-                          src={url}
-                          alt={`Thumb ${i + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          onClick={() =>
-                            setThumbnails((p) => p.filter((_, j) => j !== i))
-                          }
-                          className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                        >
-                          <X size={11} />
-                        </button>
-                      </div>
-                    ))}
-                    {thumbnails.length < 4 && (
-                      <button
-                        onClick={() => thumbRef.current?.click()}
-                        className="w-20 h-20 border border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
-                      >
-                        <PlusCircle size={18} className="text-orange-400" />
-                        <span className="text-dash-caption text-orange-400">
-                          Add
-                        </span>
-                      </button>
-                    )}
-                    <input
-                      ref={thumbRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={handleThumbUpload}
-                    />
-                  </div>
-                </>
-              ) : (
-                <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
-                  {videoFile ? (
-                    <video
-                      src={videoFile}
-                      controls
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                        <Video size={20} className="text-gray-300" />
-                      </div>
-                      <span className="text-dash-body text-gray-400">
-                        No video selected
-                      </span>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => videoRef.current?.click()}
-                    className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
-                  >
-                    <Video size={13} /> Browse
-                  </button>
-                  {videoFile && (
                     <button
-                      onClick={() => {
-                        setVideoFile(null);
-                        if (videoRef.current) videoRef.current.value = "";
-                      }}
+                      onClick={clearMainImage}
                       className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                     >
                       <Trash2 size={12} /> Clear
                     </button>
-                  )}
-                  <input
-                    ref={videoRef}
-                    type="file"
-                    accept="video/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) {
-                        setVideoFile(URL.createObjectURL(f));
-                        setVideoFileObj(f);
+                  </>
+                )}
+                <input
+                  ref={mainImageRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleMainImage}
+                />
+              </div>
+
+              {/* Thumbnails */}
+              <div className="flex gap-2.5 flex-wrap">
+                {thumbnails.map((url, i) => (
+                  <div
+                    key={i}
+                    className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
+                  >
+                    <img
+                      src={url}
+                      alt={`Thumb ${i + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      onClick={() =>
+                        setThumbnails((p) => p.filter((_, j) => j !== i))
                       }
-                    }}
-                  />
-                </div>
-              )}
+                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+                {thumbnails.length < 4 && (
+                  <button
+                    onClick={() => thumbRef.current?.click()}
+                    className="w-20 h-20 border border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle size={18} className="text-orange-400" />
+                    <span className="text-dash-caption text-orange-400">
+                      Add
+                    </span>
+                  </button>
+                )}
+                <input
+                  ref={thumbRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleThumbUpload}
+                />
+              </div>
             </FormSection>
           </PhaseBlock>
 
@@ -3516,7 +3454,7 @@ export default function AddProductPage({
         }
         groups={
           isService
-            ? SERVICE_DETAIL_PRESETS
+            ? getServiceDetailPresets(sectorValue)
             : getProductAttributePresets(selectedCategory)
         }
         existingNames={attributes.map((a) => a.name)}

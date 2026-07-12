@@ -4,6 +4,7 @@ import type { ProductActionsPopoverProps } from "@/types/product";
 import {
   DollarSign,
   Edit2,
+  MessageCircle,
   MoreHorizontal,
   RefreshCw,
   Trash2,
@@ -19,12 +20,17 @@ export default function ProductActionsPopover({
   isFood = false,
   onRestock,
   onChangePrice,
+  onSwitchToQuote,
   onDelete,
 }: ProductActionsPopoverProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inStock = product.inStock;
   const canDelete = !inStock;
+  // Menu labels follow the listing's identity — a service is not a product,
+  // and on a food account the product side is a dish.
+  const noun =
+    product.kind === "service" ? "Service" : isFood ? "Dish" : "Product";
 
   const pathname = usePathname();
   const userId = pathname.split("/").filter(Boolean)[0];
@@ -54,7 +60,7 @@ export default function ProductActionsPopover({
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
         >
           <Eye size={14} className="text-orange-500" />
-          View Product
+          View {noun}
         </button>
         <button
           onClick={() => {
@@ -64,7 +70,7 @@ export default function ProductActionsPopover({
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
         >
           <Edit2 size={14} className="text-blue-500" />
-          Edit Product
+          Edit {noun}
         </button>
         {!isFood && product.kind !== "service" && (
           <button
@@ -86,8 +92,20 @@ export default function ProductActionsPopover({
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
         >
           <DollarSign size={14} className="text-gray-500" />
-          Change Price
+          {product.quoteOnRequest ? "Set Price" : "Change Price"}
         </button>
+        {product.kind === "service" && !product.quoteOnRequest && (
+          <button
+            onClick={() => {
+              setPopoverOpen(false);
+              onSwitchToQuote();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
+          >
+            <MessageCircle size={14} className="text-teal-500" />
+            Switch to Quote
+          </button>
+        )}
         {canDelete && (
           <button
             onClick={() => {

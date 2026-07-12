@@ -69,3 +69,11 @@ export interface WhatsAppButtonProps {
   // bill the vendor's wallet for the lead (see reportLead.ts).
   onClick?: () => void;
 }
+
+export interface ShareButtonProps {
+  url: string;
+  title: string;
+  text: string;
+  label?: string;
+  className?: string;
+}

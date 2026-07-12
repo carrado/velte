@@ -213,6 +213,8 @@ export interface ProductActionsPopoverProps {
   isFood?: boolean;
   onRestock: () => void;
   onChangePrice: () => void;
+  /** Fixed-price service → back to "Contact for quote". Services only. */
+  onSwitchToQuote: () => void;
   onDelete: () => void;
 }
 
@@ -221,6 +223,7 @@ export interface ProductsTableProps {
   rowOffset?: number;
   onRestock: (product: CategoryProduct) => void;
   onChangePrice: (product: CategoryProduct) => void;
+  onSwitchToQuote: (product: CategoryProduct) => void;
   onDelete: (product: CategoryProduct) => void;
   isFood?: boolean;
 }

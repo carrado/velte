@@ -79,6 +79,17 @@ export async function uploadProductMedia(
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 
+// Cloudinary auto-optimizes format (serves WebP/AVIF per what the requesting
+// browser supports) and quality on the fly through this transform — a large
+// bandwidth cut per view, which is what actually scales with buyer traffic
+// (not upload volume, which is already low thanks to compressImage above).
+// Safe no-op on a non-Cloudinary URL.
+export function optimizedImageUrl(url: string): string {
+  if (!url.includes("res.cloudinary.com/") || !url.includes("/upload/"))
+    return url;
+  return url.replace("/upload/", "/upload/f_auto,q_auto/");
+}
+
 export function validateImageFile(file: File): string | null {
   if (!ALLOWED_TYPES.includes(file.type))
     return "Only JPG, PNG, or WebP images are allowed";

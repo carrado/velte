@@ -2,7 +2,7 @@
 "use client";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
-import { LayoutGrid, PlusCircle, Wallet, Settings } from "lucide-react";
+import { LayoutGrid, PlusCircle, Wallet, Store, Settings } from "lucide-react";
 import { useIsFood } from "@/hooks/useBusinessType";
 
 export default function BottomNav() {
@@ -33,6 +33,12 @@ export default function BottomNav() {
       icon: <Wallet size={20} />,
       segment: "wallet",
       active: subPath.startsWith("wallet"),
+    },
+    {
+      label: "Store",
+      icon: <Store size={20} />,
+      segment: "store",
+      active: subPath.startsWith("store"),
     },
     {
       label: "Settings",

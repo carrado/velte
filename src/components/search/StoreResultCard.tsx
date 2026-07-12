@@ -1,6 +1,8 @@
 import { MapPin, Store as StoreIcon } from "lucide-react";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { reportLead } from "@/lib/reportLead";
+import { useUserStore } from "@/store/userStore";
 import type { StoreMatch } from "@/types/search";
 
 // Prefix "phone repair shop" → "a phone repair shop", "electronics store" →
@@ -33,6 +35,10 @@ export function StoreResultCard({
           : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.`,
       )}`
     : null;
+  // A logged-in vendor can match their own storefront — no WhatsApp CTA to
+  // themselves (which would also bill them a lead), just say so.
+  const currentUserId = useUserStore((s) => s.user?.id);
+  const isOwn = currentUserId != null && currentUserId === match.vendorId;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-2.5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
@@ -74,13 +80,17 @@ export function StoreResultCard({
         </span>
       </div>
 
-      {chatHref && (
-        <WhatsAppButton
-          href={chatHref}
-          label="Chat on WhatsApp"
-          className="w-full mt-1"
-          onClick={() => reportLead(match.vendorId)}
-        />
+      {isOwn ? (
+        <OwnListingBadge label="This is your store" />
+      ) : (
+        chatHref && (
+          <WhatsAppButton
+            href={chatHref}
+            label="Chat on WhatsApp"
+            className="w-full mt-1"
+            onClick={() => reportLead(match.vendorId)}
+          />
+        )
       )}
     </div>
   );

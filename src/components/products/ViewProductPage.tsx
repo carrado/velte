@@ -24,7 +24,6 @@ import {
   Shield,
   Info,
   Clock,
-  Fingerprint,
   Leaf,
   Flame,
   Timer,
@@ -33,7 +32,21 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { computePrice, fmt } from "@/lib/product-price";
-import type { CategoryProduct, Category } from "@/types/product";
+
+// Raw ISO timestamp → "9 Jul 2026" (same en-NG format the wallet and
+// referrals pages use).
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  return isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString("en-NG", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+}
+import { NIGERIAN_FOOD_CATEGORIES } from "@/lib/food-categories";
+import type { Category } from "@/types/product";
 import { useIsFood } from "@/hooks/useBusinessType";
 
 // ── Carousel placeholder images (swap for real product images when available) ─
@@ -287,9 +300,21 @@ export default function ViewProductPage({ productId }: { productId: string }) {
     enabled: !isFood,
   });
 
+  // Retail dropdown categories and dish categories live in different lists —
+  // resolve whichever applies so dishes get a category label too (the retail
+  // query is disabled on food accounts, so `category` is always undefined
+  // there).
   const category: Category | undefined = categories.find(
     (c) => c.id === product?.categoryId,
   );
+  const foodCategory = isFood
+    ? NIGERIAN_FOOD_CATEGORIES.find((c) => c.id === product?.categoryId)
+    : undefined;
+  const categoryDisplay = category
+    ? { emoji: category.emoji, name: category.name }
+    : foodCategory
+      ? { emoji: foodCategory.emoji, name: foodCategory.label }
+      : undefined;
 
   if (productsLoading) return <ViewProductSkeleton />;
 
@@ -327,8 +352,12 @@ export default function ViewProductPage({ productId }: { productId: string }) {
       ? 0
       : product.totalQuantity - available - (product.orderedQuantity ?? 0);
 
-  // Determine if product has a guarantee/duration separate from expiration
-  const hasDateInfo = product.manufacturingDate || product.expirationDate;
+  // Real media for the carousel — the main image first, then thumbnails.
+  // Empty for a video-only listing, which renders a player instead.
+  const mediaImages = [
+    product.mainImageUrl,
+    ...(product.thumbnailUrls ?? []),
+  ].filter((u): u is string => Boolean(u));
 
   return (
     <div className="space-y-5">
@@ -337,26 +366,43 @@ export default function ViewProductPage({ productId }: { productId: string }) {
         {/* ── Left: Carousel + name ── */}
         <div className="lg:col-span-1">
           <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            {/* Carousel */}
-            <ProductCarousel
-              productName={product.name}
-              colorClass={product.colorClass}
-              featured={product.featured}
-              images={(product as any).images}
-            />
+            {/* Media — real images when they exist; a video-only listing
+                gets a player; otherwise the gradient placeholder slides. */}
+            {mediaImages.length === 0 && product.videoUrl ? (
+              <video
+                src={product.videoUrl}
+                controls
+                playsInline
+                className="w-full aspect-square object-cover bg-black"
+              />
+            ) : (
+              <ProductCarousel
+                productName={product.name}
+                colorClass={product.colorClass}
+                featured={product.featured}
+                images={mediaImages}
+              />
+            )}
 
-            {/* Product name + category + sale tag */}
+            {/* Name + category + description */}
             <div className="px-5 py-4 border-t border-gray-100">
               <h2 className="text-dash-title font-bold text-[#023337] leading-tight mb-1">
                 {product.name}
               </h2>
-              {category && (
+              {categoryDisplay && (
                 <div className="flex items-center gap-1.5 mt-1.5">
-                  <span className="text-dash-body">{category.emoji}</span>
+                  <span className="text-dash-body">
+                    {categoryDisplay.emoji}
+                  </span>
                   <span className="text-dash-caption text-gray-400 font-medium">
-                    {category.name}
+                    {categoryDisplay.name}
                   </span>
                 </div>
+              )}
+              {product.description && (
+                <p className="text-dash-body text-gray-500 mt-3 whitespace-pre-line">
+                  {product.description}
+                </p>
               )}
             </div>
           </div>
@@ -371,7 +417,11 @@ export default function ViewProductPage({ productId }: { productId: string }) {
               <div className="flex flex-wrap items-end gap-4">
                 <div>
                   <p className="text-dash-caption text-gray-400 mb-0.5 uppercase tracking-wide font-semibold">
-                    {pricing.isRange ? "Price range" : "Price"}
+                    {pricing.quoteOnRequest
+                      ? "Pricing"
+                      : pricing.isRange
+                        ? "Price range"
+                        : "Price"}
                   </p>
                   <p className="text-[2rem] font-black text-[#023337] leading-none">
                     {pricing.quoteOnRequest
@@ -383,6 +433,11 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                           )}`
                         : fmt(pricing.price, pricing.currencySymbol)}
                   </p>
+                  {pricing.quoteOnRequest && (
+                    <p className="text-dash-caption text-gray-400 mt-1.5">
+                      The price is agreed with each buyer in chat.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -486,21 +541,6 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           {/* ── Consolidated Listing Info ── */}
           <SectionCard title="Listing Info" icon={Info}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-              {/* ID */}
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Fingerprint size={14} className="text-gray-400" />
-                </div>
-                <div>
-                  <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
-                    Listing ID
-                  </p>
-                  <p className="text-dash-body font-mono text-[#023337] font-semibold break-all">
-                    {product.id}
-                  </p>
-                </div>
-              </div>
-
               {/* Created date */}
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -511,13 +551,13 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     Created Date
                   </p>
                   <p className="text-dash-body font-semibold text-[#023337]">
-                    {product.createdDate}
+                    {fmtDate(product.createdDate)}
                   </p>
                 </div>
               </div>
 
               {/* Category */}
-              {category && (
+              {categoryDisplay && (
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Package size={14} className="text-gray-400" />
@@ -527,7 +567,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                       Category
                     </p>
                     <p className="text-dash-body font-semibold text-[#023337]">
-                      {category.emoji} {category.name}
+                      {categoryDisplay.emoji} {categoryDisplay.name}
                     </p>
                   </div>
                 </div>
@@ -564,7 +604,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                       Manufacturing Date
                     </p>
                     <p className="text-dash-body font-semibold text-[#023337]">
-                      {product.manufacturingDate}
+                      {fmtDate(product.manufacturingDate)}
                     </p>
                   </div>
                 </div>
@@ -581,7 +621,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                       Duration / Guarantee
                     </p>
                     <p className="text-dash-body font-semibold text-[#023337]">
-                      {product.expirationDate}
+                      {fmtDate(product.expirationDate)}
                     </p>
                     <p className="text-dash-caption text-gray-400 mt-0.5">
                       Valid until expiration
@@ -597,9 +637,13 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 <div className="my-5 border-t border-gray-100" />
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <Hash size={13} className="text-orange-500" />
+                    {isService ? (
+                      <Wrench size={13} className="text-orange-500" />
+                    ) : (
+                      <Hash size={13} className="text-orange-500" />
+                    )}
                     <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
-                      Attributes
+                      {isService ? "Service Details" : "Attributes"}
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -649,9 +693,12 @@ export default function ViewProductPage({ productId }: { productId: string }) {
 
             {/* ── Food-specific fields ── */}
             {isFood &&
-              (product.estimatedPrepMins !== undefined ||
-                product.isVeg !== undefined ||
-                product.isSpicy !== undefined) && (
+              (product.estimatedPrepMins != null ||
+                product.isCurrentlyAvailable != null ||
+                product.dailyLimit != null ||
+                product.allowPreOrder ||
+                product.isVeg ||
+                product.isSpicy) && (
                 <>
                   <div className="my-5 border-t border-gray-100" />
                   <div>
@@ -662,11 +709,58 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-3">
-                      {product.estimatedPrepMins !== undefined && (
+                      {product.estimatedPrepMins != null && (
                         <div className="flex items-center gap-2 bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-2.5">
                           <Timer size={14} className="text-orange-500" />
                           <span className="text-dash-body font-semibold text-[#023337]">
                             ~{product.estimatedPrepMins} min prep
+                          </span>
+                        </div>
+                      )}
+                      {product.isCurrentlyAvailable != null && (
+                        <div
+                          className={cn(
+                            "flex items-center gap-2 rounded-xl px-3.5 py-2.5 border",
+                            product.isCurrentlyAvailable
+                              ? "bg-green-50 border-green-100"
+                              : "bg-red-50 border-red-100",
+                          )}
+                        >
+                          {product.isCurrentlyAvailable ? (
+                            <CheckCircle2
+                              size={14}
+                              className="text-green-500"
+                            />
+                          ) : (
+                            <XCircle size={14} className="text-red-500" />
+                          )}
+                          <span
+                            className={cn(
+                              "text-dash-body font-semibold",
+                              product.isCurrentlyAvailable
+                                ? "text-green-700"
+                                : "text-red-700",
+                            )}
+                          >
+                            {product.isCurrentlyAvailable
+                              ? "Available today"
+                              : "Not available today"}
+                          </span>
+                        </div>
+                      )}
+                      {product.dailyLimit != null && (
+                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-2.5">
+                          <Layers size={14} className="text-gray-500" />
+                          <span className="text-dash-body font-semibold text-[#023337]">
+                            Daily limit: {product.dailyLimit}
+                          </span>
+                        </div>
+                      )}
+                      {product.allowPreOrder && (
+                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
+                          <Clock size={14} className="text-blue-500" />
+                          <span className="text-dash-body font-semibold text-blue-700">
+                            Pre-orders accepted
                           </span>
                         </div>
                       )}

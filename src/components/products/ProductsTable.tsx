@@ -13,12 +13,14 @@ function ProductCard({
   isFood,
   onRestock,
   onChangePrice,
+  onSwitchToQuote,
   onDelete,
 }: {
   product: CategoryProduct;
   isFood: boolean;
   onRestock: () => void;
   onChangePrice: () => void;
+  onSwitchToQuote: () => void;
   onDelete: () => void;
 }) {
   const available = getAvailableStock(product);
@@ -51,6 +53,7 @@ function ProductCard({
             isFood={isFood}
             onRestock={onRestock}
             onChangePrice={onChangePrice}
+            onSwitchToQuote={onSwitchToQuote}
             onDelete={onDelete}
           />
         </div>
@@ -141,6 +144,7 @@ export default function ProductsTable({
   rowOffset = 0,
   onRestock,
   onChangePrice,
+  onSwitchToQuote,
   onDelete,
   isFood = false,
 }: ProductsTableProps) {
@@ -155,6 +159,7 @@ export default function ProductsTable({
           isFood={isFood}
           onRestock={() => onRestock(product)}
           onChangePrice={() => onChangePrice(product)}
+          onSwitchToQuote={() => onSwitchToQuote(product)}
           onDelete={() => onDelete(product)}
         />
       ))}

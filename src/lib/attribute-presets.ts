@@ -1,4 +1,5 @@
 import type { AttributePresetGroup } from "@/types/product";
+import { SECTOR_BY_VALUE } from "@/lib/sectors";
 
 /* Curated attribute / service-detail suggestions so vendors fill a checklist
    instead of inventing field names. Everything added here ends up in the text
@@ -123,6 +124,26 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
     ],
   },
 ];
+
+/** Sector-tailored service presets: the sector's configured groups (in their
+ * configured order) with General always last. No config = the full list, so
+ * unconfigured sectors keep today's behavior. `presetGroups: []` = General
+ * only — right for trades none of the specialized groups fit (consulting,
+ * finance, real estate…). */
+export function getServiceDetailPresets(
+  sectorValue?: string,
+): AttributePresetGroup[] {
+  const configured = sectorValue
+    ? SECTOR_BY_VALUE[sectorValue]?.listingConfig?.presetGroups
+    : undefined;
+  if (!configured) return SERVICE_DETAIL_PRESETS;
+  const byName = new Map(SERVICE_DETAIL_PRESETS.map((g) => [g.group, g]));
+  const general = byName.get("General")!;
+  const specific = configured
+    .map((name) => byName.get(name))
+    .filter((g): g is AttributePresetGroup => Boolean(g) && g !== general);
+  return [...specific, general];
+}
 
 // ── Products — keyed by retail category id, General always appended ──────────
 
