@@ -87,7 +87,8 @@ export default function Step2SectorDescription({
               error={field.state.meta.errors[0]}
             />
             <p className="text-black/40 text-xs mt-1">
-              Pick the closest match — this helps buyers find you.
+              Pick the closest match — this helps buyers find you. You can add
+              more sectors anytime from your store settings.
             </p>
             <FieldError message={field.state.meta.errors[0]} />
           </div>

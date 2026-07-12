@@ -1,8 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
 import { Store as StoreIcon } from "lucide-react";
 import { fmt } from "@/lib/product-price";
+import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { reportLead } from "@/lib/reportLead";
+import { useUserStore } from "@/store/userStore";
 import type { StoreProductItem } from "@/types/search";
 
 // One item from getVendorProductsTool — a SPECIFIC, already-identified
@@ -23,6 +26,10 @@ export function StoreProductCard({
 }) {
   const symbol = match.currency === "USD" ? "$" : "₦";
   const isRange = match.priceMax != null && match.priceMax > match.price;
+  // A logged-in vendor browsing their own store's catalog — no WhatsApp CTA
+  // to themselves (which would also bill them a lead), just say so.
+  const currentUserId = useUserStore((s) => s.user?.id);
+  const isOwn = currentUserId != null && currentUserId === vendorId;
 
   const chatHref = storeWhatsapp
     ? `https://wa.me/${storeWhatsapp}?text=${encodeURIComponent(
@@ -35,7 +42,7 @@ export function StoreProductCard({
       <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
         {match.mainImageUrl ? (
           <img
-            src={match.mainImageUrl}
+            src={optimizedImageUrl(match.mainImageUrl)}
             alt={match.name}
             className="w-full h-full object-cover"
           />
@@ -64,13 +71,17 @@ export function StoreProductCard({
             )}
           </p>
         )}
-        {chatHref && (
-          <WhatsAppButton
-            href={chatHref}
-            label="Chat about this"
-            className="w-full mt-1"
-            onClick={() => reportLead(vendorId, match.productId)}
-          />
+        {isOwn ? (
+          <OwnListingBadge label="This is your listing" />
+        ) : (
+          chatHref && (
+            <WhatsAppButton
+              href={chatHref}
+              label="Chat about this"
+              className="w-full mt-1"
+              onClick={() => reportLead(vendorId, match.productId)}
+            />
+          )
         )}
       </div>
     </div>

@@ -15,13 +15,38 @@ export type SectorClassification =
   | "both"
   | "food_both";
 
+/**
+ * Optional per-sector tailoring of the Add-Offering wizard. Tailors content
+ * INSIDE the existing blocks only — never adds/removes blocks or forks the
+ * component tree (that stays driven by `classification`). Sectors without a
+ * config get today's generic behavior, so this rolls out incrementally.
+ */
+export interface SectorListingConfig {
+  /**
+   * Which SERVICE_DETAIL_PRESETS groups apply to this sector's service
+   * listings, in display order. "General" is always appended — `[]` means
+   * General only. Omitted = the full ungrouped list (legacy behavior).
+   */
+  presetGroups?: string[];
+  /**
+   * Default the product-category dropdown to this id — applied only when the
+   * vendor's own category list actually contains it.
+   */
+  productCategoryId?: string;
+  /** Sector-flavored placeholder copy for the Basics block, per listing kind. */
+  productNamePlaceholder?: string;
+  productDescriptionPlaceholder?: string;
+  serviceNamePlaceholder?: string;
+  serviceDescriptionPlaceholder?: string;
+}
+
 export interface SectorLeaf {
   /** Stable id persisted on User.sector, e.g. "restaurants_quick_service". */
   value: string;
   label: string;
   classification: SectorClassification;
-  /** Shown as a Store sector-chip suggestion (see SECTOR_SUGGESTIONS). */
-  featured?: boolean;
+  /** Per-sector Add-Offering tailoring; absent = generic defaults. */
+  listingConfig?: SectorListingConfig;
 }
 
 export interface SectorCategory {

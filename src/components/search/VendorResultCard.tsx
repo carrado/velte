@@ -1,13 +1,20 @@
 /* eslint-disable @next/next/no-img-element */
 import { MapPin, ShieldCheck, Store as StoreIcon } from "lucide-react";
 import { fmt } from "@/lib/product-price";
+import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { reportLead } from "@/lib/reportLead";
+import { useUserStore } from "@/store/userStore";
 import type { VendorMatch } from "@/types/search";
 
 export function VendorResultCard({ match }: { match: VendorMatch }) {
   const symbol = match.currency === "USD" ? "$" : "₦";
   const isRange = match.priceMax != null && match.priceMax > match.price;
+  // A logged-in vendor searching can match their own catalog — no WhatsApp
+  // CTA to themselves (which would also bill them a lead), just say so.
+  const currentUserId = useUserStore((s) => s.user?.id);
+  const isOwn = currentUserId != null && currentUserId === match.vendorId;
 
   const chatHref = match.whatsapp
     ? `https://wa.me/${match.whatsapp}?text=${encodeURIComponent(
@@ -20,7 +27,7 @@ export function VendorResultCard({ match }: { match: VendorMatch }) {
       <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
         {match.mainImageUrl ? (
           <img
-            src={match.mainImageUrl}
+            src={optimizedImageUrl(match.mainImageUrl)}
             alt={match.name}
             className="w-full h-full object-cover"
           />
@@ -32,15 +39,23 @@ export function VendorResultCard({ match }: { match: VendorMatch }) {
         <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2 min-h-[2.5em]">
           {match.name}
         </p>
-        <p className="text-[15px] font-extrabold text-[#023337]">
-          {fmt(match.price, symbol)}
-          {isRange && (
-            <>
-              <span className="mx-1 text-sm font-normal text-gray-400">–</span>
-              {fmt(match.priceMax!, symbol)}
-            </>
-          )}
-        </p>
+        {match.quoteOnRequest ? (
+          <p className="text-[15px] font-extrabold text-[#023337]">
+            Ask for price
+          </p>
+        ) : (
+          <p className="text-[15px] font-extrabold text-[#023337]">
+            {fmt(match.price, symbol)}
+            {isRange && (
+              <>
+                <span className="mx-1 text-sm font-normal text-gray-400">
+                  –
+                </span>
+                {fmt(match.priceMax!, symbol)}
+              </>
+            )}
+          </p>
+        )}
         <div className="flex items-center gap-1.5 text-xs text-gray-500">
           <MapPin size={13} className="shrink-0" />
           <span className="truncate">
@@ -50,19 +65,45 @@ export function VendorResultCard({ match }: { match: VendorMatch }) {
             {match.distanceKm != null && ` · ${match.distanceKm}km away`}
           </span>
         </div>
+        {match.kind === "service" && (
+          <>
+            {match.description && (
+              <p className="text-xs text-gray-500 leading-relaxed">
+                {match.description}
+              </p>
+            )}
+            {match.attributes.length > 0 && (
+              <dl className="space-y-1 pt-1 border-t border-gray-100">
+                {match.attributes.map((attr) => (
+                  <div
+                    key={attr.name}
+                    className="flex items-baseline gap-1.5 text-xs"
+                  >
+                    <dt className="text-gray-400 shrink-0">{attr.name}:</dt>
+                    <dd className="text-gray-600 truncate">{attr.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </>
+        )}
         <div className="flex items-center justify-between gap-2 pt-1">
           <div className="flex items-center gap-1 text-xs text-gray-500 min-w-0">
             <ShieldCheck size={13} className="shrink-0 text-orange-500" />
             <span className="truncate">{match.vendorName}</span>
           </div>
         </div>
-        {chatHref && (
-          <WhatsAppButton
-            href={chatHref}
-            label="Chat with vendor"
-            className="w-full mt-1"
-            onClick={() => reportLead(match.vendorId, match.productId)}
-          />
+        {isOwn ? (
+          <OwnListingBadge label="This is your listing" />
+        ) : (
+          chatHref && (
+            <WhatsAppButton
+              href={chatHref}
+              label="Chat with vendor"
+              className="w-full mt-1"
+              onClick={() => reportLead(match.vendorId, match.productId)}
+            />
+          )
         )}
       </div>
     </div>

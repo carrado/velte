@@ -20,9 +20,10 @@ import { toast } from "sonner";
 import { storeApi } from "@/services/store";
 import { useUserStore } from "@/store/userStore";
 import { queryKeys } from "@/lib/query-keys";
-import { SECTOR_SUGGESTIONS } from "@/lib/sectors";
+import { SECTOR_TAXONOMY } from "@/lib/sectors";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { cn } from "@/lib/utils";
+import { ShareButton } from "@/components/ShareButton";
 import type { Store } from "@/types/store";
 
 const MAX_DESCRIPTION = 600;
@@ -214,6 +215,11 @@ export default function StorePage() {
                 <Copy size={13} />
                 Copy link
               </button>
+              <ShareButton
+                url={publicUrl}
+                title={form.name.trim() || "My store on Velte"}
+                text={`Check out ${form.name.trim() || "my store"} on Velte!`}
+              />
               <a
                 href={publicPath}
                 target="_blank"
@@ -335,28 +341,37 @@ export default function StorePage() {
       <SectionCard
         icon={Tags}
         title="Sectors"
-        hint={`Pick up to ${MAX_SECTORS} that describe your business.`}
+        hint={`Pick up to ${MAX_SECTORS} that describe your business — the same list as sign-up, so whatever you picked there always shows here.`}
       >
-        <div className="flex flex-wrap gap-2">
-          {SECTOR_SUGGESTIONS.map((sector) => {
-            const selected = form.sectors.includes(sector);
-            return (
-              <button
-                key={sector}
-                type="button"
-                onClick={() => toggleSector(sector)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 text-dash-secondary font-medium rounded-full border transition-colors cursor-pointer",
-                  selected
-                    ? "bg-orange-500 border-orange-500 text-white"
-                    : "border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-600",
-                )}
-              >
-                {selected && <Check size={12} />}
-                {sector}
-              </button>
-            );
-          })}
+        <div className="max-h-80 overflow-y-auto pr-1 space-y-3.5">
+          {SECTOR_TAXONOMY.map((category) => (
+            <div key={category.id}>
+              <p className="text-dash-caption font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                {category.label}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {category.sectors.map((leaf) => {
+                  const selected = form.sectors.includes(leaf.label);
+                  return (
+                    <button
+                      key={leaf.value}
+                      type="button"
+                      onClick={() => toggleSector(leaf.label)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-dash-secondary font-medium rounded-full border transition-colors cursor-pointer",
+                        selected
+                          ? "bg-orange-500 border-orange-500 text-white"
+                          : "border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-600",
+                      )}
+                    >
+                      {selected && <Check size={12} />}
+                      {leaf.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </SectionCard>
 

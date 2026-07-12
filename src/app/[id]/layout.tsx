@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { categoriesApi } from "@/services/products";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
@@ -49,6 +52,23 @@ export default function DashboardRootLayout({
 }) {
   const pathname = usePathname();
   const isFood = useIsFood();
+
+  // On the view-listing page (/{userId}/products/{productId}) the generic
+  // last-segment fallback would title the header with the raw listing id —
+  // resolve the actual listing name instead. Same query key as the page's
+  // own fetch, so this reads the cache rather than fetching twice.
+  const segments = pathname.split("/").filter(Boolean);
+  const viewedListingId =
+    segments.length === 3 &&
+    segments[1] === "products" &&
+    !PATH_TITLES[segments.slice(1).join("/")]
+      ? segments[2]
+      : undefined;
+  const { data: viewedListing } = useQuery({
+    queryKey: queryKeys.products.detail(viewedListingId ?? ""),
+    queryFn: () => categoriesApi.getProduct(viewedListingId!),
+    enabled: Boolean(viewedListingId),
+  });
   // Seed from the store so we skip the overlay when the user is already loaded
   // (avoids a synchronous setState in the fetch effect below).
   const [meStatus, setMeStatus] = useState<"loading" | "ready" | "error">(() =>
@@ -90,6 +110,8 @@ export default function DashboardRootLayout({
             <div className="pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 md:p-6 space-y-6 text-dash-body antialiased">
               <Header
                 title={(() => {
+                  // View-listing page: the listing's own name (never the id).
+                  if (viewedListingId) return viewedListing?.name ?? "Listing";
                   const t = getTitle(pathname);
                   if (!isFood) return t;
                   const foodMap: Record<string, string> = {

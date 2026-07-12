@@ -15,11 +15,12 @@ export interface BuyerLocation {
 // `null` when there are no results at all (nothing to tag).
 export type MatchTier = "local" | "nearby" | "state" | "nationwide" | null;
 
-// Only meaningful for image-derived product searches: "direct" means a
-// close/exact match to what was in the photo — merely-similar results are
-// dropped entirely when a direct match exists. "similar" is today's
-// existing behavior (everything that cleared the base relevance floor).
-// `undefined` for text-only searches, which don't apply this distinction.
+// Set for image-derived product searches only: "direct" means a close/exact
+// match to what was in the photo, and merely-similar results are dropped
+// entirely when a direct match exists. "similar" means nothing cleared that
+// bar, so the closest results that cleared the base relevance floor are
+// shown instead. `undefined` for plain text searches, which don't apply this
+// distinction.
 export type MatchQuality = "direct" | "similar" | undefined;
 
 // A prior turn's text only — never the image, and never raw tool-call/
@@ -49,11 +50,20 @@ export interface SearchRequestBody {
 // retrieval.service.js.
 export interface VendorMatch {
   productId: string;
+  kind: "product" | "service";
   name: string;
   price: number;
   priceMax: number | null;
+  // Quote-per-job service — price is a placeholder 0, not a real price;
+  // render "Ask for price", never ₦0 (same rule as StoreProductItem).
+  quoteOnRequest: boolean;
   currency: string;
   mainImageUrl: string | null;
+  description: string | null;
+  // Vendor-uploaded detail fields (e.g. "Coverage Area": "Lagos mainland") —
+  // shown in full on a service result's own card so the buyer sees exactly
+  // what the vendor posted, instead of a separate "Sold by" store card.
+  attributes: { name: string; value: string }[];
   vendorId: string;
   vendorName: string;
   area: string | null;
@@ -158,11 +168,15 @@ export type SearchStreamEvent =
       // WhatsApp message customized to what the buyer was looking for,
       // instead of a generic "interested in what you offer."
       storesQuery: string | null;
-      // The storefront of each matched product's own vendor — deterministic
+      // The storefront of each matched PRODUCT's own vendor — deterministic
       // enrichment (a plain lookup by vendorId, not a searchStores tool call)
       // so a photo/text match for a specific item still surfaces the actual
       // store selling it, not just the WhatsApp contact already on the
-      // product card. One entry per unique vendor represented in `products`.
+      // product card. One entry per unique vendor represented among the
+      // product-kind entries of `products` — service-kind results are
+      // deliberately excluded (see VendorResultCard: a service's own card
+      // already shows everything the vendor uploaded plus its own WhatsApp
+      // CTA, so a companion store card would just duplicate that contact).
       productStores: StoreMatch[];
       productsMatchTier: MatchTier;
       storesMatchTier: MatchTier;

@@ -3,6 +3,7 @@ import { categoriesApi } from "@/services/products";
 import { settingsApi } from "@/services/settings";
 import { walletApi } from "@/services/wallet";
 import { fetchMyReferrals } from "@/services/referrals";
+import { storeApi } from "@/services/store";
 import { queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
 
@@ -22,6 +23,30 @@ export function getRouteKey(href: string): string {
 }
 
 export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
+  // Dynamic routes first — the static switch below can't match these.
+  // View/edit listing (/{userId}/products/{productId}[/edit]): prefetch the
+  // listing itself plus the retail categories its label resolution needs, so
+  // the progress bar runs on the PREVIOUS page until the data is in cache
+  // and the page lands fully rendered — same behavior as every static route.
+  const listingMatch = routeKey.match(/^products\/([^/]+)(\/edit)?$/);
+  if (
+    listingMatch &&
+    listingMatch[1] !== "add" &&
+    listingMatch[1] !== "reviews"
+  ) {
+    const productId = listingMatch[1];
+    return [
+      {
+        queryKey: queryKeys.products.detail(productId),
+        queryFn: () => categoriesApi.getProduct(productId),
+      },
+      {
+        queryKey: queryKeys.products.categories,
+        queryFn: categoriesApi.getCategories,
+      },
+    ];
+  }
+
   switch (routeKey) {
     case "products": {
       const defaultParams = {
@@ -64,6 +89,13 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
         {
           queryKey: queryKeys.referrals.mine,
           queryFn: fetchMyReferrals,
+        },
+      ];
+    case "store":
+      return [
+        {
+          queryKey: queryKeys.store.mine,
+          queryFn: storeApi.getMyStore,
         },
       ];
     default:

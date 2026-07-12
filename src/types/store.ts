@@ -57,14 +57,13 @@ export interface PublicStore extends Store {
   products: PublicStoreProduct[];
 }
 
-/** Facebook-profile-style tab switcher on the public storefront. */
-export type PublicStoreTab = "products" | "services" | "photos" | "about";
+/** Tab switcher for the public storefront's catalog body — About was dropped,
+ *  the Intro sidebar already covers that ground. */
+export type PublicStoreTab = "products" | "services";
 
+/** Both card types share the same social-post-style layout and CTA. */
 export interface PublicStoreProductProps {
   product: PublicStoreProduct;
-}
-
-export interface ServiceCardProps extends PublicStoreProductProps {
   storeName: string;
   whatsapp: string | null;
 }
@@ -72,13 +71,9 @@ export interface ServiceCardProps extends PublicStoreProductProps {
 export interface StoreTabsProps {
   goods: PublicStoreProduct[];
   services: PublicStoreProduct[];
-  photos: string[];
   isFood: boolean;
   storeName: string;
   whatsapp: string | null;
-  description: string;
-  area: string | null;
-  sectors: string[];
   defaultTab: PublicStoreTab;
   sidebar: ReactNode;
 }

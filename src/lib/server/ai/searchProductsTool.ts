@@ -121,7 +121,7 @@ export function searchProductsTool(
           push?.(foundCountPhrase(results.length, "product", matchTier));
         }
       } else {
-        push?.(noProductMatchPhrase(Boolean(externalSuggestions?.length)));
+        push?.(noProductMatchPhrase());
       }
 
       return {

@@ -6,6 +6,11 @@
 // Matching itself stays embeddings-first (see marketplace model) — this list
 // exists for vendor self-description, search filters, and this derivation,
 // not as a hard taxonomy the AI is constrained to.
+//
+// `listingConfig` tailors the Add-Offering wizard's content per sector (which
+// service-detail preset groups show, category pre-fill, placeholder copy) —
+// see SectorListingConfig in @/types/sectors. It never changes the wizard's
+// block structure; that stays a function of `classification` alone.
 import type { SectorCategory, SectorLeaf } from "@/types/sectors";
 
 export const SECTOR_TAXONOMY: SectorCategory[] = [
@@ -17,18 +22,22 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "restaurants_quick_service",
         label: "Restaurants & Quick Service",
         classification: "food",
-        featured: true,
       },
       {
         value: "catering_event_food",
         label: "Catering & Event Food",
         classification: "food_both",
+        listingConfig: {
+          presetGroups: ["Events & Catering"],
+          serviceNamePlaceholder: "e.g., Full-service wedding catering",
+          serviceDescriptionPlaceholder:
+            "Describe the menu options, staff included, setup, and how bookings work…",
+        },
       },
       {
         value: "bakery_pastries",
         label: "Bakery & Pastries",
         classification: "food",
-        featured: true,
       },
       {
         value: "bars_lounges_nightlife",
@@ -49,12 +58,22 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "hotels_shortlets",
         label: "Hotels & Short-lets",
         classification: "service",
-        featured: true,
+        listingConfig: {
+          presetGroups: [],
+          serviceNamePlaceholder:
+            "e.g., Deluxe room — nightly, 2-bedroom short-let…",
+          serviceDescriptionPlaceholder:
+            "Describe the space, amenities, check-in process, and nightly rate…",
+        },
       },
       {
         value: "event_planning_services",
         label: "Event Planning Services",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Events & Catering"],
+          serviceNamePlaceholder: "e.g., Full wedding planning package",
+        },
       },
     ],
   },
@@ -66,7 +85,6 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "groceries_supermarket",
         label: "Groceries & Supermarket",
         classification: "retail",
-        featured: true,
       },
       {
         value: "provision_stores_kiosks",
@@ -82,11 +100,16 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "stationery_books",
         label: "Stationery & Books",
         classification: "both",
+        listingConfig: {
+          presetGroups: [],
+          productCategoryId: "books",
+        },
       },
       {
         value: "toys_kids_items",
         label: "Toys & Kids' Items",
         classification: "retail",
+        listingConfig: { productCategoryId: "toys" },
       },
       {
         value: "gift_items_souvenirs",
@@ -103,32 +126,49 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "clothing_apparel",
         label: "Clothing & Apparel",
         classification: "retail",
-        featured: true,
+        listingConfig: {
+          productCategoryId: "fashion",
+          productNamePlaceholder: "e.g., Men's senator wear, Ankara gown…",
+        },
       },
       {
         value: "shoes_footwear",
         label: "Shoes & Footwear",
         classification: "retail",
+        listingConfig: { productCategoryId: "fashion" },
       },
       {
         value: "bags_accessories",
         label: "Bags & Accessories",
         classification: "retail",
+        listingConfig: { productCategoryId: "accessories" },
       },
       {
         value: "jewelry_watches",
         label: "Jewelry & Watches",
         classification: "both",
+        listingConfig: {
+          presetGroups: ["Fashion & Tailoring", "Repairs & Technical"],
+          productCategoryId: "accessories",
+        },
       },
       {
         value: "tailoring_fashion_design",
         label: "Tailoring & Fashion Design",
         classification: "both",
+        listingConfig: {
+          presetGroups: ["Fashion & Tailoring"],
+          productCategoryId: "fashion",
+          serviceNamePlaceholder: "e.g., Custom agbada — sewn to measure",
+          serviceDescriptionPlaceholder:
+            "Describe what you sew, fittings included, and turnaround time…",
+        },
       },
       {
         value: "textile_fabric_sales",
         label: "Textile & Fabric Sales",
         classification: "retail",
+        listingConfig: { productCategoryId: "fashion" },
       },
     ],
   },
@@ -140,39 +180,64 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "phones_accessories",
         label: "Phones & Accessories",
         classification: "both",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Repairs & Technical"],
+          productCategoryId: "electronics",
+          productNamePlaceholder:
+            "e.g., Samsung Galaxy A16, iPhone 13 charger…",
+        },
       },
       {
         value: "computers_laptops",
         label: "Computers & Laptops",
         classification: "both",
+        listingConfig: {
+          presetGroups: ["Repairs & Technical"],
+          productCategoryId: "electronics",
+        },
       },
       {
         value: "home_electronics_appliances",
         label: "Home Electronics & Appliances",
         classification: "both",
+        listingConfig: {
+          presetGroups: ["Repairs & Technical"],
+          productCategoryId: "electronics",
+        },
       },
       {
         value: "gaming_consoles",
         label: "Gaming & Consoles",
         classification: "retail",
+        listingConfig: { productCategoryId: "electronics" },
       },
       {
         value: "software_development_it",
         label: "Software Development & IT Services",
         classification: "service",
-        featured: true,
+        listingConfig: {
+          presetGroups: [],
+          serviceNamePlaceholder: "e.g., Business website design & build",
+          serviceDescriptionPlaceholder:
+            "Describe what you build, your process, and delivery timeline…",
+        },
       },
       {
         value: "phone_gadget_repairs",
         label: "Phone & Gadget Repairs",
         classification: "service",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Repairs & Technical"],
+          serviceNamePlaceholder: "e.g., iPhone screen replacement",
+          serviceDescriptionPlaceholder:
+            "Describe what you repair, the parts you use, and turnaround time…",
+        },
       },
       {
         value: "computer_repairs_it_support",
         label: "Computer Repairs & IT Support",
         classification: "service",
+        listingConfig: { presetGroups: ["Repairs & Technical"] },
       },
     ],
   },
@@ -184,25 +249,39 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "cosmetics_skincare_retail",
         label: "Cosmetics & Skincare Retail",
         classification: "retail",
-        featured: true,
       },
       {
         value: "hairdressing_barbing",
         label: "Hairdressing & Barbing",
         classification: "both",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Beauty & Personal Care"],
+          serviceNamePlaceholder: "e.g., Braids, fade cut, wig installation…",
+        },
       },
       {
         value: "makeup_artistry",
         label: "Makeup Artistry",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Beauty & Personal Care"],
+          serviceNamePlaceholder: "e.g., Bridal makeup — full glam",
+        },
       },
       {
         value: "spa_massage",
         label: "Spa & Massage",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Beauty & Personal Care", "Health & Wellness"],
+        },
       },
-      { value: "nail_care", label: "Nail Care", classification: "service" },
+      {
+        value: "nail_care",
+        label: "Nail Care",
+        classification: "service",
+        listingConfig: { presetGroups: ["Beauty & Personal Care"] },
+      },
       {
         value: "perfumes_fragrances",
         label: "Perfumes & Fragrances",
@@ -218,42 +297,56 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "pharmacy_medicines",
         label: "Pharmacy & Medicines",
         classification: "both",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Health & Wellness"],
+          productCategoryId: "health",
+        },
       },
       {
         value: "medical_equipment_supplies",
         label: "Medical Equipment & Supplies",
         classification: "retail",
+        listingConfig: { productCategoryId: "health" },
       },
       {
         value: "clinics_hospitals",
         label: "Clinics & Hospitals",
         classification: "service",
+        listingConfig: { presetGroups: ["Health & Wellness"] },
       },
       {
         value: "dental_services",
         label: "Dental Services",
         classification: "service",
+        listingConfig: { presetGroups: ["Health & Wellness"] },
       },
       {
         value: "diagnostic_lab_services",
         label: "Diagnostic & Lab Services",
         classification: "service",
+        listingConfig: { presetGroups: ["Health & Wellness"] },
       },
       {
         value: "fitness_gyms",
         label: "Fitness & Gyms",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Health & Wellness", "Training & Lessons"],
+          serviceNamePlaceholder:
+            "e.g., Monthly gym membership, personal training…",
+        },
       },
       {
         value: "nutrition_dietetics",
         label: "Nutrition & Dietetics",
         classification: "service",
+        listingConfig: { presetGroups: ["Health & Wellness"] },
       },
       {
         value: "traditional_herbal_medicine",
         label: "Traditional & Herbal Medicine",
         classification: "both",
+        listingConfig: { presetGroups: ["Health & Wellness"] },
       },
     ],
   },
@@ -265,27 +358,35 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "furniture",
         label: "Furniture",
         classification: "both",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Home Services"],
+          productCategoryId: "home-kitchen",
+          serviceNamePlaceholder: "e.g., Custom wardrobe — made to order",
+        },
       },
       {
         value: "home_decor_furnishings",
         label: "Home Decor & Furnishings",
         classification: "retail",
+        listingConfig: { productCategoryId: "home-kitchen" },
       },
       {
         value: "kitchenware_appliances",
         label: "Kitchenware & Appliances",
         classification: "retail",
+        listingConfig: { productCategoryId: "home-kitchen" },
       },
       {
         value: "bedding_linens",
         label: "Bedding & Linens",
         classification: "retail",
+        listingConfig: { productCategoryId: "home-kitchen" },
       },
       {
         value: "interior_design_services",
         label: "Interior Design Services",
         classification: "service",
+        listingConfig: { presetGroups: ["Home Services"] },
       },
     ],
   },
@@ -297,7 +398,6 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "building_materials",
         label: "Building Materials",
         classification: "retail",
-        featured: true,
       },
       {
         value: "hardware_tools",
@@ -308,36 +408,50 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "construction_contracting",
         label: "Construction & Contracting",
         classification: "service",
+        listingConfig: { presetGroups: ["Home Services"] },
       },
       {
         value: "architecture_engineering_design",
         label: "Architecture & Engineering Design",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "plumbing_services",
         label: "Plumbing Services",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Home Services", "Repairs & Technical"],
+        },
       },
       {
         value: "electrical_installation_services",
         label: "Electrical Installation Services",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Home Services", "Repairs & Technical"],
+        },
       },
       {
         value: "painting_decorating_services",
         label: "Painting & Decorating Services",
         classification: "service",
+        listingConfig: { presetGroups: ["Home Services"] },
       },
       {
         value: "real_estate_property_sales",
         label: "Real Estate & Property Sales",
         classification: "service",
+        listingConfig: {
+          presetGroups: [],
+          serviceNamePlaceholder: "e.g., 3-bedroom flat for rent in Ikeja",
+        },
       },
       {
         value: "property_management",
         label: "Property Management",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
     ],
   },
@@ -349,28 +463,39 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "auto_parts_accessories",
         label: "Auto Parts & Accessories",
         classification: "both",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Auto Services"],
+          productNamePlaceholder: "e.g., Toyota Corolla brake pads",
+        },
       },
       {
         value: "vehicle_sales",
         label: "Vehicle Sales",
         classification: "retail",
+        listingConfig: {
+          productNamePlaceholder: "e.g., Toyota Camry 2015 — foreign used",
+        },
       },
       {
         value: "auto_repair_mechanic",
         label: "Auto Repair & Mechanic Services",
         classification: "service",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Auto Services"],
+          serviceNamePlaceholder: "e.g., Full engine service",
+        },
       },
       {
         value: "car_wash_detailing",
         label: "Car Wash & Detailing",
         classification: "service",
+        listingConfig: { presetGroups: ["Auto Services"] },
       },
       {
         value: "tyre_sales_vulcanizing",
         label: "Tyre Sales & Vulcanizing",
         classification: "both",
+        listingConfig: { presetGroups: ["Auto Services"] },
       },
       {
         value: "motorcycle_keke_sales",
@@ -387,22 +512,28 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "generator_solar_install_repair",
         label: "Generator & Solar Installation/Repair",
         classification: "both",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Repairs & Technical", "Home Services"],
+          serviceNamePlaceholder: "e.g., 5kVA solar installation",
+        },
       },
       {
         value: "appliance_repair",
         label: "Appliance Repair",
         classification: "service",
+        listingConfig: { presetGroups: ["Repairs & Technical"] },
       },
       {
         value: "shoe_bag_repair_cobbling",
         label: "Shoe & Bag Repair (Cobbling)",
         classification: "service",
+        listingConfig: { presetGroups: ["Repairs & Technical"] },
       },
       {
         value: "watch_repair",
         label: "Watch Repair",
         classification: "service",
+        listingConfig: { presetGroups: ["Repairs & Technical"] },
       },
     ],
   },
@@ -414,54 +545,68 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "consulting_advisory",
         label: "Consulting & Advisory",
         classification: "service",
-        featured: true,
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "accounting_bookkeeping",
         label: "Accounting & Bookkeeping",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "legal_services",
         label: "Legal Services",
         classification: "service",
-        featured: true,
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "marketing_advertising",
         label: "Marketing & Advertising",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "graphic_design_branding",
         label: "Graphic Design & Branding",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Media & Photography"],
+          serviceNamePlaceholder: "e.g., Logo & full brand identity design",
+        },
       },
       {
         value: "photography_videography",
         label: "Photography & Videography",
         classification: "service",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Media & Photography"],
+          serviceNamePlaceholder:
+            "e.g., Wedding photography — full-day coverage",
+        },
       },
       {
         value: "printing_publishing",
         label: "Printing & Publishing",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "recruitment_hr_services",
         label: "Recruitment & HR Services",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "translation_interpretation",
         label: "Translation & Interpretation",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "virtual_assistance_admin",
         label: "Virtual Assistance & Admin Support",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
     ],
   },
@@ -473,27 +618,34 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "schools_tutorial_centers",
         label: "Schools & Tutorial Centers",
         classification: "service",
-        featured: true,
+        listingConfig: { presetGroups: ["Training & Lessons"] },
       },
       {
         value: "vocational_skills_training",
         label: "Vocational & Skills Training",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Training & Lessons"],
+          serviceNamePlaceholder: "e.g., 8-week fashion design training",
+        },
       },
       {
         value: "online_courses_elearning",
         label: "Online Courses & E-learning",
         classification: "service",
+        listingConfig: { presetGroups: ["Training & Lessons"] },
       },
       {
         value: "daycare_creche",
         label: "Daycare & Creche",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "educational_materials",
         label: "Educational Materials & Publishing",
         classification: "retail",
+        listingConfig: { productCategoryId: "books" },
       },
     ],
   },
@@ -505,7 +657,9 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "crop_farming_produce",
         label: "Crop Farming & Produce Sales",
         classification: "retail",
-        featured: true,
+        listingConfig: {
+          productNamePlaceholder: "e.g., 50kg bag of rice, basket of tomatoes…",
+        },
       },
       {
         value: "livestock_poultry",
@@ -521,6 +675,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "agro_processing",
         label: "Agro-processing (Milling, Packaging)",
         classification: "both",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "farm_inputs_equipment",
@@ -531,6 +686,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "agricultural_consulting",
         label: "Agricultural Consulting Services",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
     ],
   },
@@ -542,27 +698,34 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "logistics_courier_services",
         label: "Logistics & Courier Services",
         classification: "service",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Logistics & Transport"],
+          serviceNamePlaceholder: "e.g., Same-day delivery within Lagos",
+        },
       },
       {
         value: "ride_hailing_car_hire",
         label: "Ride-hailing & Car Hire",
         classification: "service",
+        listingConfig: { presetGroups: ["Logistics & Transport"] },
       },
       {
         value: "haulage_trucking",
         label: "Haulage & Trucking",
         classification: "service",
+        listingConfig: { presetGroups: ["Logistics & Transport"] },
       },
       {
         value: "moving_relocation_services",
         label: "Moving & Relocation Services",
         classification: "service",
+        listingConfig: { presetGroups: ["Logistics & Transport"] },
       },
       {
         value: "freight_forwarding_clearing",
         label: "Freight Forwarding & Clearing",
         classification: "service",
+        listingConfig: { presetGroups: ["Logistics & Transport"] },
       },
     ],
   },
@@ -574,27 +737,31 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "microfinance_loans",
         label: "Microfinance & Loans",
         classification: "service",
-        featured: true,
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "insurance_services",
         label: "Insurance Services",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "bureau_de_change_forex",
         label: "Bureau de Change / Forex",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "investment_wealth_advisory",
         label: "Investment & Wealth Advisory",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "cooperative_societies",
         label: "Cooperative Societies",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
     ],
   },
@@ -606,32 +773,45 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "music_audio_production",
         label: "Music & Audio Production",
         classification: "service",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Media & Photography"],
+          serviceNamePlaceholder: "e.g., Studio recording session",
+        },
       },
       {
         value: "film_video_production",
         label: "Film & Video Production",
         classification: "service",
+        listingConfig: { presetGroups: ["Media & Photography"] },
       },
       {
         value: "event_centers_rentals",
         label: "Event Centers & Rentals",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Events & Catering"],
+          serviceNamePlaceholder: "e.g., 500-seat event hall rental",
+        },
       },
       {
         value: "dj_mc_services",
         label: "DJ & MC Services",
         classification: "service",
+        listingConfig: {
+          presetGroups: ["Events & Catering", "Media & Photography"],
+        },
       },
       {
         value: "art_craft_sales",
         label: "Art & Craft Sales",
         classification: "both",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "content_creation_influencer",
         label: "Content Creation & Influencer Services",
         classification: "service",
+        listingConfig: { presetGroups: ["Media & Photography"] },
       },
     ],
   },
@@ -648,11 +828,16 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "textile_manufacturing",
         label: "Textile Manufacturing",
         classification: "retail",
+        listingConfig: { productCategoryId: "fashion" },
       },
       {
         value: "furniture_manufacturing",
         label: "Furniture Manufacturing",
         classification: "both",
+        listingConfig: {
+          presetGroups: ["Home Services"],
+          productCategoryId: "home-kitchen",
+        },
       },
       {
         value: "plastics_packaging_manufacturing",
@@ -674,33 +859,43 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "cleaning_services",
         label: "Cleaning Services",
         classification: "service",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Home Services"],
+          serviceNamePlaceholder: "e.g., Deep cleaning — 3-bedroom flat",
+        },
       },
       {
         value: "laundry_dry_cleaning",
         label: "Laundry & Dry Cleaning",
         classification: "service",
-        featured: true,
+        listingConfig: {
+          presetGroups: ["Home Services"],
+          serviceNamePlaceholder: "e.g., Wash & fold — per basket",
+        },
       },
       {
         value: "fumigation_pest_control",
         label: "Fumigation & Pest Control",
         classification: "service",
+        listingConfig: { presetGroups: ["Home Services"] },
       },
       {
         value: "domestic_staffing",
         label: "Domestic Staffing (Nanny, Cook, etc.)",
         classification: "service",
+        listingConfig: { presetGroups: ["Home Services"] },
       },
       {
         value: "gardening_landscaping",
         label: "Gardening & Landscaping",
         classification: "service",
+        listingConfig: { presetGroups: ["Home Services"] },
       },
       {
         value: "security_services",
         label: "Security Services",
         classification: "service",
+        listingConfig: { presetGroups: ["Home Services"] },
       },
     ],
   },
@@ -712,16 +907,19 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "religious_organizations",
         label: "Religious Organizations & Ministries",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "ngos_nonprofits",
         label: "NGOs & Nonprofits",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
       {
         value: "community_associations",
         label: "Community Associations",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
     ],
   },
@@ -738,7 +936,10 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "government_public_sector_contracting",
         label: "Government & Public Sector Contracting",
         classification: "service",
+        listingConfig: { presetGroups: [] },
       },
+      // "Other" keeps no listingConfig on purpose — with no sector signal, the
+      // full preset list is the honest default.
       { value: "other", label: "Other", classification: "both" },
     ],
   },
@@ -753,10 +954,10 @@ export const SECTOR_BY_VALUE: Record<string, SectorLeaf> = Object.fromEntries(
   ALL_SECTORS.map((s) => [s.value, s]),
 );
 
-// Backward-compat flat suggestion list for the Store editor's "pick up to 5"
-// sector chips (src/components/store/StorePage.tsx) — same shape as before
-// (readonly string[] of labels), now sourced from the curated `featured`
-// subset instead of a hand-maintained 12-item list.
-export const SECTOR_SUGGESTIONS = ALL_SECTORS.filter((s) => s.featured).map(
-  (s) => s.label,
-) as readonly string[];
+// Store.sectors holds display LABELS (not slugs — see the Store editor), so
+// resolving a store back to its category (e.g. for the public storefront's
+// hero theme) needs a label -> category id lookup rather than SECTOR_BY_VALUE.
+export const SECTOR_CATEGORY_BY_LABEL: Record<string, string> =
+  Object.fromEntries(
+    SECTOR_TAXONOMY.flatMap((c) => c.sectors.map((s) => [s.label, c.id])),
+  );
