@@ -2,12 +2,12 @@
 // (src/lib/sectors.ts) — kept in sync manually so a waitlist vendor's chosen
 // sector slug matches what real signup will store, with no translation
 // needed when they're invited to onboard. `listingConfig` (wizard-only) is
-// dropped; `classification` is kept because the waitlist needs it to filter
-// down to the Enugu pilot's scope below.
+// dropped.
 //
 // `eventRelated` mirrors the source taxonomy's `listingConfig.presetGroups`
-// containing "Events & Catering" — it's the signal for which pure-service
-// sectors the pilot accommodates (see WAITLIST_SECTOR_TAXONOMY).
+// containing "Events & Catering" — kept for parity with the canonical source
+// even though WAITLIST_SECTOR_TAXONOMY below is now a hand-picked lineup
+// rather than something derived from this flag.
 
 export type SectorClassification =
   | "retail"
@@ -73,6 +73,12 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
       {
         value: "event_planning_services",
         label: "Event Planning Services",
+        classification: "service",
+        eventRelated: true,
+      },
+      {
+        value: "ushering_services",
+        label: "Ushering Services",
         classification: "service",
         eventRelated: true,
       },
@@ -580,17 +586,53 @@ export const SECTOR_LABEL_BY_VALUE: Record<string, string> = Object.fromEntries(
   ALL_SECTORS.map((s) => [s.value, s.label]),
 );
 
-// Enugu pilot scope: vendors who post products (retail/food) plus
-// event-related services only — no pure professional/technical/domestic
-// services yet. See eventRelated above for which service sectors qualify.
-function isWaitlistEligible(leaf: SectorLeaf): boolean {
-  if (leaf.classification === "service") return leaf.eventRelated === true;
-  return true;
+function leavesByValue(...values: string[]): SectorLeaf[] {
+  return values.map((v) => ALL_SECTORS.find((s) => s.value === v)!);
 }
 
-export const WAITLIST_SECTOR_TAXONOMY: SectorCategory[] = SECTOR_TAXONOMY.map(
-  (category) => ({
-    ...category,
-    sectors: category.sectors.filter(isWaitlistEligible),
-  }),
-).filter((category) => category.sectors.length > 0);
+function categorySectors(id: string): SectorLeaf[] {
+  return SECTOR_TAXONOMY.find((c) => c.id === id)!.sectors;
+}
+
+// Enugu pilot scope: a hand-picked launch lineup, not a rule derived from
+// classification/eventRelated — phones (highest-urgency, most WhatsApp-native
+// search behavior), fashion, and beauty essentials as the retail wedge, plus
+// event services (incl. ushering) and food & hospitality. Deliberately
+// narrower than SECTOR_TAXONOMY above, which stays in sync with the
+// canonical source for later full-signup use.
+export const WAITLIST_SECTOR_TAXONOMY: SectorCategory[] = [
+  {
+    id: "electronics_technology",
+    label: "Electronics & Technology",
+    sectors: leavesByValue("phones_accessories", "phone_gadget_repairs"),
+  },
+  {
+    id: "fashion_apparel",
+    label: "Fashion & Apparel",
+    sectors: categorySectors("fashion_apparel"),
+  },
+  {
+    id: "beauty_personal_care",
+    label: "Beauty & Personal Care",
+    sectors: leavesByValue("cosmetics_skincare_retail", "perfumes_fragrances"),
+  },
+  {
+    id: "event_services",
+    label: "Event Services",
+    sectors: leavesByValue("event_planning_services", "ushering_services"),
+  },
+  {
+    id: "food_hospitality",
+    label: "Food & Hospitality",
+    sectors: categorySectors("food_hospitality").filter(
+      (s) =>
+        ![
+          "event_planning_services",
+          "ushering_services",
+          "restaurants_quick_service",
+          "bars_lounges_nightlife",
+          "hotels_shortlets",
+        ].includes(s.value),
+    ),
+  },
+];

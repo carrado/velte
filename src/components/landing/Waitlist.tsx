@@ -422,7 +422,7 @@ export default function Waitlist() {
                               <SelectContent className="max-h-72">
                                 {WAITLIST_SECTOR_TAXONOMY.map((category) => (
                                   <SelectGroup key={category.id}>
-                                    <SelectLabel className="text-[11px] font-semibold uppercase tracking-wide text-white/35">
+                                    <SelectLabel className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                                       {category.label}
                                     </SelectLabel>
                                     {category.sectors.map((leaf) => (
