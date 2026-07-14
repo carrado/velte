@@ -16,7 +16,8 @@ import type { SectorPickerProps } from "@/types/sectors";
 // Plain grouped dropdown (same primitive as the State field in
 // Step1BusinessAccount.tsx) — a prior searchable-combobox version (custom
 // Popover + search input) was more UI than this needs; a native-feeling
-// select with category groups is enough to get through ~120 leaf sectors.
+// select with category groups is enough to get through the Enugu pilot's
+// trimmed-down sector list.
 export default function SectorPicker({
   value,
   onSelect,
