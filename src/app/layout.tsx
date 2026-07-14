@@ -10,43 +10,47 @@ const inter = Inter({
   variable: "--font-sans",
 });
 
+const VELTE_ICON =
+  "https://res.cloudinary.com/dbhpul04t/image/upload/v1779845711/velte_manifest_qdphtb.png";
+
 export const metadata: Metadata = {
+  metadataBase: new URL("https://velte.ng"),
   title: {
-    default: "Velte | WhatsApp AI Sales Rep | 24/7 Automated Sales Agent",
-    template: "%s | WhatsApp AI Sales Rep",
+    default: "Velte Connect | Let AI Bring Buyers Straight To Your Shop",
+    template: "%s | Velte Connect",
   },
   description:
-    "Deploy an intelligent AI agent on your WhatsApp Business number that answers product questions, negotiates prices, checks inventory, and closes sales — 24 hours a day, 7 days a week.",
+    "Velte Connect is an AI discovery engine that matches buyers to nearby vendors by what they need, then hands them straight to your WhatsApp to close the sale. Now onboarding vendors in Enugu.",
   keywords: [
-    "WhatsApp AI",
-    "AI sales agent",
-    "WhatsApp Business automation",
-    "automated sales",
-    "AI chatbot",
-    "inventory check",
-    "price negotiation",
-    "24/7 sales",
+    "Velte Connect",
+    "AI vendor discovery",
+    "buyer to vendor matching",
+    "WhatsApp sales",
+    "Enugu vendors",
+    "AI shopping assistant",
+    "find local vendors",
+    "AI marketplace Nigeria",
   ],
-  authors: [{ name: "Your Company Name", url: "https://yourcompany.com" }],
-  creator: "Your Company Name",
-  publisher: "Your Company Name",
+  authors: [{ name: "Velte Technologies", url: "https://velte.ng" }],
+  creator: "Velte Technologies",
+  publisher: "Velte Technologies",
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
   openGraph: {
-    title: "Turn WhatsApp Into Your Smartest Sales Rep",
+    title: "Let AI Bring Buyers Straight To Your Shop",
     description:
-      "Deploy an intelligent AI agent on your WhatsApp Business number that answers product questions, negotiates prices, checks inventory, and closes sales — 24/7.",
-    url: "https://yourdomain.com",
-    siteName: "WhatsApp AI Sales Rep",
+      "A buyer describes what they need — our AI matches them to nearby vendors and hands them straight to WhatsApp to close the sale. Join the Velte Connect vendor waitlist in Enugu.",
+    url: "https://velte.ng",
+    siteName: "Velte Connect",
     images: [
       {
-        url: "https://yourdomain.com/og-image.jpg", // Replace with your actual image
-        width: 1200,
-        height: 630,
-        alt: "WhatsApp AI Sales Rep – 24/7 Automated Sales Agent",
+        url: VELTE_ICON,
+        width: 1000,
+        height: 1000,
+        alt: "Velte Connect",
       },
     ],
     locale: "en_US",
@@ -54,11 +58,10 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Turn WhatsApp Into Your Smartest Sales Rep",
+    title: "Let AI Bring Buyers Straight To Your Shop",
     description:
-      "Deploy an intelligent AI agent on your WhatsApp Business number that answers product questions, negotiates prices, checks inventory, and closes sales — 24/7.",
-    images: ["https://yourdomain.com/twitter-image.jpg"], // Replace
-    creator: "@yourtwitterhandle",
+      "A buyer describes what they need — our AI matches them to nearby vendors and hands them straight to WhatsApp to close the sale. Join the Velte Connect vendor waitlist in Enugu.",
+    images: [VELTE_ICON],
   },
   robots: {
     index: true,
@@ -72,9 +75,9 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: "https://res.cloudinary.com/dbhpul04t/image/upload/v1779845711/velte_manifest_qdphtb.png",
-    shortcut: "/favicon-16x16.png",
-    apple: "/apple-touch-icon.png",
+    icon: VELTE_ICON,
+    shortcut: VELTE_ICON,
+    apple: VELTE_ICON,
   },
   verification: {
     other: {
