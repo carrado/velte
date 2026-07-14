@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, Loader2, Camera, X, Compass, Send } from "lucide-react";
+import { Loader2, Camera, X, Compass, ArrowUp } from "lucide-react";
 import { toast } from "sonner";
 import { runSearchStream } from "@/lib/searchStream";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
@@ -206,12 +206,13 @@ function ConversationTurnView({
   onAnswerClarification: (text: string) => void;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* The buyer's own message — right-aligned, shaded with the app's
-          accent color, like a chat bubble. The AI's response below is
-          left/full-width instead, since it's cards and prose, not a bubble. */}
+          accent color, like a chat bubble. The AI's response below sits in
+          its own row with an avatar, plain text/cards rather than a bubble —
+          same structure as ChatGPT's thread. */}
       <div className="flex justify-end">
-        <div className="max-w-[85%] sm:max-w-[70%] bg-orange-100 rounded-2xl rounded-br-md px-4 py-2.5 flex items-start gap-2.5">
+        <div className="max-w-[85%] sm:max-w-[70%] bg-orange-50 border border-orange-100 rounded-3xl rounded-br-lg px-4 py-2.5 flex items-start gap-2.5">
           {turn.imagePreview && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -228,145 +229,161 @@ function ConversationTurnView({
         </div>
       </div>
 
-      {turn.phase === "loading" && (
-        <div className="flex items-center gap-2 text-sm text-gray-500 animate-pulse">
-          <Loader2 size={15} className="animate-spin" />
-          <span>{turn.status}</span>
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-[13px] font-bold shrink-0">
+          V
         </div>
-      )}
-
-      {turn.phase === "done" && turn.error && (
-        <p className="text-sm text-red-600">{turn.error}</p>
-      )}
-
-      {turn.phase === "done" && !turn.error && (
-        <div className="space-y-6">
-          {turn.products.length > 0 ||
-          turn.stores.length > 0 ||
-          turn.vendorProducts.length > 0 ? (
-            <>
-              <FormattedReply text={turn.reply} />
-              {turn.vendorProducts.length > 0 && turn.vendorProductsStore && (
-                <div className="space-y-3">
-                  <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                    From {turn.vendorProductsStore.name}
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {turn.vendorProducts.map((item) => (
-                      <StoreProductCard
-                        key={item.productId}
-                        match={item}
-                        storeName={turn.vendorProductsStore!.name}
-                        storeWhatsapp={turn.vendorProductsStore!.whatsapp}
-                        vendorId={turn.vendorProductsStore!.vendorId}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {turn.products.length > 0 && (
-                <div className="space-y-3">
-                  {(turn.stores.length > 0 ||
-                    (turn.productsMatchTier &&
-                      turn.productsMatchTier !== "local") ||
-                    turn.productsMatchQuality) && (
-                    <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      {productsHeading(
-                        turn.productsMatchTier,
-                        turn.productsMatchQuality,
-                      )}
-                    </h2>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {turn.products.map((match) => (
-                      <VendorResultCard key={match.productId} match={match} />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {turn.productStores.length > 0 && (
-                <div className="space-y-3">
-                  <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                    {turn.productStores.length === 1
-                      ? "Sold by"
-                      : "Sold by these vendors"}
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {turn.productStores.map((match) => (
-                      <StoreResultCard key={match.storeId} match={match} />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {turn.stores.length > 0 && (
-                <div className="space-y-3">
-                  {(turn.products.length > 0 ||
-                    (turn.storesMatchTier &&
-                      turn.storesMatchTier !== "local")) && (
-                    <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      {storesHeading(turn.storesMatchTier)}
-                    </h2>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {turn.stores.map((match) => (
-                      <StoreResultCard
-                        key={match.storeId}
-                        match={match}
-                        // Only when this is a pure vendor/store result (no
-                        // product attached) — a dual-intent turn already has
-                        // a product for the buyer to reference instead.
-                        searchQuery={
-                          turn.products.length === 0 ? turn.storesQuery : null
-                        }
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : turn.externalStoreSuggestions.length > 0 ? (
-            // No Velte vendor matched — real nearby businesses via Google
-            // Places (searchStores Tier 5), visibly distinct from an actual
-            // Velte listing (see ExternalBusinessCard).
-            <>
-              <FormattedReply text={turn.reply} />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {turn.externalStoreSuggestions.map((match) => (
-                  <ExternalBusinessCard
-                    key={match.name + match.address}
-                    match={match}
-                  />
-                ))}
-              </div>
-            </>
-          ) : !turn.toolCalled ? (
-            // The model asked a clarifying question instead of searching
-            // (see systemPrompt.ts) — a plain reply, same as the text above
-            // a result grid, never the "nothing found anywhere" card below:
-            // the conversation is still open, not a dead end.
-            <FormattedReply text={turn.reply} />
-          ) : (
-            // A real search ran and came up completely empty — an AI
-            // suggestion card (spec §3.5), not a bare empty state.
-            <div className="flex items-start gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <Compass size={20} className="text-orange-500 shrink-0 mt-0.5" />
-              <FormattedReply text={turn.reply} />
+        <div className="flex-1 min-w-0 pt-0.5">
+          {turn.phase === "loading" && (
+            <div className="flex items-center gap-2 text-sm text-gray-500 animate-pulse">
+              <Loader2 size={15} className="animate-spin" />
+              <span>{turn.status}</span>
             </div>
           )}
-          {/* Sits after, not inside, the chain above — so the rare turn
+
+          {turn.phase === "done" && turn.error && (
+            <p className="text-sm text-red-600">{turn.error}</p>
+          )}
+
+          {turn.phase === "done" && !turn.error && (
+            <div className="space-y-6">
+              {turn.products.length > 0 ||
+              turn.stores.length > 0 ||
+              turn.vendorProducts.length > 0 ? (
+                <>
+                  <FormattedReply text={turn.reply} />
+                  {turn.vendorProducts.length > 0 &&
+                    turn.vendorProductsStore && (
+                      <div className="space-y-3">
+                        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                          From {turn.vendorProductsStore.name}
+                        </h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {turn.vendorProducts.map((item) => (
+                            <StoreProductCard
+                              key={item.productId}
+                              match={item}
+                              storeName={turn.vendorProductsStore!.name}
+                              storeWhatsapp={turn.vendorProductsStore!.whatsapp}
+                              vendorId={turn.vendorProductsStore!.vendorId}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  {turn.products.length > 0 && (
+                    <div className="space-y-3">
+                      {(turn.stores.length > 0 ||
+                        (turn.productsMatchTier &&
+                          turn.productsMatchTier !== "local") ||
+                        turn.productsMatchQuality) && (
+                        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                          {productsHeading(
+                            turn.productsMatchTier,
+                            turn.productsMatchQuality,
+                          )}
+                        </h2>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {turn.products.map((match) => (
+                          <VendorResultCard
+                            key={match.productId}
+                            match={match}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {turn.productStores.length > 0 && (
+                    <div className="space-y-3">
+                      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        {turn.productStores.length === 1
+                          ? "Sold by"
+                          : "Sold by these vendors"}
+                      </h2>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {turn.productStores.map((match) => (
+                          <StoreResultCard key={match.storeId} match={match} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {turn.stores.length > 0 && (
+                    <div className="space-y-3">
+                      {(turn.products.length > 0 ||
+                        (turn.storesMatchTier &&
+                          turn.storesMatchTier !== "local")) && (
+                        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                          {storesHeading(turn.storesMatchTier)}
+                        </h2>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {turn.stores.map((match) => (
+                          <StoreResultCard
+                            key={match.storeId}
+                            match={match}
+                            // Only when this is a pure vendor/store result (no
+                            // product attached) — a dual-intent turn already has
+                            // a product for the buyer to reference instead.
+                            searchQuery={
+                              turn.products.length === 0
+                                ? turn.storesQuery
+                                : null
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : turn.externalStoreSuggestions.length > 0 ? (
+                // No Velte vendor matched — real nearby businesses via Google
+                // Places (searchStores Tier 5), visibly distinct from an actual
+                // Velte listing (see ExternalBusinessCard).
+                <>
+                  <FormattedReply text={turn.reply} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {turn.externalStoreSuggestions.map((match) => (
+                      <ExternalBusinessCard
+                        key={match.name + match.address}
+                        match={match}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : !turn.toolCalled ? (
+                // The model asked a clarifying question instead of searching
+                // (see systemPrompt.ts) — a plain reply, same as the text above
+                // a result grid, never the "nothing found anywhere" card below:
+                // the conversation is still open, not a dead end.
+                <FormattedReply text={turn.reply} />
+              ) : (
+                // A real search ran and came up completely empty — an AI
+                // suggestion card (spec §3.5), not a bare empty state.
+                <div className="flex items-start gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <Compass
+                    size={20}
+                    className="text-orange-500 shrink-0 mt-0.5"
+                  />
+                  <FormattedReply text={turn.reply} />
+                </div>
+              )}
+              {/* Sits after, not inside, the chain above — so the rare turn
               where the model both ran a real search AND asked a follow-up
               question still shows the results AND this widget, rather than
               one silently suppressing the other. Only actionable (rendered
               at all) while this is still the latest turn — once answered,
               a new turn is appended and this one's isLatest flips false. */}
-          {turn.clarification && isLatest && (
-            <ClarificationPrompt
-              clarification={turn.clarification}
-              onAnswer={onAnswerClarification}
-            />
+              {turn.clarification && isLatest && (
+                <ClarificationPrompt
+                  clarification={turn.clarification}
+                  onAnswer={onAnswerClarification}
+                />
+              )}
+            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -633,8 +650,10 @@ export function SearchHome() {
     );
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // Shared by the form's onSubmit and the composer textarea's Enter-to-send
+  // (see textareaRef below) — both are just "the buyer hit send," the only
+  // difference is which DOM event triggered it.
+  async function trySubmit() {
     const message = query.trim();
     if (
       (!message && !imageUrl) ||
@@ -650,6 +669,29 @@ export function SearchHome() {
     setImagePreview(null);
     setImageUrl(null);
     await submitMessage(message, currentImageUrl, currentImagePreview);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await trySubmit();
+  }
+
+  // Auto-grows with content, capped at max-h (CSS below) — same feel as
+  // ChatGPT's composer. Re-measured whenever `query` changes, including the
+  // reset to "" after a send, so the box collapses back down too.
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [query]);
+
+  function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void trySubmit();
+    }
   }
 
   // A clarification answer — button click or the dedicated input's own
@@ -703,11 +745,13 @@ export function SearchHome() {
         </div>
       )}
 
-      <div className="flex items-center gap-1.5 bg-white rounded-2xl border border-gray-200 shadow-sm pl-4 pr-2 h-14 focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500">
-        <Search size={18} className="text-gray-400 shrink-0" />
-        <input
+      <div className="flex flex-col bg-white rounded-[28px] border border-gray-200 shadow-sm focus-within:border-gray-300 focus-within:shadow-md transition-shadow">
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleComposerKeyDown}
           disabled={hasPendingClarification}
           placeholder={
             hasPendingClarification
@@ -716,44 +760,46 @@ export function SearchHome() {
                 ? "Ask a follow-up, or search for something else…"
                 : "e.g. 'Tecno fast charger near me'"
           }
-          className="flex-1 min-w-0 h-full outline-none text-[15px] bg-transparent disabled:opacity-50"
+          className="w-full resize-none bg-transparent outline-none text-[15px] leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 max-h-40 overflow-y-auto disabled:opacity-50"
         />
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={handleImageSelect}
-        />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploadingImage || hasPendingClarification}
-          title="Search with a photo"
-          className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
-        >
-          <Camera size={18} />
-        </button>
-        <button
-          type="submit"
-          disabled={
-            (!query.trim() && !imageUrl) ||
-            isSending ||
-            uploadingImage ||
-            hasPendingClarification
-          }
-          title="Send"
-          className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:hover:bg-orange-500 text-white transition-colors"
-        >
-          <Send size={17} />
-        </button>
+        <div className="flex items-center justify-between px-3 pb-3 pt-1">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleImageSelect}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingImage || hasPendingClarification}
+            title="Search with a photo"
+            className="shrink-0 w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+          >
+            <Camera size={17} />
+          </button>
+          <button
+            type="submit"
+            disabled={
+              (!query.trim() && !imageUrl) ||
+              isSending ||
+              uploadingImage ||
+              hasPendingClarification
+            }
+            title="Send"
+            className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
+          >
+            <ArrowUp size={18} />
+          </button>
+        </div>
       </div>
     </form>
   );
 
   return (
-    <div className="h-dvh bg-[#F1F5F9] flex flex-col overflow-hidden">
-      <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-1 shrink-0 bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-sm z-10">
+    <div className="h-dvh bg-white flex flex-col overflow-hidden">
+      <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-white border-b border-gray-100 z-10">
         <Link href="/" className="shrink-0">
           <Image
             src="/velte_logo_esn5dj.png"
@@ -810,8 +856,8 @@ export function SearchHome() {
 
       {!collapsed ? (
         <main className="flex-1 flex flex-col items-center justify-center px-5">
-          <div className="text-center mb-8 max-w-4xl">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[#023337] mb-2">
+          <div className="text-center mb-6 max-w-2xl">
+            <h1 className="text-[28px] sm:text-4xl font-semibold text-[#023337] mb-2 tracking-tight">
               What are you looking for?
             </h1>
             <p className="text-gray-500 text-sm sm:text-base">
@@ -819,14 +865,14 @@ export function SearchHome() {
               nearest vendor who actually has it.
             </p>
           </div>
-          <div className="w-full max-w-4xl">{inputForm}</div>
+          <div className="w-full max-w-2xl">{inputForm}</div>
         </main>
       ) : (
         <>
           {/* Newest content stays pinned to the bottom (bottomRef) as the
               thread grows, so scrolling reads bottom-up like a chat. */}
           <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-6">
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="max-w-3xl mx-auto space-y-8">
               {turns.map((turn, i) => (
                 <ConversationTurnView
                   key={turn.id}
@@ -839,7 +885,7 @@ export function SearchHome() {
             </div>
           </div>
           <div className="shrink-0 px-5 sm:px-8 pt-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-            <div className="max-w-4xl mx-auto">{inputForm}</div>
+            <div className="max-w-3xl mx-auto">{inputForm}</div>
           </div>
         </>
       )}
