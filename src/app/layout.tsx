@@ -10,19 +10,18 @@ const inter = Inter({
   variable: "--font-sans",
 });
 
-const VELTE_ICON =
-  "https://res.cloudinary.com/dbhpul04t/image/upload/v1779845711/velte_manifest_qdphtb.png";
+const VELTE_ICON = "/velte-icon.png";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://velte.ng"),
   title: {
-    default: "Velte Connect | Let AI Bring Buyers Straight To Your Shop",
-    template: "%s | Velte Connect",
+    default: "Velte | Let AI Bring Buyers Straight To Your Shop",
+    template: "%s | Velte",
   },
   description:
-    "Velte Connect is an AI discovery engine that matches buyers to nearby vendors by what they need, then hands them straight to your WhatsApp to close the sale. Now onboarding vendors in Enugu.",
+    "Velte is an AI discovery engine that matches buyers to nearby vendors by what they need, then hands them straight to your WhatsApp to close the sale. Now onboarding vendors in Enugu.",
   keywords: [
-    "Velte Connect",
+    "Velte",
     "AI vendor discovery",
     "buyer to vendor matching",
     "WhatsApp sales",
@@ -42,15 +41,15 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Let AI Bring Buyers Straight To Your Shop",
     description:
-      "A buyer describes what they need — our AI matches them to nearby vendors and hands them straight to WhatsApp to close the sale. Join the Velte Connect vendor waitlist in Enugu.",
+      "A buyer describes what they need — our AI matches them to nearby vendors and hands them straight to WhatsApp to close the sale. Join the Velte vendor waitlist in Enugu.",
     url: "https://velte.ng",
-    siteName: "Velte Connect",
+    siteName: "Velte",
     images: [
       {
         url: VELTE_ICON,
         width: 1000,
         height: 1000,
-        alt: "Velte Connect",
+        alt: "Velte",
       },
     ],
     locale: "en_US",
@@ -60,7 +59,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Let AI Bring Buyers Straight To Your Shop",
     description:
-      "A buyer describes what they need — our AI matches them to nearby vendors and hands them straight to WhatsApp to close the sale. Join the Velte Connect vendor waitlist in Enugu.",
+      "A buyer describes what they need — our AI matches them to nearby vendors and hands them straight to WhatsApp to close the sale. Join the Velte vendor waitlist in Enugu.",
     images: [VELTE_ICON],
   },
   robots: {

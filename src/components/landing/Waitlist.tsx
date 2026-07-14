@@ -61,8 +61,8 @@ async function submitToWaitlist(data: WaitlistForm) {
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       access_key: WEB3FORMS_ACCESS_KEY,
-      subject: "New Vendor Waitlist Signup — Velte Connect (Enugu)",
-      from_name: "Velte Connect Waitlist",
+      subject: "New Vendor Waitlist Signup — Velte (Enugu)",
+      from_name: "Velte Waitlist",
       "Full Name": data.fullName,
       "Business Name": data.businessName,
       "WhatsApp Number": data.whatsapp,
@@ -503,8 +503,7 @@ export default function Waitlist() {
 
                       <p className="flex items-center justify-center gap-1.5 text-white/30 text-xs pt-1">
                         <ShieldCheck className="w-3.5 h-3.5" />
-                        We&apos;ll only reach out about your Velte Connect
-                        onboarding.
+                        We&apos;ll only reach out about your Velte onboarding.
                       </p>
                     </form>
                   )}

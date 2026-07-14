@@ -201,11 +201,6 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         classification: "retail",
       },
       {
-        value: "hairdressing_barbing",
-        label: "Hairdressing & Barbing",
-        classification: "both",
-      },
-      {
         value: "makeup_artistry",
         label: "Makeup Artistry",
         classification: "service",
@@ -220,52 +215,6 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "perfumes_fragrances",
         label: "Perfumes & Fragrances",
         classification: "retail",
-      },
-    ],
-  },
-  {
-    id: "health_wellness",
-    label: "Health & Wellness",
-    sectors: [
-      {
-        value: "pharmacy_medicines",
-        label: "Pharmacy & Medicines",
-        classification: "both",
-      },
-      {
-        value: "medical_equipment_supplies",
-        label: "Medical Equipment & Supplies",
-        classification: "retail",
-      },
-      {
-        value: "clinics_hospitals",
-        label: "Clinics & Hospitals",
-        classification: "service",
-      },
-      {
-        value: "dental_services",
-        label: "Dental Services",
-        classification: "service",
-      },
-      {
-        value: "diagnostic_lab_services",
-        label: "Diagnostic & Lab Services",
-        classification: "service",
-      },
-      {
-        value: "fitness_gyms",
-        label: "Fitness & Gyms",
-        classification: "service",
-      },
-      {
-        value: "nutrition_dietetics",
-        label: "Nutrition & Dietetics",
-        classification: "service",
-      },
-      {
-        value: "traditional_herbal_medicine",
-        label: "Traditional & Herbal Medicine",
-        classification: "both",
       },
     ],
   },
@@ -300,16 +249,6 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
     id: "building_construction",
     label: "Building & Construction",
     sectors: [
-      {
-        value: "building_materials",
-        label: "Building Materials",
-        classification: "retail",
-      },
-      {
-        value: "hardware_tools",
-        label: "Hardware & Tools",
-        classification: "retail",
-      },
       {
         value: "construction_contracting",
         label: "Construction & Contracting",
@@ -489,47 +428,6 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Daycare & Creche",
         classification: "service",
       },
-      {
-        value: "educational_materials",
-        label: "Educational Materials & Publishing",
-        classification: "retail",
-      },
-    ],
-  },
-  {
-    id: "agriculture_agroprocessing",
-    label: "Agriculture & Agro-processing",
-    sectors: [
-      {
-        value: "crop_farming_produce",
-        label: "Crop Farming & Produce Sales",
-        classification: "retail",
-      },
-      {
-        value: "livestock_poultry",
-        label: "Livestock & Poultry",
-        classification: "retail",
-      },
-      {
-        value: "fishery_aquaculture",
-        label: "Fishery & Aquaculture",
-        classification: "retail",
-      },
-      {
-        value: "agro_processing",
-        label: "Agro-processing (Milling, Packaging)",
-        classification: "both",
-      },
-      {
-        value: "farm_inputs_equipment",
-        label: "Farm Inputs & Equipment",
-        classification: "retail",
-      },
-      {
-        value: "agricultural_consulting",
-        label: "Agricultural Consulting Services",
-        classification: "service",
-      },
     ],
   },
   {
@@ -609,57 +507,9 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         classification: "service",
       },
       {
-        value: "event_centers_rentals",
-        label: "Event Centers & Rentals",
-        classification: "service",
-        eventRelated: true,
-      },
-      {
-        value: "dj_mc_services",
-        label: "DJ & MC Services",
-        classification: "service",
-        eventRelated: true,
-      },
-      {
-        value: "art_craft_sales",
-        label: "Art & Craft Sales",
-        classification: "both",
-      },
-      {
         value: "content_creation_influencer",
         label: "Content Creation & Influencer Services",
         classification: "service",
-      },
-    ],
-  },
-  {
-    id: "manufacturing_industrial",
-    label: "Manufacturing & Industrial",
-    sectors: [
-      {
-        value: "food_beverage_manufacturing",
-        label: "Food & Beverage Manufacturing",
-        classification: "food",
-      },
-      {
-        value: "textile_manufacturing",
-        label: "Textile Manufacturing",
-        classification: "retail",
-      },
-      {
-        value: "furniture_manufacturing",
-        label: "Furniture Manufacturing",
-        classification: "both",
-      },
-      {
-        value: "plastics_packaging_manufacturing",
-        label: "Plastics & Packaging Manufacturing",
-        classification: "retail",
-      },
-      {
-        value: "cosmetics_manufacturing",
-        label: "Cosmetics Manufacturing",
-        classification: "retail",
       },
     ],
   },
@@ -718,23 +568,6 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Community Associations",
         classification: "service",
       },
-    ],
-  },
-  {
-    id: "other_miscellaneous",
-    label: "Other",
-    sectors: [
-      {
-        value: "import_export_trading",
-        label: "Import & Export Trading",
-        classification: "retail",
-      },
-      {
-        value: "government_public_sector_contracting",
-        label: "Government & Public Sector Contracting",
-        classification: "service",
-      },
-      { value: "other", label: "Other", classification: "both" },
     ],
   },
 ];
