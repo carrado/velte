@@ -31,6 +31,9 @@ import {
 } from "@/components/ui/select";
 import { WAITLIST_SECTOR_TAXONOMY, SECTOR_LABEL_BY_VALUE } from "@/lib/sectors";
 
+// The pilot's three South-East states — order shown in the picker.
+const PILOT_STATES = ["Anambra", "Enugu", "Imo"] as const;
+
 const waitlistSchema = z.object({
   fullName: z.string().min(2, "Enter your full name"),
   businessName: z.string().min(2, "Enter your business or shop name"),
@@ -42,7 +45,14 @@ const waitlistSchema = z.object({
     .string()
     .min(1, "Select what you sell")
     .refine((v) => v in SECTOR_LABEL_BY_VALUE, "Select what you sell"),
-  area: z.string().min(2, "Tell us where in Enugu you're located"),
+  state: z
+    .string()
+    .min(1, "Select your state")
+    .refine(
+      (v) => (PILOT_STATES as readonly string[]).includes(v),
+      "Select your state",
+    ),
+  area: z.string().min(2, "Tell us where you're located"),
 });
 
 type WaitlistForm = z.infer<typeof waitlistSchema>;
@@ -56,18 +66,22 @@ async function submitToWaitlist(data: WaitlistForm) {
     );
   }
 
+  // The selected state is attached directly onto the address so the notification
+  // email reads as one place ("New Haven, Enugu"), not two fields to cross-reference.
+  const addressWithState = `${data.area}, ${data.state}`;
+
   const res = await fetch("https://api.web3forms.com/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       access_key: WEB3FORMS_ACCESS_KEY,
-      subject: "New Vendor Waitlist Signup — Velte (Enugu)",
+      subject: `New Vendor Waitlist Signup — Velte (${data.state})`,
       from_name: "Velte Waitlist",
       "Full Name": data.fullName,
       "Business Name": data.businessName,
       "WhatsApp Number": data.whatsapp,
       Sector: SECTOR_LABEL_BY_VALUE[data.sector] ?? data.sector,
-      "Area in Enugu": data.area,
+      Address: addressWithState,
     }),
   });
 
@@ -121,6 +135,7 @@ export default function Waitlist() {
       businessName: "",
       whatsapp: "",
       sector: "",
+      state: "",
       area: "",
     } as WaitlistForm,
     onSubmit: async ({ value }) => {
@@ -144,7 +159,7 @@ export default function Waitlist() {
           />
           <span className="hidden sm:inline-flex items-center gap-1.5 bg-[rgb(247,107,16)]/[0.1] border border-[rgb(247,107,16)]/[0.2] text-[rgb(247,107,16)] text-xs font-semibold px-3 py-1.5 rounded-full">
             <MapPin className="w-3 h-3" />
-            Now onboarding vendors in Enugu
+            Now onboarding vendors in Enugu, Anambra &amp; Imo
           </span>
         </div>
       </header>
@@ -168,7 +183,7 @@ export default function Waitlist() {
             className="sm:hidden inline-flex items-center gap-1.5 bg-[rgb(247,107,16)]/[0.1] border border-[rgb(247,107,16)]/[0.2] text-[rgb(247,107,16)] text-xs font-semibold px-3 py-1.5 rounded-full mb-5"
           >
             <MapPin className="w-3 h-3" />
-            Now onboarding vendors in Enugu
+            Now onboarding in Enugu, Anambra &amp; Imo
           </motion.span>
 
           <motion.h1
@@ -219,7 +234,7 @@ export default function Waitlist() {
           >
             <Users className="w-3.5 h-3.5 text-[rgb(247,107,16)]" />
             {submitted ? `${VENDOR_BASE_COUNT}+` : VENDOR_BASE_COUNT} vendors
-            joining the Enugu pilot
+            joining the pilot
           </motion.p>
 
           {!showForm && (
@@ -443,6 +458,55 @@ export default function Waitlist() {
                       </form.Field>
 
                       <form.Field
+                        name="state"
+                        validators={{
+                          onChange: ({ value }) => {
+                            const r =
+                              waitlistSchema.shape.state.safeParse(value);
+                            return r.success
+                              ? undefined
+                              : r.error.issues[0]?.message;
+                          },
+                        }}
+                      >
+                        {(field) => (
+                          <div>
+                            <Label
+                              htmlFor={field.name}
+                              className="text-white/70 text-sm mb-1.5"
+                            >
+                              Which state?
+                            </Label>
+                            <Select
+                              items={PILOT_STATES.map((state) => ({
+                                value: state,
+                                label: state,
+                              }))}
+                              value={field.state.value}
+                              onValueChange={(val) =>
+                                field.handleChange(val ?? "")
+                              }
+                            >
+                              <SelectTrigger
+                                id={field.name}
+                                className="w-full bg-transparent text-white border-white/15 h-11 [&_svg]:text-white/50"
+                              >
+                                <SelectValue placeholder="Select your state" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {PILOT_STATES.map((state) => (
+                                  <SelectItem key={state} value={state}>
+                                    {state}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FieldError message={field.state.meta.errors[0]} />
+                          </div>
+                        )}
+                      </form.Field>
+
+                      <form.Field
                         name="area"
                         validators={{
                           onChange: ({ value }) => {
@@ -460,7 +524,7 @@ export default function Waitlist() {
                               htmlFor={field.name}
                               className="text-white/70 text-sm mb-1.5"
                             >
-                              Where in Enugu?
+                              Street / area
                             </Label>
                             <Input
                               id={field.name}
