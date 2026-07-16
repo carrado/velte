@@ -6,8 +6,7 @@
 //
 // `eventRelated` mirrors the source taxonomy's `listingConfig.presetGroups`
 // containing "Events & Catering" — kept for parity with the canonical source
-// even though WAITLIST_SECTOR_TAXONOMY below is now a hand-picked lineup
-// rather than something derived from this flag.
+// even though WAITLIST_SECTOR_TAXONOMY below doesn't derive from this flag.
 
 export type SectorClassification =
   | "retail"
@@ -591,58 +590,17 @@ export const SECTOR_LABEL_BY_VALUE: Record<string, string> = Object.fromEntries(
   ALL_SECTORS.map((s) => [s.value, s.label]),
 );
 
-function leavesByValue(...values: string[]): SectorLeaf[] {
-  return values.map((v) => ALL_SECTORS.find((s) => s.value === v)!);
-}
+// Enugu pilot scope: the full canonical taxonomy minus categories/sectors
+// that don't fit the pilot — "Finance & Insurance" (banking) dropped
+// entirely, and the "NGOs & Nonprofits" leaf dropped from Religious,
+// Community & Nonprofit (religious orgs and community associations stay).
+const EXCLUDED_CATEGORY_IDS = new Set(["finance_insurance"]);
+const EXCLUDED_SECTOR_VALUES = new Set(["ngos_nonprofits"]);
 
-function categorySectors(id: string): SectorLeaf[] {
-  return SECTOR_TAXONOMY.find((c) => c.id === id)!.sectors;
-}
-
-// Enugu pilot scope: a hand-picked launch lineup, not a rule derived from
-// classification/eventRelated — phones (highest-urgency, most WhatsApp-native
-// search behavior), fashion, and beauty essentials as the retail wedge, plus
-// event services (incl. ushering) and food & hospitality. Deliberately
-// narrower than SECTOR_TAXONOMY above, which stays in sync with the
-// canonical source for later full-signup use.
-export const WAITLIST_SECTOR_TAXONOMY: SectorCategory[] = [
-  {
-    id: "electronics_technology",
-    label: "Electronics & Technology",
-    sectors: leavesByValue("phones_accessories", "phone_gadget_repairs"),
-  },
-  {
-    id: "fashion_apparel",
-    label: "Fashion & Apparel",
-    sectors: categorySectors("fashion_apparel"),
-  },
-  {
-    id: "beauty_personal_care",
-    label: "Beauty & Personal Care",
-    sectors: leavesByValue("cosmetics_skincare_retail", "perfumes_fragrances"),
-  },
-  {
-    id: "event_services",
-    label: "Event Services",
-    sectors: leavesByValue("event_planning_services", "ushering_services"),
-  },
-  {
-    id: "repairs_technical",
-    label: "Repairs & Technical Services",
-    sectors: leavesByValue("solar_installation"),
-  },
-  {
-    id: "food_hospitality",
-    label: "Food & Hospitality",
-    sectors: categorySectors("food_hospitality").filter(
-      (s) =>
-        ![
-          "event_planning_services",
-          "ushering_services",
-          "restaurants_quick_service",
-          "bars_lounges_nightlife",
-          "hotels_shortlets",
-        ].includes(s.value),
-    ),
-  },
-];
+export const WAITLIST_SECTOR_TAXONOMY: SectorCategory[] =
+  SECTOR_TAXONOMY.filter((c) => !EXCLUDED_CATEGORY_IDS.has(c.id))
+    .map((c) => ({
+      ...c,
+      sectors: c.sectors.filter((s) => !EXCLUDED_SECTOR_VALUES.has(s.value)),
+    }))
+    .filter((c) => c.sectors.length > 0);
