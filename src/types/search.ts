@@ -161,6 +161,14 @@ export type SearchStreamEvent =
       // composer while it's the latest turn's still-unanswered question.
       clarification: Clarification | null;
       products: VendorMatch[];
+      // Up to 2 "not that close" candidates from the SAME tier as `products`
+      // (see WEAK_MATCH_LIMIT in retrieval.service.js) — a supplement to
+      // real results, never a substitute: always empty when `products` is
+      // empty too. Deliberately never seen by the model (see
+      // searchProductsTool.ts's weakResultsOut) — the frontend must label
+      // these honestly as not-quite-matches, never render them
+      // indistinguishably from `products`.
+      weakProducts: VendorMatch[];
       stores: StoreMatch[];
       // The businessType the model actually searched stores for this turn
       // (e.g. "phone repair shop", "tailor") — null when searchStores wasn't

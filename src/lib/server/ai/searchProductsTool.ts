@@ -62,12 +62,24 @@ const inputSchema = z.object({
  * it) — passed straight through to the backend so it can be embedded via
  * voyage-multimodal-3 and compared against product image embeddings, not
  * just matched on a text paraphrase.
+ * `weakResultsOut` — a side channel, not part of this tool's return value.
+ * The backend also returns up to 2 "not that close" candidates alongside
+ * the real results (see WEAK_MATCH_LIMIT in retrieval.service.js) — these
+ * are a UI-only supplement route.ts renders directly, same reasoning as
+ * productStores (route.ts's own comment): the system prompt already forbids
+ * the model from restating card-level detail in its closing note (see
+ * systemPrompt.ts), so a weak match's whole point — "not a great match,
+ * shown anyway" — has no safe way to enter the model's return value without
+ * risking it narrating specifics about a deliberately low-confidence
+ * result. Stashed here instead of returned, so it's simply never part of
+ * what the model sees or can talk about.
  */
 export function searchProductsTool(
   buyerLocation?: BuyerLocation,
   push?: (candidates: string[]) => void,
   isImageQuery = false,
   imageUrl?: string,
+  weakResultsOut?: { current: VendorMatch[] },
 ) {
   return tool({
     description:
@@ -94,23 +106,29 @@ export function searchProductsTool(
       const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
       const queryText = [product, ...(attributes ?? [])].join(" ");
-      const { results, matchTier, matchQuality, externalSuggestions } =
-        await backendData<{
-          results: VendorMatch[];
-          matchTier: MatchTier;
-          matchQuality: MatchQuality;
-          externalSuggestions: NearbyBusiness[] | null;
-        }>("/search/products", {
-          method: "POST",
-          body: {
-            queryText,
-            lat: coords?.lat,
-            lng: coords?.lng,
-            radiusKm: radiusKm ?? 10,
-            isImageQuery,
-            imageUrl,
-          },
-        });
+      const {
+        results,
+        weakResults,
+        matchTier,
+        matchQuality,
+        externalSuggestions,
+      } = await backendData<{
+        results: VendorMatch[];
+        weakResults: VendorMatch[];
+        matchTier: MatchTier;
+        matchQuality: MatchQuality;
+        externalSuggestions: NearbyBusiness[] | null;
+      }>("/search/products", {
+        method: "POST",
+        body: {
+          queryText,
+          lat: coords?.lat,
+          lng: coords?.lng,
+          radiusKm: radiusKm ?? 10,
+          isImageQuery,
+          imageUrl,
+        },
+      });
 
       if (results.length) {
         if (isImageQuery && matchQuality === "direct") {
@@ -123,6 +141,10 @@ export function searchProductsTool(
       } else {
         push?.(noProductMatchPhrase());
       }
+
+      // Side channel, not this tool's return value — see weakResultsOut's
+      // own doc comment above for why.
+      if (weakResultsOut) weakResultsOut.current = weakResults;
 
       return {
         results,

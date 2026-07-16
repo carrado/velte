@@ -232,6 +232,12 @@ export async function POST(req: Request) {
 
       push(understandingRequestPhrase(Boolean(imageUrl), message));
 
+      // Populated by searchProductsTool's execute(), outside the model's own
+      // return value — see that tool's weakResultsOut doc comment. Declared
+      // here (not inside the tool call) since it needs to survive past
+      // callLLM to build the final event below.
+      const weakResultsRef: { current: VendorMatch[] } = { current: [] };
+
       // Computed once, server-side, before the model ever sees anything —
       // never a tool the model calls itself (see systemPrompt.ts's comment
       // on buildSystemPrompt for why). Scoped to a FRESH, text-only turn:
@@ -258,6 +264,7 @@ export async function POST(req: Request) {
                 push,
                 Boolean(imageUrl),
                 imageUrl,
+                weakResultsRef,
               ),
               searchStores: searchStoresTool(body?.buyerLocation, push),
               getVendorProducts: getVendorProductsTool(push),
@@ -417,6 +424,11 @@ export async function POST(req: Request) {
         // frontend renders the paused question instead of a dead-end card.
         const toolCalled = !clarification;
 
+        // Same "skipped when the clarification actually won" reasoning as
+        // productStores above — dead weight the buyer will never see once a
+        // clarifying question takes over the turn instead.
+        const weakProducts = clarification ? [] : weakResultsRef.current;
+
         controller.enqueue(
           encodeEvent({
             type: "final",
@@ -424,6 +436,7 @@ export async function POST(req: Request) {
             toolCalled,
             clarification,
             products,
+            weakProducts,
             stores,
             storesQuery,
             productStores,

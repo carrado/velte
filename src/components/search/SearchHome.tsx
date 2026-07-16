@@ -52,6 +52,41 @@ function productsHeading(
   return matchQuality === "similar" ? "Similar options nearby" : "Products";
 }
 
+// Clusters `products` by vendorId, preserving each product's original rank
+// order and the order vendors first appear in (so the highest-ranked
+// product's vendor group still leads) — a buyer asking for "sneakers" who
+// gets 3 listings from the same vendor should see those 3 together with one
+// "Sold by" card underneath, not scattered across the grid with a separate,
+// disconnected vendor-card section at the bottom (the old layout). `store`
+// is null for a group whose products are all service-kind (route.ts
+// excludes those from productStores — see StoreProductItem's own comment).
+function groupProductsByVendor(
+  products: VendorMatch[],
+  productStores: StoreMatch[],
+): { vendorId: string; products: VendorMatch[]; store: StoreMatch | null }[] {
+  const storeByVendorId = new Map(productStores.map((s) => [s.vendorId, s]));
+  const groups: {
+    vendorId: string;
+    products: VendorMatch[];
+    store: StoreMatch | null;
+  }[] = [];
+  const groupByVendorId = new Map<string, (typeof groups)[number]>();
+  for (const product of products) {
+    let group = groupByVendorId.get(product.vendorId);
+    if (!group) {
+      group = {
+        vendorId: product.vendorId,
+        products: [],
+        store: storeByVendorId.get(product.vendorId) ?? null,
+      };
+      groupByVendorId.set(product.vendorId, group);
+      groups.push(group);
+    }
+    group.products.push(product);
+  }
+  return groups;
+}
+
 function storesHeading(matchTier: MatchTier): string {
   if (matchTier === "nationwide") return "Vendors across Velte";
   if (matchTier === "state") return "Vendors — elsewhere in your state";
@@ -167,6 +202,10 @@ interface ConversationTurn {
   // see the `isLatest` prop on ConversationTurnView.
   clarification: Clarification | null;
   products: VendorMatch[];
+  // Up to 2 "not that close" candidates from the same tier as `products` —
+  // see WEAK_MATCH_LIMIT in retrieval.service.js and weakProducts' own
+  // comment on SearchStreamEvent. Always empty when `products` is.
+  weakProducts: VendorMatch[];
   stores: StoreMatch[];
   // The businessType actually searched for this turn (e.g. "tailor") — null
   // when searchStores wasn't called. Passed to StoreResultCard only for a
@@ -272,7 +311,7 @@ function ConversationTurnView({
                       </div>
                     )}
                   {turn.products.length > 0 && (
-                    <div className="space-y-3">
+                    <div className="space-y-6">
                       {(turn.stores.length > 0 ||
                         (turn.productsMatchTier &&
                           turn.productsMatchTier !== "local") ||
@@ -284,26 +323,59 @@ function ConversationTurnView({
                           )}
                         </h2>
                       )}
+                      {groupProductsByVendor(
+                        turn.products,
+                        turn.productStores,
+                      ).map((group) => (
+                        <div key={group.vendorId} className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {group.products.map((match) => (
+                              <VendorResultCard
+                                key={match.productId}
+                                match={match}
+                              />
+                            ))}
+                          </div>
+                          {group.store ? (
+                            <div className="pl-3 border-l-2 border-orange-100 space-y-2">
+                              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                                Sold by
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <StoreResultCard match={group.store} />
+                              </div>
+                            </div>
+                          ) : (
+                            // Service-only vendor group — no store card (see
+                            // route.ts: a service listing's own card already
+                            // shows the vendor's description/attributes/
+                            // WhatsApp, so a companion store card would be
+                            // redundant). Still anchor the group to its
+                            // vendor visually when there's more than one
+                            // listing, same purpose the "Sold by" label
+                            // serves above.
+                            group.products.length > 1 && (
+                              <p className="pl-3 text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                                {group.products.length} services from{" "}
+                                {group.products[0].vendorName}
+                              </p>
+                            )
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {turn.weakProducts.length > 0 && (
+                    <div className="space-y-3">
+                      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        A couple more options — not an exact match
+                      </h2>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {turn.products.map((match) => (
+                        {turn.weakProducts.map((match) => (
                           <VendorResultCard
                             key={match.productId}
                             match={match}
                           />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {turn.productStores.length > 0 && (
-                    <div className="space-y-3">
-                      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                        {turn.productStores.length === 1
-                          ? "Sold by"
-                          : "Sold by these vendors"}
-                      </h2>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {turn.productStores.map((match) => (
-                          <StoreResultCard key={match.storeId} match={match} />
                         ))}
                       </div>
                     </div>
@@ -575,6 +647,7 @@ export function SearchHome() {
         toolCalled: false,
         clarification: null,
         products: [],
+        weakProducts: [],
         stores: [],
         storesQuery: null,
         productStores: [],
@@ -631,6 +704,7 @@ export function SearchHome() {
             toolCalled: event.toolCalled,
             clarification: event.clarification,
             products: event.products,
+            weakProducts: event.weakProducts,
             stores: dedupedStores,
             storesQuery: event.storesQuery,
             productStores: event.productStores,
