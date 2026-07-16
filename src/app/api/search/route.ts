@@ -1,7 +1,8 @@
 import { stepCountIs, type ModelMessage, type UserContent } from "ai";
 
 import { callLLM } from "@/lib/server/ai/router";
-import { backendData, backendFetch } from "@/lib/server/backend";
+import { backendData } from "@/lib/server/backend";
+import { aiSearchFetch } from "@/lib/server/aiSearchBackend";
 import { searchProductsTool } from "@/lib/server/ai/searchProductsTool";
 import { searchStoresTool } from "@/lib/server/ai/searchStoresTool";
 import { getVendorProductsTool } from "@/lib/server/ai/getVendorProductsTool";
@@ -470,7 +471,7 @@ export async function POST(req: Request) {
               | { businessType?: string }
               | undefined;
 
-            await backendFetch("/search/log", {
+            await aiSearchFetch("/search/log", {
               method: "POST",
               body: {
                 rawQuery: message || null,

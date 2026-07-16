@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { backendData } from "@/lib/server/backend";
+import { aiSearchData } from "@/lib/server/aiSearchBackend";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
 import {
   searchingPhrase,
@@ -76,7 +76,7 @@ export function searchStoresTool(
       }
       const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
-      const { results, matchTier, externalSuggestions } = await backendData<{
+      const { results, matchTier, externalSuggestions } = await aiSearchData<{
         results: StoreMatch[];
         matchTier: MatchTier;
         externalSuggestions: NearbyBusiness[] | null;

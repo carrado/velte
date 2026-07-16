@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { backendData } from "@/lib/server/backend";
+import { aiSearchData } from "@/lib/server/aiSearchBackend";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
 import {
   searchingPhrase,
@@ -112,7 +112,7 @@ export function searchProductsTool(
         matchTier,
         matchQuality,
         externalSuggestions,
-      } = await backendData<{
+      } = await aiSearchData<{
         results: VendorMatch[];
         weakResults: VendorMatch[];
         matchTier: MatchTier;
