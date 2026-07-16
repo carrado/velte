@@ -333,8 +333,13 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
     label: "Repairs & Technical Services",
     sectors: [
       {
-        value: "generator_solar_install_repair",
-        label: "Generator & Solar Installation/Repair",
+        value: "generator_sales_repair",
+        label: "Generator Sales & Repair",
+        classification: "both",
+      },
+      {
+        value: "solar_installation",
+        label: "Solar Panel Installation & Repair",
         classification: "both",
       },
       {
@@ -620,6 +625,11 @@ export const WAITLIST_SECTOR_TAXONOMY: SectorCategory[] = [
     id: "event_services",
     label: "Event Services",
     sectors: leavesByValue("event_planning_services", "ushering_services"),
+  },
+  {
+    id: "repairs_technical",
+    label: "Repairs & Technical Services",
+    sectors: leavesByValue("solar_installation"),
   },
   {
     id: "food_hospitality",
