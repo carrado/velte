@@ -106,29 +106,46 @@ export function searchProductsTool(
       const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
       const queryText = [product, ...(attributes ?? [])].join(" ");
-      const {
-        results,
-        weakResults,
-        matchTier,
-        matchQuality,
-        externalSuggestions,
-      } = await aiSearchData<{
-        results: VendorMatch[];
-        weakResults: VendorMatch[];
-        matchTier: MatchTier;
-        matchQuality: MatchQuality;
+      let results: VendorMatch[],
+        weakResults: VendorMatch[],
+        matchTier: MatchTier,
+        matchQuality: MatchQuality,
         externalSuggestions: NearbyBusiness[] | null;
-      }>("/search/products", {
-        method: "POST",
-        body: {
-          queryText,
-          lat: coords?.lat,
-          lng: coords?.lng,
-          radiusKm: radiusKm ?? 10,
-          isImageQuery,
-          imageUrl,
-        },
-      });
+      try {
+        ({
+          results,
+          weakResults,
+          matchTier,
+          matchQuality,
+          externalSuggestions,
+        } = await aiSearchData<{
+          results: VendorMatch[];
+          weakResults: VendorMatch[];
+          matchTier: MatchTier;
+          matchQuality: MatchQuality;
+          externalSuggestions: NearbyBusiness[] | null;
+        }>("/search/products", {
+          method: "POST",
+          body: {
+            queryText,
+            lat: coords?.lat,
+            lng: coords?.lng,
+            radiusKm: radiusKm ?? 10,
+            isImageQuery,
+            imageUrl,
+          },
+        }));
+      } catch (err) {
+        // Was uncaught — the AI SDK swallows the thrown error into a generic
+        // tool-error the model then apologizes for, with no trace of *why*
+        // (timeout vs DNS vs 5xx) in Vercel's logs. Log before rethrowing so
+        // the failure is diagnosable instead of a silent LLM-authored apology.
+        console.error(
+          "[searchProductsTool] aiSearchData(/search/products) failed:",
+          err,
+        );
+        throw err;
+      }
 
       if (results.length) {
         if (isImageQuery && matchQuality === "direct") {

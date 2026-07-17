@@ -76,19 +76,31 @@ export function searchStoresTool(
       }
       const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
-      const { results, matchTier, externalSuggestions } = await aiSearchData<{
-        results: StoreMatch[];
-        matchTier: MatchTier;
+      let results: StoreMatch[],
+        matchTier: MatchTier,
         externalSuggestions: NearbyBusiness[] | null;
-      }>("/search/stores", {
-        method: "POST",
-        body: {
-          queryText: businessType,
-          lat: coords?.lat,
-          lng: coords?.lng,
-          radiusKm: radiusKm ?? 10,
-        },
-      });
+      try {
+        ({ results, matchTier, externalSuggestions } = await aiSearchData<{
+          results: StoreMatch[];
+          matchTier: MatchTier;
+          externalSuggestions: NearbyBusiness[] | null;
+        }>("/search/stores", {
+          method: "POST",
+          body: {
+            queryText: businessType,
+            lat: coords?.lat,
+            lng: coords?.lng,
+            radiusKm: radiusKm ?? 10,
+          },
+        }));
+      } catch (err) {
+        // Same reasoning as searchProductsTool's own catch — see that comment.
+        console.error(
+          "[searchStoresTool] aiSearchData(/search/stores) failed:",
+          err,
+        );
+        throw err;
+      }
 
       if (results.length) {
         push?.(foundCountPhrase(results.length, "vendor", matchTier));
