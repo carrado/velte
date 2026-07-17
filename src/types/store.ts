@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { BusinessType } from "@/types/user";
+import type { SectorClassification } from "@/types/sectors";
 
 /** How Velte pulls a connected catalog (spec §16.1 adapters). */
 export type CatalogPlatform = "woocommerce" | "shopify" | "feed" | "unknown";
@@ -29,7 +29,11 @@ export interface Store {
 }
 
 // `connectedCatalog` is managed via its own endpoint, not the profile PUT.
-export type UpdateStorePayload = Partial<Omit<Store, "connectedCatalog">>;
+// `sectors` is read-only here too — it's a derived cache of User.sectors,
+// written only via PATCH /api/auth/sectors (see settingsApi.updateSectors).
+export type UpdateStorePayload = Partial<
+  Omit<Store, "connectedCatalog" | "sectors">
+>;
 
 export interface ConnectCatalogPayload {
   sourceUrl: string;
@@ -53,7 +57,9 @@ export interface PublicStoreProduct {
 export interface PublicStore extends Store {
   avatar: string | null;
   area: string | null;
-  businessType: BusinessType;
+  /** Server-derived shim from the store's current sectors (see
+   *  velte-backend's getPublicStore) — not a stored account field. */
+  businessType: SectorClassification;
   products: PublicStoreProduct[];
 }
 

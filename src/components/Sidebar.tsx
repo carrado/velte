@@ -11,7 +11,7 @@ import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira } from "@/lib/utils";
 import type { NavItem, NavSection } from "@/types/common";
-import { useIsFood } from "@/hooks/useBusinessType";
+import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
 
 // Mirrors the wallet page's low-balance nudge threshold.
 const LOW_BALANCE_KOBO = 160_000; // ₦1,600 — matches the backend's hourly wallet-low notification cron
@@ -40,7 +40,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 export default function Sidebar() {
   const pathname = usePathname();
   const { navigate } = useNavigation();
-  const isFood = useIsFood();
+  const { hasFood: isFood } = useVendorSectorCapabilities();
   const userDetails = useUserStore((state) => state.user);
 
   // Shares the wallet page's query key, so this is served from cache whenever

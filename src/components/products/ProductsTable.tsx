@@ -6,7 +6,7 @@ import { computePrice, fmt } from "@/lib/product-price";
 import type { ProductsTableProps } from "@/types/product";
 import type { CategoryProduct } from "@/types/product";
 import ProductActionsPopover from "./ProductActionsPopover";
-import { Star, Clock, Package } from "lucide-react";
+import { Star, Package } from "lucide-react";
 
 function ProductCard({
   product,
@@ -113,11 +113,6 @@ function ProductCard({
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-amber-100 text-amber-700">
               <Star size={9} className="fill-amber-500 text-amber-500" />{" "}
               Featured
-            </span>
-          )}
-          {product.estimatedPrepMins != null && (
-            <span className="flex items-center gap-0.5 text-dash-caption text-gray-400 ml-auto">
-              <Clock size={10} /> {product.estimatedPrepMins}m
             </span>
           )}
         </div>

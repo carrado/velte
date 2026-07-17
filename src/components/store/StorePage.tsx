@@ -9,7 +9,6 @@ import {
   Loader2,
   ImagePlus,
   X,
-  Check,
   CheckCircle2,
   FileText,
   Tags,
@@ -18,16 +17,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { storeApi } from "@/services/store";
-import { useUserStore } from "@/store/userStore";
+import { settingsApi } from "@/services/settings";
+import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import { queryKeys } from "@/lib/query-keys";
-import { SECTOR_TAXONOMY } from "@/lib/sectors";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { cn } from "@/lib/utils";
 import { ShareButton } from "@/components/ShareButton";
+import SectorMultiSelect from "@/components/sectors/SectorMultiSelect";
 import type { Store } from "@/types/store";
 
 const MAX_DESCRIPTION = 600;
-const MAX_SECTORS = 5;
 const MAX_GALLERY = 6;
 
 const inputClass =
@@ -65,6 +64,7 @@ function SectionCard({
 export default function StorePage() {
   const queryClient = useQueryClient();
   const avatar = useUserStore((state) => state.user?.avatar);
+  const sectors = useUserStore((state) => state.user?.sectors ?? EMPTY_SECTORS);
 
   const { data: store, isLoading } = useQuery({
     queryKey: queryKeys.store.mine,
@@ -73,6 +73,11 @@ export default function StorePage() {
   });
 
   const [form, setForm] = useState<Store | null>(null);
+  // Sectors are canonical on User.sectors, not Store.sectors (a read-only
+  // derived label cache) — tracked as their own draft array, seeded/reset
+  // alongside `form` and folded into the same general Save bar below rather
+  // than saving on every chip click.
+  const [sectorValues, setSectorValues] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,10 +86,26 @@ export default function StorePage() {
   if (store && !seeded) {
     setSeeded(true);
     setForm(store);
+    setSectorValues(sectors);
   }
 
+  const sameSectors = (a: string[], b: string[]) =>
+    a.length === b.length && a.every((v) => b.includes(v));
+
   const saveMutation = useMutation({
-    mutationFn: (payload: Store) => storeApi.updateMyStore(payload),
+    mutationFn: async () => {
+      // Sectors first (a different record, User.sectors) so the store-profile
+      // save below re-reads the store with its sectors-derived label cache
+      // already fresh, instead of racing it.
+      if (!sameSectors(sectorValues, sectors)) {
+        await settingsApi.updateSectors(sectorValues);
+      }
+      // sectors is a read-only derived cache on this endpoint — stripped so
+      // this save can't trip the backend's rejection of a sectors key here.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { sectors: _sectors, ...rest } = form!;
+      return storeApi.updateMyStore(rest);
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.store.mine, updated);
       setForm(updated);
@@ -116,34 +137,23 @@ export default function StorePage() {
   );
   const nameValid = form.name.trim().length > 0 && form.name.length <= 80;
   const isValid = handleValid && nameValid;
-  const dirty = store ? JSON.stringify(form) !== JSON.stringify(store) : false;
+  const dirty = store
+    ? JSON.stringify(form) !== JSON.stringify(store) ||
+      !sameSectors(sectorValues, sectors)
+    : false;
 
   // Completeness — description drives AI matching, photos and a chat number
   // drive buyer trust/conversion.
   const checklist = [
     { done: nameValid, label: "a store name" },
     { done: !!form.description.trim(), label: "a description of what you do" },
-    { done: form.sectors.length > 0, label: "your sectors" },
+    { done: sectorValues.length > 0, label: "your sectors" },
     { done: !!form.whatsapp, label: "your WhatsApp number" },
     { done: form.gallery.length > 0, label: "a few photos" },
   ];
   const doneCount = checklist.filter((c) => c.done).length;
   const percent = Math.round((doneCount / checklist.length) * 100);
   const missing = checklist.filter((c) => !c.done).map((c) => c.label);
-
-  const toggleSector = (sector: string) => {
-    const has = form.sectors.includes(sector);
-    if (!has && form.sectors.length >= MAX_SECTORS) {
-      toast.error(`You can pick at most ${MAX_SECTORS} sectors`);
-      return;
-    }
-    set(
-      "sectors",
-      has
-        ? form.sectors.filter((s) => s !== sector)
-        : [...form.sectors, sector],
-    );
-  };
 
   const addPhotos = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -341,37 +351,13 @@ export default function StorePage() {
       <SectionCard
         icon={Tags}
         title="Sectors"
-        hint={`Pick up to ${MAX_SECTORS} that describe your business — the same list as sign-up, so whatever you picked there always shows here.`}
+        hint="Pick up to 5 that describe your business — the same list as signup, editable here anytime."
       >
-        <div className="max-h-80 overflow-y-auto pr-1 space-y-3.5">
-          {SECTOR_TAXONOMY.map((category) => (
-            <div key={category.id}>
-              <p className="text-dash-caption font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
-                {category.label}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {category.sectors.map((leaf) => {
-                  const selected = form.sectors.includes(leaf.label);
-                  return (
-                    <button
-                      key={leaf.value}
-                      type="button"
-                      onClick={() => toggleSector(leaf.label)}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 text-dash-secondary font-medium rounded-full border transition-colors cursor-pointer",
-                        selected
-                          ? "bg-orange-500 border-orange-500 text-white"
-                          : "border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-600",
-                      )}
-                    >
-                      {selected && <Check size={12} />}
-                      {leaf.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+        <div className="max-h-80 overflow-y-auto pr-1">
+          <SectorMultiSelect
+            selected={sectorValues}
+            onChange={setSectorValues}
+          />
         </div>
       </SectionCard>
 
@@ -470,14 +456,17 @@ export default function StorePage() {
             </p>
             <div className="flex gap-2 flex-shrink-0">
               <button
-                onClick={() => store && setForm(store)}
+                onClick={() => {
+                  if (store) setForm(store);
+                  setSectorValues(sectors);
+                }}
                 disabled={saveMutation.isPending || uploading}
                 className="px-3.5 py-2 text-dash-secondary font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg cursor-pointer disabled:opacity-50"
               >
                 Discard
               </button>
               <button
-                onClick={() => saveMutation.mutate(form)}
+                onClick={() => saveMutation.mutate()}
                 disabled={!isValid || saveMutation.isPending || uploading}
                 className="flex items-center gap-2 px-4 py-2 text-dash-secondary font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >

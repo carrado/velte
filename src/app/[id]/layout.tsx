@@ -14,7 +14,7 @@ import AppInitOverlay from "@/components/AppInitOverlay";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { usersApi } from "@/services/users";
 import { useUserStore } from "@/store/userStore";
-import { useIsFood } from "@/hooks/useBusinessType";
+import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
 import { useNotificationsSync } from "@/hooks/useNotificationsSync";
 
 // Needs client-only browser APIs (Notification, PushManager) at module init —
@@ -51,7 +51,7 @@ export default function DashboardRootLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isFood = useIsFood();
+  const { hasFood: isFood } = useVendorSectorCapabilities();
 
   // On the view-listing page (/{userId}/products/{productId}) the generic
   // last-segment fallback would title the header with the raw listing id —
@@ -84,7 +84,7 @@ export default function DashboardRootLayout({
 
   // Fetch current user on mount so the store is populated for the shell.
   // Always refetch (even if login already seeded a user) since that seed can
-  // carry stale derived fields like businessType — getMe() is the source of
+  // be stale (e.g. sectors edited in another tab) — getMe() is the source of
   // truth. Only fall back to the error overlay if we had nothing cached.
   useEffect(() => {
     const hadUser = !!useUserStore.getState().user;

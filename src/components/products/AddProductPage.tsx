@@ -15,8 +15,8 @@ import {
   getProductAttributePresets,
 } from "@/lib/attribute-presets";
 import { SECTOR_BY_VALUE } from "@/lib/sectors";
-import { NIGERIAN_FOOD_CATEGORIES } from "@/lib/food-categories";
-import { useUserStore } from "@/store/userStore";
+import type { SectorClassification } from "@/types/sectors";
+import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import AttributePickerModal from "./AttributePickerModal";
 import {
   Save,
@@ -36,7 +36,6 @@ import {
   ChefHat,
   Tag,
   Layers,
-  Clock,
   BarChart3,
   AlertCircle,
   CheckCircle2,
@@ -57,7 +56,6 @@ import type {
 import { storeApi } from "@/services/store";
 import type { ConnectedCatalog, CatalogPlatform } from "@/types/store";
 import {
-  useBusinessType,
   isFoodBusiness,
   businessOffersProducts,
   businessOffersServices,
@@ -147,8 +145,6 @@ function downloadTemplate(isFood: boolean) {
     "Name",
     "Description",
     "Price",
-    "Category",
-    "Prep Time (mins)",
     "Vegetarian",
     "Spicy",
     "Halal",
@@ -159,8 +155,6 @@ function downloadTemplate(isFood: boolean) {
       '"Jollof Rice"',
       '"Smoky party jollof rice served with your choice of protein"',
       "2500",
-      '"Rice Dishes"',
-      "20",
       "no",
       "no",
       "no",
@@ -170,8 +164,6 @@ function downloadTemplate(isFood: boolean) {
       '"Egusi Soup"',
       '"Rich egusi soup cooked with assorted meat and stockfish"',
       "3500",
-      '"Soups & Stews"',
-      "35",
       "no",
       "no",
       "yes",
@@ -181,8 +173,6 @@ function downloadTemplate(isFood: boolean) {
       '"Pounded Yam"',
       '"Smooth pounded yam — pairs with any soup"',
       "500",
-      '"Swallows"',
-      "10",
       "yes",
       "no",
       "yes",
@@ -192,8 +182,6 @@ function downloadTemplate(isFood: boolean) {
       '"Suya (Full Stick)"',
       '"Spiced beef suya grilled over open flame"',
       "1500",
-      '"Grilled & BBQ"',
-      "15",
       "no",
       "yes",
       "yes",
@@ -203,8 +191,6 @@ function downloadTemplate(isFood: boolean) {
       '"Chin Chin (Pack)"',
       '"Crunchy homemade chin chin — sweet or plain"',
       "800",
-      '"Snacks & Street"',
-      "0",
       "yes",
       "no",
       "yes",
@@ -241,19 +227,13 @@ function stripExt(filename: string): string {
   return filename.replace(/\.[^.]+$/, "");
 }
 
+// Retail only — dishes carry no category (see Basics).
 function matchCategoryId(
   value: string,
-  isFood: boolean,
   retailCategories: Category[],
 ): string | null {
   if (!value) return null;
   const v = value.trim().toLowerCase();
-  if (isFood) {
-    const found = NIGERIAN_FOOD_CATEGORIES.find(
-      (c) => c.label.toLowerCase() === v,
-    );
-    return found?.id ?? null;
-  }
   const found = retailCategories.find((c) => c.name.toLowerCase() === v);
   return found?.id ?? null;
 }
@@ -289,6 +269,7 @@ function buildRowResult(
   isFood: boolean,
   retailCategories: Category[],
   imageFiles: Map<string, File>,
+  sectorValue: string,
 ): RowResult {
   const name = getCell(row, "Name");
   const imageFilenameRaw = getCell(row, "Image Filename");
@@ -310,16 +291,11 @@ function buildRowResult(
   if (!priceRaw || isNaN(price) || price <= 0)
     return fail("Price must be greater than zero");
 
-  const categoryRaw = getCell(row, "Category");
-  if (!categoryRaw) return fail("Category is required");
-  const categoryId = matchCategoryId(categoryRaw, isFood, retailCategories);
-  if (!categoryId) return fail(`Unknown category "${categoryRaw}"`);
-
   const description = getCell(row, "Description");
   const base = {
     name,
     description: description || null,
-    category_id: categoryId,
+    sector_value: sectorValue,
     price: Math.round(price * 100),
     price_max: null,
     currency: "NGN" as const,
@@ -335,18 +311,20 @@ function buildRowResult(
       tags.push("vegetarian");
     if (getCell(row, "Spicy").toLowerCase() === "yes") tags.push("spicy");
     if (getCell(row, "Halal").toLowerCase() === "yes") tags.push("halal");
-    const prepRaw = getCell(row, "Prep Time (mins)");
     const payload: FoodProductPayload = {
       ...base,
+      category_id: null,
       tags,
-      estimated_prep_mins: parseInt(prepRaw, 10) || 0,
       is_currently_available: true,
-      daily_limit: null,
-      allow_pre_order: false,
       modifiers: [],
     };
     return { index, name, payload, error: null, imageFilenameRaw, imageFile };
   }
+
+  const categoryRaw = getCell(row, "Category");
+  if (!categoryRaw) return fail("Category is required");
+  const categoryId = matchCategoryId(categoryRaw, retailCategories);
+  if (!categoryId) return fail(`Unknown category "${categoryRaw}"`);
 
   const tagsRaw = getCell(row, "Tags");
   const tags = tagsRaw
@@ -359,6 +337,7 @@ function buildRowResult(
   const stockRaw = getCell(row, "Stock Quantity");
   const payload: RetailProductPayload = {
     ...base,
+    category_id: categoryId,
     tags,
     kind: "product",
     quote_on_request: false,
@@ -600,10 +579,12 @@ function ImportCatalogModal({
   isOpen,
   onClose,
   isFood,
+  sectorValue,
 }: {
   isOpen: boolean;
   onClose: () => void;
   isFood: boolean;
+  sectorValue: string;
 }) {
   const [method, setMethod] = useState<CatalogMethod>("spreadsheet");
   const queryClient = useQueryClient();
@@ -636,7 +617,7 @@ function ImportCatalogModal({
   });
 
   const rowResults = allRows.map((row, i) =>
-    buildRowResult(row, i, isFood, retailCategories, imageFiles),
+    buildRowResult(row, i, isFood, retailCategories, imageFiles, sectorValue),
   );
   const validRows = rowResults.filter((r) => !r.error && r.payload);
   const errorRows = rowResults.filter((r) => r.error);
@@ -1550,16 +1531,44 @@ export default function AddProductPage({
   productId?: string;
 }) {
   const isEditMode = mode === "edit";
-  const businessType = useBusinessType();
-  // Account-level capabilities. `foodAccount` = the product side is a menu
-  // (dishes), not a stocked shelf. Only accounts that do both need the toggle;
-  // the rest have a fixed kind.
-  const foodAccount = isFoodBusiness(businessType);
-  const showKindToggle = businessShowsKindToggle(businessType);
+
+  // The vendor's own operating sectors (slugs, up to 5) — chosen at signup,
+  // editable from the Store editor.
+  const sectors = useUserStore((s) => s.user?.sectors ?? EMPTY_SECTORS);
+
+  // Per-LISTING sector choice — replaces what used to be one frozen
+  // account-wide businessType. Add mode: auto-seeded when the vendor has
+  // exactly one sector (zero added friction for the common case); a
+  // multi-sector vendor picks one via the wizard's "sector" phase below.
+  // Edit mode: seeded from the existing listing's own stored sector (see the
+  // pre-fill effect further down) and never changed afterward.
+  const [sectorValue, setSectorValue] = useState(
+    !isEditMode && sectors.length === 1 ? sectors[0] : "",
+  );
+  // Sectors hydrate asynchronously (account data loads after mount) —
+  // re-seed once they arrive if nothing's been picked yet and there's only
+  // one to pick.
+  useEffect(() => {
+    if (isEditMode) return;
+    if (sectors.length === 1 && !sectorValue) setSectorValue(sectors[0]);
+  }, [isEditMode, sectors, sectorValue]);
+
+  // This listing's classification (retail/food/service/both/food_both) —
+  // drives shape. Defaults to "retail" only until a sector's actually been
+  // picked; progression is gated on picking one for multi-sector vendors, so
+  // this fallback is never consequential once the wizard's actually usable.
+  const classification: SectorClassification =
+    SECTOR_BY_VALUE[sectorValue]?.classification ?? "retail";
+
+  // Listing-level capabilities, derived from THIS listing's sector rather
+  // than one frozen account-wide type. `foodAccount` = the product side is a
+  // menu (dishes), not a stocked shelf, for this listing. Only sectors that
+  // support both need the toggle; the rest have a fixed kind.
+  const foodAccount = isFoodBusiness(classification);
+  const showKindToggle = businessShowsKindToggle(classification);
 
   // Sector-level tailoring (preset groups, category pre-fill, placeholder
-  // copy) — content inside blocks only; block structure stays businessType's.
-  const sectorValue = useUserStore((s) => s.user?.sector);
+  // copy) — content inside blocks only; block structure stays classification's.
   const sectorConfig = sectorValue
     ? SECTOR_BY_VALUE[sectorValue]?.listingConfig
     : undefined;
@@ -1567,24 +1576,24 @@ export default function AddProductPage({
   // Offering identity — a service is a catalog entry with no stock semantics
   // and an optional "from" price. Fixed after creation.
   const [kind, setKind] = useState<"product" | "service">(
-    businessOffersProducts(businessType) ? "product" : "service",
+    businessOffersProducts(classification) ? "product" : "service",
   );
   // Services may skip an upfront price entirely — quoted per job in chat.
   const [quoteOnRequest, setQuoteOnRequest] = useState(false);
   // Listing-level: this listing is a service (kind), and so gets dish tooling
-  // only when it's a product on a food account.
+  // only when it's a product under a food-classified sector.
   const isService = kind === "service";
   const isFood = foodAccount && !isService;
   const isQuote = isService && quoteOnRequest;
 
-  // Keep fixed-kind accounts aligned even if businessType hydrates after mount.
-  // "both"/"food_both" are left alone — that vendor drives the toggle.
+  // Keep fixed-kind listings aligned to whichever sector is currently picked.
+  // "both"/"food_both" sectors are left alone — the vendor drives the toggle.
   useEffect(() => {
     if (isEditMode) return;
-    if (!businessOffersServices(businessType))
+    if (!businessOffersServices(classification))
       setKind("product"); // retail, food
-    else if (!businessOffersProducts(businessType)) setKind("service"); // service
-  }, [businessType, isEditMode]);
+    else if (!businessOffersProducts(classification)) setKind("service"); // service
+  }, [classification, isEditMode]);
 
   // Basic
   const [productName, setProductName] = useState("");
@@ -1614,10 +1623,8 @@ export default function AddProductPage({
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
-  const [attributeNameInput, setAttributeNameInput] = useState("");
-  const [attributeValueInput, setAttributeValueInput] = useState("");
-  const [attributeError, setAttributeError] = useState("");
   const [presetPickerOpen, setPresetPickerOpen] = useState(false);
+  const [attributesExpanded, setAttributesExpanded] = useState(false);
 
   // Phased wizard (add mode): index of the currently-active block; everything
   // beyond it stays blurred until Next is clicked.
@@ -1625,11 +1632,9 @@ export default function AddProductPage({
   const phaseRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Food-specific
-  const [estimatedPrepMins, setEstimatedPrepMins] = useState(20);
   const [isCurrentlyAvailable, setIsCurrentlyAvailable] = useState(true);
-  const [dailyLimit, setDailyLimit] = useState("");
-  const [allowPreOrder, setAllowPreOrder] = useState(false);
   const [modifiers, setModifiers] = useState<ProductModifier[]>([]);
+  const [choicesExpanded, setChoicesExpanded] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [optionName, setOptionName] = useState("");
   const [optionPrice, setOptionPrice] = useState("");
@@ -1721,6 +1726,8 @@ export default function AddProductPage({
   useEffect(() => {
     if (!existingProduct) return;
     if (existingProduct.kind) setKind(existingProduct.kind);
+    if (existingProduct.sectorValue)
+      setSectorValue(existingProduct.sectorValue);
     setQuoteOnRequest(existingProduct.quoteOnRequest === true);
     setProductName(existingProduct.name);
     setDescription(existingProduct.description ?? "");
@@ -1743,14 +1750,8 @@ export default function AddProductPage({
       setMainImage(existingProduct.mainImageUrl);
     if (existingProduct.thumbnailUrls?.length)
       setThumbnails(existingProduct.thumbnailUrls);
-    if (existingProduct.estimatedPrepMins)
-      setEstimatedPrepMins(existingProduct.estimatedPrepMins);
     if (existingProduct.isCurrentlyAvailable !== undefined)
       setIsCurrentlyAvailable(existingProduct.isCurrentlyAvailable);
-    if (existingProduct.dailyLimit)
-      setDailyLimit(String(existingProduct.dailyLimit));
-    if (existingProduct.allowPreOrder !== undefined)
-      setAllowPreOrder(existingProduct.allowPreOrder);
   }, [existingProduct]);
 
   useEffect(() => {
@@ -1817,19 +1818,6 @@ export default function AddProductPage({
     }
   };
 
-  const addAttribute = () => {
-    const name = attributeNameInput.trim();
-    const value = attributeValueInput.trim();
-    if (!name || !value) {
-      setAttributeError("Both attribute name and value are required.");
-      return;
-    }
-    setAttributeError("");
-    setAttributes([{ id: Date.now().toString(), name, value }, ...attributes]);
-    setAttributeNameInput("");
-    setAttributeValueInput("");
-  };
-
   const addPresetDetails = (details: { name: string; value: string }[]) => {
     const existing = new Set(attributes.map((a) => a.name.toLowerCase()));
     const fresh = details
@@ -1883,8 +1871,9 @@ export default function AddProductPage({
   const isElectronics = selectedCategory === "electronics";
   const isHealth = selectedCategory === "health";
   const canSubmit =
+    sectorValue !== "" &&
     productName.trim().length > 0 &&
-    (isService || selectedCategory !== "") && // services carry no category
+    (isService || isFood || selectedCategory !== "") && // services & food carry no category
     // Services have no category — the description is what search matches on,
     // so it's required there (and only there).
     (!isService || description.trim().length > 0) &&
@@ -1900,6 +1889,10 @@ export default function AddProductPage({
   // ── Form submission ────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
+    if (!sectorValue) {
+      toast.error("Please pick which sector this listing is for");
+      return;
+    }
     if (!productName.trim()) {
       toast.error(
         isFood
@@ -1910,7 +1903,7 @@ export default function AddProductPage({
       );
       return;
     }
-    if (!isService && !selectedCategory) {
+    if (!isService && !isFood && !selectedCategory) {
       toast.error("Please select a category");
       return;
     }
@@ -1997,7 +1990,9 @@ export default function AddProductPage({
       const base = {
         name: productName.trim(),
         description: description.trim() || null,
-        category_id: selectedCategory,
+        sector_value: sectorValue,
+        // Null for services and dishes — neither carries a category.
+        category_id: isService || isFood ? null : selectedCategory,
         price: priceKobo,
         price_max: priceMaxKobo,
         currency,
@@ -2012,10 +2007,7 @@ export default function AddProductPage({
       if (isFood) {
         payload = {
           ...base,
-          estimated_prep_mins: estimatedPrepMins,
           is_currently_available: isCurrentlyAvailable,
-          daily_limit: dailyLimit ? parseInt(dailyLimit) : null,
-          allow_pre_order: allowPreOrder,
           modifiers: modifiers.map((m) => ({
             name: m.name,
             required: m.required,
@@ -2126,18 +2118,19 @@ export default function AddProductPage({
   // ── Phased wizard definition (must match the blocks' DOM order) ────────────
   const wizard = !isEditMode;
   const phases = [
-    showKindToggle && { id: "type", label: "Type", valid: true },
-    // Import decision — add mode only, product/dish kind only (a CSV row is
-    // a stocked good or menu item, not a service). Its own buttons drive the
-    // flow (import in bulk vs. add one by one), so it has no Next.
     wizard &&
-      kind === "product" && { id: "import", label: "Import", valid: true },
+      sectors.length > 1 && {
+        id: "sector",
+        label: "Sector",
+        valid: sectorValue !== "",
+      },
+    showKindToggle && { id: "type", label: "Type", valid: true },
     {
       id: "basics",
       label: "Basics",
       valid:
         productName.trim().length > 0 &&
-        (isService || selectedCategory !== "") &&
+        (isService || isFood || selectedCategory !== "") &&
         // Services have no category — description is the matching signal.
         (!isService || description.trim().length > 0),
     },
@@ -2155,7 +2148,6 @@ export default function AddProductPage({
         label: "Additional Details",
         valid: !(isHealth || isElectronics) || expirationDate !== "",
       },
-    isFood && { id: "preparation", label: "Prep", valid: true },
     {
       id: "media",
       label: "Media",
@@ -2187,11 +2179,12 @@ export default function AddProductPage({
     if (nextId) requestAnimationFrame(() => scrollToPhase(nextId));
   };
 
-  // Switching to bulk import abandons manual entry: clear everything typed in
-  // the blocks below the decision and re-lock (re-blur) them, so a change of
-  // mind later starts the walk clean instead of resuming half-filled state.
-  const startBulkImport = () => {
-    setFrontier(phaseIndex("import"));
+  // Shared reset for anything that changes which SHAPE of listing this is —
+  // switching kind (product/dish vs. service) or sector below, or starting a
+  // bulk import — since fields typed for one shape (e.g. a service's price)
+  // carry no meaning for another (e.g. a dish's category) and would
+  // otherwise silently sit there prefilled after the switch.
+  const resetListingFields = () => {
     setProductName("");
     setDescription("");
     setSelectedCategory("");
@@ -2211,14 +2204,12 @@ export default function AddProductPage({
     setTags([]);
     setTagInput("");
     setAttributes([]);
-    setAttributeNameInput("");
-    setAttributeValueInput("");
-    setAttributeError("");
-    setEstimatedPrepMins(20);
     setIsCurrentlyAvailable(true);
-    setDailyLimit("");
-    setAllowPreOrder(false);
     setModifiers([]);
+  };
+
+  const startBulkImport = () => {
+    resetListingFields();
     setImportModalOpen(true);
   };
 
@@ -2257,6 +2248,7 @@ export default function AddProductPage({
         isOpen={importModalOpen}
         onClose={() => setImportModalOpen(false)}
         isFood={isFood}
+        sectorValue={sectorValue}
       />
 
       <div className="space-y-5 sm:pb-10 pb-10">
@@ -2282,7 +2274,7 @@ export default function AddProductPage({
                     ? showKindToggle
                       ? "Add a dish or list a service you offer"
                       : "Add a new dish, drink or snack to your menu"
-                    : businessType === "service"
+                    : classification === "service"
                       ? "List a service you offer"
                       : showKindToggle
                         ? "List a product or service in your store"
@@ -2294,8 +2286,57 @@ export default function AddProductPage({
 
         {/* Single phased column — desktop gets the same flow, centered */}
         <div className="max-w-3xl mx-auto w-full space-y-5">
-          {/* Phase — listing type ("both" accounts only; retail/service have a
-              fixed kind. Identity is locked after creation either way). */}
+          {/* Phase — which sector this listing is for. Skipped entirely for
+              single-sector vendors (auto-seeded, zero added friction) — only
+              shown when there's an actual choice to make. Drives shape (via
+              `classification` above) and per-sector wizard tailoring, so it
+              has to be picked before Type/Basics can make sense. */}
+          {wizard && sectors.length > 1 && (
+            <PhaseBlock {...phaseProps("sector")}>
+              <FormSection title="Sector" icon={Tag}>
+                <div>
+                  <FieldLabel required>
+                    Which of your sectors is this listing for?
+                  </FieldLabel>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {sectors.map((value) => {
+                      const leaf = SECTOR_BY_VALUE[value];
+                      if (!leaf) return null;
+                      const active = sectorValue === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            if (value === sectorValue) return;
+                            setSectorValue(value);
+                            resetListingFields();
+                          }}
+                          className={cn(
+                            "text-left px-3 py-2.5 rounded-md border transition-colors cursor-pointer",
+                            active
+                              ? "border-orange-500 bg-orange-50"
+                              : "border-gray-200 bg-white hover:border-orange-300",
+                          )}
+                        >
+                          <p className="text-dash-body font-bold text-[#023337]">
+                            {leaf.label}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-dash-caption text-gray-400 mt-1.5">
+                    This shapes what you can list and how the form is tailored.
+                  </p>
+                </div>
+              </FormSection>
+            </PhaseBlock>
+          )}
+
+          {/* Phase — listing type ("both"-classified sectors only;
+              retail/food/service-only sectors have a fixed kind. Identity is
+              locked after creation either way). */}
           {showKindToggle && (
             <PhaseBlock {...phaseProps("type")}>
               <FormSection title="Listing Type" icon={Package}>
@@ -2318,7 +2359,11 @@ export default function AddProductPage({
                         key={value}
                         type="button"
                         disabled={isEditMode}
-                        onClick={() => setKind(value as "product" | "service")}
+                        onClick={() => {
+                          if (value === kind) return;
+                          setKind(value as "product" | "service");
+                          resetListingFields();
+                        }}
                         className={cn(
                           "text-left px-3 py-2.5 rounded-md border transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
                           kind === value
@@ -2345,61 +2390,35 @@ export default function AddProductPage({
             </PhaseBlock>
           )}
 
-          {/* Phase — import decision (add mode only, product/dish kind only).
-                A CSV row is a stocked good or menu item, so services skip
-                straight to Basics. Same flow for food and retail — only the
-                copy adapts. */}
-          {wizard && kind === "product" && (
-            <PhaseBlock {...phaseProps("import")} hideNext>
-              <FormSection
-                title={isFood ? "Add Your Dishes" : "Add Your Products"}
-                icon={Upload}
-              >
-                <div>
-                  <FieldLabel required>
-                    How would you like to add them?
-                  </FieldLabel>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={startBulkImport}
-                      className="text-left px-3 py-2.5 rounded-md border border-gray-200 bg-white hover:border-orange-300 transition-colors cursor-pointer"
-                    >
-                      <p className="flex items-center gap-1.5 text-dash-body font-bold text-[#023337]">
-                        <Upload size={13} className="text-orange-500" />
-                        {isFood
-                          ? "Bring in your menu"
-                          : "Bring in your catalogue"}
-                      </p>
-                      <p className="text-dash-caption text-gray-400 mt-0.5">
-                        Upload a spreadsheet or connect Shopify / WooCommerce
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => goNext("import")}
-                      className="text-left px-3 py-2.5 rounded-md border border-gray-200 bg-white hover:border-orange-300 transition-colors cursor-pointer"
-                    >
-                      <p className="flex items-center gap-1.5 text-dash-body font-bold text-[#023337]">
-                        <PlusCircle size={13} className="text-orange-500" />
-                        Add one by one
-                      </p>
-                      <p className="text-dash-caption text-gray-400 mt-0.5">
-                        Fill in the form step by step
-                      </p>
-                    </button>
-                  </div>
-                </div>
-              </FormSection>
-            </PhaseBlock>
-          )}
-
           {/* Basic Details */}
           <PhaseBlock {...phaseProps("basics")}>
             <FormSection
               title="Basic Details"
               icon={isFood ? ChefHat : Package}
             >
+              {/* Bulk-import escape hatch — folded in here instead of its own
+                  phase so add-one-by-one (the common case) reaches the name
+                  field immediately. Add mode, product/dish kind only — a CSV
+                  row is a stocked good or menu item, not a service. */}
+              {wizard && kind === "product" && (
+                <button
+                  type="button"
+                  onClick={startBulkImport}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-md border border-dashed border-orange-200 bg-orange-50/50 hover:bg-orange-100/60 transition-colors cursor-pointer"
+                >
+                  <Upload size={14} className="text-orange-500 flex-shrink-0" />
+                  <span className="text-left">
+                    <span className="block text-dash-body font-semibold text-orange-600">
+                      {isFood
+                        ? "Bring in your menu instead"
+                        : "Bring in your catalogue instead"}
+                    </span>
+                    <span className="block text-dash-caption text-orange-400">
+                      Upload a spreadsheet or connect Shopify / WooCommerce
+                    </span>
+                  </span>
+                </button>
+              )}
               <div>
                 <FieldLabel required>
                   {isFood
@@ -2463,54 +2482,27 @@ export default function AddProductPage({
                 )}
               </div>
 
-              {/* Category — products & food only. Services are discovered by
-                  meaning (their description + sector), not a fixed category. */}
-              {!isService && (
+              {/* Category — retail products only. Services are discovered by
+                  meaning (their description + sector); food dishes carry no
+                  category — matched purely on name/description/sector too. */}
+              {!isService && !isFood && (
                 <div>
-                  <FieldLabel required>
-                    {isFood ? "What type of dish is this?" : "Category"}
-                  </FieldLabel>
-                  {isFood ? (
-                    <div className="flex flex-wrap gap-2">
-                      {NIGERIAN_FOOD_CATEGORIES.map((cat) => {
-                        const active = selectedCategory === cat.id;
-                        return (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            onClick={() =>
-                              setSelectedCategory(active ? "" : cat.id)
-                            }
-                            className={cn(
-                              "flex items-center gap-1.5 px-3 py-2 rounded-md text-dash-body font-medium border transition-colors cursor-pointer",
-                              active
-                                ? "bg-orange-500 text-white border-orange-500"
-                                : "bg-white text-gray-700 border-gray-200 hover:border-orange-300 hover:bg-orange-50",
-                            )}
-                          >
-                            <span>{cat.emoji}</span>
-                            {cat.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <Select
-                      value={selectedCategory}
-                      onValueChange={(v) => setSelectedCategory(v ?? "")}
-                    >
-                      <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {retailCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.emoji} {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+                  <FieldLabel required>Category</FieldLabel>
+                  <Select
+                    value={selectedCategory}
+                    onValueChange={(v) => setSelectedCategory(v ?? "")}
+                  >
+                    <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {retailCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.emoji} {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </FormSection>
@@ -2612,23 +2604,33 @@ export default function AddProductPage({
                 </div>
               )}
 
-              {/* Price range — turn the single price into a min–max band */}
+              {/* Price range — turn the single price into a min–max band.
+                  Collapsed to a small link by default: most vendors sell at
+                  one price, so the row only expands into the fuller UI once
+                  opted into. */}
               {!isQuote && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-dash-body font-bold text-[#023337]">
-                        Set a price range
-                      </p>
-                      <p className="text-dash-caption text-gray-400 mt-0.5">
-                        Show a &quot;from – to&quot; band instead of one price
-                      </p>
-                    </div>
-                    <Toggle value={isRange} onChange={handleRangeToggle} />
-                  </div>
-                  {isRange && (
-                    <div>
-                      <FieldLabel required>Maximum Price</FieldLabel>
+                <div>
+                  {!isRange ? (
+                    <button
+                      type="button"
+                      onClick={() => handleRangeToggle(true)}
+                      className="flex items-center gap-1.5 text-dash-caption font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
+                    >
+                      <Plus size={12} />
+                      Add a price range instead of one price
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <FieldLabel required>Maximum Price</FieldLabel>
+                        <button
+                          type="button"
+                          onClick={() => handleRangeToggle(false)}
+                          className="text-dash-caption text-gray-400 hover:text-red-500 cursor-pointer"
+                        >
+                          Remove range
+                        </button>
+                      </div>
                       <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3">
                         <span className="bg-orange-50 rounded-lg px-2 py-1 text-dash-caption font-bold text-orange-600 flex-shrink-0">
                           {currSymbol}
@@ -2753,62 +2755,6 @@ export default function AddProductPage({
                   onChange={setIsFeatured}
                   label="Feature this listing in a highlighted section"
                 />
-              </FormSection>
-            </PhaseBlock>
-          )}
-
-          {/* Preparation — food only */}
-          {isFood && (
-            <PhaseBlock {...phaseProps("preparation")}>
-              <FormSection title="Preparation" icon={Clock}>
-                <div>
-                  <FieldLabel>How long does it take to prepare?</FieldLabel>
-                  {/* Quick presets */}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {[5, 10, 15, 20, 30, 45, 60].map((mins) => (
-                      <button
-                        key={mins}
-                        type="button"
-                        onClick={() => setEstimatedPrepMins(mins)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-md text-dash-body font-medium border transition-colors cursor-pointer",
-                          estimatedPrepMins === mins
-                            ? "bg-orange-500 text-white border-orange-500"
-                            : "bg-white text-gray-600 border-gray-200 hover:border-orange-300",
-                        )}
-                      >
-                        {mins >= 60 ? "1 hr" : `${mins} min`}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Fine-tune stepper */}
-                  <div className="flex items-center gap-3 max-w-[200px]">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setEstimatedPrepMins((p) => Math.max(5, p - 5))
-                      }
-                      className="w-10 h-10 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-heading font-bold flex-shrink-0"
-                    >
-                      −
-                    </button>
-                    <div className="flex-1 h-10 bg-gray-50 border border-gray-200 rounded-md flex items-center justify-center">
-                      <span className="text-dash-body font-black text-gray-800">
-                        {estimatedPrepMins} min
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEstimatedPrepMins((p) => p + 5)}
-                      className="w-10 h-10 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer text-dash-heading font-bold flex-shrink-0"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <p className="text-dash-caption text-gray-400 mt-1.5">
-                    Customers will see this as estimated wait time
-                  </p>
-                </div>
               </FormSection>
             </PhaseBlock>
           )}
@@ -3014,98 +2960,72 @@ export default function AddProductPage({
 
                 {/* Attributes — retail only. For services these read as
                     "service details" (Duration, Coverage, Warranty…) — same
-                    name/value structure, different vocabulary. */}
+                    name/value structure, different vocabulary. Collapsed by
+                    default: most casual listings skip it entirely. */}
                 {!isFood && (
                   <div>
-                    <FieldLabel optional>
-                      {isService ? "Service Details" : "Attributes"}
-                    </FieldLabel>
-                    {isService && (
-                      <p className="text-dash-caption text-gray-400 mb-2">
-                        Things buyers ask before booking — duration, coverage
-                        area, warranty…
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setPresetPickerOpen(true)}
-                      className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-50 text-orange-600 text-dash-body font-medium rounded-md transition-colors cursor-pointer"
-                    >
-                      <Plus size={14} />
-                      {isService
-                        ? "Quick add — pick from common service details"
-                        : "Quick add — pick from common attributes"}
-                    </button>
-                    <div className="flex gap-2">
-                      <Input
-                        type="text"
-                        value={attributeNameInput}
-                        onChange={(e) => {
-                          setAttributeNameInput(e.target.value);
-                          if (attributeError) setAttributeError("");
-                        }}
-                        placeholder={
-                          isService
-                            ? "Name (e.g., Duration)"
-                            : "Name (e.g., Size)"
-                        }
-                        className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                      />
-                      <Input
-                        type="text"
-                        value={attributeValueInput}
-                        onChange={(e) => {
-                          setAttributeValueInput(e.target.value);
-                          if (attributeError) setAttributeError("");
-                        }}
-                        placeholder={
-                          isService
-                            ? "Value (e.g., about 2 hours)"
-                            : "Value (e.g., Large)"
-                        }
-                        className="flex-1 h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                      />
+                    {!(attributesExpanded || attributes.length > 0) ? (
                       <button
                         type="button"
-                        onClick={addAttribute}
-                        className="w-11 h-11 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer"
+                        onClick={() => setAttributesExpanded(true)}
+                        className="flex items-center gap-1.5 text-dash-caption font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
                       >
-                        <Plus size={18} />
+                        <Plus size={12} />
+                        {isService ? "Add service details" : "Add attributes"}
                       </button>
-                    </div>
-                    {attributeError && (
-                      <p className="text-dash-caption text-red-500 mt-1.5">
-                        {attributeError}
-                      </p>
-                    )}
-                    {attributes.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        {attributes.map((attr) => (
-                          <div
-                            key={attr.id}
-                            className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-md"
-                          >
-                            <div className="text-dash-body">
-                              <span className="font-semibold text-[#023337]">
-                                {attr.name}:
-                              </span>{" "}
-                              <span className="text-gray-600">
-                                {attr.value}
-                              </span>
-                            </div>
-                            <button
-                              onClick={() =>
-                                setAttributes(
-                                  attributes.filter((a) => a.id !== attr.id),
-                                )
-                              }
-                              className="text-red-400 hover:text-red-600 cursor-pointer"
-                            >
-                              <X size={15} />
-                            </button>
+                    ) : (
+                      <>
+                        <FieldLabel optional>
+                          {isService ? "Service Details" : "Attributes"}
+                        </FieldLabel>
+                        {isService && (
+                          <p className="text-dash-caption text-gray-400 mb-2">
+                            Things buyers ask before booking — duration,
+                            coverage area, warranty…
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setPresetPickerOpen(true)}
+                          className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-50 text-orange-600 text-dash-body font-medium rounded-md transition-colors cursor-pointer"
+                        >
+                          <Plus size={14} />
+                          {isService
+                            ? "Quick add — pick from common service details"
+                            : "Quick add — pick from common attributes"}
+                        </button>
+                        {attributes.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            {attributes.map((attr) => (
+                              <div
+                                key={attr.id}
+                                className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-md"
+                              >
+                                <div className="text-dash-body">
+                                  <span className="font-semibold text-[#023337]">
+                                    {attr.name}:
+                                  </span>{" "}
+                                  <span className="text-gray-600">
+                                    {attr.value}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() =>
+                                    setAttributes(
+                                      attributes.filter(
+                                        (a) => a.id !== attr.id,
+                                      ),
+                                    )
+                                  }
+                                  className="text-red-400 hover:text-red-600 cursor-pointer"
+                                >
+                                  <X size={15} />
+                                </button>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -3132,43 +3052,6 @@ export default function AddProductPage({
                     onChange={setIsCurrentlyAvailable}
                   />
                 </div>
-
-                {/* Daily quantity limit */}
-                <div>
-                  <FieldLabel>
-                    Daily Quantity Limit{" "}
-                    <span className="text-gray-400 font-normal">
-                      (optional)
-                    </span>
-                  </FieldLabel>
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={dailyLimit}
-                    onChange={(e) => setDailyLimit(e.target.value)}
-                    placeholder="e.g. 20"
-                    className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                  />
-                  <p className="text-dash-caption text-gray-400 mt-1.5">
-                    Dish auto-marks as unavailable once this many orders are
-                    placed today
-                  </p>
-                </div>
-
-                {/* Pre-order toggle */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-dash-body font-bold text-[#023337]">
-                      Allow Pre-orders
-                    </p>
-                    <p className="text-dash-caption text-gray-400 mt-0.5">
-                      Customers can book this dish for a future date and time —
-                      their chosen date overrides the prep time
-                    </p>
-                  </div>
-                  <Toggle value={allowPreOrder} onChange={setAllowPreOrder} />
-                </div>
               </FormSection>
             </PhaseBlock>
           )}
@@ -3177,242 +3060,287 @@ export default function AddProductPage({
           {isFood && (
             <PhaseBlock {...phaseProps("choices")}>
               <FormSection title="Customer Choices & Extras" icon={Layers}>
-                {/* Explainer */}
-                <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 -mt-1 space-y-1">
-                  <p className="text-dash-body font-semibold text-blue-700">
-                    What will customers pick when ordering this dish?
-                  </p>
-                  <p className="text-dash-caption text-blue-500">
-                    Add the choices below — e.g. which protein, what size, which
-                    side dish. Only the options you add here will appear to
-                    customers at checkout. Remove any option your kitchen does
-                    not offer, and set the extra cost for each (type 0 if
-                    it&apos;s included in the base price).
-                  </p>
-                </div>
-
-                {/* Quick templates */}
-                <div>
-                  <p className="text-dash-caption font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
-                    Tap to add a choice group
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {NIGERIAN_TEMPLATES.map((tpl) => {
-                      const alreadyAdded = modifiers.some(
-                        (m) => m.name === tpl.name,
-                      );
-                      return (
-                        <button
-                          key={tpl.id}
-                          type="button"
-                          onClick={() => addTemplateGroup(tpl)}
-                          disabled={alreadyAdded}
-                          className={cn(
-                            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-dash-caption font-semibold border transition-colors",
-                            alreadyAdded
-                              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                              : "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 cursor-pointer",
-                          )}
-                        >
-                          {alreadyAdded ? (
-                            <CheckCircle2
-                              size={12}
-                              className="text-green-500"
-                            />
-                          ) : (
-                            <Plus size={12} />
-                          )}
-                          {tpl.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-dash-caption text-gray-400 mt-2">
-                    Each group opens below — remove options you don&apos;t offer
-                    and set your own prices
-                  </p>
-                </div>
-
-                {modifiers.length > 0 && (
-                  <div className="space-y-2">
-                    {modifiers.map((group) => (
-                      <div
-                        key={group.id}
-                        className="border border-gray-200 rounded-md overflow-hidden"
+                {/* Default state: reads as safely skippable — most dishes
+                    have no modifiers, so this shouldn't require parsing the
+                    builder UI below just to confirm there's nothing to do. */}
+                {modifiers.length === 0 && !choicesExpanded && (
+                  <div className="flex items-start gap-3 p-4 bg-gray-50 border border-gray-100 rounded-md">
+                    <CheckCircle2
+                      size={18}
+                      className="text-green-500 mt-0.5 flex-shrink-0"
+                    />
+                    <div className="flex-1">
+                      <p className="text-dash-body font-bold text-[#023337]">
+                        No extra choices for this dish
+                      </p>
+                      <p className="text-dash-caption text-gray-400 mt-0.5">
+                        Buyers order it exactly as described. Only add choices
+                        if customers pick something — like protein, size or a
+                        side.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setChoicesExpanded(true)}
+                        className="mt-2.5 flex items-center gap-1.5 text-dash-caption font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
                       >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedGroupId((p) =>
-                              p === group.id ? null : group.id,
-                            )
-                          }
-                          className="w-full flex items-center justify-between px-3.5 py-3 bg-gray-50 hover:bg-orange-50 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-dash-body font-semibold text-[#023337] truncate">
-                              {group.name}
-                            </span>
-                            <div className="flex gap-1 flex-shrink-0">
-                              {group.required && (
-                                <span className="text-dash-caption bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">
-                                  Required
-                                </span>
-                              )}
-                              {group.multiSelect && (
-                                <span className="text-dash-caption bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md">
-                                  Multi-select
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className="text-dash-caption text-gray-400">
-                              {group.options.length} option
-                              {group.options.length !== 1 ? "s" : ""}
-                            </span>
-                            {expandedGroupId === group.id ? (
-                              <ChevronUp size={13} className="text-gray-400" />
-                            ) : (
-                              <ChevronDown
-                                size={13}
-                                className="text-gray-400"
-                              />
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setModifiers((p) =>
-                                  p.filter((g) => g.id !== group.id),
-                                );
-                                if (expandedGroupId === group.id)
-                                  setExpandedGroupId(null);
-                              }}
-                              className="text-red-400 hover:text-red-600 p-0.5 cursor-pointer"
-                            >
-                              <X size={13} />
-                            </button>
-                          </div>
-                        </button>
+                        <Plus size={12} />
+                        This dish has choices to add
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                        {expandedGroupId === group.id && (
-                          <div className="px-3.5 py-3 space-y-2 border-t border-gray-100">
-                            <p className="text-dash-caption text-gray-400 pb-1">
-                              Set the extra cost for each option — type{" "}
-                              <span className="font-semibold text-gray-500">
-                                0
-                              </span>{" "}
-                              if it&apos;s included in the dish price. Delete
-                              any option you don&apos;t offer.
-                            </p>
-                            {group.options.map((opt) => (
-                              <div
-                                key={opt.id}
-                                className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg"
-                              >
-                                <span className="flex-1 text-dash-body text-[#023337]">
-                                  {opt.name}
+                {(modifiers.length > 0 || choicesExpanded) && (
+                  <>
+                    {/* Explainer */}
+                    <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 -mt-1 space-y-1">
+                      <p className="text-dash-body font-semibold text-blue-700">
+                        What will customers pick when ordering this dish?
+                      </p>
+                      <p className="text-dash-caption text-blue-500">
+                        Add the choices below — e.g. which protein, what size,
+                        which side dish. Only the options you add here will
+                        appear to customers at checkout. Remove any option your
+                        kitchen does not offer, and set the extra cost for each
+                        (type 0 if it&apos;s included in the base price).
+                      </p>
+                    </div>
+
+                    {/* Quick templates */}
+                    <div>
+                      <p className="text-dash-caption font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
+                        Tap to add a choice group
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {NIGERIAN_TEMPLATES.map((tpl) => {
+                          const alreadyAdded = modifiers.some(
+                            (m) => m.name === tpl.name,
+                          );
+                          return (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              onClick={() => addTemplateGroup(tpl)}
+                              disabled={alreadyAdded}
+                              className={cn(
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-dash-caption font-semibold border transition-colors",
+                                alreadyAdded
+                                  ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                                  : "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 cursor-pointer",
+                              )}
+                            >
+                              {alreadyAdded ? (
+                                <CheckCircle2
+                                  size={12}
+                                  className="text-green-500"
+                                />
+                              ) : (
+                                <Plus size={12} />
+                              )}
+                              {tpl.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-dash-caption text-gray-400 mt-2">
+                        Each group opens below — remove options you don&apos;t
+                        offer and set your own prices
+                      </p>
+                    </div>
+
+                    {modifiers.length > 0 && (
+                      <div className="space-y-2">
+                        {modifiers.map((group) => (
+                          <div
+                            key={group.id}
+                            className="border border-gray-200 rounded-md overflow-hidden"
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedGroupId((p) =>
+                                  p === group.id ? null : group.id,
+                                )
+                              }
+                              className="w-full flex items-center justify-between px-3.5 py-3 bg-gray-50 hover:bg-orange-50 transition-colors cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-dash-body font-semibold text-[#023337] truncate">
+                                  {group.name}
                                 </span>
-                                <div className="relative flex-shrink-0">
-                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-dash-caption font-medium">
-                                    +₦
-                                  </span>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    value={
-                                      opt.additionalPrice === 0
-                                        ? ""
-                                        : opt.additionalPrice
-                                    }
-                                    placeholder="0"
-                                    onChange={(e) => {
-                                      const val =
-                                        parseFloat(e.target.value) || 0;
-                                      setModifiers((p) =>
-                                        p.map((g) =>
-                                          g.id === group.id
-                                            ? {
-                                                ...g,
-                                                options: g.options.map((o) =>
-                                                  o.id === opt.id
-                                                    ? {
-                                                        ...o,
-                                                        additionalPrice: val,
-                                                      }
-                                                    : o,
-                                                ),
-                                              }
-                                            : g,
-                                        ),
-                                      );
-                                      const tplId = NIGERIAN_TEMPLATES.find(
-                                        (t) => t.name === group.name,
-                                      )?.id;
-                                      if (tplId)
-                                        saveTemplatePrice(tplId, opt.name, val);
-                                    }}
-                                    className="w-24 h-8 pl-8 pr-2 bg-white border border-gray-200 rounded-lg text-dash-caption text-[#023337]"
-                                  />
+                                <div className="flex gap-1 flex-shrink-0">
+                                  {group.required && (
+                                    <span className="text-dash-caption bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">
+                                      Required
+                                    </span>
+                                  )}
+                                  {group.multiSelect && (
+                                    <span className="text-dash-caption bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md">
+                                      Multi-select
+                                    </span>
+                                  )}
                                 </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-dash-caption text-gray-400">
+                                  {group.options.length} option
+                                  {group.options.length !== 1 ? "s" : ""}
+                                </span>
+                                {expandedGroupId === group.id ? (
+                                  <ChevronUp
+                                    size={13}
+                                    className="text-gray-400"
+                                  />
+                                ) : (
+                                  <ChevronDown
+                                    size={13}
+                                    className="text-gray-400"
+                                  />
+                                )}
                                 <button
-                                  onClick={() =>
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setModifiers((p) =>
-                                      p.map((g) =>
-                                        g.id === group.id
-                                          ? {
-                                              ...g,
-                                              options: g.options.filter(
-                                                (o) => o.id !== opt.id,
-                                              ),
-                                            }
-                                          : g,
-                                      ),
-                                    )
-                                  }
-                                  className="text-red-400 hover:text-red-600 cursor-pointer flex-shrink-0"
+                                      p.filter((g) => g.id !== group.id),
+                                    );
+                                    if (expandedGroupId === group.id)
+                                      setExpandedGroupId(null);
+                                  }}
+                                  className="text-red-400 hover:text-red-600 p-0.5 cursor-pointer"
                                 >
                                   <X size={13} />
                                 </button>
                               </div>
-                            ))}
-                            <div className="flex gap-2 pt-1 border-t border-gray-100 mt-1">
-                              <Input
-                                type="text"
-                                value={optionName}
-                                onChange={(e) => setOptionName(e.target.value)}
-                                placeholder="Add another option…"
-                                className="flex-1 h-9 px-2 bg-gray-50 border border-gray-200 rounded-lg text-dash-body"
-                              />
-                              <div className="relative flex-shrink-0">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-dash-caption">
-                                  +₦
-                                </span>
-                                <Input
-                                  type="number"
-                                  value={optionPrice}
-                                  onChange={(e) =>
-                                    setOptionPrice(e.target.value)
-                                  }
-                                  placeholder="0"
-                                  min={0}
-                                  className="w-24 h-9 pl-7 pr-2 bg-gray-50 border border-gray-200 rounded-lg text-dash-body"
-                                />
+                            </button>
+
+                            {expandedGroupId === group.id && (
+                              <div className="px-3.5 py-3 space-y-2 border-t border-gray-100">
+                                <p className="text-dash-caption text-gray-400 pb-1">
+                                  Set the extra cost for each option — type{" "}
+                                  <span className="font-semibold text-gray-500">
+                                    0
+                                  </span>{" "}
+                                  if it&apos;s included in the dish price.
+                                  Delete any option you don&apos;t offer.
+                                </p>
+                                {group.options.map((opt) => (
+                                  <div
+                                    key={opt.id}
+                                    className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg"
+                                  >
+                                    <span className="flex-1 text-dash-body text-[#023337]">
+                                      {opt.name}
+                                    </span>
+                                    <div className="relative flex-shrink-0">
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-dash-caption font-medium">
+                                        +₦
+                                      </span>
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        value={
+                                          opt.additionalPrice === 0
+                                            ? ""
+                                            : opt.additionalPrice
+                                        }
+                                        placeholder="0"
+                                        onChange={(e) => {
+                                          const val =
+                                            parseFloat(e.target.value) || 0;
+                                          setModifiers((p) =>
+                                            p.map((g) =>
+                                              g.id === group.id
+                                                ? {
+                                                    ...g,
+                                                    options: g.options.map(
+                                                      (o) =>
+                                                        o.id === opt.id
+                                                          ? {
+                                                              ...o,
+                                                              additionalPrice:
+                                                                val,
+                                                            }
+                                                          : o,
+                                                    ),
+                                                  }
+                                                : g,
+                                            ),
+                                          );
+                                          const tplId = NIGERIAN_TEMPLATES.find(
+                                            (t) => t.name === group.name,
+                                          )?.id;
+                                          if (tplId)
+                                            saveTemplatePrice(
+                                              tplId,
+                                              opt.name,
+                                              val,
+                                            );
+                                        }}
+                                        className="w-24 h-8 pl-8 pr-2 bg-white border border-gray-200 rounded-lg text-dash-caption text-[#023337]"
+                                      />
+                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        setModifiers((p) =>
+                                          p.map((g) =>
+                                            g.id === group.id
+                                              ? {
+                                                  ...g,
+                                                  options: g.options.filter(
+                                                    (o) => o.id !== opt.id,
+                                                  ),
+                                                }
+                                              : g,
+                                          ),
+                                        )
+                                      }
+                                      className="text-red-400 hover:text-red-600 cursor-pointer flex-shrink-0"
+                                    >
+                                      <X size={13} />
+                                    </button>
+                                  </div>
+                                ))}
+                                <div className="flex gap-2 pt-1 border-t border-gray-100 mt-1">
+                                  <Input
+                                    type="text"
+                                    value={optionName}
+                                    onChange={(e) =>
+                                      setOptionName(e.target.value)
+                                    }
+                                    placeholder="Add another option…"
+                                    className="flex-1 h-9 px-2 bg-gray-50 border border-gray-200 rounded-lg text-dash-body"
+                                  />
+                                  <div className="relative flex-shrink-0">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-dash-caption">
+                                      +₦
+                                    </span>
+                                    <Input
+                                      type="number"
+                                      value={optionPrice}
+                                      onChange={(e) =>
+                                        setOptionPrice(e.target.value)
+                                      }
+                                      placeholder="0"
+                                      min={0}
+                                      className="w-24 h-9 pl-7 pr-2 bg-gray-50 border border-gray-200 rounded-lg text-dash-body"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => addModifierOption(group.id)}
+                                    disabled={!optionName.trim()}
+                                    className="w-9 h-9 bg-orange-500 text-white rounded-lg flex items-center justify-center hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex-shrink-0"
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => addModifierOption(group.id)}
-                                disabled={!optionName.trim()}
-                                className="w-9 h-9 bg-orange-500 text-white rounded-lg flex items-center justify-center hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex-shrink-0"
-                              >
-                                <Plus size={14} />
-                              </button>
-                            </div>
+                            )}
                           </div>
-                        )}
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </FormSection>
             </PhaseBlock>

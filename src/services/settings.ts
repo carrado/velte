@@ -5,7 +5,6 @@ import type {
   UserCompany,
   UserPreferences,
   UserLocation,
-  BusinessType,
 } from "@/types/user";
 
 export interface UpdateProfileData {
@@ -65,7 +64,11 @@ function mapRawUser(u: Record<string, unknown>): User {
     avatar: (u.avatar as string) ?? undefined,
     company: (u.company as UserCompany) ?? undefined,
     preferences: (u.preferences as UserPreferences) ?? undefined,
-    businessType: (u.businessType as BusinessType) ?? undefined,
+    // Previously missing here entirely — fetchProfile() below calls setUser()
+    // (a full replace, not a merge), so visiting Settings silently wiped
+    // sectors from client state for the rest of the session until this was
+    // added.
+    sectors: (u.sectors as string[]) ?? [],
     area: (u.area as string) ?? undefined,
     state: (u.state as string) ?? undefined,
     location: mapGeo(u.geo),
@@ -120,10 +123,10 @@ export const settingsApi = {
     return { message: message ?? "" };
   },
 
-  updateBusinessType: async (businessType: BusinessType): Promise<User> => {
+  updateSectors: async (sectors: string[]): Promise<User> => {
     const { user: raw } = await api.patch<{ user: Record<string, unknown> }>(
-      "/api/auth/business-type",
-      { businessType },
+      "/api/auth/sectors",
+      { sectors },
     );
     const user = mapRawUser(raw);
     useUserStore.getState().updateUser(user);

@@ -56,8 +56,9 @@ export interface SectorCategory {
 }
 
 export interface SectorPickerProps {
-  value: string;
-  onSelect: (leaf: SectorLeaf) => void;
+  /** Selected sector slugs — up to 5. */
+  value: string[];
+  onChange: (values: string[]) => void;
   error?: string;
 }
 

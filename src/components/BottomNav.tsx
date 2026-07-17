@@ -3,12 +3,12 @@
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { LayoutGrid, PlusCircle, Wallet, Store, Settings } from "lucide-react";
-import { useIsFood } from "@/hooks/useBusinessType";
+import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
 
 export default function BottomNav() {
   const pathname = usePathname();
   const { navigate } = useNavigation();
-  const isFood = useIsFood();
+  const { hasFood: isFood } = useVendorSectorCapabilities();
 
   const segments = pathname.split("/").filter(Boolean);
   const userId = segments[0];

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { MapPin, Package, Wrench } from "lucide-react";
 import { getPublicStore } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
+import { isFoodBusiness } from "@/hooks/useBusinessType";
 import type {
   IntroCardProps,
   PublicStore,
@@ -129,7 +130,8 @@ export default async function PublicStorePage({
       )}`
     : null;
 
-  const isFood = store.businessType === "food";
+  // Was `=== "food"` — silently missed food_both stores.
+  const isFood = isFoodBusiness(store.businessType);
   const goodsUnit = isFood ? "dish" : "product";
   const goods = store.products.filter((p) => p.kind === "product");
   const services = store.products.filter((p) => p.kind === "service");

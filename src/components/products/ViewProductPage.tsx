@@ -26,7 +26,6 @@ import {
   Clock,
   Leaf,
   Flame,
-  Timer,
   ChefHat,
   Wrench,
 } from "lucide-react";
@@ -47,7 +46,7 @@ function fmtDate(iso: string): string {
 }
 import { NIGERIAN_FOOD_CATEGORIES } from "@/lib/food-categories";
 import type { Category } from "@/types/product";
-import { useIsFood } from "@/hooks/useBusinessType";
+import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
 
 // ── Carousel placeholder images (swap for real product images when available) ─
 
@@ -287,7 +286,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
   const pathname = usePathname();
   const userId = pathname.split("/").filter(Boolean)[0];
   const { navigate } = useNavigation();
-  const isFood = useIsFood();
+  const { hasFood: isFood } = useVendorSectorCapabilities();
 
   const { data: product, isLoading: productsLoading } = useQuery({
     queryKey: queryKeys.products.detail(productId),
@@ -693,8 +692,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
 
             {/* ── Food-specific fields ── */}
             {isFood &&
-              (product.estimatedPrepMins != null ||
-                product.isCurrentlyAvailable != null ||
+              (product.isCurrentlyAvailable != null ||
                 product.dailyLimit != null ||
                 product.allowPreOrder ||
                 product.isVeg ||
@@ -709,14 +707,6 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-3">
-                      {product.estimatedPrepMins != null && (
-                        <div className="flex items-center gap-2 bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-2.5">
-                          <Timer size={14} className="text-orange-500" />
-                          <span className="text-dash-body font-semibold text-[#023337]">
-                            ~{product.estimatedPrepMins} min prep
-                          </span>
-                        </div>
-                      )}
                       {product.isCurrentlyAvailable != null && (
                         <div
                           className={cn(

@@ -53,10 +53,10 @@ const baseSchema = z.object({
   state: z.string().min(1, "Please select your state"),
   address: z.string().min(5, "Please enter your business address"),
   location: z.object({ lat: z.number(), lng: z.number() }).nullable(),
-  sector: z.string().min(1, "Please select your business sector"),
-  businessType: z.enum(["retail", "food", "service", "both", "food_both"], {
-    message: "Please select your business sector",
-  }),
+  sectors: z
+    .array(z.string())
+    .min(1, "Pick at least one sector")
+    .max(5, "Pick at most 5 sectors"),
   description: z
     .string()
     .min(10, "Please write a short description (at least 10 characters)")
@@ -96,8 +96,7 @@ export const step1Schema = baseSchema
   });
 
 export const step2Schema = baseSchema.pick({
-  sector: true,
-  businessType: true,
+  sectors: true,
   description: true,
 });
 

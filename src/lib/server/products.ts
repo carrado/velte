@@ -36,6 +36,7 @@ interface ApiModifier {
 interface ApiProduct {
   id: string;
   name: string;
+  sector_value?: string;
   kind?: "product" | "service";
   quote_on_request?: boolean;
   description: string | null;
@@ -57,7 +58,6 @@ interface ApiProduct {
   manufacturing_date?: string | null;
   expiration_date?: string | null;
   attributes?: { id: string; name: string; value: string }[];
-  estimated_prep_mins?: number;
   is_currently_available?: boolean;
   daily_limit?: number | null;
   allow_pre_order?: boolean;
@@ -99,9 +99,7 @@ function mapCategory(c: ApiCategory): Category {
 }
 
 function mapProduct(p: ApiProduct): CategoryProduct {
-  const isFood =
-    p.is_currently_available !== undefined ||
-    p.estimated_prep_mins !== undefined;
+  const isFood = p.is_currently_available !== undefined;
 
   let totalQuantity: number;
   let orderedQuantity: number;
@@ -139,6 +137,7 @@ function mapProduct(p: ApiProduct): CategoryProduct {
   return {
     id: p.id,
     name: p.name,
+    sectorValue: p.sector_value,
     kind: p.kind ?? "product",
     quoteOnRequest: p.quote_on_request ?? false,
     description: p.description,
@@ -160,7 +159,6 @@ function mapProduct(p: ApiProduct): CategoryProduct {
     manufacturingDate: p.manufacturing_date,
     expirationDate: p.expiration_date,
     attributes,
-    estimatedPrepMins: p.estimated_prep_mins,
     isCurrentlyAvailable: p.is_currently_available,
     dailyLimit: p.daily_limit,
     allowPreOrder: p.allow_pre_order,

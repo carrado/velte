@@ -47,13 +47,15 @@ export default function Step2SectorDescription({
 
   const handleGenerate = () => {
     const businessName = form.store.state.values.businessName?.trim();
-    const sectorValue = form.store.state.values.sector;
+    // Multiple sectors can be picked, but the description generator only
+    // needs one to work from — the first one chosen drives the prompt.
+    const sectorValue = form.store.state.values.sectors[0];
     if (!businessName) {
       toast.error("Add your business name in step 1 first");
       return;
     }
     if (!sectorValue) {
-      toast.error("Pick your sector first");
+      toast.error("Pick at least one sector first");
       return;
     }
     generateMutation.mutate({ businessName, sectorValue });
@@ -61,12 +63,12 @@ export default function Step2SectorDescription({
 
   return (
     <div className="space-y-5">
-      {/* Sector */}
+      {/* Sectors */}
       <form.Field
-        name="sector"
+        name="sectors"
         validators={{
           onChange: ({ value }) => {
-            const r = SIGNUP_FIELD_SCHEMAS.sector.safeParse(value);
+            const r = SIGNUP_FIELD_SCHEMAS.sectors.safeParse(value);
             return r.success ? undefined : r.error.issues[0]?.message;
           },
         }}
@@ -75,20 +77,16 @@ export default function Step2SectorDescription({
           <div>
             <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
               <Briefcase className="w-3.5 h-3.5 text-orange-400" />
-              Business Sector
+              Business Sectors
             </Label>
             <SectorPicker
               value={field.state.value}
-              onSelect={(leaf) => {
-                field.handleChange(leaf.value);
-                // Selecting a sector derives the account's businessType.
-                form.setFieldValue("businessType", leaf.classification);
-              }}
+              onChange={field.handleChange}
               error={field.state.meta.errors[0]}
             />
             <p className="text-black/40 text-xs mt-1">
-              Pick the closest match — this helps buyers find you. You can add
-              more sectors anytime from your store settings.
+              Pick up to 5 — this helps buyers find you, and shapes what you can
+              list. Editable anytime from your store settings.
             </p>
             <FieldError message={field.state.meta.errors[0]} />
           </div>

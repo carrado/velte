@@ -40,7 +40,7 @@ import type {
   ProductListParams,
 } from "@/types/product";
 import type { FilterField } from "@/types/common";
-import { useBusinessType, isFoodBusiness } from "@/hooks/useBusinessType";
+import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
 import DeleteProductModal from "./DeleteProductModal";
 import ProductsTable from "./ProductsTable";
 import { Pagination } from "../Pagination";
@@ -634,10 +634,9 @@ export default function ProductsPage() {
   const pathSegments = pathname.split("/").filter(Boolean);
   const userId = pathSegments[0];
   const isProductsListPage = pathSegments.at(-1) === "products";
-  const businessType = useBusinessType();
-  const isFood = isFoodBusiness(businessType);
+  const { hasFood: isFood, offersProducts } = useVendorSectorCapabilities();
   // Service-only accounts don't use categories — every listing is a service.
-  const isServiceOnly = businessType === "service";
+  const isServiceOnly = !offersProducts;
 
   // Filter / sort / pagination state
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(

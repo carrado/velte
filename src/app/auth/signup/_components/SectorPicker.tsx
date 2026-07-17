@@ -1,61 +1,26 @@
 "use client";
 
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { SECTOR_TAXONOMY, SECTOR_BY_VALUE, ALL_SECTORS } from "@/lib/sectors";
-import { cn } from "@/lib/utils";
+import SectorMultiSelect, {
+  MAX_SECTORS,
+} from "@/components/sectors/SectorMultiSelect";
 import type { SectorPickerProps } from "@/types/sectors";
 
-// Plain grouped dropdown (same primitive as the State field in
-// Step1BusinessAccount.tsx) — a prior searchable-combobox version (custom
-// Popover + search input) was more UI than this needs; a native-feeling
-// select with category groups is enough to get through the Enugu pilot's
-// trimmed-down sector list.
+// Multi-select, capped at MAX_SECTORS — signup is the canonical entry point
+// for a vendor's sectors (up to 5), edited later from the Store editor via
+// the same SectorMultiSelect.
 export default function SectorPicker({
   value,
-  onSelect,
+  onChange,
   error,
 }: SectorPickerProps) {
   return (
     <div>
-      <Select
-        items={ALL_SECTORS}
-        value={value}
-        onValueChange={(v) => {
-          const leaf = v ? SECTOR_BY_VALUE[v] : undefined;
-          if (leaf) onSelect(leaf);
-        }}
-      >
-        <SelectTrigger
-          className={cn(
-            "bg-transparent w-full text-black h-11 focus:border-orange-500/50 focus:ring-orange-500/20",
-            error ? "border-red-400" : "border-black/[0.3]",
-          )}
-        >
-          <SelectValue placeholder="Select your business sector" />
-        </SelectTrigger>
-        <SelectContent className="bg-white border-black/[0.15] z-50 text-black max-h-72">
-          {SECTOR_TAXONOMY.map((category) => (
-            <SelectGroup key={category.id}>
-              <SelectLabel className="text-[11px] font-semibold uppercase tracking-wide text-black/35">
-                {category.label}
-              </SelectLabel>
-              {category.sectors.map((leaf) => (
-                <SelectItem key={leaf.value} value={leaf.value}>
-                  {leaf.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          ))}
-        </SelectContent>
-      </Select>
+      <SectorMultiSelect
+        selected={value}
+        onChange={onChange}
+        max={MAX_SECTORS}
+        className={error ? "rounded-md ring-1 ring-red-400 p-2" : undefined}
+      />
     </div>
   );
 }

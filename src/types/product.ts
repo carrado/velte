@@ -13,6 +13,10 @@ export type OfferingKind = "product" | "service";
 export interface CategoryProduct {
   id: string;
   name: string;
+  /** Which of the vendor's own sectors this listing was posted under —
+   * drives shape (see SectorLeaf.classification) and per-sector wizard
+   * tailoring in edit mode. */
+  sectorValue?: string;
   /** Offering identity — services carry no stock semantics. */
   kind?: OfferingKind;
   /** Service priced per job — no upfront price; buyers see "Contact for quote". */
@@ -39,7 +43,6 @@ export interface CategoryProduct {
   attributes?: ProductAttribute[];
   tags?: string[];
   modifiers?: ProductModifier[];
-  estimatedPrepMins?: number | null;
   isCurrentlyAvailable?: boolean;
   dailyLimit?: number | null;
   allowPreOrder?: boolean;
@@ -126,6 +129,9 @@ export interface ProductListResult {
 export interface CreateProductBasePayload {
   name: string;
   description?: string | null;
+  /** Which of the vendor's own sectors this listing is posted under — drives
+   * shape (food/retail/service tooling) and wizard tailoring per-listing. */
+  sector_value: string;
   /** Null for services — they carry no category. */
   category_id: string | null;
   price: number;
@@ -150,7 +156,6 @@ export interface RetailProductPayload extends CreateProductBasePayload {
 }
 
 export interface FoodProductPayload extends CreateProductBasePayload {
-  estimated_prep_mins: number;
   is_currently_available?: boolean;
   daily_limit?: number | null;
   allow_pre_order?: boolean;

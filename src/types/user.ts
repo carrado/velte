@@ -1,5 +1,3 @@
-export type BusinessType = "retail" | "food" | "service" | "both" | "food_both";
-
 export interface UserCompany {
   name?: string;
   location?: string;
@@ -30,12 +28,15 @@ export interface User {
   services?: string[];
   company?: UserCompany;
   preferences?: UserPreferences;
-  businessType?: BusinessType;
   area?: string;
   state?: string;
   location?: UserLocation | null;
   /** When area/state/location was last changed — drives the address-change cooldown. */
   addressChangedAt?: string | null;
-  sector?: string;
+  /** The vendor's operating sectors (taxonomy slugs, e.g. "phones_accessories")
+   * — chosen at signup, up to 5, editable later from the Store editor. Drives
+   * listing shape per-listing (see SectorLeaf.classification), not one frozen
+   * account-wide type. */
+  sectors: string[];
   description?: string;
 }
