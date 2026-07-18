@@ -18,8 +18,12 @@ interface AnchoredPopoverProps {
       (e.g. inside a list where a single ref won't do). One of the two. */
   anchorRef?: RefObject<HTMLElement | null>;
   anchorEl?: HTMLElement | null;
-  /** Horizontal edge of the panel to align with the trigger. Default "left". */
-  align?: "left" | "right";
+  /** Horizontal edge of the panel to align with the trigger. Default "left".
+      "auto" opens left-aligned (rightward) like "left", but flips to
+      right-aligned (leftward) if that would overflow the viewport's right
+      edge — for a trigger whose position varies (e.g. a grid of cards)
+      where a fixed side is wrong for roughly half of them. */
+  align?: "left" | "right" | "auto";
   /** Gap in px between the trigger and the panel. */
   gap?: number;
   className?: string;
@@ -56,6 +60,9 @@ export default function AnchoredPopover({
       const a = anchor?.getBoundingClientRect();
       if (!a) return;
       const top = a.bottom + gap;
+      // "auto" starts left-aligned (opening rightward, the common case) —
+      // the effect below corrects it to right-aligned once the panel is
+      // actually mounted and its real width is known.
       setPos(
         align === "right"
           ? { top, right: window.innerWidth - a.right }
@@ -71,6 +78,30 @@ export default function AnchoredPopover({
       window.removeEventListener("resize", update);
     };
   }, [open, align, gap, anchorRef, anchorEl]);
+
+  // "auto" only: once the panel is in the DOM (pos set → rendered below),
+  // measure its real width and flip to right-aligned if opening rightward
+  // would overflow the viewport — runs in a layout effect (before paint),
+  // so there's no visible flicker. Only ever flips left-aligned → right;
+  // `pos.left === undefined` (already flipped) short-circuits re-checking,
+  // which is what keeps this from looping.
+  useLayoutEffect(() => {
+    if (!open || align !== "auto" || !pos || pos.left === undefined) return;
+    const anchor = anchorEl ?? anchorRef?.current ?? null;
+    const panel = panelRef.current;
+    if (!anchor || !panel) return;
+    const panelWidth = panel.getBoundingClientRect().width;
+    const a = anchor.getBoundingClientRect();
+    const overflowsRight = pos.left + panelWidth > window.innerWidth - 8;
+    if (overflowsRight) {
+      // Deliberate measure-then-correct: this can only run once the panel's
+      // real (just-committed) width is known, so it can't be folded into
+      // the initial position effect above — same one-time layout-correction
+      // pattern Radix/Floating UI use internally, just without the library.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPos({ top: pos.top, right: window.innerWidth - a.right });
+    }
+  }, [open, align, pos, anchorRef, anchorEl]);
 
   useEffect(() => {
     if (!open) return;

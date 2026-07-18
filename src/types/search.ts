@@ -59,6 +59,14 @@ export interface VendorMatch {
   quoteOnRequest: boolean;
   currency: string;
   mainImageUrl: string | null;
+  // Everything beyond the main image — lets a result card offer a swipeable
+  // gallery instead of pinning the buyer to whichever single photo the
+  // vendor set as "main".
+  thumbnailUrls: string[];
+  // Null when the vendor has no Store record at all (shouldn't normally
+  // happen — every vendor gets one at signup — but a matched product should
+  // never be unrenderable over a missing storefront link).
+  storeHandle: string | null;
   description: string | null;
   // Vendor-uploaded detail fields (e.g. "Coverage Area": "Lagos mainland") —
   // shown in full on a service result's own card so the buyer sees exactly

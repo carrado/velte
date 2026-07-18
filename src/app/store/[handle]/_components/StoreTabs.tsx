@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { reportLead } from "@/lib/reportLead";
 import type { PublicStoreTab, StoreTabsProps } from "@/types/store";
 import { OfferingCard } from "./shared";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -17,6 +18,7 @@ export default function StoreTabs({
   isFood,
   storeName,
   whatsapp,
+  vendorId,
   defaultTab,
   sidebar,
 }: StoreTabsProps) {
@@ -52,6 +54,7 @@ export default function StoreTabs({
                 href={whatsappHref}
                 label="Ask on WhatsApp"
                 className="mt-5"
+                onClick={() => reportLead(vendorId)}
               />
             </>
           ) : (
@@ -109,6 +112,7 @@ export default function StoreTabs({
                 product={product}
                 storeName={storeName}
                 whatsapp={whatsapp}
+                vendorId={vendorId}
               />
             ))}
           </div>
@@ -122,6 +126,7 @@ export default function StoreTabs({
                 product={product}
                 storeName={storeName}
                 whatsapp={whatsapp}
+                vendorId={vendorId}
               />
             ))}
           </div>

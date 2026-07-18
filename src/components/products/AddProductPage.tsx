@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { queryKeys } from "@/lib/query-keys";
@@ -43,6 +43,7 @@ import {
   ArrowRight,
   Globe,
   Loader2,
+  Sparkle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -122,7 +123,6 @@ function downloadTemplate(isFood: boolean) {
     "Price",
     "Category",
     "Tags",
-    "Stock Quantity",
     "SKU",
     "Manufacturing Date",
     "Expiration Date",
@@ -134,7 +134,6 @@ function downloadTemplate(isFood: boolean) {
     "15000",
     "Electronics",
     '"bluetooth,audio,headphones"',
-    "50",
     "WH-001",
     "2024-01-01",
     "2026-12-31",
@@ -334,15 +333,12 @@ function buildRowResult(
         .filter(Boolean)
     : [];
   const sku = getCell(row, "SKU");
-  const stockRaw = getCell(row, "Stock Quantity");
   const payload: RetailProductPayload = {
     ...base,
     category_id: categoryId,
     tags,
     kind: "product",
     quote_on_request: false,
-    stock_quantity: parseInt(stockRaw, 10) || 0,
-    low_stock_threshold: null,
     manufacturing_date: getCell(row, "Manufacturing Date") || null,
     expiration_date: getCell(row, "Expiration Date") || null,
     attributes: sku ? [{ name: "SKU", value: sku }] : [],
@@ -1513,16 +1509,6 @@ function PhaseBlock({
   );
 }
 
-// New listings no longer collect a real stock count in this wizard — stock
-// tracking now lives entirely in the dedicated Restock action on the
-// products list. This sentinel just keeps a fresh product reading as "in
-// stock" instead of defaulting to 0 and looking sold out immediately.
-// Editing an EXISTING product still round-trips its real
-// totalQuantity/lowStockThreshold untouched (see the edit-mode prefill
-// effect and the submit payload below), so this only ever applies to
-// brand-new listings that were never given a real quantity.
-const UNTRACKED_STOCK_QUANTITY = 999999;
-
 export default function AddProductPage({
   mode,
   productId,
@@ -1607,8 +1593,6 @@ export default function AddProductPage({
   const [priceMax, setPriceMax] = useState("");
 
   // Inventory (retail)
-  const [stockQuantity, setStockQuantity] = useState("");
-  const [threshold, setThreshold] = useState("");
   const [manufacturingDate, setManufacturingDate] = useState("");
   const [expirationDate, setExpirationDate] = useState("");
   const [isFeatured, setIsFeatured] = useState(false);
@@ -1625,6 +1609,47 @@ export default function AddProductPage({
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
   const [presetPickerOpen, setPresetPickerOpen] = useState(false);
   const [attributesExpanded, setAttributesExpanded] = useState(false);
+
+  // AI-drafted description — reads whatever's already on the form (name,
+  // category/sector, attributes already added) so the draft is as specific
+  // as possible, since this text is exactly what later gets embedded for
+  // buyer-search matching (see attribute-presets.ts's own comment).
+  const generateDescriptionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/ai/listing-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: productName.trim(),
+          kind: isService ? "service" : "product",
+          categoryLabel: retailCategories.find((c) => c.id === selectedCategory)
+            ?.name,
+          sectorValue: sectorValue || undefined,
+          attributes: attributes.map((a) => ({ name: a.name, value: a.value })),
+        }),
+      });
+      const data = (await res.json()) as {
+        description?: string;
+        error?: string;
+      };
+      if (!res.ok)
+        throw new Error(data.error ?? "Couldn't generate a description.");
+      return data.description!;
+    },
+    onSuccess: (generated) => {
+      setDescription(generated);
+      toast.success("Draft ready — edit it to sound like you");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const handleGenerateDescription = () => {
+    if (!productName.trim()) {
+      toast.error("Add a name first");
+      return;
+    }
+    generateDescriptionMutation.mutate();
+  };
 
   // Phased wizard (add mode): index of the currently-active block; everything
   // beyond it stays blurred until Next is clicked.
@@ -1738,8 +1763,6 @@ export default function AddProductPage({
       setIsRange(true);
       setPriceMax(String(existingProduct.priceMax));
     }
-    setStockQuantity(String(existingProduct.totalQuantity ?? ""));
-    setThreshold(String(existingProduct.lowStockThreshold ?? ""));
     setManufacturingDate(existingProduct.manufacturingDate ?? "");
     setExpirationDate(existingProduct.expirationDate ?? "");
     setIsFeatured(existingProduct.featured ?? false);
@@ -1870,6 +1893,16 @@ export default function AddProductPage({
   const currSymbol = currency === "NGN" ? "₦" : "$";
   const isElectronics = selectedCategory === "electronics";
   const isHealth = selectedCategory === "health";
+  // Locks the category dropdown once it matches what the sector actually
+  // dictates — the sector-driven prefill effect below sets it to exactly
+  // this value in add mode, so the common case is locked from the start.
+  // Guarded by equality (not just "sector has a configured category") so an
+  // existing product whose stored category predates this rule, or was
+  // deliberately set to something else, is never trapped on a wrong value
+  // with no way to change it.
+  const categoryLockedBySector =
+    Boolean(sectorConfig?.productCategoryId) &&
+    selectedCategory === sectorConfig?.productCategoryId;
   const canSubmit =
     sectorValue !== "" &&
     productName.trim().length > 0 &&
@@ -1880,11 +1913,79 @@ export default function AddProductPage({
     (isQuote || parseFloat(price) > 0) && // quote services need no price
     (isQuote || !isRange || parseFloat(priceMax) > parseFloat(price)) &&
     mainImage !== null &&
+    // Stock quantity/threshold are no longer collected on this form (see the
+    // "Additional Details" block's own comment) — only the conditional
+    // expiration/guarantee date still applies, matching that phase's own
+    // `valid` flag below.
     (isFood ||
-      isService || // services carry no stock/expiry requirements
-      (stockQuantity !== "" &&
-        threshold !== "" &&
-        (!(isHealth || isElectronics) || expirationDate !== "")));
+      isService ||
+      !(isHealth || isElectronics) ||
+      expirationDate !== "");
+
+  // Same preset pool the AttributePickerModal draws from — computed once
+  // here so both the always-visible "important" inputs below AND the modal
+  // (for everything else) read from a single source instead of calling
+  // getServiceDetailPresets/getProductAttributePresets twice with the risk
+  // of the two call sites drifting apart.
+  const presetGroups = isService
+    ? getServiceDetailPresets(sectorValue)
+    : getProductAttributePresets(
+        // Only substitute the sector's more specific attribute category when
+        // the vendor is still on the category the sector actually suggested
+        // — if they picked something else themselves, respect that instead
+        // (see SectorListingConfig.attributeCategoryId's doc comment).
+        selectedCategory && selectedCategory === sectorConfig?.productCategoryId
+          ? (sectorConfig?.attributeCategoryId ?? selectedCategory)
+          : selectedCategory,
+      );
+
+  // The handful of fields that matter most for AI matching (see
+  // attribute-presets.ts) — promoted to always-visible inputs directly on
+  // the form instead of hiding behind the "Quick add" modal, per vendor
+  // feedback that these shouldn't read as skippable. Deduped by name since
+  // a category-specific group and General can both mark the same field
+  // (e.g. "Brand") important.
+  const importantFields = (() => {
+    const seen = new Set<string>();
+    const out: { name: string; example: string }[] = [];
+    for (const group of presetGroups) {
+      for (const item of group.items) {
+        if (!item.important) continue;
+        const key = item.name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(item);
+      }
+    }
+    return out;
+  })();
+  const importantFieldNames = new Set(
+    importantFields.map((f) => f.name.toLowerCase()),
+  );
+  // Everything else stays behind the modal — stripped of the fields already
+  // promoted above so the same field is never editable in two places.
+  const modalPresetGroups = presetGroups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => !i.important),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  const getAttributeValue = (name: string) =>
+    attributes.find((a) => a.name === name)?.value ?? "";
+
+  const setAttributeValue = (name: string, value: string) => {
+    setAttributes((prev) => {
+      const idx = prev.findIndex((a) => a.name === name);
+      if (!value.trim()) {
+        return idx === -1 ? prev : prev.filter((a) => a.name !== name);
+      }
+      if (idx === -1) {
+        return [...prev, { id: `${Date.now()}-${name}`, name, value }];
+      }
+      return prev.map((a) => (a.name === name ? { ...a, value } : a));
+    });
+  };
 
   // ── Form submission ────────────────────────────────────────────────────────
 
@@ -2024,13 +2125,6 @@ export default function AddProductPage({
           kind,
           category_id: isService ? null : selectedCategory,
           quote_on_request: isQuote,
-          stock_quantity: isService
-            ? 0
-            : stockQuantity === ""
-              ? UNTRACKED_STOCK_QUANTITY
-              : parseInt(stockQuantity) || 0,
-          low_stock_threshold:
-            !isService && threshold ? parseInt(threshold) : null,
           manufacturing_date:
             !isService && isHealth ? manufacturingDate || null : null,
           expiration_date:
@@ -2192,8 +2286,6 @@ export default function AddProductPage({
     setIsRange(false);
     setPriceMax("");
     setQuoteOnRequest(false);
-    setStockQuantity("");
-    setThreshold("");
     setManufacturingDate("");
     setExpirationDate("");
     setIsFeatured(false);
@@ -2474,12 +2566,31 @@ export default function AddProductPage({
                   rows={4}
                   className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
                 />
-                {isService && (
-                  <p className="text-dash-caption text-gray-400 mt-1.5">
-                    Buyers find your service through this description — the more
-                    specific, the better your matches
-                  </p>
-                )}
+                <div className="flex items-center justify-between mt-1.5">
+                  {isService ? (
+                    <p className="text-dash-caption text-gray-400">
+                      Buyers find your service through this description — the
+                      more specific, the better your matches
+                    </p>
+                  ) : (
+                    <span />
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleGenerateDescription}
+                    disabled={generateDescriptionMutation.isPending}
+                    className="flex items-center gap-1 text-dash-caption font-medium text-orange-500 hover:text-orange-600 disabled:opacity-60 cursor-pointer shrink-0"
+                  >
+                    {generateDescriptionMutation.isPending ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Sparkle size={12} className="fill-orange-500" />
+                    )}
+                    {generateDescriptionMutation.isPending
+                      ? "Generating…"
+                      : "Ask AI to generate"}
+                  </button>
+                </div>
               </div>
 
               {/* Category — retail products only. Services are discovered by
@@ -2491,6 +2602,7 @@ export default function AddProductPage({
                   <Select
                     value={selectedCategory}
                     onValueChange={(v) => setSelectedCategory(v ?? "")}
+                    disabled={categoryLockedBySector}
                   >
                     <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
                       <SelectValue placeholder="Select a category" />
@@ -2503,6 +2615,11 @@ export default function AddProductPage({
                       ))}
                     </SelectContent>
                   </Select>
+                  {categoryLockedBySector && (
+                    <p className="text-dash-caption text-gray-400 mt-1.5">
+                      Set automatically from your sector.
+                    </p>
+                  )}
                 </div>
               )}
             </FormSection>
@@ -2697,9 +2814,7 @@ export default function AddProductPage({
           </PhaseBlock>
 
           {/* Additional details — retail only; services skip straight past
-              this (no stock/expiry semantics). Stock quantity/threshold are
-              no longer collected here — stock tracking now happens entirely
-              via the dedicated Restock action on the products list. */}
+              this (no expiry semantics). Stock is no longer tracked at all. */}
           {!isFood && !isService && (
             <PhaseBlock {...phaseProps("inventory")}>
               <FormSection title="Additional Details" icon={Layers}>
@@ -2960,83 +3075,129 @@ export default function AddProductPage({
 
                 {/* Attributes — retail only. For services these read as
                     "service details" (Duration, Coverage, Warranty…) — same
-                    name/value structure, different vocabulary. Collapsed by
-                    default: most casual listings skip it entirely. */}
+                    name/value structure, different vocabulary. The fields
+                    that matter most for AI matching (importantFields) render
+                    directly here, always visible — not gated behind a click,
+                    since leaving them blank is exactly what quietly hurts
+                    match quality. Everything else stays collapsed by
+                    default behind the Quick-add modal. */}
                 {!isFood && (
-                  <div>
-                    {!(attributesExpanded || attributes.length > 0) ? (
-                      <button
-                        type="button"
-                        onClick={() => setAttributesExpanded(true)}
-                        className="flex items-center gap-1.5 text-dash-caption font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
-                      >
-                        <Plus size={12} />
-                        {isService ? "Add service details" : "Add attributes"}
-                      </button>
-                    ) : (
-                      <>
-                        <FieldLabel optional>
-                          {isService ? "Service Details" : "Attributes"}
-                        </FieldLabel>
-                        {isService && (
-                          <p className="text-dash-caption text-gray-400 mb-2">
-                            Things buyers ask before booking — duration,
-                            coverage area, warranty…
-                          </p>
-                        )}
+                  <div className="space-y-4">
+                    {importantFields.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <FieldLabel optional>
+                            {isService
+                              ? "Key Service Details"
+                              : "Key Attributes"}
+                          </FieldLabel>
+                        </div>
+                        <p className="text-dash-caption text-gray-400 mb-2 flex items-center gap-1">
+                          <Sparkle
+                            size={11}
+                            className="shrink-0 fill-orange-400 text-orange-400"
+                          />
+                          Matter most for buyers finding you — fill in what
+                          applies.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {importantFields.map((field) => (
+                            <div key={field.name}>
+                              <label className="block text-dash-caption font-medium text-gray-600 mb-1">
+                                {field.name}
+                              </label>
+                              <Input
+                                value={getAttributeValue(field.name)}
+                                onChange={(e) =>
+                                  setAttributeValue(field.name, e.target.value)
+                                }
+                                placeholder={field.example}
+                                className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(() => {
+                      const otherAttributes = attributes.filter(
+                        (a) => !importantFieldNames.has(a.name.toLowerCase()),
+                      );
+                      return !(
+                        attributesExpanded || otherAttributes.length > 0
+                      ) ? (
                         <button
                           type="button"
-                          onClick={() => setPresetPickerOpen(true)}
-                          className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-50 text-orange-600 text-dash-body font-medium rounded-md transition-colors cursor-pointer"
+                          onClick={() => setAttributesExpanded(true)}
+                          className="flex items-center gap-1.5 text-dash-caption font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
                         >
-                          <Plus size={14} />
+                          <Plus size={12} />
                           {isService
-                            ? "Quick add — pick from common service details"
-                            : "Quick add — pick from common attributes"}
+                            ? "Add more service details"
+                            : "Add more attributes"}
                         </button>
-                        {attributes.length > 0 && (
-                          <div className="mt-3 space-y-2">
-                            {attributes.map((attr) => (
-                              <div
-                                key={attr.id}
-                                className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-md"
-                              >
-                                <div className="text-dash-body">
-                                  <span className="font-semibold text-[#023337]">
-                                    {attr.name}:
-                                  </span>{" "}
-                                  <span className="text-gray-600">
-                                    {attr.value}
-                                  </span>
-                                </div>
-                                <button
-                                  onClick={() =>
-                                    setAttributes(
-                                      attributes.filter(
-                                        (a) => a.id !== attr.id,
-                                      ),
-                                    )
-                                  }
-                                  className="text-red-400 hover:text-red-600 cursor-pointer"
+                      ) : (
+                        <div>
+                          <FieldLabel optional>
+                            {isService
+                              ? "More Service Details"
+                              : "More Attributes"}
+                          </FieldLabel>
+                          <button
+                            type="button"
+                            onClick={() => setPresetPickerOpen(true)}
+                            className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-50 text-orange-600 text-dash-body font-medium rounded-md transition-colors cursor-pointer"
+                          >
+                            <Plus size={14} />
+                            {isService
+                              ? "Quick add — pick from common service details"
+                              : "Quick add — pick from common attributes"}
+                          </button>
+                          {otherAttributes.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                              {otherAttributes.map((attr) => (
+                                <div
+                                  key={attr.id}
+                                  className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-md"
                                 >
-                                  <X size={15} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
+                                  <div className="text-dash-body">
+                                    <span className="font-semibold text-[#023337]">
+                                      {attr.name}:
+                                    </span>{" "}
+                                    <span className="text-gray-600">
+                                      {attr.value}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={() =>
+                                      setAttributes(
+                                        attributes.filter(
+                                          (a) => a.id !== attr.id,
+                                        ),
+                                      )
+                                    }
+                                    className="text-red-400 hover:text-red-600 cursor-pointer"
+                                  >
+                                    <X size={15} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </FormSection>
             </PhaseBlock>
           )}
 
-          {/* Availability & Stock — food only */}
+          {/* Availability — food only */}
           {isFood && (
             <PhaseBlock {...phaseProps("availability")}>
-              <FormSection title="Availability & Stock" icon={Calendar}>
+              <FormSection title="Availability" icon={Calendar}>
                 {/* Currently available toggle */}
                 <div className="flex items-center justify-between">
                   <div>
@@ -3390,11 +3551,7 @@ export default function AddProductPage({
             ? "Fill in whatever applies to your service — buyers see these before they chat."
             : "Fill in whatever applies to this product."
         }
-        groups={
-          isService
-            ? getServiceDetailPresets(sectorValue)
-            : getProductAttributePresets(selectedCategory)
-        }
+        groups={modalPresetGroups}
         existingNames={attributes.map((a) => a.name)}
         onClose={() => setPresetPickerOpen(false)}
         onAdd={addPresetDetails}

@@ -18,11 +18,16 @@ const WAS_INSTALLED_KEY = "pwa-was-installed";
 
 // Two mutually exclusive timing rules, decided by whether the user has ever
 // dismissed the banner:
-//  - Never dismissed: wait 5 minutes after this session/login starts.
+//  - Never dismissed: wait for the base delay below, counted from this
+//    session/login start (browser tab) or from opening the standalone PWA.
 //  - Previously dismissed: wait 36 hours after that dismissal instead —
-//    replaces the 5-minute rule entirely until the cooldown clears, at which
-//    point the banner is due immediately (no extra 5-minute wait on top).
-const LOGIN_DELAY_MS = 30 * 1000;
+//    replaces the base-delay rule entirely until the cooldown clears, at
+//    which point the banner is due immediately (no extra wait on top).
+// The install banner (browser, not yet installed) waits 5 minutes; the
+// alerts banner (only shown once running inside the installed PWA) waits
+// just 1 minute from opening the app, since the user has already installed.
+const INSTALL_DELAY_MS = 5 * 60 * 1000;
+const ALERTS_DELAY_MS = 60 * 1000;
 const SKIP_COOLDOWN_MS = 36 * 60 * 60 * 1000;
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
@@ -60,8 +65,10 @@ function resetInstallCycle() {
 
 // Returns how long to wait (ms) before the banner is next due — picks
 // whichever timing rule applies (see the constants above) and creates
-// whatever timestamp it needs on first read.
-function computeRemainingDelayMs(): number {
+// whatever timestamp it needs on first read. `baseDelayMs` is INSTALL_DELAY_MS
+// or ALERTS_DELAY_MS depending on whether the app is currently running
+// standalone (see armDelayTimer).
+function computeRemainingDelayMs(baseDelayMs: number): number {
   const skippedAtRaw = localStorage.getItem(SKIPPED_AT_KEY);
   if (skippedAtRaw) {
     const elapsed = Date.now() - parseInt(skippedAtRaw, 10);
@@ -74,7 +81,7 @@ function computeRemainingDelayMs(): number {
     sessionStorage.setItem(SESSION_STARTED_KEY, sessionStart);
   }
   const elapsed = Date.now() - parseInt(sessionStart, 10);
-  return Math.max(0, LOGIN_DELAY_MS - elapsed);
+  return Math.max(0, baseDelayMs - elapsed);
 }
 
 export function usePushNotifications() {
@@ -94,7 +101,8 @@ export function usePushNotifications() {
 
   const armDelayTimer = useCallback(() => {
     clearDelayTimerRef.current();
-    const remaining = computeRemainingDelayMs();
+    const baseDelayMs = isStandalone ? ALERTS_DELAY_MS : INSTALL_DELAY_MS;
+    const remaining = computeRemainingDelayMs(baseDelayMs);
     if (remaining === 0) {
       setDelayPassed(true);
       clearDelayTimerRef.current = () => {};
@@ -103,7 +111,7 @@ export function usePushNotifications() {
     setDelayPassed(false);
     const timer = setTimeout(() => setDelayPassed(true), remaining);
     clearDelayTimerRef.current = () => clearTimeout(timer);
-  }, []);
+  }, [isStandalone]);
 
   // Mount: resolve all state from browser APIs + localStorage/sessionStorage
   useEffect(() => {

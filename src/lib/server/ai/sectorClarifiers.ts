@@ -167,7 +167,11 @@ function sectorSpecificFields(sector: SectorLeaf): ClarifierField[] {
   }
 
   if (isRetailCapable) {
-    const categoryId = listingConfig?.productCategoryId;
+    // attributeCategoryId (content) wins over productCategoryId (the real,
+    // vendor-selectable category id) when both are set — see its own doc
+    // comment in SectorListingConfig for why the two can legitimately differ.
+    const categoryId =
+      listingConfig?.attributeCategoryId ?? listingConfig?.productCategoryId;
     const category = categoryId
       ? PRODUCT_PRESETS_BY_CATEGORY[categoryId]
       : undefined;

@@ -52,9 +52,6 @@ interface ApiProduct {
   color_class: string | null;
   created_at: string;
   updated_at: string;
-  stock_quantity?: number;
-  ordered_quantity?: number;
-  low_stock_threshold?: number | null;
   manufacturing_date?: string | null;
   expiration_date?: string | null;
   attributes?: { id: string; name: string; value: string }[];
@@ -99,23 +96,6 @@ function mapCategory(c: ApiCategory): Category {
 }
 
 function mapProduct(p: ApiProduct): CategoryProduct {
-  const isFood = p.is_currently_available !== undefined;
-
-  let totalQuantity: number;
-  let orderedQuantity: number;
-  let inStock: number;
-
-  if (isFood) {
-    const avail = p.is_currently_available ?? true;
-    totalQuantity = avail ? 1 : 0;
-    orderedQuantity = 0;
-    inStock = avail ? 1 : 0;
-  } else {
-    totalQuantity = p.stock_quantity ?? 0;
-    orderedQuantity = p.ordered_quantity ?? 0;
-    inStock = totalQuantity - orderedQuantity;
-  }
-
   const modifiers: ProductModifier[] = (p.modifiers ?? []).map((m) => ({
     id: m.id,
     name: m.name,
@@ -152,10 +132,6 @@ function mapProduct(p: ApiProduct): CategoryProduct {
     videoUrl: p.video_url,
     colorClass: p.color_class ?? "bg-gray-200",
     createdDate: p.created_at,
-    totalQuantity,
-    orderedQuantity,
-    inStock,
-    lowStockThreshold: p.low_stock_threshold,
     manufacturingDate: p.manufacturing_date,
     expirationDate: p.expiration_date,
     attributes,
@@ -226,18 +202,6 @@ export async function updateProduct(
 
 export async function deleteProduct(id: string, cookie: string): Promise<void> {
   await backendFetch(`/products/${id}`, { method: "DELETE", cookie });
-}
-
-export async function restockProduct(
-  id: string,
-  quantity: number,
-  cookie: string,
-): Promise<CategoryProduct> {
-  const { data } = await backendFetch<Wrapped<ApiProduct>>(
-    `/products/${id}/restock`,
-    { method: "POST", body: { quantity }, cookie },
-  );
-  return mapProduct(data);
 }
 
 /** `priceNaira` from the client is converted to kobo for the backend. */

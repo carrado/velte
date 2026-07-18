@@ -1,11 +1,20 @@
 /* eslint-disable @next/next/no-img-element */
-import { MapPin, ShieldCheck, Store as StoreIcon } from "lucide-react";
+import { useState } from "react";
+import Link from "next/link";
+import {
+  MapPin,
+  ShieldCheck,
+  Store as StoreIcon,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
+import { cn } from "@/lib/utils";
 import type { VendorMatch } from "@/types/search";
 
 export function VendorResultCard({ match }: { match: VendorMatch }) {
@@ -22,17 +31,65 @@ export function VendorResultCard({ match }: { match: VendorMatch }) {
       )}`
     : null;
 
+  // Main image first, then whatever else the vendor uploaded — a buyer
+  // shouldn't be stuck with just whichever single photo was set as "main"
+  // when the listing actually has more angles/variants to show.
+  const images = [match.mainImageUrl, ...match.thumbnailUrls].filter(
+    (url): url is string => Boolean(url),
+  );
+  const [imgIndex, setImgIndex] = useState(0);
+  const hasGallery = images.length > 1;
+  const showPrev = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setImgIndex((i) => (i - 1 + images.length) % images.length);
+  };
+  const showNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setImgIndex((i) => (i + 1) % images.length);
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
-        {match.mainImageUrl ? (
+        {images.length > 0 ? (
           <img
-            src={optimizedImageUrl(match.mainImageUrl)}
+            src={optimizedImageUrl(images[imgIndex])}
             alt={match.name}
             className="w-full h-full object-cover"
           />
         ) : (
           <StoreIcon size={28} className="text-gray-300" />
+        )}
+        {hasGallery && (
+          <>
+            <button
+              type="button"
+              onClick={showPrev}
+              aria-label="Previous photo"
+              className="absolute left-1.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-black/40 text-white"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={showNext}
+              aria-label="Next photo"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-black/40 text-white"
+            >
+              <ChevronRight size={14} />
+            </button>
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+              {images.map((url, i) => (
+                <span
+                  key={url}
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full transition-colors",
+                    i === imgIndex ? "bg-white" : "bg-white/50",
+                  )}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
       <div className="p-4 space-y-2.5">
@@ -96,14 +153,26 @@ export function VendorResultCard({ match }: { match: VendorMatch }) {
         {isOwn ? (
           <OwnListingBadge label="This is your listing" />
         ) : (
-          chatHref && (
-            <WhatsAppButton
-              href={chatHref}
-              label="Chat with vendor"
-              className="w-full mt-1"
-              onClick={() => reportLead(match.vendorId, match.productId)}
-            />
-          )
+          <div className="flex items-center gap-2 mt-1">
+            {match.storeHandle && (
+              <Link
+                href={`/store/${match.storeHandle}`}
+                target="_blank"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors"
+              >
+                <StoreIcon size={15} />
+                View Store
+              </Link>
+            )}
+            {chatHref && (
+              <WhatsAppButton
+                href={chatHref}
+                label="Chat with vendor"
+                className="flex-1"
+                onClick={() => reportLead(match.vendorId, match.productId)}
+              />
+            )}
+          </div>
         )}
       </div>
     </div>

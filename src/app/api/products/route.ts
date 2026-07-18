@@ -4,7 +4,7 @@ import { requireAuth, fail, jsonError } from "@/lib/server/guards";
 import { listProducts, createProduct } from "@/lib/server/products";
 import type { CreateProductPayload } from "@/types/product";
 
-// GET /api/products?page=&limit=&category_id=&tab=&search=&sort_by=&sort_order=&stock_status=
+// GET /api/products?page=&limit=&category_id=&tab=&search=&sort_by=&sort_order=
 export async function GET(req: NextRequest) {
   const gate = await requireAuth();
   if ("response" in gate) return gate.response;

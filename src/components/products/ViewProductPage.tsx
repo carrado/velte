@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import { categoriesApi, getAvailableStock } from "@/services/products";
+import { categoriesApi } from "@/services/products";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -11,10 +11,7 @@ import {
   Package,
   Tag,
   Calendar,
-  BarChart2,
   Star,
-  ShoppingCart,
-  AlertTriangle,
   CheckCircle2,
   XCircle,
   Layers,
@@ -59,47 +56,6 @@ const CAROUSEL_GRADIENTS = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function StatPill({
-  icon: Icon,
-  label,
-  value,
-  accent = false,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string | number;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-1.5 p-4 rounded-2xl border",
-        accent
-          ? "bg-orange-50 border-orange-100"
-          : "bg-white border-gray-100 shadow-sm",
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <Icon
-          size={14}
-          className={accent ? "text-orange-500" : "text-gray-400"}
-        />
-        <span className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
-          {label}
-        </span>
-      </div>
-      <span
-        className={cn(
-          "text-dash-title font-bold",
-          accent ? "text-orange-600" : "text-[#023337]",
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
 
 function SectionCard({
   title,
@@ -166,7 +122,14 @@ function ProductCarousel({
       <div
         className="flex h-full transition-transform duration-500 ease-in-out"
         style={{
-          transform: `translateX(-${current * 100}%)`,
+          // The track's own width is `slides.length * 100%` (of the frame),
+          // and CSS `%` in a transform resolves against the TRANSFORMED
+          // element's own box — not the frame — so moving by exactly one
+          // frame-width requires dividing by slides.length here. Without
+          // it (found live), each step overshoots by a factor of
+          // slides.length and lands on blank space past the last slide for
+          // any listing with 2+ images.
+          transform: `translateX(-${(current * 100) / slides.length}%)`,
           width: `${slides.length * 100}%`,
         }}
       >
@@ -339,17 +302,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
 
   // Services carry no stock — skip every quantity-shaped section for them.
   const isService = product.kind === "service";
-  const available = getAvailableStock(product);
   const pricing = computePrice(product);
-  const stockPercent =
-    product.totalQuantity > 0
-      ? Math.round((available / product.totalQuantity) * 100)
-      : 0;
-
-  const reserved =
-    product.totalQuantity - available - (product.orderedQuantity ?? 0) < 0
-      ? 0
-      : product.totalQuantity - available - (product.orderedQuantity ?? 0);
 
   // Real media for the carousel — the main image first, then thumbnails.
   // Empty for a video-only listing, which renders a player instead.
@@ -357,6 +310,17 @@ export default function ViewProductPage({ productId }: { productId: string }) {
     product.mainImageUrl,
     ...(product.thumbnailUrls ?? []),
   ].filter((u): u is string => Boolean(u));
+
+  const hasAttributes = (product.attributes?.length ?? 0) > 0;
+  const hasTags = (product.tags?.length ?? 0) > 0;
+  const hasFoodDetails =
+    isFood &&
+    (product.isCurrentlyAvailable != null ||
+      product.dailyLimit != null ||
+      product.allowPreOrder ||
+      product.isVeg ||
+      product.isSpicy);
+  const hasModifiers = isFood && (product.modifiers?.length ?? 0) > 0;
 
   return (
     <div className="space-y-5">
@@ -440,107 +404,247 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 </div>
               </div>
 
-              {/* ── Badge (top-right of pricing card) ── */}
+              {/* ── Badge (top-right of pricing card) — a service has no
+                  stock concept at all, and a dish's real signal is the
+                  "available today" toggle. A plain retail product gets no
+                  badge here: stock quantity is no longer tracked/shown on
+                  this page (business happens outside the app, so it was
+                  never a trustworthy signal anyway). ── */}
               {isService ? (
                 <div className="flex items-center gap-1.5 text-dash-caption font-bold px-3 py-1.5 rounded-full flex-shrink-0 bg-teal-50 text-teal-700">
                   <Wrench size={12} />
                   Service
                 </div>
               ) : (
-                <div
-                  className={cn(
-                    "flex items-center gap-1.5 text-dash-caption font-bold px-3 py-1.5 rounded-full shadow-sm flex-shrink-0",
-                    available > 0
-                      ? "bg-green-500 text-white"
-                      : "bg-red-500 text-white",
-                  )}
-                >
-                  {available > 0 ? (
-                    <CheckCircle2 size={12} />
-                  ) : (
-                    <XCircle size={12} />
-                  )}
-                  {available > 0 ? "In Stock" : "Out of Stock"}
-                </div>
+                isFood && (
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 text-dash-caption font-bold px-3 py-1.5 rounded-full shadow-sm flex-shrink-0",
+                      product.isCurrentlyAvailable === false
+                        ? "bg-red-500 text-white"
+                        : "bg-green-500 text-white",
+                    )}
+                  >
+                    {product.isCurrentlyAvailable === false ? (
+                      <XCircle size={12} />
+                    ) : (
+                      <CheckCircle2 size={12} />
+                    )}
+                    {product.isCurrentlyAvailable === false
+                      ? "Not Available Today"
+                      : "Available Today"}
+                  </div>
+                )
               )}
             </div>
           </SectionCard>
 
-          {/* Stats grid — quantity-based, products only */}
-          {!isService && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatPill
-                icon={Layers}
-                label="Total Qty"
-                value={product.totalQuantity}
-                accent
-              />
-              <StatPill
-                icon={ShoppingCart}
-                label="Ordered"
-                value={product.orderedQuantity}
-              />
-              <StatPill icon={Package} label="Available" value={available} />
-              <StatPill icon={BarChart2} label="Reserved" value={reserved} />
-            </div>
-          )}
-
-          {/* Stock bar — products only */}
-          {!isService && (
-            <SectionCard title="Stock Level" icon={BarChart2}>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-dash-body text-gray-500">
-                    {available} of {product.totalQuantity} units available
-                  </span>
-                  <span
-                    className={cn(
-                      "text-dash-body font-bold",
-                      stockPercent > 50
-                        ? "text-green-600"
-                        : stockPercent > 20
-                          ? "text-amber-500"
-                          : "text-red-500",
-                    )}
-                  >
-                    {stockPercent}%
-                  </span>
-                </div>
-                <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+          {/* ── Service: its details lead, right after pricing — no stock
+              concept exists for a service at all. ── */}
+          {isService && hasAttributes && (
+            <SectionCard title="Service Details" icon={Wrench}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {product.attributes!.map((attr) => (
                   <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      stockPercent > 50
-                        ? "bg-green-500"
-                        : stockPercent > 20
-                          ? "bg-amber-400"
-                          : "bg-red-500",
-                    )}
-                    style={{ width: `${stockPercent}%` }}
-                  />
-                </div>
-                {product.lowStockThreshold != null &&
-                  available <= product.lowStockThreshold &&
-                  available > 0 && (
-                    <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                      <AlertTriangle
-                        size={14}
-                        className="text-amber-500 flex-shrink-0"
-                      />
-                      <p className="text-dash-caption text-amber-700 font-medium">
-                        Low stock — only {available} unit
-                        {available !== 1 ? "s" : ""} remaining.
-                      </p>
-                    </div>
-                  )}
+                    key={attr.id}
+                    className="flex items-center justify-between bg-gray-50 rounded-xl px-3.5 py-2.5 border border-gray-100"
+                  >
+                    <span className="text-dash-body text-gray-500 font-medium">
+                      {attr.name}
+                    </span>
+                    <span className="text-dash-body font-bold text-[#023337]">
+                      {attr.value}
+                    </span>
+                  </div>
+                ))}
               </div>
             </SectionCard>
           )}
 
-          {/* ── Consolidated Listing Info ── */}
-          <SectionCard title="Listing Info" icon={Info}>
+          {/* ── Dish: what actually matters for a dish leads — real-time
+              availability, daily limit, dietary flags, the days/hours it's
+              served, and its modifiers. ── */}
+          {hasFoodDetails && (
+            <SectionCard title="Food Details" icon={ChefHat}>
+              <div className="flex flex-wrap gap-3">
+                {product.isCurrentlyAvailable != null && (
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl px-3.5 py-2.5 border",
+                      product.isCurrentlyAvailable
+                        ? "bg-green-50 border-green-100"
+                        : "bg-red-50 border-red-100",
+                    )}
+                  >
+                    {product.isCurrentlyAvailable ? (
+                      <CheckCircle2 size={14} className="text-green-500" />
+                    ) : (
+                      <XCircle size={14} className="text-red-500" />
+                    )}
+                    <span
+                      className={cn(
+                        "text-dash-body font-semibold",
+                        product.isCurrentlyAvailable
+                          ? "text-green-700"
+                          : "text-red-700",
+                      )}
+                    >
+                      {product.isCurrentlyAvailable
+                        ? "Available today"
+                        : "Not available today"}
+                    </span>
+                  </div>
+                )}
+                {product.dailyLimit != null && (
+                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-2.5">
+                    <Layers size={14} className="text-gray-500" />
+                    <span className="text-dash-body font-semibold text-[#023337]">
+                      Daily limit: {product.dailyLimit}
+                    </span>
+                  </div>
+                )}
+                {product.allowPreOrder && (
+                  <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
+                    <Clock size={14} className="text-blue-500" />
+                    <span className="text-dash-body font-semibold text-blue-700">
+                      Pre-orders accepted
+                    </span>
+                  </div>
+                )}
+                {product.isVeg && (
+                  <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3.5 py-2.5">
+                    <Leaf size={14} className="text-green-500" />
+                    <span className="text-dash-body font-semibold text-green-700">
+                      Vegetarian
+                    </span>
+                  </div>
+                )}
+                {product.isSpicy && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">
+                    <Flame size={14} className="text-red-500" />
+                    <span className="text-dash-body font-semibold text-red-700">
+                      Spicy
+                    </span>
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          )}
+
+          {isFood && product.availability && (
+            <SectionCard title="Availability" icon={Clock}>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {product.availability.days.map((day) => (
+                  <span
+                    key={day}
+                    className="px-2.5 py-1 bg-orange-500 text-white text-dash-caption font-semibold rounded-lg"
+                  >
+                    {day.charAt(0).toUpperCase() + day.slice(1)}
+                  </span>
+                ))}
+              </div>
+              <p className="text-dash-caption text-gray-500 font-medium">
+                {product.availability.startTime} –{" "}
+                {product.availability.endTime}
+              </p>
+            </SectionCard>
+          )}
+
+          {hasModifiers && (
+            <SectionCard title="Modifiers" icon={Hash}>
+              <div className="space-y-3">
+                {product.modifiers!.map((group) => (
+                  <div
+                    key={group.id}
+                    className="border border-gray-100 rounded-xl overflow-hidden"
+                  >
+                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
+                      <span className="text-dash-body font-semibold text-[#023337]">
+                        {group.name}
+                      </span>
+                      {group.required && (
+                        <span className="text-dash-micro bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">
+                          Required
+                        </span>
+                      )}
+                      {group.multiSelect && (
+                        <span className="text-dash-micro bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">
+                          Multi-select
+                        </span>
+                      )}
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {group.options.map((opt) => (
+                        <div
+                          key={opt.id}
+                          className="flex items-center justify-between px-3 py-2"
+                        >
+                          <span className="text-dash-body text-gray-700">
+                            {opt.name}
+                          </span>
+                          {opt.additionalPrice > 0 && (
+                            <span className="text-dash-caption text-green-600 font-semibold">
+                              +₦{opt.additionalPrice.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {/* ── Dish attributes (if the vendor added any beyond the
+              food-specific fields above) — a dish CAN carry these too, same
+              generic name/value shape as a retail product's. ── */}
+          {isFood && hasAttributes && (
+            <SectionCard title="Attributes" icon={Hash}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {product.attributes!.map((attr) => (
+                  <div
+                    key={attr.id}
+                    className="flex items-center justify-between bg-gray-50 rounded-xl px-3.5 py-2.5 border border-gray-100"
+                  >
+                    <span className="text-dash-body text-gray-500 font-medium">
+                      {attr.name}
+                    </span>
+                    <span className="text-dash-body font-bold text-[#023337]">
+                      {attr.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {/* ── Plain retail product's attributes — service/dish already
+              rendered theirs above; stock is no longer tracked/shown here
+              at all (see the badge above too — same reasoning). ── */}
+          {!isService && !isFood && hasAttributes && (
+            <SectionCard title="Attributes" icon={Hash}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {product.attributes!.map((attr) => (
+                  <div
+                    key={attr.id}
+                    className="flex items-center justify-between bg-gray-50 rounded-xl px-3.5 py-2.5 border border-gray-100"
+                  >
+                    <span className="text-dash-body text-gray-500 font-medium">
+                      {attr.name}
+                    </span>
+                    <span className="text-dash-body font-bold text-[#023337]">
+                      {attr.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {/* ── Details — common to every kind. ── */}
+          <SectionCard title="Details" icon={Info}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-              {/* Created date */}
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Calendar size={14} className="text-gray-400" />
@@ -555,7 +659,6 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 </div>
               </div>
 
-              {/* Category */}
               {categoryDisplay && (
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -572,7 +675,6 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 </div>
               )}
 
-              {/* Featured */}
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Star size={14} className="text-gray-400" />
@@ -592,7 +694,6 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 </div>
               </div>
 
-              {/* Manufacturing date */}
               {product.manufacturingDate && (
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -609,7 +710,6 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 </div>
               )}
 
-              {/* Expiration / Guarantee / Duration */}
               {product.expirationDate && (
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -629,237 +729,23 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 </div>
               )}
             </div>
-
-            {/* ── Divider before attributes ── */}
-            {product.attributes && product.attributes.length > 0 && (
-              <>
-                <div className="my-5 border-t border-gray-100" />
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    {isService ? (
-                      <Wrench size={13} className="text-orange-500" />
-                    ) : (
-                      <Hash size={13} className="text-orange-500" />
-                    )}
-                    <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
-                      {isService ? "Service Details" : "Attributes"}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {product.attributes.map((attr) => (
-                      <div
-                        key={attr.id}
-                        className="flex items-center justify-between bg-gray-50 rounded-xl px-3.5 py-2.5 border border-gray-100"
-                      >
-                        <span className="text-dash-body text-gray-500 font-medium">
-                          {attr.name}
-                        </span>
-                        <span className="text-dash-body font-bold text-[#023337]">
-                          {attr.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* ── Divider before tags ── */}
-            {product.tags && product.tags.length > 0 && (
-              <>
-                <div className="my-5 border-t border-gray-100" />
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Tag size={13} className="text-orange-500" />
-                    <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
-                      Tags
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {product.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-orange-50 text-orange-600 border border-orange-100 rounded-full text-dash-caption font-semibold"
-                      >
-                        <Tag size={10} />
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* ── Food-specific fields ── */}
-            {isFood &&
-              (product.isCurrentlyAvailable != null ||
-                product.dailyLimit != null ||
-                product.allowPreOrder ||
-                product.isVeg ||
-                product.isSpicy) && (
-                <>
-                  <div className="my-5 border-t border-gray-100" />
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <ChefHat size={13} className="text-orange-500" />
-                      <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
-                        Food Details
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      {product.isCurrentlyAvailable != null && (
-                        <div
-                          className={cn(
-                            "flex items-center gap-2 rounded-xl px-3.5 py-2.5 border",
-                            product.isCurrentlyAvailable
-                              ? "bg-green-50 border-green-100"
-                              : "bg-red-50 border-red-100",
-                          )}
-                        >
-                          {product.isCurrentlyAvailable ? (
-                            <CheckCircle2
-                              size={14}
-                              className="text-green-500"
-                            />
-                          ) : (
-                            <XCircle size={14} className="text-red-500" />
-                          )}
-                          <span
-                            className={cn(
-                              "text-dash-body font-semibold",
-                              product.isCurrentlyAvailable
-                                ? "text-green-700"
-                                : "text-red-700",
-                            )}
-                          >
-                            {product.isCurrentlyAvailable
-                              ? "Available today"
-                              : "Not available today"}
-                          </span>
-                        </div>
-                      )}
-                      {product.dailyLimit != null && (
-                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-2.5">
-                          <Layers size={14} className="text-gray-500" />
-                          <span className="text-dash-body font-semibold text-[#023337]">
-                            Daily limit: {product.dailyLimit}
-                          </span>
-                        </div>
-                      )}
-                      {product.allowPreOrder && (
-                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
-                          <Clock size={14} className="text-blue-500" />
-                          <span className="text-dash-body font-semibold text-blue-700">
-                            Pre-orders accepted
-                          </span>
-                        </div>
-                      )}
-                      {product.isVeg && (
-                        <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3.5 py-2.5">
-                          <Leaf size={14} className="text-green-500" />
-                          <span className="text-dash-body font-semibold text-green-700">
-                            Vegetarian
-                          </span>
-                        </div>
-                      )}
-                      {product.isSpicy && (
-                        <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">
-                          <Flame size={14} className="text-red-500" />
-                          <span className="text-dash-body font-semibold text-red-700">
-                            Spicy
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-
-            {/* ── Availability ── */}
-            {isFood && product.availability && (
-              <>
-                <div className="my-5 border-t border-gray-100" />
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Clock size={13} className="text-orange-500" />
-                    <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
-                      Availability
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {product.availability.days.map((day) => (
-                      <span
-                        key={day}
-                        className="px-2.5 py-1 bg-orange-500 text-white text-dash-caption font-semibold rounded-lg"
-                      >
-                        {day.charAt(0).toUpperCase() + day.slice(1)}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-dash-caption text-gray-500 font-medium">
-                    {product.availability.startTime} –{" "}
-                    {product.availability.endTime}
-                  </p>
-                </div>
-              </>
-            )}
-
-            {/* ── Modifiers ── */}
-            {isFood && product.modifiers && product.modifiers.length > 0 && (
-              <>
-                <div className="my-5 border-t border-gray-100" />
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Hash size={13} className="text-orange-500" />
-                    <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold">
-                      Modifiers
-                    </p>
-                  </div>
-                  <div className="space-y-3">
-                    {product.modifiers.map((group) => (
-                      <div
-                        key={group.id}
-                        className="border border-gray-100 rounded-xl overflow-hidden"
-                      >
-                        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
-                          <span className="text-dash-body font-semibold text-[#023337]">
-                            {group.name}
-                          </span>
-                          {group.required && (
-                            <span className="text-dash-micro bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">
-                              Required
-                            </span>
-                          )}
-                          {group.multiSelect && (
-                            <span className="text-dash-micro bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">
-                              Multi-select
-                            </span>
-                          )}
-                        </div>
-                        <div className="divide-y divide-gray-50">
-                          {group.options.map((opt) => (
-                            <div
-                              key={opt.id}
-                              className="flex items-center justify-between px-3 py-2"
-                            >
-                              <span className="text-dash-body text-gray-700">
-                                {opt.name}
-                              </span>
-                              {opt.additionalPrice > 0 && (
-                                <span className="text-dash-caption text-green-600 font-semibold">
-                                  +₦{opt.additionalPrice.toLocaleString()}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
           </SectionCard>
+
+          {hasTags && (
+            <SectionCard title="Tags" icon={Tag}>
+              <div className="flex flex-wrap gap-2">
+                {product.tags!.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-orange-50 text-orange-600 border border-orange-100 rounded-full text-dash-caption font-semibold"
+                  >
+                    <Tag size={10} />
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </SectionCard>
+          )}
         </div>
       </div>
     </div>

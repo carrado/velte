@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { getAvailableStock } from "@/services/products";
 import { computePrice, fmt } from "@/lib/product-price";
 import type { ProductsTableProps } from "@/types/product";
 import type { CategoryProduct } from "@/types/product";
@@ -11,31 +10,28 @@ import { Star, Package } from "lucide-react";
 function ProductCard({
   product,
   isFood,
-  onRestock,
   onChangePrice,
   onSwitchToQuote,
   onDelete,
 }: {
   product: CategoryProduct;
   isFood: boolean;
-  onRestock: () => void;
   onChangePrice: () => void;
   onSwitchToQuote: () => void;
   onDelete: () => void;
 }) {
-  const available = getAvailableStock(product);
   const pricing = computePrice(product);
 
   return (
-    <div className="bg-white rounded-md border border-gray-100 shadow-sm hover:shadow-md transition-all">
+    <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       {/* Product image */}
-      <div className="relative w-full h-44 overflow-hidden rounded-t-md">
+      <div className="relative w-full aspect-square overflow-hidden bg-gray-50">
         {product.mainImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={product.mainImageUrl}
             alt={product.name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
           />
         ) : (
           <div
@@ -47,11 +43,43 @@ function ProductCard({
             {product.name.charAt(0)}
           </div>
         )}
+
+        {/* Bottom scrim so the status badges stay legible over any photo */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/35 to-transparent" />
+
+        <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1.5">
+          {product.kind === "service" ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-white/90 text-teal-700 backdrop-blur-sm">
+              Service
+            </span>
+          ) : isFood ? (
+            // A dish's real signal is isCurrentlyAvailable (never a stock
+            // quantity, which this listing type never had anyway).
+            <span
+              className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold backdrop-blur-sm",
+                product.isCurrentlyAvailable === false
+                  ? "bg-white/90 text-red-700"
+                  : "bg-white/90 text-green-700",
+              )}
+            >
+              {product.isCurrentlyAvailable === false
+                ? "Not Available"
+                : "Available"}
+            </span>
+          ) : null}
+          {product.featured && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-amber-400 text-white">
+              <Star size={9} className="fill-white text-white" />
+              Featured
+            </span>
+          )}
+        </div>
+
         <div className="absolute top-2 right-2">
           <ProductActionsPopover
             product={product}
             isFood={isFood}
-            onRestock={onRestock}
             onChangePrice={onChangePrice}
             onSwitchToQuote={onSwitchToQuote}
             onDelete={onDelete}
@@ -60,62 +88,26 @@ function ProductCard({
       </div>
 
       {/* Content */}
-      <div className="p-3">
-        <p className="text-dash-body font-bold text-[#023337] mb-1 line-clamp-2">
+      <div className="p-3.5">
+        <p className="text-dash-body font-bold text-[#023337] mb-1.5 line-clamp-2 min-h-[2.5em]">
           {product.name}
         </p>
 
-        {/* Price */}
-        <div className="mb-3">
-          {pricing.quoteOnRequest ? (
-            <p className="text-dash-heading font-black text-orange-500">
-              Contact for quote
-            </p>
-          ) : pricing.isRange ? (
-            <p className="text-dash-heading font-black text-orange-500">
-              {fmt(pricing.price, pricing.currencySymbol)}{" "}
-              <span className="text-gray-400 font-medium">–</span>{" "}
-              {fmt(pricing.priceMax!, pricing.currencySymbol)}
-            </p>
-          ) : (
-            <p className="text-dash-heading font-black text-orange-500">
-              {fmt(pricing.price, pricing.currencySymbol)}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {product.kind === "service" ? (
-            // Services have no stock — a red "Out of Stock" here would be
-            // misleading, so show a neutral identity badge instead.
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-teal-50 text-teal-700">
-              Service
-            </span>
-          ) : (
-            <span
-              className={cn(
-                "inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold",
-                available > 0
-                  ? "bg-green-100 text-green-700"
-                  : "bg-red-100 text-red-700",
-              )}
-            >
-              {available > 0
-                ? isFood
-                  ? "Available"
-                  : "In Stock"
-                : isFood
-                  ? "Not Available"
-                  : "Out of Stock"}
-            </span>
-          )}
-          {product.featured && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-amber-100 text-amber-700">
-              <Star size={9} className="fill-amber-500 text-amber-500" />{" "}
-              Featured
-            </span>
-          )}
-        </div>
+        {pricing.quoteOnRequest ? (
+          <p className="text-dash-heading font-black text-orange-500">
+            Contact for quote
+          </p>
+        ) : pricing.isRange ? (
+          <p className="text-dash-heading font-black text-orange-500">
+            {fmt(pricing.price, pricing.currencySymbol)}{" "}
+            <span className="text-gray-400 font-medium">–</span>{" "}
+            {fmt(pricing.priceMax!, pricing.currencySymbol)}
+          </p>
+        ) : (
+          <p className="text-dash-heading font-black text-orange-500">
+            {fmt(pricing.price, pricing.currencySymbol)}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -136,8 +128,6 @@ function EmptyState({ isFood }: { isFood: boolean }) {
 
 export default function ProductsTable({
   products,
-  rowOffset = 0,
-  onRestock,
   onChangePrice,
   onSwitchToQuote,
   onDelete,
@@ -146,13 +136,12 @@ export default function ProductsTable({
   if (products.length === 0) return <EmptyState isFood={isFood} />;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-4 p-5">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5">
       {products.map((product) => (
         <ProductCard
           key={product.id}
           product={product}
           isFood={isFood}
-          onRestock={() => onRestock(product)}
           onChangePrice={() => onChangePrice(product)}
           onSwitchToQuote={() => onSwitchToQuote(product)}
           onDelete={() => onDelete(product)}

@@ -9,11 +9,11 @@ import type {
   PublicStore,
   PublicStoreTab,
 } from "@/types/store";
-import { WhatsAppButton } from "@/components/WhatsAppButton";
 import StoreNavbar from "./_components/StoreNavbar";
 import StoreHero from "./_components/StoreHero";
 import StoreFooter from "./_components/StoreFooter";
 import StoreTabs from "./_components/StoreTabs";
+import { StoreWhatsAppButton } from "./_components/shared";
 
 // Public storefront — server-rendered for SEO and link previews. This is the
 // page the AI hands buyers off to. A real site shell (Navbar with AI Search +
@@ -105,10 +105,11 @@ function IntroCard({
         </div>
       )}
       {whatsappHref && (
-        <WhatsAppButton
+        <StoreWhatsAppButton
           href={whatsappHref}
           label="Chat on WhatsApp"
           className="w-full"
+          vendorId={store.vendorId}
         />
       )}
     </div>
@@ -169,6 +170,7 @@ export default async function PublicStorePage({
           isFood={isFood}
           storeName={store.name}
           whatsapp={store.whatsapp}
+          vendorId={store.vendorId}
           defaultTab={defaultTab}
           sidebar={
             <IntroCard
@@ -192,10 +194,11 @@ export default async function PublicStorePage({
       {/* ── Mobile sticky chat bar ─────────────────────────────────────── */}
       {whatsappHref && (
         <div className="fixed bottom-0 inset-x-0 sm:hidden z-30 bg-white/95 backdrop-blur border-t border-gray-200 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
-          <WhatsAppButton
+          <StoreWhatsAppButton
             href={whatsappHref}
             label={`Chat with ${store.name}`}
             className="w-full"
+            vendorId={store.vendorId}
           />
         </div>
       )}

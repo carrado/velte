@@ -1,3 +1,5 @@
+"use client";
+
 /* eslint-disable @next/next/no-img-element */
 import {
   MessageCircle,
@@ -7,10 +9,45 @@ import {
 } from "lucide-react";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { reportLead } from "@/lib/reportLead";
 import type {
   PublicStoreProduct,
   PublicStoreProductProps,
 } from "@/types/store";
+
+// "use client" so the server page (page.tsx) can still import/render these
+// across the server/client boundary while StoreWhatsAppButton attaches a
+// real onClick — a Server Component can't pass an inline event handler to
+// a prop itself, but it CAN render an already-client component that owns
+// its own handler internally, which is exactly what this is for.
+
+/** Wraps WhatsAppButton with the same lead-billing beacon the search
+ * result cards use (see reportLead) — every "chat with vendor" touchpoint
+ * on the public store page should bill the same way theirs does.
+ * `productId` omitted = a store-level enquiry, not tied to one listing. */
+export function StoreWhatsAppButton({
+  href,
+  label,
+  className,
+  vendorId,
+  productId,
+}: {
+  href: string;
+  label: string;
+  className?: string;
+  vendorId: string;
+  productId?: string;
+}) {
+  return (
+    <WhatsAppButton
+      href={href}
+      label={label}
+      className={className}
+      onClick={() => reportLead(vendorId, productId)}
+    />
+  );
+}
 
 // Shared, non-interactive pieces used by both the server page (header CTAs,
 // Intro sidebar) and the client StoreTabs component (catalog panels).
@@ -48,6 +85,7 @@ export function OfferingCard({
   product,
   storeName,
   whatsapp,
+  vendorId,
 }: PublicStoreProductProps) {
   const isService = product.kind === "service";
   const KindIcon = isService ? Wrench : Package;
@@ -95,6 +133,7 @@ export function OfferingCard({
               href={enquireHref}
               target="_blank"
               rel="noreferrer"
+              onClick={() => reportLead(vendorId, product.id)}
               className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[12px] sm:text-[13px] font-semibold rounded-lg transition-colors shrink-0"
             >
               <MessageCircle size={13} />

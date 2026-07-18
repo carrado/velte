@@ -14,6 +14,7 @@ import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
 import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
+import { LocationPermissionModal } from "@/components/search/LocationPermissionModal";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { getInitial } from "@/lib/initials";
@@ -29,11 +30,25 @@ import type {
   VendorMatch,
 } from "@/types/search";
 
+// `products` decides the noun: a pure service turn (e.g. "haircut near me")
+// shouldn't be headed "Products", and a turn can genuinely mix both kinds
+// (retrieval is embeddings-based across all listings regardless of kind), so
+// this can't just be a static "product vs service" flag passed in from the
+// call site.
+function productsNoun(products: VendorMatch[]): string {
+  const hasProduct = products.some((p) => p.kind !== "service");
+  const hasService = products.some((p) => p.kind === "service");
+  if (hasProduct && hasService) return "Results";
+  return hasService ? "Services" : "Products";
+}
+
 function productsHeading(
   matchTier: MatchTier,
   matchQuality: MatchQuality,
+  products: VendorMatch[],
 ): string {
   if (matchQuality === "direct") return "Exact match";
+  const noun = productsNoun(products);
   if (matchTier === "nationwide") {
     return matchQuality === "similar"
       ? "Similar options — across Velte"
@@ -42,14 +57,14 @@ function productsHeading(
   if (matchTier === "state") {
     return matchQuality === "similar"
       ? "Similar options — elsewhere in your state"
-      : "Products — elsewhere in your state";
+      : `${noun} — elsewhere in your state`;
   }
   if (matchTier === "nearby") {
     return matchQuality === "similar"
       ? "Similar options — a bit further out"
       : "A bit further out";
   }
-  return matchQuality === "similar" ? "Similar options nearby" : "Products";
+  return matchQuality === "similar" ? "Similar options nearby" : noun;
 }
 
 // Clusters `products` by vendorId, preserving each product's original rank
@@ -320,6 +335,7 @@ function ConversationTurnView({
                           {productsHeading(
                             turn.productsMatchTier,
                             turn.productsMatchQuality,
+                            turn.products,
                           )}
                         </h2>
                       )}
@@ -562,9 +578,46 @@ export function SearchHome() {
     return buyerLocationPromise.current;
   }
 
+  // Checked via the Permissions API rather than calling getBuyerLocationOnce
+  // straight away — that would fire the browser's native geolocation prompt
+  // the instant the page loads, with zero context for why. "granted"
+  // fetches silently (no prompt, nothing to explain); "prompt" (undecided)
+  // shows our own explanation first via LocationPermissionModal; "denied"
+  // is left alone entirely — the browser won't re-prompt either way, and a
+  // getCurrentPosition() call would just fail again. Safari's geolocation
+  // support for this query has historically been inconsistent, so any
+  // failure/lack of support falls back to showing the modal too, rather
+  // than silently assuming permission either way.
+  const [showLocationModal, setShowLocationModal] = useState(false);
   useEffect(() => {
-    getBuyerLocationOnce();
+    let cancelled = false;
+    async function checkLocationPermission() {
+      if (!navigator.geolocation) return;
+      if (!navigator.permissions?.query) {
+        if (!cancelled) setShowLocationModal(true);
+        return;
+      }
+      try {
+        const status = await navigator.permissions.query({
+          name: "geolocation",
+        });
+        if (cancelled) return;
+        if (status.state === "granted") getBuyerLocationOnce();
+        else if (status.state === "prompt") setShowLocationModal(true);
+      } catch {
+        if (!cancelled) setShowLocationModal(true);
+      }
+    }
+    checkLocationPermission();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const handleAllowLocation = () => {
+    setShowLocationModal(false);
+    getBuyerLocationOnce();
+  };
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -873,6 +926,11 @@ export function SearchHome() {
 
   return (
     <div className="h-dvh bg-white flex flex-col overflow-hidden">
+      <LocationPermissionModal
+        open={showLocationModal}
+        onAllow={handleAllowLocation}
+        onDismiss={() => setShowLocationModal(false)}
+      />
       <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-white border-b border-gray-100 z-10">
         <Link href="/" className="shrink-0">
           <Image
@@ -946,7 +1004,7 @@ export function SearchHome() {
           {/* Newest content stays pinned to the bottom (bottomRef) as the
               thread grows, so scrolling reads bottom-up like a chat. */}
           <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-6">
-            <div className="max-w-3xl mx-auto space-y-8">
+            <div className="max-w-3xl lg:max-w-5xl mx-auto space-y-8">
               {turns.map((turn, i) => (
                 <ConversationTurnView
                   key={turn.id}
@@ -959,7 +1017,7 @@ export function SearchHome() {
             </div>
           </div>
           <div className="shrink-0 px-5 sm:px-8 pt-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-            <div className="max-w-3xl mx-auto">{inputForm}</div>
+            <div className="max-w-3xl lg:max-w-5xl mx-auto">{inputForm}</div>
           </div>
         </>
       )}

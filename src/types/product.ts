@@ -6,7 +6,7 @@ export interface Category {
   description?: string;
 }
 
-export type ProductTab = "all" | "featured" | "out-of-stock";
+export type ProductTab = "all" | "featured";
 
 export type OfferingKind = "product" | "service";
 
@@ -17,7 +17,7 @@ export interface CategoryProduct {
    * drives shape (see SectorLeaf.classification) and per-sector wizard
    * tailoring in edit mode. */
   sectorValue?: string;
-  /** Offering identity — services carry no stock semantics. */
+  /** Offering identity — a physical good or a service. */
   kind?: OfferingKind;
   /** Service priced per job — no upfront price; buyers see "Contact for quote". */
   quoteOnRequest?: boolean;
@@ -28,16 +28,12 @@ export interface CategoryProduct {
   /** High end of a price range; null = single price. */
   priceMax?: number | null;
   currency?: "NGN" | "USD";
-  totalQuantity: number;
-  orderedQuantity: number;
   createdDate: string;
   featured: boolean;
-  inStock: number;
   colorClass: string;
   mainImageUrl?: string | null;
   thumbnailUrls?: string[];
   videoUrl?: string | null;
-  lowStockThreshold?: number | null;
   manufacturingDate?: string | null;
   expirationDate?: string | null;
   attributes?: ProductAttribute[];
@@ -59,10 +55,14 @@ export interface ProductAttribute {
 }
 
 /** A suggested attribute / service detail: the name is fixed, the example
- * seeds the value input's placeholder. */
+ * seeds the value input's placeholder. `important` flags the handful of
+ * fields per group that most affect AI match quality (e.g. Brand, Shoe
+ * Size) — surfaced to vendors so they know which blanks actually cost them
+ * matches, not a hard requirement. */
 export interface AttributePreset {
   name: string;
   example: string;
+  important?: boolean;
 }
 
 export interface AttributePresetGroup {
@@ -113,7 +113,6 @@ export interface ProductListParams {
   search?: string;
   sort_by?: "created_at" | "price";
   sort_order?: "asc" | "desc";
-  stock_status?: "in-stock" | "out-of-stock";
 }
 
 export interface ProductListResult {
@@ -148,8 +147,6 @@ export interface CreateProductBasePayload {
 export interface RetailProductPayload extends CreateProductBasePayload {
   kind?: OfferingKind;
   quote_on_request?: boolean;
-  stock_quantity: number;
-  low_stock_threshold?: number | null;
   manufacturing_date?: string | null;
   expiration_date?: string | null;
   attributes?: { name: string; value: string }[];
@@ -180,25 +177,6 @@ export interface CategoryCardProps {
   onDelete: () => void;
 }
 
-export interface CategoryModalProps {
-  open: boolean;
-  editing: Category | null;
-  onClose: () => void;
-  onSubmit: (data: {
-    name: string;
-    description: string;
-    emoji: string;
-    bgColor: string;
-  }) => void;
-}
-
-export interface RestockModalProps {
-  open: boolean;
-  product: CategoryProduct | null;
-  onClose: () => void;
-  onConfirm: (productId: string, quantity: number) => void;
-}
-
 export interface PriceModalProps {
   open: boolean;
   product: CategoryProduct | null;
@@ -216,7 +194,6 @@ export interface DeleteProductModalProps {
 export interface ProductActionsPopoverProps {
   product: CategoryProduct;
   isFood?: boolean;
-  onRestock: () => void;
   onChangePrice: () => void;
   /** Fixed-price service → back to "Contact for quote". Services only. */
   onSwitchToQuote: () => void;
@@ -225,8 +202,6 @@ export interface ProductActionsPopoverProps {
 
 export interface ProductsTableProps {
   products: CategoryProduct[];
-  rowOffset?: number;
-  onRestock: (product: CategoryProduct) => void;
   onChangePrice: (product: CategoryProduct) => void;
   onSwitchToQuote: (product: CategoryProduct) => void;
   onDelete: (product: CategoryProduct) => void;
@@ -234,8 +209,6 @@ export interface ProductsTableProps {
 }
 
 export type AddProductTaxOption = "yes" | "no";
-
-export type AddProductStockStatus = "In Stock" | "Out of Stock" | "Low Stock";
 
 export interface AddProductColor {
   name: string;

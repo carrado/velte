@@ -4,7 +4,10 @@ import { SECTOR_BY_VALUE } from "@/lib/sectors";
 /* Curated attribute / service-detail suggestions so vendors fill a checklist
    instead of inventing field names. Everything added here ends up in the text
    that gets embedded for AI matching — richer details = better matches.
-   Names are the fixed keys; `example` only seeds the placeholder. */
+   Names are the fixed keys; `example` only seeds the placeholder.
+   `important: true` marks the 1-2 fields per group that most affect match
+   quality (see AttributePreset's own doc comment) — surfaced to vendors as a
+   nudge, not a hard requirement. */
 
 // ── Services — grouped by sector, vendors scroll and fill what applies ───────
 
@@ -12,8 +15,8 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
   {
     group: "General",
     items: [
-      { name: "Duration", example: "about 2 hours" },
-      { name: "Coverage Area", example: "Lagos mainland" },
+      { name: "Duration", example: "about 2 hours", important: true },
+      { name: "Coverage Area", example: "Lagos mainland", important: true },
       { name: "Availability", example: "Mon–Sat, 9am–6pm" },
       { name: "Experience", example: "5+ years" },
       { name: "Home Service", example: "Yes — we come to you" },
@@ -26,10 +29,18 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
   {
     group: "Repairs & Technical",
     items: [
-      { name: "Device Types", example: "phones, laptops, TVs" },
+      {
+        name: "Device Types",
+        example: "phones, laptops, TVs",
+        important: true,
+      },
       { name: "Diagnosis Fee", example: "₦2,000 — waived if we repair" },
       { name: "Parts Policy", example: "original parts only" },
-      { name: "Turnaround Time", example: "same day for most repairs" },
+      {
+        name: "Turnaround Time",
+        example: "same day for most repairs",
+        important: true,
+      },
       { name: "Pickup & Delivery", example: "available within Ikeja" },
       { name: "Repair Warranty", example: "14 days" },
     ],
@@ -37,22 +48,26 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
   {
     group: "Fashion & Tailoring",
     items: [
-      { name: "Turnaround Time", example: "1–2 weeks" },
+      { name: "Turnaround Time", example: "1–2 weeks", important: true },
       { name: "Measurement", example: "home visit or send measurements" },
       { name: "Fabric", example: "customer provides or we source" },
       { name: "Fittings Included", example: "2 fittings" },
-      { name: "Styles", example: "agbada, kaftan, suits" },
+      { name: "Styles", example: "agbada, kaftan, suits", important: true },
       { name: "Rush Orders", example: "48-hour express available" },
     ],
   },
   {
     group: "Beauty & Personal Care",
     items: [
-      { name: "Location", example: "home service or in-salon" },
+      {
+        name: "Location",
+        example: "home service or in-salon",
+        important: true,
+      },
       { name: "Session Duration", example: "45 minutes" },
       { name: "Products Used", example: "hypoallergenic products" },
       { name: "Group Bookings", example: "bridal parties welcome" },
-      { name: "Gender", example: "ladies only / unisex" },
+      { name: "Gender", example: "ladies only / unisex", important: true },
     ],
   },
   {
@@ -61,15 +76,27 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
       { name: "Team Size", example: "2 cleaners" },
       { name: "Equipment", example: "we bring everything" },
       { name: "Free Inspection", example: "free quote visit first" },
-      { name: "Frequency", example: "one-time, weekly or monthly" },
-      { name: "Certifications", example: "licensed electrician" },
+      {
+        name: "Frequency",
+        example: "one-time, weekly or monthly",
+        important: true,
+      },
+      {
+        name: "Certifications",
+        example: "licensed electrician",
+        important: true,
+      },
     ],
   },
   {
     group: "Events & Catering",
     items: [
-      { name: "Capacity", example: "up to 200 guests" },
-      { name: "Menu Options", example: "Nigerian & continental" },
+      { name: "Capacity", example: "up to 200 guests", important: true },
+      {
+        name: "Menu Options",
+        example: "Nigerian & continental",
+        important: true,
+      },
       { name: "Staff Included", example: "servers and setup crew" },
       { name: "Tasting Session", example: "available before booking" },
       { name: "Advance Notice", example: "2 weeks minimum" },
@@ -79,8 +106,8 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
   {
     group: "Logistics & Transport",
     items: [
-      { name: "Delivery Areas", example: "Lagos & Ogun" },
-      { name: "Vehicle Type", example: "bike / van / truck" },
+      { name: "Delivery Areas", example: "Lagos & Ogun", important: true },
+      { name: "Vehicle Type", example: "bike / van / truck", important: true },
       { name: "Same-Day Delivery", example: "orders before 2pm" },
       { name: "Package Limits", example: "up to 50kg" },
       { name: "Tracking", example: "WhatsApp updates" },
@@ -89,7 +116,7 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
   {
     group: "Auto Services",
     items: [
-      { name: "Vehicle Types", example: "cars & SUVs" },
+      { name: "Vehicle Types", example: "cars & SUVs", important: true },
       { name: "Roadside Service", example: "available 24/7" },
       { name: "Genuine Parts", example: "sourced on request" },
       { name: "Diagnostics", example: "computerized diagnostics" },
@@ -99,8 +126,8 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
     group: "Training & Lessons",
     items: [
       { name: "Class Format", example: "one-on-one or small group" },
-      { name: "Course Duration", example: "8-week course" },
-      { name: "Level", example: "beginner to advanced" },
+      { name: "Course Duration", example: "8-week course", important: true },
+      { name: "Level", example: "beginner to advanced", important: true },
       { name: "Materials", example: "included" },
       { name: "Certificate", example: "issued on completion" },
     ],
@@ -108,8 +135,8 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
   {
     group: "Media & Photography",
     items: [
-      { name: "Deliverables", example: "50 edited photos" },
-      { name: "Delivery Time", example: "5 working days" },
+      { name: "Deliverables", example: "50 edited photos", important: true },
+      { name: "Delivery Time", example: "5 working days", important: true },
       { name: "Coverage Hours", example: "6 hours" },
       { name: "Crew", example: "photographer + assistant" },
       { name: "Raw Files", example: "available on request" },
@@ -118,7 +145,11 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
   {
     group: "Health & Wellness",
     items: [
-      { name: "Consultation", example: "free first consultation" },
+      {
+        name: "Consultation",
+        example: "free first consultation",
+        important: true,
+      },
       { name: "Home Visits", example: "available" },
       { name: "Packages", example: "per session or monthly plan" },
     ],
@@ -150,8 +181,8 @@ export function getServiceDetailPresets(
 export const GENERAL_PRODUCT_PRESETS: AttributePresetGroup = {
   group: "General",
   items: [
-    { name: "Brand", example: "e.g. Samsung" },
-    { name: "Color", example: "e.g. Black" },
+    { name: "Brand", example: "e.g. Samsung", important: true },
+    { name: "Color", example: "e.g. Black", important: true },
     { name: "Material", example: "e.g. stainless steel" },
     { name: "Size", example: "e.g. Medium" },
     { name: "Weight", example: "e.g. 1.2kg" },
@@ -166,8 +197,8 @@ export const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> =
     electronics: {
       group: "Electronics",
       items: [
-        { name: "Model", example: "e.g. Spark 10 Pro" },
-        { name: "Storage", example: "e.g. 128GB" },
+        { name: "Model", example: "e.g. Spark 10 Pro", important: true },
+        { name: "Storage", example: "e.g. 128GB", important: true },
         { name: "RAM", example: "e.g. 8GB" },
         { name: "Screen Size", example: "e.g. 6.5 inches" },
         { name: "Battery", example: "e.g. 5000mAh" },
@@ -179,9 +210,13 @@ export const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> =
     fashion: {
       group: "Fashion",
       items: [
-        { name: "Sizes Available", example: "e.g. S, M, L, XL" },
+        {
+          name: "Sizes Available",
+          example: "e.g. S, M, L, XL",
+          important: true,
+        },
         { name: "Fabric", example: "e.g. 100% cotton" },
-        { name: "Gender", example: "men / women / unisex" },
+        { name: "Gender", example: "men / women / unisex", important: true },
         { name: "Fit", example: "e.g. slim fit" },
         { name: "Occasion", example: "e.g. casual, formal" },
         { name: "Care", example: "e.g. hand wash only" },
@@ -191,7 +226,11 @@ export const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> =
     accessories: {
       group: "Accessories",
       items: [
-        { name: "Compatibility", example: "e.g. fits iPhone 13–15" },
+        {
+          name: "Compatibility",
+          example: "e.g. fits iPhone 13–15",
+          important: true,
+        },
         { name: "Dimensions", example: "e.g. 20cm × 12cm" },
         { name: "Strap Type", example: "e.g. adjustable leather" },
         { name: "Water Resistance", example: "e.g. splash-proof" },
@@ -201,8 +240,8 @@ export const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> =
       group: "Home & Kitchen",
       items: [
         { name: "Dimensions", example: "e.g. 60cm × 40cm" },
-        { name: "Capacity", example: "e.g. 5 litres" },
-        { name: "Power", example: "e.g. 1500W" },
+        { name: "Capacity", example: "e.g. 5 litres", important: true },
+        { name: "Power", example: "e.g. 1500W", important: true },
         { name: "Pieces in Set", example: "e.g. 6 pieces" },
         { name: "Care Instructions", example: "e.g. dishwasher safe" },
       ],
@@ -210,8 +249,8 @@ export const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> =
     sports: {
       group: "Sports",
       items: [
-        { name: "Sport Type", example: "e.g. football" },
-        { name: "Sizes Available", example: "e.g. 40–45" },
+        { name: "Sport Type", example: "e.g. football", important: true },
+        { name: "Sizes Available", example: "e.g. 40–45", important: true },
         { name: "Age Range", example: "e.g. adults" },
         { name: "Set Includes", example: "e.g. pump included" },
       ],
@@ -219,32 +258,116 @@ export const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> =
     toys: {
       group: "Toys",
       items: [
-        { name: "Age Range", example: "e.g. 3–7 years" },
+        { name: "Age Range", example: "e.g. 3–7 years", important: true },
         { name: "Batteries", example: "e.g. 2× AA, included" },
         { name: "Pieces", example: "e.g. 120 pieces" },
-        { name: "Safety", example: "e.g. non-toxic plastic" },
+        { name: "Safety", example: "e.g. non-toxic plastic", important: true },
       ],
     },
     health: {
       group: "Health",
       items: [
-        { name: "Strength", example: "e.g. 500mg" },
+        { name: "Strength", example: "e.g. 500mg", important: true },
         { name: "Pack Size", example: "e.g. 30 tablets" },
         { name: "Form", example: "tablet / syrup / cream" },
         { name: "Age Suitability", example: "e.g. adults only" },
         { name: "Storage", example: "e.g. store below 25°C" },
-        { name: "NAFDAC Number", example: "e.g. A4-1234" },
+        { name: "NAFDAC Number", example: "e.g. A4-1234", important: true },
       ],
     },
     books: {
       group: "Books",
       items: [
-        { name: "Author", example: "e.g. Chimamanda Adichie" },
-        { name: "Format", example: "paperback / hardcover" },
+        { name: "Author", example: "e.g. Chimamanda Adichie", important: true },
+        { name: "Format", example: "paperback / hardcover", important: true },
         { name: "Pages", example: "e.g. 320" },
         { name: "Language", example: "e.g. English" },
         { name: "Publisher", example: "e.g. Farafina" },
         { name: "ISBN", example: "e.g. 978-…" },
+      ],
+    },
+    // Not a real vendor-selectable category (shoes still file under the
+    // "Fashion" category) — only ever reached via a sector's
+    // attributeCategoryId override, see shoes_footwear in sectors.ts.
+    footwear: {
+      group: "Footwear",
+      items: [
+        { name: "Brand", example: "e.g. Nike, Adidas, Puma", important: true },
+        {
+          name: "Shoe Size",
+          example: "e.g. UK 8 / US 9 / EU 42",
+          important: true,
+        },
+        { name: "Gender", example: "men's / women's / unisex" },
+        { name: "Style", example: "sneakers, loafers, boots, sandals, heels" },
+        { name: "Closure Type", example: "lace-up, slip-on, velcro, buckle" },
+        { name: "Upper Material", example: "leather, canvas, mesh, suede" },
+        { name: "Sole Material", example: "rubber, EVA" },
+      ],
+    },
+    // Only ever reached via jewelry_watches' attributeCategoryId override —
+    // the real vendor category is still "Accessories".
+    jewelry: {
+      group: "Jewelry & Watches",
+      items: [
+        { name: "Brand", example: "e.g. Rolex, Casio, handmade/generic" },
+        {
+          name: "Material",
+          example: "gold, silver, stainless steel",
+          important: true,
+        },
+        {
+          name: "Gemstone",
+          example: "diamond, cubic zirconia, none",
+          important: true,
+        },
+        { name: "Watch Movement", example: "quartz, automatic, mechanical" },
+        { name: "Water Resistance", example: "e.g. 50m, not water resistant" },
+        { name: "Adjustable Size", example: "yes — resizable" },
+      ],
+    },
+    // Only ever reached via bags_accessories' attributeCategoryId override —
+    // the real vendor category is still "Accessories".
+    bags: {
+      group: "Bags",
+      items: [
+        {
+          name: "Brand",
+          example: "e.g. Louis Vuitton, generic",
+          important: true,
+        },
+        {
+          name: "Material",
+          example: "leather, canvas, synthetic",
+          important: true,
+        },
+        { name: "Strap Type", example: "adjustable, shoulder, hand-carry" },
+        { name: "Dimensions", example: "e.g. 30cm × 20cm × 10cm" },
+        { name: "Closure Type", example: "zip, magnetic snap, drawstring" },
+        {
+          name: "Water Resistance",
+          example: "splash-proof, not water resistant",
+        },
+      ],
+    },
+    // Only ever reached via textile_fabric_sales' attributeCategoryId
+    // override — the real vendor category is still "Fashion".
+    textiles: {
+      group: "Textiles & Fabric",
+      items: [
+        {
+          name: "Fabric Type",
+          example: "ankara, lace, aso-oke, chiffon, cotton",
+          important: true,
+        },
+        { name: "Width", example: "e.g. 45 inches" },
+        { name: "Pattern", example: "plain, printed, embroidered" },
+        {
+          name: "Unit Sold",
+          example: "per yard / per full piece",
+          important: true,
+        },
+        { name: "Care Instructions", example: "e.g. hand wash only" },
       ],
     },
   };

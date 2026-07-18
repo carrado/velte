@@ -13,9 +13,6 @@ export type { ProductListParams, ProductListResult, CreateProductPayload };
 
 // ── Utility ──────────────────────────────────────────────────────────────────
 
-export const getAvailableStock = (product: CategoryProduct) =>
-  product.totalQuantity - product.orderedQuantity;
-
 function buildQuery(params?: ProductListParams): string {
   const qs = new URLSearchParams();
   if (params?.page) qs.set("page", String(params.page));
@@ -25,7 +22,6 @@ function buildQuery(params?: ProductListParams): string {
   if (params?.search?.trim()) qs.set("search", params.search.trim());
   if (params?.sort_by) qs.set("sort_by", params.sort_by);
   if (params?.sort_order) qs.set("sort_order", params.sort_order);
-  if (params?.stock_status) qs.set("stock_status", params.stock_status);
   const s = qs.toString();
   return s ? `?${s}` : "";
 }
@@ -92,17 +88,6 @@ export const categoriesApi = {
   },
 
   // ── Retail actions ─────────────────────────────────────────────────────────
-
-  restockProduct: async (
-    id: string,
-    quantity: number,
-  ): Promise<CategoryProduct> => {
-    const { product } = await api.post<{ product: CategoryProduct }>(
-      `/api/products/${id}/restock`,
-      { quantity },
-    );
-    return product;
-  },
 
   changePrice: async (
     id: string,

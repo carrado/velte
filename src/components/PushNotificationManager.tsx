@@ -188,9 +188,6 @@ export default function PushNotificationManager() {
             )}
           >
             <div className="relative overflow-hidden rounded-2xl bg-white shadow-[0_12px_40px_-8px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.06]">
-              {/* Brand stripe */}
-              <div className="h-[3px] w-full bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600" />
-
               {/* Dismiss */}
               <button
                 onClick={

@@ -55,6 +55,10 @@ export interface PublicStoreProduct {
 
 /** What the public /store/[handle] page renders. */
 export interface PublicStore extends Store {
+  // Needed so a buyer's "Chat"/"Enquire" click on this page can bill the
+  // right vendor's wallet (see reportLead) — the backend already returns it
+  // for exactly this purpose (see velte-backend's getPublicStore).
+  vendorId: string;
   avatar: string | null;
   area: string | null;
   /** Server-derived shim from the store's current sectors (see
@@ -72,6 +76,7 @@ export interface PublicStoreProductProps {
   product: PublicStoreProduct;
   storeName: string;
   whatsapp: string | null;
+  vendorId: string;
 }
 
 export interface StoreTabsProps {
@@ -80,6 +85,7 @@ export interface StoreTabsProps {
   isFood: boolean;
   storeName: string;
   whatsapp: string | null;
+  vendorId: string;
   defaultTab: PublicStoreTab;
   sidebar: ReactNode;
 }

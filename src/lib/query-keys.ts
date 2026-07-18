@@ -7,8 +7,6 @@ export const queryKeys = {
     list: (params?: ProductListParams) =>
       ["products", "list", params ?? {}] as const,
     detail: (id: string) => ["products", "detail", id] as const,
-    stats: (filter: "all" | "in-stock" | "out-of-stock" | "featured") =>
-      ["products", "stats", filter] as const,
   },
   settings: {
     profile: ["settings", "profile"] as const,

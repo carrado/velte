@@ -1,5 +1,4 @@
 import { createPortal } from "react-dom";
-import { getAvailableStock } from "@/services/products";
 import type { DeleteProductModalProps } from "@/types/product";
 import { X } from "lucide-react";
 
@@ -10,8 +9,11 @@ export default function DeleteProductModal({
   onConfirm,
 }: DeleteProductModalProps) {
   if (!open || !product) return null;
-  const available = getAvailableStock(product);
-  const canDelete = available <= 0;
+  // Stock no longer gates deletion (removed along with the rest of the
+  // stock/quantity concept) — the backend's one remaining gate is a food
+  // dish still marked available (`isCurrentlyAvailable` is undefined for
+  // retail/service listings, so this only ever blocks a live dish).
+  const canDelete = product.isCurrentlyAvailable !== true;
 
   // Portaled to document.body — rendered inline this backdrop only ever
   // covered its scrollable ancestor's box, not the real viewport (same
@@ -38,8 +40,8 @@ export default function DeleteProductModal({
           </p>
           {!canDelete && (
             <p className="text-dash-body text-amber-600 bg-amber-50 p-2 rounded">
-              ⚠️ This product is still in stock. Only out-of-stock products can
-              be deleted.
+              ⚠️ This dish is still marked available. Disable availability
+              first.
             </p>
           )}
           <div className="flex gap-3">

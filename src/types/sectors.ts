@@ -33,6 +33,18 @@ export interface SectorListingConfig {
    * vendor's own category list actually contains it.
    */
   productCategoryId?: string;
+  /**
+   * Which PRODUCT_PRESETS_BY_CATEGORY entry to draw attribute suggestions
+   * from (buyer search clarifying questions AND the vendor Add-Offering
+   * attribute picker) — separate from productCategoryId because that field
+   * is constrained to a REAL category id the vendor can actually select
+   * (one of the backend's default categories), which for many sectors is
+   * too broad to produce good attribute suggestions (e.g. shoes and
+   * clothing both really only have "Fashion" as a selectable category, but
+   * want very different suggested attributes). Falls back to
+   * productCategoryId when omitted.
+   */
+  attributeCategoryId?: string;
   /** Sector-flavored placeholder copy for the Basics block, per listing kind. */
   productNamePlaceholder?: string;
   productDescriptionPlaceholder?: string;
