@@ -15,12 +15,11 @@ export interface BuyerLocation {
 // `null` when there are no results at all (nothing to tag).
 export type MatchTier = "local" | "nearby" | "state" | "nationwide" | null;
 
-// Set for image-derived product searches only: "direct" means a close/exact
-// match to what was in the photo, and merely-similar results are dropped
-// entirely when a direct match exists. "similar" means nothing cleared that
-// bar, so the closest results that cleared the base relevance floor are
-// shown instead. `undefined` for plain text searches, which don't apply this
-// distinction.
+// Set for any product search, text or photo: "direct" means a close/exact
+// match to the query, and merely-similar results are dropped entirely when a
+// direct match exists. "similar" means nothing cleared that bar, so the
+// closest results that cleared the base relevance floor are shown instead.
+// `undefined` only when there are no results at all (nothing to tag).
 export type MatchQuality = "direct" | "similar" | undefined;
 
 // A prior turn's text only — never the image, and never raw tool-call/

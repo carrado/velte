@@ -39,4 +39,9 @@ export interface User {
    * account-wide type. */
   sectors: string[];
   description?: string;
+  /** One-way server flag — starts `true` for every new account, flips to
+   * `false` the first time the onboarding tour is skipped or finished.
+   * Never set back to `true` client-side (the backend's PATCH /users/:id
+   * only accepts the false transition). */
+  onboarding?: boolean;
 }

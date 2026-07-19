@@ -245,6 +245,51 @@ function AccountSettingsPanel() {
   const addressLocked =
     !!addressLockedUntil && addressLockedUntil.getTime() > Date.now();
 
+  // Same reverse-geocode endpoint and state-reconciliation logic as signup's
+  // Step1BusinessAccount.tsx — "use my current location" here previously
+  // only ever captured raw coordinates, leaving the Business Address field
+  // untouched even though the buyer-facing search relies on that address
+  // text just as much as the lat/lng.
+  const reverseGeocodeMutation = useMutation({
+    mutationFn: async (coords: { lat: number; lng: number }) => {
+      const res = await fetch(
+        `/api/geo/reverse?lat=${coords.lat}&lng=${coords.lng}`,
+      );
+      const data = (await res.json()) as {
+        address: string;
+        state?: string;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Couldn't resolve address.");
+      return data;
+    },
+    onSuccess: (data, coords) => {
+      // Detected state differs from what's already picked — reset it rather
+      // than leave a stale, contradicted value sitting there unnoticed
+      // (same reasoning as signup: nearby-buyer matching depends on state
+      // agreeing with the actual coordinates).
+      const stateMismatch =
+        !!data.state && !!profile.state && data.state !== profile.state;
+
+      setProfile((p) => ({
+        ...p,
+        location: coords,
+        area: data.address,
+        state: stateMismatch ? "" : (data.state ?? p.state),
+      }));
+
+      if (stateMismatch) {
+        toast.message("Your selected state didn't match your location", {
+          description: `We reset it — your location looks like ${data.state}. Please pick your state again.`,
+          duration: 8000,
+        });
+      } else {
+        toast.success("Location captured — review the address below");
+      }
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation isn't supported by this browser");
@@ -253,15 +298,11 @@ function AccountSettingsPanel() {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setProfile((p) => ({
-          ...p,
-          location: {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          },
-        }));
         setLocating(false);
-        toast.success("Location captured — remember to save");
+        reverseGeocodeMutation.mutate({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
       },
       (err) => {
         setLocating(false);
@@ -578,14 +619,18 @@ function AccountSettingsPanel() {
           <button
             type="button"
             onClick={handleUseCurrentLocation}
-            disabled={locating || addressLocked}
+            disabled={
+              locating || reverseGeocodeMutation.isPending || addressLocked
+            }
             className="text-dash-secondary text-orange-500 font-semibold whitespace-nowrap cursor-pointer hover:text-orange-600 transition-colors disabled:opacity-60"
           >
             {addressLocked
               ? "Locked"
               : locating
                 ? "Locating…"
-                : "Use my current location"}
+                : reverseGeocodeMutation.isPending
+                  ? "Resolving address…"
+                  : "Use my current location"}
           </button>
         </div>
 

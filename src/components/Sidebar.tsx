@@ -11,10 +11,12 @@ import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira } from "@/lib/utils";
 import type { NavItem, NavSection } from "@/types/common";
-import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
 
-// Mirrors the wallet page's low-balance nudge threshold.
-const LOW_BALANCE_KOBO = 160_000; // ₦1,600 — matches the backend's hourly wallet-low notification cron
+// Matches the backend's hourly wallet-low notification cron
+// (walletLowBalance.job.js's own LOW_BALANCE_KOBO) and the wallet page's own
+// nudge — ₦1,000 exactly does NOT count as low, only ₦999 down to ₦0 does,
+// hence the strict `<` everywhere this is compared, never `<=`.
+const LOW_BALANCE_KOBO = 100_000; // ₦1,000
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const { navigate } = useNavigation();
@@ -40,7 +42,6 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 export default function Sidebar() {
   const pathname = usePathname();
   const { navigate } = useNavigation();
-  const { hasFood: isFood } = useVendorSectorCapabilities();
   const userDetails = useUserStore((state) => state.user);
 
   // Shares the wallet page's query key, so this is served from cache whenever
@@ -53,17 +54,19 @@ export default function Sidebar() {
 
   const sections: NavSection[] = [
     {
-      title: isFood ? "My Menu" : "Listings",
+      title: "Listings",
       items: [
         {
-          label: isFood ? "Add a Dish" : "Add Listing",
+          label: "Add Listing",
           icon: <PlusCircle size={16} />,
           href: "products/add",
+          id: "add-listing-nav",
         },
         {
-          label: isFood ? "View Menu" : "My Listings",
+          label: "View Listings",
           icon: <List size={16} />,
           href: "products/",
+          id: "my-listings-nav",
         },
       ],
     },
@@ -177,7 +180,7 @@ export default function Sidebar() {
           <p className="text-lg font-bold text-[#023337]">
             {wallet ? formatNaira(wallet.balanceKobo) : "—"}
           </p>
-          {wallet && wallet.balanceKobo <= LOW_BALANCE_KOBO && (
+          {wallet && wallet.balanceKobo < LOW_BALANCE_KOBO && (
             <p className="text-dash-caption text-amber-600 mt-0.5">
               Balance is running low
             </p>
@@ -186,7 +189,7 @@ export default function Sidebar() {
             onClick={() => navigate(getFullPath("wallet"))}
             className="mt-2.5 w-full py-1.5 text-dash-caption font-semibold text-orange-600 bg-white border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors cursor-pointer"
           >
-            {wallet && wallet.balanceKobo <= LOW_BALANCE_KOBO
+            {wallet && wallet.balanceKobo < LOW_BALANCE_KOBO
               ? "Top Up"
               : "Manage Wallet"}
           </button>

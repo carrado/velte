@@ -11,10 +11,10 @@ import Sidebar from "@/components/Sidebar";
 import BottomNav from "@/components/BottomNav";
 import { NavigationProgressProvider } from "@/components/NavigationProgressContext";
 import AppInitOverlay from "@/components/AppInitOverlay";
+import OnboardingTour from "@/components/OnboardingTour";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { usersApi } from "@/services/users";
 import { useUserStore } from "@/store/userStore";
-import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
 import { useNotificationsSync } from "@/hooks/useNotificationsSync";
 
 // Needs client-only browser APIs (Notification, PushManager) at module init —
@@ -51,7 +51,6 @@ export default function DashboardRootLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { hasFood: isFood } = useVendorSectorCapabilities();
 
   // On the view-listing page (/{userId}/products/{productId}) the generic
   // last-segment fallback would title the header with the raw listing id —
@@ -109,18 +108,12 @@ export default function DashboardRootLayout({
           >
             <div className="pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 md:p-6 space-y-6 text-dash-body antialiased">
               <Header
-                title={(() => {
+                title={
                   // View-listing page: the listing's own name (never the id).
-                  if (viewedListingId) return viewedListing?.name ?? "Listing";
-                  const t = getTitle(pathname);
-                  if (!isFood) return t;
-                  const foodMap: Record<string, string> = {
-                    "My Listings": "My Menu",
-                    "Add Listing": "Add Dish",
-                    "Edit Listing": "Edit Dish",
-                  };
-                  return foodMap[t] ?? t;
-                })()}
+                  viewedListingId
+                    ? (viewedListing?.name ?? "Listing")
+                    : getTitle(pathname)
+                }
               />
               <PushNotificationManager />
               <TooltipProvider>{children}</TooltipProvider>
@@ -130,6 +123,7 @@ export default function DashboardRootLayout({
           <BottomNav />
         </div>
       </div>
+      <OnboardingTour />
     </NavigationProgressProvider>
   );
 }

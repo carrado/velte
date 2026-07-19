@@ -29,7 +29,10 @@ import SpendHistoryTable from "./SpendHistoryTable";
 // before that happens rather than after. Purely a UI hint; the actual
 // eligibility decision for low-balance vendors belongs to the future
 // search/leads ranking layer (see "Known gaps" in the teardown plan).
-const LOW_BALANCE_KOBO = 50_000; // ₦500
+// Matches the backend's LOW_BALANCE_KOBO (walletLowBalance.job.js) and
+// Sidebar's own copy — ₦1,000 exactly does NOT count as low, only ₦999 down
+// to ₦0 does, hence the strict `<` below.
+const LOW_BALANCE_KOBO = 100_000; // ₦1,000
 
 export default function WalletPage() {
   const queryClient = useQueryClient();

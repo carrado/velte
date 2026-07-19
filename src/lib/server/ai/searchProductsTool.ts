@@ -56,8 +56,11 @@ const inputSchema = z.object({
  * their query; an explicit `location` always wins over it (see
  * resolveSearchLocation). If neither exists, the search runs nationwide.
  * `push` reports progress text at the same two points spec §7 describes.
- * `isImageQuery` — true when the buyer's turn included a photo — turns on
- * the direct-vs-similar match tiering (backend-side) and its narration.
+ * `isImageQuery` — true when the buyer's turn included a photo — the
+ * direct-vs-similar match tiering (backend-side) applies either way, this
+ * only picks which status phrasing narrates a "direct" result (a text
+ * search's own default "N found" phrasing already reads confidently enough
+ * on its own; only "similar" needs an explicit callout regardless of kind).
  * `imageUrl` — the buyer's actual photo (not the LLM's text description of
  * it) — passed straight through to the backend so it can be embedded via
  * voyage-multimodal-3 and compared against product image embeddings, not
@@ -150,7 +153,7 @@ export function searchProductsTool(
       if (results.length) {
         if (isImageQuery && matchQuality === "direct") {
           push?.(directMatchPhrase(results.length));
-        } else if (isImageQuery && matchQuality === "similar") {
+        } else if (matchQuality === "similar") {
           push?.(similarMatchPhrase(results.length));
         } else {
           push?.(foundCountPhrase(results.length, "product", matchTier));
@@ -163,11 +166,30 @@ export function searchProductsTool(
       // own doc comment above for why.
       if (weakResultsOut) weakResultsOut.current = weakResults;
 
+      // A mechanical fact, not left to the model's own inference: `coords`
+      // truthy means a REAL place was actually searched (the buyer's device
+      // location or a named place) — Tiers 1-3 (local/nearby/state) already
+      // ran and came up empty before this Tier-4 nationwide fallback ever
+      // fires, so a result here is genuinely from elsewhere in the country,
+      // not "close by". Found live: the model narrated a real-but-distant
+      // Tier-4 match (an Anambra caterer for an Enugu buyer) as if it were
+      // nearby — relying on the system prompt's general reasoning about
+      // matchTier + location context wasn't reliable enough on its own.
+      // Handing it this as a direct, already-resolved fact instead of
+      // something to re-derive removes that failure mode.
+      const locationNote =
+        matchTier === "nationwide"
+          ? coords
+            ? "Nothing matched within the search radius, the wider area, or even the buyer's own state — these results are from elsewhere in the country. You MUST say plainly that nothing was found nearby BEFORE presenting them, naming the actual state each result is in (its own `state` field) rather than implying it's close by."
+            : "No location signal existed for this search at all (no place named, no device location) — these results are ranked purely by relevance across all of Velte, not by distance. Say so honestly rather than implying proximity."
+          : undefined;
+
       return {
         results,
         matchTier,
         matchQuality,
         externalSuggestions: externalSuggestions ?? [],
+        ...(locationNote ? { locationNote } : {}),
       };
     },
   });

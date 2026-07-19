@@ -108,10 +108,23 @@ export function searchStoresTool(
         push?.(noVendorMatchPhrase(Boolean(externalSuggestions?.length)));
       }
 
+      // Same mechanical-fact reasoning as searchProductsTool's own
+      // locationNote — see that file's comment. `coords` truthy means a real
+      // place was actually searched (Tiers 1-3 already ran and came up
+      // empty), so a Tier-4 nationwide store match here is genuinely from
+      // elsewhere in the country, not nearby.
+      const locationNote =
+        matchTier === "nationwide"
+          ? coords
+            ? "Nothing matched within the search radius, the wider area, or even the buyer's own state — these results are from elsewhere in the country. You MUST say plainly that nothing was found nearby BEFORE presenting them, naming the actual state each result is in (its own `state` field) rather than implying it's close by."
+            : "No location signal existed for this search at all (no place named, no device location) — these results are ranked purely by relevance across all of Velte, not by distance. Say so honestly rather than implying proximity."
+          : undefined;
+
       return {
         results,
         matchTier,
         externalSuggestions: externalSuggestions ?? [],
+        ...(locationNote ? { locationNote } : {}),
       };
     },
   });

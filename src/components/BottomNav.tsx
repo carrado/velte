@@ -3,12 +3,10 @@
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { LayoutGrid, PlusCircle, Wallet, Store, Settings } from "lucide-react";
-import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
 
 export default function BottomNav() {
   const pathname = usePathname();
   const { navigate } = useNavigation();
-  const { hasFood: isFood } = useVendorSectorCapabilities();
 
   const segments = pathname.split("/").filter(Boolean);
   const userId = segments[0];
@@ -16,35 +14,40 @@ export default function BottomNav() {
 
   const items = [
     {
-      label: isFood ? "Menu" : "Listings",
+      label: "Listings",
       icon: <LayoutGrid size={20} />,
       segment: "products",
       // "Add" owns the products/add route, so keep this tab off there.
       active: subPath.startsWith("products") && subPath !== "products/add",
+      id: "my-listings-mobile",
     },
     {
       label: "Add",
       icon: <PlusCircle size={20} />,
       segment: "products/add",
       active: subPath === "products/add",
+      id: "add-listing-mobile",
     },
     {
       label: "Wallet",
       icon: <Wallet size={20} />,
       segment: "wallet",
       active: subPath.startsWith("wallet"),
+      id: "wallet-mobile",
     },
     {
       label: "Store",
       icon: <Store size={20} />,
       segment: "store",
       active: subPath.startsWith("store"),
+      id: "store-mobile",
     },
     {
       label: "Settings",
       icon: <Settings size={20} />,
       segment: "settings",
       active: subPath.startsWith("settings"),
+      id: "settings-mobile",
     },
   ];
 
@@ -54,6 +57,7 @@ export default function BottomNav() {
         {items.map((item) => (
           <button
             key={item.label}
+            id={item.id}
             onClick={() => navigate(`/${userId}/${item.segment}`)}
             className={`flex flex-col items-center gap-1 px-3 py-1 rounded-lg ${
               item.active ? "text-orange-500" : "text-gray-500"
