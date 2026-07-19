@@ -284,14 +284,16 @@ function ConversationTurnView({
       </div>
 
       <div className="flex items-start gap-3">
-        <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-[13px] font-bold shrink-0">
-          V
-        </div>
+        <img
+          src="/velte_manifest.png"
+          alt="Velte"
+          className="w-8 h-8 rounded-full object-cover shrink-0"
+        />
         <div className="flex-1 min-w-0 pt-0.5">
           {turn.phase === "loading" && (
-            <div className="flex items-center gap-2 text-sm text-gray-500 animate-pulse">
-              <Loader2 size={15} className="animate-spin" />
-              <span>{turn.status}</span>
+            <div className="flex items-center gap-2 text-sm text-gray-500 animate-pulse min-w-0">
+              <Loader2 size={15} className="animate-spin shrink-0" />
+              <span className="truncate min-w-0">{turn.status}</span>
             </div>
           )}
 
@@ -1004,7 +1006,7 @@ export function SearchHome() {
           {/* Newest content stays pinned to the bottom (bottomRef) as the
               thread grows, so scrolling reads bottom-up like a chat. */}
           <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-6">
-            <div className="max-w-3xl lg:max-w-5xl mx-auto space-y-8">
+            <div className="max-w-2xl lg:max-w-3xl mx-auto space-y-8">
               {turns.map((turn, i) => (
                 <ConversationTurnView
                   key={turn.id}
@@ -1017,7 +1019,7 @@ export function SearchHome() {
             </div>
           </div>
           <div className="shrink-0 px-5 sm:px-8 pt-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-            <div className="max-w-3xl lg:max-w-5xl mx-auto">{inputForm}</div>
+            <div className="max-w-2xl lg:max-w-3xl mx-auto">{inputForm}</div>
           </div>
         </>
       )}

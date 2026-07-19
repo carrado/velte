@@ -12,6 +12,7 @@ import { uploadProductMedia } from "@/lib/cloudinary";
 import { getErrorMessage } from "@/lib/error-message";
 import {
   getServiceDetailPresets,
+  getFoodDetailPresets,
   getProductAttributePresets,
 } from "@/lib/attribute-presets";
 import { SECTOR_BY_VALUE } from "@/lib/sectors";
@@ -44,6 +45,7 @@ import {
   Globe,
   Loader2,
   Sparkle,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -1608,7 +1610,6 @@ export default function AddProductPage({
   const [tags, setTags] = useState<string[]>([]);
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
   const [presetPickerOpen, setPresetPickerOpen] = useState(false);
-  const [attributesExpanded, setAttributesExpanded] = useState(false);
 
   // AI-drafted description — reads whatever's already on the form (name,
   // category/sector, attributes already added) so the draft is as specific
@@ -1925,19 +1926,36 @@ export default function AddProductPage({
   // Same preset pool the AttributePickerModal draws from — computed once
   // here so both the always-visible "important" inputs below AND the modal
   // (for everything else) read from a single source instead of calling
-  // getServiceDetailPresets/getProductAttributePresets twice with the risk
-  // of the two call sites drifting apart.
+  // getServiceDetailPresets/getFoodDetailPresets/getProductAttributePresets
+  // twice with the risk of the two call sites drifting apart.
+  // isFood MUST be checked before the retail branch below — food listings
+  // have no selectedCategory (see the canSubmit comment above), so falling
+  // through to getProductAttributePresets("") used to silently return only
+  // GENERAL_PRODUCT_PRESETS (Brand, Material, Weight, Warranty, Country of
+  // Origin — none of it dish-shaped) for every single dish/menu item.
   const presetGroups = isService
     ? getServiceDetailPresets(sectorValue)
-    : getProductAttributePresets(
-        // Only substitute the sector's more specific attribute category when
-        // the vendor is still on the category the sector actually suggested
-        // — if they picked something else themselves, respect that instead
-        // (see SectorListingConfig.attributeCategoryId's doc comment).
-        selectedCategory && selectedCategory === sectorConfig?.productCategoryId
-          ? (sectorConfig?.attributeCategoryId ?? selectedCategory)
-          : selectedCategory,
-      );
+    : isFood
+      ? getFoodDetailPresets(sectorValue)
+      : getProductAttributePresets(
+          // Substitute the sector's more specific attribute category when
+          // either (a) the sector names no real productCategoryId at all —
+          // there's nothing for the vendor to have "switched away from", this
+          // is the toys_kids_items/groceries_supermarket/etc. shape, where
+          // none of the 8 seeded retail categories (see
+          // velte-backend/src/seeds/categories.seed.js) fit the sector well
+          // enough to prefill, but the attribute suggestions should still
+          // apply regardless of which generic bucket the vendor ends up
+          // picking — or (b) the vendor is still on the category the sector
+          // actually suggested (see SectorListingConfig.attributeCategoryId's
+          // doc comment) — if they picked something else themselves, respect
+          // that instead.
+          sectorConfig?.attributeCategoryId &&
+            (!sectorConfig?.productCategoryId ||
+              selectedCategory === sectorConfig.productCategoryId)
+            ? sectorConfig.attributeCategoryId
+            : selectedCategory,
+        );
 
   // The handful of fields that matter most for AI matching (see
   // attribute-presets.ts) — promoted to always-visible inputs directly on
@@ -1961,6 +1979,12 @@ export default function AddProductPage({
   })();
   const importantFieldNames = new Set(
     importantFields.map((f) => f.name.toLowerCase()),
+  );
+  // Vendor-added details that aren't one of the promoted important fields —
+  // shown in the always-visible "More Service Details"/"More Attributes"
+  // block below.
+  const otherAttributes = attributes.filter(
+    (a) => !importantFieldNames.has(a.name.toLowerCase()),
   );
   // Everything else stays behind the modal — stripped of the fields already
   // promoted above so the same field is never editable in two places.
@@ -3086,20 +3110,23 @@ export default function AddProductPage({
                     {importantFields.length > 0 && (
                       <div>
                         <div className="flex items-center gap-1.5 mb-0.5">
-                          <FieldLabel optional>
+                          <FieldLabel>
                             {isService
                               ? "Key Service Details"
                               : "Key Attributes"}
                           </FieldLabel>
                         </div>
-                        <p className="text-dash-caption text-gray-400 mb-2 flex items-center gap-1">
-                          <Sparkle
-                            size={11}
-                            className="shrink-0 fill-orange-400 text-orange-400"
+                        <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-md px-3 py-2.5 mb-2">
+                          <Info
+                            size={15}
+                            className="shrink-0 text-blue-500 mt-0.5"
                           />
-                          Matter most for buyers finding you — fill in what
-                          applies.
-                        </p>
+                          <p className="text-dash-caption text-blue-700">
+                            The more of these you fill in, the easier it is for
+                            our AI to match you to buyers — and the more often
+                            you&apos;ll show up in their search results.
+                          </p>
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {importantFields.map((field) => (
                             <div key={field.name}>
@@ -3120,74 +3147,50 @@ export default function AddProductPage({
                       </div>
                     )}
 
-                    {(() => {
-                      const otherAttributes = attributes.filter(
-                        (a) => !importantFieldNames.has(a.name.toLowerCase()),
-                      );
-                      return !(
-                        attributesExpanded || otherAttributes.length > 0
-                      ) ? (
-                        <button
-                          type="button"
-                          onClick={() => setAttributesExpanded(true)}
-                          className="flex items-center gap-1.5 text-dash-caption font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
-                        >
-                          <Plus size={12} />
-                          {isService
-                            ? "Add more service details"
-                            : "Add more attributes"}
-                        </button>
-                      ) : (
-                        <div>
-                          <FieldLabel optional>
-                            {isService
-                              ? "More Service Details"
-                              : "More Attributes"}
-                          </FieldLabel>
-                          <button
-                            type="button"
-                            onClick={() => setPresetPickerOpen(true)}
-                            className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-50 text-orange-600 text-dash-body font-medium rounded-md transition-colors cursor-pointer"
-                          >
-                            <Plus size={14} />
-                            {isService
-                              ? "Quick add — pick from common service details"
-                              : "Quick add — pick from common attributes"}
-                          </button>
-                          {otherAttributes.length > 0 && (
-                            <div className="mt-3 space-y-2">
-                              {otherAttributes.map((attr) => (
-                                <div
-                                  key={attr.id}
-                                  className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-md"
-                                >
-                                  <div className="text-dash-body">
-                                    <span className="font-semibold text-[#023337]">
-                                      {attr.name}:
-                                    </span>{" "}
-                                    <span className="text-gray-600">
-                                      {attr.value}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={() =>
-                                      setAttributes(
-                                        attributes.filter(
-                                          (a) => a.id !== attr.id,
-                                        ),
-                                      )
-                                    }
-                                    className="text-red-400 hover:text-red-600 cursor-pointer"
-                                  >
-                                    <X size={15} />
-                                  </button>
-                                </div>
-                              ))}
+                    <div>
+                      <FieldLabel optional>
+                        {isService ? "More Service Details" : "More Attributes"}
+                      </FieldLabel>
+                      <button
+                        type="button"
+                        onClick={() => setPresetPickerOpen(true)}
+                        className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-50 text-orange-600 text-dash-body font-medium rounded-md transition-colors cursor-pointer"
+                      >
+                        <Plus size={14} />
+                        {isService
+                          ? "Quick add — pick from common service details"
+                          : "Quick add — pick from common attributes"}
+                      </button>
+                      {otherAttributes.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {otherAttributes.map((attr) => (
+                            <div
+                              key={attr.id}
+                              className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-md"
+                            >
+                              <div className="text-dash-body">
+                                <span className="font-semibold text-[#023337]">
+                                  {attr.name}:
+                                </span>{" "}
+                                <span className="text-gray-600">
+                                  {attr.value}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() =>
+                                  setAttributes(
+                                    attributes.filter((a) => a.id !== attr.id),
+                                  )
+                                }
+                                className="text-red-400 hover:text-red-600 cursor-pointer"
+                              >
+                                <X size={15} />
+                              </button>
                             </div>
-                          )}
+                          ))}
                         </div>
-                      );
-                    })()}
+                      )}
+                    </div>
                   </div>
                 )}
               </FormSection>
