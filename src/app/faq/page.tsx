@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -8,9 +9,23 @@ import Footer from "@/components/landing/Footer";
 import FaqAccordionItem from "@/components/landing/FaqAccordionItem";
 import { Button } from "@/components/ui/button";
 import { faqs } from "@/lib/faqs";
+import type { FaqSectionImage } from "@/types/common";
 
 const buyerFaqs = faqs.filter((faq) => faq.category === "buyer");
 const vendorFaqs = faqs.filter((faq) => faq.category === "vendor");
+
+// Photo credits — Unsplash's license doesn't require attribution, kept here
+// for maintainability.
+const buyerImage: FaqSectionImage = {
+  src: "https://images.unsplash.com/photo-1751276651723-3b9b000ce37d",
+  alt: "Woman looking into a storefront in Lagos, Nigeria",
+  credit: "Michael Umoh (unsplash.com/photos/o1reZpaQ7NM)",
+};
+const vendorImage: FaqSectionImage = {
+  src: "https://images.unsplash.com/photo-1761370571873-5d869310d731",
+  alt: "Woman inside her clothing store, Abuja, Nigeria",
+  credit: "Muhammad-Taha Ibrahim (unsplash.com/photos/zoWuHiPJYHc)",
+};
 
 const stagger = {
   hidden: {},
@@ -22,26 +37,55 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5 } },
 };
 
-function FaqGroup({ label, items }: { label: string; items: typeof faqs }) {
+function FaqGroup({
+  label,
+  items,
+  image,
+  reverse = false,
+}: {
+  label: string;
+  items: typeof faqs;
+  image: FaqSectionImage;
+  reverse?: boolean;
+}) {
   return (
     <motion.div
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, margin: "-80px" }}
       variants={stagger}
+      className="grid lg:grid-cols-[0.8fr_1.2fr] gap-8 lg:gap-12 items-start"
     >
-      <motion.span
+      <motion.div
         variants={fadeUp}
-        className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-4 block"
+        className={`hidden sm:block ${reverse ? "lg:order-2" : ""}`}
       >
-        {label}
-      </motion.span>
-      <div className="space-y-3">
-        {items.map((faq) => (
-          <motion.div key={faq.question} variants={fadeUp}>
-            <FaqAccordionItem faq={faq} />
-          </motion.div>
-        ))}
+        <div className="relative rounded-3xl overflow-hidden aspect-[3/2] shadow-lg shadow-gray-300/40 lg:sticky lg:top-28">
+          <Image
+            src={image.src}
+            alt={image.alt}
+            fill
+            sizes="(min-width: 1024px) 500px, 700px"
+            quality={90}
+            className="object-cover"
+          />
+        </div>
+      </motion.div>
+
+      <div>
+        <motion.span
+          variants={fadeUp}
+          className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-4 block"
+        >
+          {label}
+        </motion.span>
+        <div className="space-y-3">
+          {items.map((faq) => (
+            <motion.div key={faq.question} variants={fadeUp}>
+              <FaqAccordionItem faq={faq} />
+            </motion.div>
+          ))}
+        </div>
       </div>
     </motion.div>
   );
@@ -81,9 +125,14 @@ export default function FaqPage() {
         </section>
 
         {/* FAQ groups */}
-        <section className="max-w-3xl mx-auto px-5 sm:px-8 space-y-14">
-          <FaqGroup label="For buyers" items={buyerFaqs} />
-          <FaqGroup label="For vendors" items={vendorFaqs} />
+        <section className="max-w-6xl mx-auto px-5 sm:px-8 space-y-20">
+          <FaqGroup label="For buyers" items={buyerFaqs} image={buyerImage} />
+          <FaqGroup
+            label="For vendors"
+            items={vendorFaqs}
+            image={vendorImage}
+            reverse
+          />
         </section>
 
         {/* CTA */}

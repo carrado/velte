@@ -6,31 +6,48 @@ import type { SectorClassification } from "@/types/sectors";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
-interface GenerateArgs {
-  businessName: string;
-  sectorLabel: string;
+interface SectorInput {
+  label: string;
   classification: SectorClassification;
 }
 
-function templateDescription({
-  businessName,
-  sectorLabel,
-  classification,
-}: GenerateArgs): string {
-  const sector = sectorLabel.toLowerCase();
-  if (classification === "food") {
-    return `${businessName} serves ${sector}, made fresh and ready to order. We take pride in quality ingredients and fast, friendly service.`;
+interface GenerateArgs {
+  businessName: string;
+  sectors: SectorInput[]; // one or more — a vendor can pick up to 5 at signup
+}
+
+// "a", "a and b", "a, b and c" — reads naturally whether the vendor picked
+// one sector or several.
+function formatSectorList(labels: string[]): string {
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
+function templateDescription({ businessName, sectors }: GenerateArgs): string {
+  const sectorList = formatSectorList(
+    sectors.map((s) => s.label.toLowerCase()),
+  );
+  const hasFood = sectors.some(
+    (s) => s.classification === "food" || s.classification === "food_both",
+  );
+  const hasService = sectors.some(
+    (s) =>
+      s.classification === "service" ||
+      s.classification === "both" ||
+      s.classification === "food_both",
+  );
+
+  if (hasFood && hasService) {
+    return `${businessName} covers ${sectorList} — from food to services, we bring quality and reliable delivery to everything we do.`;
   }
-  if (classification === "service") {
-    return `${businessName} provides ${sector}. We bring the right skills and reliable service to every job, big or small.`;
+  if (hasFood) {
+    return `${businessName} covers ${sectorList}, made fresh and ready to order. We take pride in quality ingredients and fast, friendly service.`;
   }
-  if (classification === "both") {
-    return `${businessName} works in ${sector} — we sell quality products and offer the services that go with them. Whatever you need, buy it or book it with us.`;
+  if (hasService) {
+    return `${businessName} covers ${sectorList} — we bring the right skills and reliable service to every job, big or small.`;
   }
-  if (classification === "food_both") {
-    return `${businessName} handles ${sector} — we cook great food and cater for your events. Order a meal or book us for your next occasion.`;
-  }
-  return `${businessName} is a ${sector} business. We stock quality products and are ready to serve customers looking for exactly what they need.`;
+  return `${businessName} covers ${sectorList}. We stock quality products and are ready to serve customers looking for exactly what they need.`;
 }
 
 export async function generateBusinessDescription(
@@ -40,6 +57,7 @@ export async function generateBusinessDescription(
   if (!apiKey) return templateDescription(args);
 
   try {
+    const sectorLabels = args.sectors.map((s) => s.label).join(", ");
     const res = await fetch(GROQ_URL, {
       method: "POST",
       headers: {
@@ -54,11 +72,11 @@ export async function generateBusinessDescription(
           {
             role: "system",
             content:
-              "You write short business descriptions for vendors on a Nigerian marketplace app. 2-3 plain-language sentences, first person plural ('We...'), no fluff, no hashtags, no emoji, no markdown.",
+              "You write short business descriptions for vendors on a Nigerian marketplace app. 2-3 plain-language sentences, first person plural ('We...'), no fluff, no hashtags, no emoji, no markdown. When more than one sector is listed, weave all of them into the description rather than focusing on just one.",
           },
           {
             role: "user",
-            content: `Business name: ${args.businessName}\nSector: ${args.sectorLabel}\nWrite a description that helps buyers understand what this business sells or does.`,
+            content: `Business name: ${args.businessName}\nSector(s): ${sectorLabels}\nWrite a description that helps buyers understand what this business sells or does across all the sectors listed.`,
           },
         ],
       }),

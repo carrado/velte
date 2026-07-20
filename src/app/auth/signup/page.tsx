@@ -16,7 +16,7 @@ import {
   storeReferralCode,
   clearStoredReferralCode,
 } from "@/lib/referralCode";
-import { step1Schema, signupSchema } from "./schema";
+import { step1Schema, step2Schema, signupSchema } from "./schema";
 import type { SignupForm } from "./schema";
 import WizardProgress from "./_components/WizardProgress";
 import Step1BusinessAccount from "./_components/Step1BusinessAccount";
@@ -45,7 +45,7 @@ export default function Signup() {
   const [referralLocked, setReferralLocked] = useState(false);
 
   const signupMutation = useMutation({
-    mutationFn: (data: Omit<SignupForm, "confirmPassword">) =>
+    mutationFn: (data: Omit<SignupForm, "confirmPassword" | "agreedToTerms">) =>
       usersApi.create(data),
     onSuccess: (_response, variables) => {
       // Done its job — a leftover code in storage after a real signup would
@@ -75,6 +75,7 @@ export default function Signup() {
       sectors: [] as string[],
       description: "",
       referralCode: "",
+      agreedToTerms: false as boolean,
     } satisfies SignupForm,
     onSubmit: async ({ value }) => {
       const parsed = signupSchema.safeParse(value);
@@ -82,8 +83,13 @@ export default function Signup() {
         toast.error("Please fix the highlighted fields before submitting.");
         return;
       }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { confirmPassword: _confirmPassword, ...apiData } = parsed.data;
+      const {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        confirmPassword: _confirmPassword,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        agreedToTerms: _agreedToTerms,
+        ...apiData
+      } = parsed.data;
       signupMutation.mutate(apiData);
     },
   });
@@ -227,12 +233,25 @@ export default function Signup() {
                     Back
                   </Button>
                   <form.Subscribe
-                    selector={(state) => [state.isSubmitting] as const}
+                    selector={(state) =>
+                      [
+                        state.isSubmitting,
+                        step2Schema.safeParse({
+                          sectors: state.values.sectors,
+                          description: state.values.description,
+                          agreedToTerms: state.values.agreedToTerms,
+                        }).success,
+                      ] as const
+                    }
                   >
-                    {([isSubmitting]) => (
+                    {([isSubmitting, step2Valid]) => (
                       <Button
                         type="submit"
-                        disabled={isSubmitting || signupMutation.isPending}
+                        disabled={
+                          isSubmitting ||
+                          signupMutation.isPending ||
+                          !step2Valid
+                        }
                         size="lg"
                         className="flex-1 bg-orange-500 hover:bg-orange-400 cursor-pointer text-white font-semibold shadow-lg shadow-orange-500/20 gap-2"
                       >

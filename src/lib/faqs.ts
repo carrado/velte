@@ -27,6 +27,31 @@ export const faqs: FaqItem[] = [
       "Yes — snap or upload a photo of what you're after and the AI will identify it and match it the same way it would a text description.",
   },
   {
+    category: "buyer",
+    featured: true,
+    question: "How do I actually contact a vendor I find?",
+    answer:
+      "Every match hands you straight into a WhatsApp chat with the vendor — no in-app messaging, no waiting on a callback. You're talking to the real business directly, the same way you would if a friend gave you their number.",
+  },
+  {
+    category: "buyer",
+    question: "Can I negotiate the price?",
+    answer:
+      "That's between you and the vendor once you're chatting — Velte shows you the real listed price, but bargaining happens the way it always has, person to person on WhatsApp.",
+  },
+  {
+    category: "buyer",
+    question: "Where does Velte currently work?",
+    answer:
+      "We're live across Anambra, Enugu and Imo as our pilot region. Search still works outside that area — you'll just find fewer vendors until we expand.",
+  },
+  {
+    category: "buyer",
+    question: "Do I need an account to search?",
+    answer:
+      "No — searching is open to anyone, no sign-up required. Just describe what you need or send a photo and start browsing matches straight away.",
+  },
+  {
     category: "vendor",
     featured: true,
     question: "How do I get discovered by buyers?",
@@ -51,6 +76,30 @@ export const faqs: FaqItem[] = [
     question: "What if I haven't uploaded my full catalogue?",
     answer:
       "Your store profile alone is enough to be discoverable. Vendors who list individual products rank higher for specific searches, but an unlisted shop still shows up.",
+  },
+  {
+    category: "vendor",
+    question: "How do buyers pay me?",
+    answer:
+      "Directly, by bank transfer to the account you set once in your dashboard. When a buyer sends their receipt, Velte verifies it automatically and flags the order for you to confirm — no payment link, no processor holding your money.",
+  },
+  {
+    category: "vendor",
+    question: "What happens if my wallet runs low?",
+    answer:
+      "You'll get a low-balance notice before you're dropped from results, so you can top up without losing visibility. Your store and listings stay exactly as they are — only new leads pause until you top up.",
+  },
+  {
+    category: "vendor",
+    question: "Can I update my store or products later?",
+    answer:
+      "Yes — edit your store profile, products and prices anytime from your dashboard. Changes show up in buyer search right away, no review or delay.",
+  },
+  {
+    category: "vendor",
+    question: "How is trust built for a new vendor?",
+    answer:
+      "It builds from real activity on the platform — verified details, staying responsive, and completed orders over time. A brand-new store still shows up in search from day one; trust affects ranking, not whether you're found.",
   },
 ];
 

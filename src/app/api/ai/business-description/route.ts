@@ -7,22 +7,25 @@ import { SECTOR_BY_VALUE } from "@/lib/sectors";
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as {
     businessName?: string;
-    sectorValue?: string;
+    sectorValues?: string[];
   } | null;
 
   const businessName = body?.businessName?.trim();
-  const sector = body?.sectorValue
-    ? SECTOR_BY_VALUE[body.sectorValue]
-    : undefined;
+  const sectors = (body?.sectorValues ?? [])
+    .map((v) => SECTOR_BY_VALUE[v])
+    .filter((s) => s != null);
 
   if (!businessName) return jsonError(400, "businessName is required.");
-  if (!sector) return jsonError(400, "A valid sectorValue is required.");
+  if (!sectors.length)
+    return jsonError(400, "At least one valid sectorValue is required.");
 
   try {
     const description = await generateBusinessDescription({
       businessName,
-      sectorLabel: sector.label,
-      classification: sector.classification,
+      sectors: sectors.map((s) => ({
+        label: s.label,
+        classification: s.classification,
+      })),
     });
     return NextResponse.json({ description });
   } catch (err) {

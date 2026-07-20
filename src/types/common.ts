@@ -84,3 +84,9 @@ export interface FaqItem {
   category: "buyer" | "vendor";
   featured?: boolean;
 }
+
+export interface FaqSectionImage {
+  src: string;
+  alt: string;
+  credit: string;
+}

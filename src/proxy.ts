@@ -18,6 +18,7 @@ const publicRoutes = [
   "/payment/callback",
   "/api",
   "/faq",
+  "/welcome",
   "/track",
   "/store",
   "/search",

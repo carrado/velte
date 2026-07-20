@@ -26,6 +26,7 @@ import { usersApi } from "@/services/users";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
 import LogoutModal from "@/components/LogOutModal";
+import { useIsStandalone } from "@/hooks/useIsStandalone";
 import { NIGERIA_STATES } from "@/lib/states";
 import {
   Select,
@@ -806,11 +807,13 @@ function AccountSettingsPanel() {
 
 function LogoutSection() {
   const [showModal, setShowModal] = useState(false);
+  const isStandalone = useIsStandalone();
 
   const logoutMutation = useMutation({
     mutationFn: () => usersApi.logout(),
     onSuccess: () => {
-      window.location.href = "/";
+      // Installed PWA: land on the app welcome screen, not the marketing homepage.
+      window.location.href = isStandalone ? "/welcome" : "/";
     },
     onError: (error: unknown) => {
       toast.error(error instanceof Error ? error.message : "Logout failed");

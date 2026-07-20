@@ -71,11 +71,21 @@ const baseSchema = z.object({
   // is a server-side check on submit (see backend auth.js register), which
   // silently ignores an invalid/typo'd code rather than blocking signup.
   referralCode: z.string(),
+  // Plain boolean (not refined here) so the per-field onChange validator
+  // (SIGNUP_FIELD_SCHEMAS.agreedToTerms) never blocks typing/unchecking —
+  // "must be true" is only enforced at submit time via the `termsAgreed`
+  // refine below, same pattern as `passwordsMatch`. Never sent to the
+  // backend (stripped alongside confirmPassword in page.tsx) — it's a
+  // client-side consent gate, not account data.
+  agreedToTerms: z.boolean(),
 });
 
 const passwordsMatch = (
   d: Pick<z.infer<typeof baseSchema>, "password" | "confirmPassword">,
 ) => d.password === d.confirmPassword;
+
+const termsAgreed = (d: Pick<z.infer<typeof baseSchema>, "agreedToTerms">) =>
+  d.agreedToTerms === true;
 
 export const step1Schema = baseSchema
   .pick({
@@ -95,15 +105,26 @@ export const step1Schema = baseSchema
     path: ["confirmPassword"],
   });
 
-export const step2Schema = baseSchema.pick({
-  sectors: true,
-  description: true,
-});
+export const step2Schema = baseSchema
+  .pick({
+    sectors: true,
+    description: true,
+    agreedToTerms: true,
+  })
+  .refine(termsAgreed, {
+    message: "You must agree to the Terms & Conditions to continue",
+    path: ["agreedToTerms"],
+  });
 
-export const signupSchema = baseSchema.refine(passwordsMatch, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
+export const signupSchema = baseSchema
+  .refine(passwordsMatch, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  })
+  .refine(termsAgreed, {
+    message: "You must agree to the Terms & Conditions to continue",
+    path: ["agreedToTerms"],
+  });
 
 export type SignupForm = z.infer<typeof baseSchema>;
 export const SIGNUP_FIELD_SCHEMAS = baseSchema.shape;

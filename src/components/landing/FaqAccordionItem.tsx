@@ -16,7 +16,14 @@ export default function FaqAccordionItem({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-gray-200 rounded-2xl bg-white overflow-hidden">
+    <div
+      className={cn(
+        "border rounded-2xl bg-white overflow-hidden transition-shadow duration-200",
+        open
+          ? "border-orange-200 shadow-md shadow-orange-500/[0.06]"
+          : "border-gray-200 hover:border-gray-300",
+      )}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

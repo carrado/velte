@@ -36,6 +36,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# ops scripts' local data — CSV exports/results contain real customer PII
+# (names, WhatsApp numbers), never commit them
+scripts/data/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

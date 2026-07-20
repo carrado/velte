@@ -19,6 +19,7 @@ import type { HeaderProps } from "@/types/common";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
+import { useIsStandalone } from "@/hooks/useIsStandalone";
 
 export default function Header({ title }: HeaderProps) {
   const userDetails = useUserStore((state) => state.user);
@@ -28,11 +29,13 @@ export default function Header({ title }: HeaderProps) {
     s.notifications.some((n) => !n.read),
   );
   const userId = pathname.split("/")[1];
+  const isStandalone = useIsStandalone();
 
   const logoutMutation = useMutation({
     mutationFn: () => usersApi.logout(),
     onSuccess: () => {
-      window.location.href = "/";
+      // Installed PWA: land on the app welcome screen, not the marketing homepage.
+      window.location.href = isStandalone ? "/welcome" : "/";
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : "Logout failed";
