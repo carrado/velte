@@ -77,3 +77,10 @@ export interface ShareButtonProps {
   label?: string;
   className?: string;
 }
+
+export interface FaqItem {
+  question: string;
+  answer: string;
+  category: "buyer" | "vendor";
+  featured?: boolean;
+}

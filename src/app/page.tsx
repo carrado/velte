@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
 import VendorPitch from "@/components/landing/VendorPitch";
+import FAQ from "@/components/landing/FAQ";
 import Footer from "@/components/landing/Footer";
 
 // Velte's homepage — redesigned for the pivot (replaces the old
@@ -19,6 +20,7 @@ export default function HomePage() {
       <Navbar />
       <Hero />
       <VendorPitch />
+      <FAQ />
       <Footer />
     </div>
   );

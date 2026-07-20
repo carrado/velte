@@ -17,6 +17,7 @@ const publicRoutes = [
   "/site.webmanifest",
   "/payment/callback",
   "/api",
+  "/faq",
   "/track",
   "/store",
   "/search",

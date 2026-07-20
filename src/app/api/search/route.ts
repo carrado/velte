@@ -179,6 +179,143 @@ async function getVendorStoresForProducts(
   return stores.filter((s): s is StoreMatch => s !== null);
 }
 
+// Pure post-processing of one callLLM result into everything the route needs
+// downstream — pulled out so a retry (see POST's "looksLikeLocationClarify"
+// comment) can re-run this exact same extraction on a second model call
+// without duplicating ~90 lines of tool-result parsing.
+function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
+  // askClarifyingQuestion's own tool description explicitly forbids calling
+  // it alongside another tool, but gpt-4o-mini has been observed doing
+  // exactly that anyway (found live: it reaches for this tool almost
+  // reflexively, INCLUDING on turns where nothing was actually missing —
+  // e.g. device location already known, a search that would have returned
+  // real results regardless). So its presence is a candidate, not
+  // automatically authoritative — the real decision (hasUsefulResults below)
+  // is: did the co-called search find anything genuinely useful? If yes, a
+  // spurious clarify call is ignored entirely and the real results win; only
+  // a search that came back with nothing at all (or no search call happened)
+  // defers to the clarification.
+  const clarifyCall = result.toolCalls.findLast(
+    (c) => c.toolName === "askClarifyingQuestion",
+  );
+  const clarifyInput = clarifyCall?.input as
+    | { question: string; kind: "choice" | "text"; options?: string[] }
+    | undefined;
+  // Downgrades a malformed "choice" (missing/too-few options) to "text"
+  // server-side, so the frontend's discriminated Clarification type never
+  // has to re-validate what the model actually sent.
+  const clarifyCandidate: Clarification | null = !clarifyInput
+    ? null
+    : clarifyInput.kind === "choice" && (clarifyInput.options?.length ?? 0) >= 2
+      ? {
+          kind: "choice",
+          question: clarifyInput.question,
+          options: clarifyInput.options!,
+        }
+      : { kind: "text", question: clarifyInput.question };
+
+  // .findLast, not .find: a fallback model (Groq) occasionally calls a tool
+  // more than once for one turn — the last call is what its final reply is
+  // actually synthesized from, found live during the hardening pass.
+  const productCall = result.toolCalls.findLast(
+    (c) => c.toolName === "searchProducts",
+  );
+  const storeCall = result.toolCalls.findLast(
+    (c) => c.toolName === "searchStores",
+  );
+  const productResult = result.toolResults.findLast(
+    (r) => r.toolName === "searchProducts",
+  )?.output as
+    | {
+        results?: VendorMatch[];
+        matchTier?: MatchTier;
+        matchQuality?: MatchQuality;
+        externalSuggestions?: NearbyBusiness[];
+      }
+    | undefined;
+  const storeResult = result.toolResults.findLast(
+    (r) => r.toolName === "searchStores",
+  )?.output as
+    | {
+        results?: StoreMatch[];
+        matchTier?: MatchTier;
+        externalSuggestions?: NearbyBusiness[];
+      }
+    | undefined;
+  const vendorProductsResult = result.toolResults.findLast(
+    (r) => r.toolName === "getVendorProducts",
+  )?.output as
+    | {
+        results?: StoreProductItem[];
+        store?: {
+          name: string;
+          handle: string;
+          whatsapp: string | null;
+          vendorId: string;
+        };
+      }
+    | undefined;
+  const products = productResult?.results ?? [];
+  const stores = storeResult?.results ?? [];
+  const productsMatchTier = productResult?.matchTier ?? null;
+  const storesMatchTier = storeResult?.matchTier ?? null;
+  const productsMatchQuality = productResult?.matchQuality;
+  // What the model actually searched stores FOR this turn (e.g. "phone
+  // repair shop", "tailor") — used to customize the WhatsApp pre-filled
+  // message on a pure vendor/store card (no product attached) instead of the
+  // generic "interested in what you offer." Only meaningful when it's the
+  // sole intent, never for productStores (a real product already names
+  // itself on that card).
+  const storesQuery =
+    (storeCall?.input as { businessType?: string } | undefined)?.businessType ??
+    null;
+  // Either tool can surface its own Google Places fallback (Tier 5) — a
+  // dual-intent turn ("a phone repair shop that also sells white sneakers")
+  // could in principle call both and get overlapping nearby businesses back
+  // from each, so dedupe by placeId rather than assuming only one tool ever
+  // populates this.
+  const externalStoreSuggestions = Array.from(
+    new Map(
+      [
+        ...(productResult?.externalSuggestions ?? []),
+        ...(storeResult?.externalSuggestions ?? []),
+      ].map((b) => [b.placeId, b]),
+    ).values(),
+  );
+  const vendorProducts = vendorProductsResult?.results ?? [];
+  const vendorProductsStore = vendorProductsResult?.store ?? null;
+
+  // The real decision: a spurious clarify call is dropped entirely when the
+  // co-called search actually found something useful — the buyer already has
+  // a real, actionable answer, and a pointless question on top of it is
+  // worse than the original bug of silently dropping the clarification. Only
+  // defers to the clarification when the search came back with genuinely
+  // nothing (or no search ran at all this turn).
+  const hasUsefulResults =
+    products.length > 0 ||
+    stores.length > 0 ||
+    vendorProducts.length > 0 ||
+    externalStoreSuggestions.length > 0;
+  const clarification = hasUsefulResults ? null : clarifyCandidate;
+
+  return {
+    clarifyCandidate,
+    hasUsefulResults,
+    clarification,
+    products,
+    stores,
+    storesQuery,
+    productsMatchTier,
+    storesMatchTier,
+    productsMatchQuality,
+    externalStoreSuggestions,
+    vendorProducts,
+    vendorProductsStore,
+    productCall,
+    storeCall,
+  };
+}
+
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as SearchRequestBody | null;
   const message = body?.message?.trim() ?? "";
@@ -252,23 +389,36 @@ export async function POST(req: Request) {
           : null;
 
       try {
-        const result = await callLLM(
+        // Split out so a retry (below) can re-run the model with
+        // askClarifyingQuestion removed from the tool set entirely, rather
+        // than just asking it again not to — see the retry's own comment for
+        // why a second plain request isn't good enough here.
+        const searchTools = {
+          searchProducts: searchProductsTool(
+            body?.buyerLocation,
+            push,
+            Boolean(imageUrl),
+            imageUrl,
+            weakResultsRef,
+          ),
+          searchStores: searchStoresTool(body?.buyerLocation, push),
+          getVendorProducts: getVendorProductsTool(push),
+        };
+        const system = buildSystemPrompt(
+          Boolean(body?.buyerLocation),
+          sectorClarifiers,
+        );
+        // Groq is text-only — never route an image query to it.
+        const providerOrder: ("openai" | "groq")[] = imageUrl
+          ? ["openai"]
+          : ["openai", "groq"];
+
+        let result = await callLLM(
           {
-            system: buildSystemPrompt(
-              Boolean(body?.buyerLocation),
-              sectorClarifiers,
-            ),
+            system,
             messages,
             tools: {
-              searchProducts: searchProductsTool(
-                body?.buyerLocation,
-                push,
-                Boolean(imageUrl),
-                imageUrl,
-                weakResultsRef,
-              ),
-              searchStores: searchStoresTool(body?.buyerLocation, push),
-              getVendorProducts: getVendorProductsTool(push),
+              ...searchTools,
               askClarifyingQuestion: askClarifyingQuestionTool(),
             },
             // 4, not 3: a zero-match searchProducts now always falls through
@@ -283,127 +433,61 @@ export async function POST(req: Request) {
             // keeps a guaranteed last step for text generation.
             stopWhen: stepCountIs(4),
           },
-          // Groq is text-only — never route an image query to it.
-          imageUrl ? ["openai"] : ["openai", "groq"],
+          providerOrder,
         );
+        let outcome = extractOutcome(result);
 
-        // askClarifyingQuestion's own tool description explicitly forbids
-        // calling it alongside another tool, but gpt-4o-mini has been
-        // observed doing exactly that anyway (found live: it reaches for
-        // this tool almost reflexively, INCLUDING on turns where nothing
-        // was actually missing — e.g. device location already known, a
-        // search that would have returned real results regardless). So its
-        // presence is a candidate, not automatically authoritative — the
-        // real decision (below, once search results are known) is: did the
-        // co-called search find anything genuinely useful? If yes, a
-        // spurious clarify call is ignored entirely and the real results
-        // win; only a search that came back with nothing at all (or no
-        // search call happened) defers to the clarification.
-        const clarifyCall = result.toolCalls.findLast(
-          (c) => c.toolName === "askClarifyingQuestion",
-        );
-        const clarifyInput = clarifyCall?.input as
-          | { question: string; kind: "choice" | "text"; options?: string[] }
-          | undefined;
-        // Downgrades a malformed "choice" (missing/too-few options) to
-        // "text" server-side, so the frontend's discriminated Clarification
-        // type never has to re-validate what the model actually sent.
-        const clarifyCandidate: Clarification | null = !clarifyInput
-          ? null
-          : clarifyInput.kind === "choice" &&
-              (clarifyInput.options?.length ?? 0) >= 2
-            ? {
-                kind: "choice",
-                question: clarifyInput.question,
-                options: clarifyInput.options!,
-              }
-            : { kind: "text", question: clarifyInput.question };
+        // gpt-4o-mini has been observed asking the location clarifying
+        // question (systemPrompt.ts's "tell me your area / search nationwide
+        // anyway" branch) even when the buyer's device location is already
+        // known and folded into the prompt via locationNote — a documented
+        // reliability gap the co-called-search fallback below doesn't catch
+        // on its own, since a compliant model makes askClarifyingQuestion its
+        // ONLY tool call that turn (per the prompt's "STOP there" rule),
+        // leaving no co-called search result to fall back on. Detected by
+        // shape, not exact text (the model paraphrases the question itself):
+        // a "choice" clarification with a "...nationwide..." option is
+        // unambiguously THIS question — never a sector-attribute one
+        // (color/size/budget never mention "nationwide"). Retried once, with
+        // askClarifyingQuestion itself removed from the tool set — a second
+        // plain request not to ask again is exactly the instruction that
+        // failed the first time, so the model is left with no way to repeat
+        // the mistake and must pick a real search tool instead.
+        const looksLikeLocationClarify =
+          Boolean(body?.buyerLocation) &&
+          outcome.clarifyCandidate?.kind === "choice" &&
+          outcome.clarifyCandidate.options.some((o) => /nationwide/i.test(o));
 
-        // .findLast, not .find: a fallback model (Groq) occasionally calls a
-        // tool more than once for one turn — the last call is what its
-        // final reply is actually synthesized from, found live during the
-        // hardening pass.
-        const productCall = result.toolCalls.findLast(
-          (c) => c.toolName === "searchProducts",
-        );
-        const storeCall = result.toolCalls.findLast(
-          (c) => c.toolName === "searchStores",
-        );
-        const productResult = result.toolResults.findLast(
-          (r) => r.toolName === "searchProducts",
-        )?.output as
-          | {
-              results?: VendorMatch[];
-              matchTier?: MatchTier;
-              matchQuality?: MatchQuality;
-              externalSuggestions?: NearbyBusiness[];
-            }
-          | undefined;
-        const storeResult = result.toolResults.findLast(
-          (r) => r.toolName === "searchStores",
-        )?.output as
-          | {
-              results?: StoreMatch[];
-              matchTier?: MatchTier;
-              externalSuggestions?: NearbyBusiness[];
-            }
-          | undefined;
-        const vendorProductsResult = result.toolResults.findLast(
-          (r) => r.toolName === "getVendorProducts",
-        )?.output as
-          | {
-              results?: StoreProductItem[];
-              store?: {
-                name: string;
-                handle: string;
-                whatsapp: string | null;
-                vendorId: string;
-              };
-            }
-          | undefined;
-        const products = productResult?.results ?? [];
-        const stores = storeResult?.results ?? [];
-        const productsMatchTier = productResult?.matchTier ?? null;
-        const storesMatchTier = storeResult?.matchTier ?? null;
-        const productsMatchQuality = productResult?.matchQuality;
-        // What the model actually searched stores FOR this turn (e.g. "phone
-        // repair shop", "tailor") — used to customize the WhatsApp
-        // pre-filled message on a pure vendor/store card (no product
-        // attached) instead of the generic "interested in what you offer."
-        // Only meaningful when it's the sole intent, never for
-        // productStores (a real product already names itself on that card).
-        const storesQuery =
-          (storeCall?.input as { businessType?: string } | undefined)
-            ?.businessType ?? null;
-        // Either tool can surface its own Google Places fallback (Tier 5) —
-        // a dual-intent turn ("a phone repair shop that also sells white
-        // sneakers") could in principle call both and get overlapping
-        // nearby businesses back from each, so dedupe by placeId rather
-        // than assuming only one tool ever populates this.
-        const externalStoreSuggestions = Array.from(
-          new Map(
-            [
-              ...(productResult?.externalSuggestions ?? []),
-              ...(storeResult?.externalSuggestions ?? []),
-            ].map((b) => [b.placeId, b]),
-          ).values(),
-        );
-        const vendorProducts = vendorProductsResult?.results ?? [];
-        const vendorProductsStore = vendorProductsResult?.store ?? null;
+        if (looksLikeLocationClarify && !outcome.hasUsefulResults) {
+          // Marks which path produced a given turn's result — the model
+          // asking correctly the first time vs. this retry silently catching
+          // a spurious ask are indistinguishable to the buyer, but not
+          // distinguishing them here would make gpt-4o-mini's location-
+          // asking reliability impossible to track over time.
+          console.warn(
+            "[search] discarded a spurious location clarify (buyer location already known) — retrying without askClarifyingQuestion",
+          );
+          result = await callLLM(
+            { system, messages, tools: searchTools, stopWhen: stepCountIs(4) },
+            providerOrder,
+          );
+          outcome = extractOutcome(result);
+        }
 
-        // The real decision: a spurious clarify call is dropped entirely
-        // when the co-called search actually found something useful — the
-        // buyer already has a real, actionable answer, and a pointless
-        // question on top of it is worse than the original bug of silently
-        // dropping the clarification. Only defers to the clarification when
-        // the search came back with genuinely nothing (or no search ran at
-        // all this turn).
-        const hasUsefulResults =
-          products.length > 0 ||
-          stores.length > 0 ||
-          vendorProducts.length > 0 ||
-          externalStoreSuggestions.length > 0;
-        const clarification = hasUsefulResults ? null : clarifyCandidate;
+        const {
+          clarification,
+          products,
+          stores,
+          storesQuery,
+          productsMatchTier,
+          storesMatchTier,
+          productsMatchQuality,
+          externalStoreSuggestions,
+          vendorProducts,
+          vendorProductsStore,
+          productCall,
+          storeCall,
+        } = outcome;
 
         // Skipped (not just discarded) when the clarification actually won
         // — no point spending an extra lookup on data that's about to be
@@ -419,10 +503,11 @@ export async function POST(req: Request) {
             : [];
 
         // A real SEARCH tool's results are what the buyer sees this turn
-        // whenever any exist — see hasUsefulResults above. Only a genuinely
-        // empty outcome (or no search tool call at all) falls through to
-        // the clarification, in which case toolCalled is false so the
-        // frontend renders the paused question instead of a dead-end card.
+        // whenever any exist — see hasUsefulResults inside extractOutcome.
+        // Only a genuinely empty outcome (or no search tool call at all)
+        // falls through to the clarification, in which case toolCalled is
+        // false so the frontend renders the paused question instead of a
+        // dead-end card.
         const toolCalled = !clarification;
 
         // Same "skipped when the clarification actually won" reasoning as
