@@ -1,6 +1,13 @@
 "use client";
 
-import { motion } from "motion/react";
+import { useRef } from "react";
+import Image from "next/image";
+import {
+  motion,
+  useScroll,
+  useTransform,
+  type MotionValue,
+} from "motion/react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -11,6 +18,15 @@ import {
   Search as SearchIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import ShineSweep from "@/components/ShineSweep";
+
+// Photo credit: Ali Mkumbwa / Unsplash (unsplash.com/photos/H1KbBGUs4bM) —
+// Unsplash's license doesn't require attribution, but it's kept here for
+// maintainability.
+const heroPhoto = {
+  src: "https://images.unsplash.com/photo-1687422808384-c896d0efd4ab",
+  alt: "Woman standing in front of a store holding a cell phone",
+};
 
 const stagger = {
   hidden: {},
@@ -120,14 +136,69 @@ function SearchPreview() {
   );
 }
 
-export default function Hero() {
+// Real business photo, floating beside the search mockup — drifts with
+// scroll (parallax) on top of its own idle float + hover tilt, so the page
+// reads as alive rather than a static screenshot next to a still photo.
+function HeroPhotoCard({ y }: { y: MotionValue<number> }) {
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden bg-[#F1F5F9] pt-20 sm:pt-24">
+    <motion.div
+      style={{ y }}
+      initial={{ opacity: 0, x: -50, rotate: -12 }}
+      animate={{ opacity: 1, x: 0, rotate: -6 }}
+      transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
+      whileHover={{ rotate: -2, scale: 1.03 }}
+      className="relative mx-auto mb-6 w-32 sm:w-36 md:absolute md:mx-0 md:mb-0 md:-left-12 md:top-2 md:w-32 lg:-left-24 lg:top-6 lg:w-40 z-10"
+    >
+      <motion.div
+        animate={{ y: [0, -14, 0] }}
+        transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+        className="relative aspect-[4/5] rounded-2xl overflow-hidden shadow-2xl shadow-gray-400/30 border-4 border-white"
+      >
+        <Image
+          src={heroPhoto.src}
+          alt={heroPhoto.alt}
+          fill
+          sizes="200px"
+          quality={90}
+          priority
+          className="object-cover"
+        />
+        <ShineSweep />
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.3, duration: 0.5 }}
+        className="mt-2.5 bg-white rounded-xl border border-gray-200 shadow-md px-2.5 py-2 flex items-center gap-1.5"
+      >
+        <ShieldCheck className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+        <span className="text-[#023337] text-[10.5px] font-medium leading-tight">
+          Verified storefront
+        </span>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+export default function Hero() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start start", "end start"],
+  });
+  const photoY = useTransform(scrollYProgress, [0, 1], [0, 140]);
+
+  return (
+    <section
+      ref={sectionRef}
+      className="relative min-h-screen flex items-center lg:items-start overflow-hidden bg-[#F1F5F9] pt-20 sm:pt-24"
+    >
       {/* Soft glows */}
       <div className="absolute top-1/4 left-1/4 w-[420px] h-[420px] bg-orange-400/[0.08] rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] bg-orange-400/[0.06] rounded-full blur-[80px] pointer-events-none" />
 
-      <div className="relative max-w-7xl mx-auto px-5 sm:px-8 pt-8 pb-16 sm:py-16 w-full">
+      <div className="relative max-w-7xl mx-auto px-5 sm:px-8 pt-8 pb-16 sm:py-16 lg:pt-4 w-full">
         <motion.div
           variants={stagger}
           initial="hidden"
@@ -180,7 +251,10 @@ export default function Hero() {
           </motion.div>
         </motion.div>
 
-        <SearchPreview />
+        <div className="relative max-w-md mx-auto">
+          <HeroPhotoCard y={photoY} />
+          <SearchPreview />
+        </div>
 
         {/* Value strip */}
         <motion.div

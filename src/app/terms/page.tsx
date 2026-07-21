@@ -386,8 +386,8 @@ export default function Terms() {
                 />
                 <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden border border-gray-200 shadow-2xl shadow-gray-300/50">
                   <Image
-                    src="https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=900&q=80&auto=format&fit=crop"
-                    alt="Business partners agreeing on terms with a handshake"
+                    src="https://res.cloudinary.com/campnet/image/upload/v1784631782/ChatGPT_Image_Jul_21_2026_11_54_52_AM_edeudw.png"
+                    alt="A Nigerian shop vendor behind the counter of his store"
                     fill
                     priority
                     sizes="(max-width: 1024px) 90vw, 480px"
@@ -508,8 +508,8 @@ export default function Terms() {
               {/* Image */}
               <div className="relative min-h-[260px] lg:min-h-full">
                 <Image
-                  src="https://images.unsplash.com/photo-1573497620053-ea5300f94f21?w=900&q=80&auto=format&fit=crop"
-                  alt="Business owner managing customer messages professionally"
+                  src="https://res.cloudinary.com/campnet/image/upload/v1784631957/ChatGPT_Image_Jul_21_2026_12_05_41_PM_z7jmzw.png"
+                  alt="A Nigerian shop vendor standing behind his counter, supporting local vendors"
                   fill
                   sizes="(max-width: 1024px) 100vw, 520px"
                   className="object-cover"

@@ -79,12 +79,6 @@ export const faqs: FaqItem[] = [
   },
   {
     category: "vendor",
-    question: "How do buyers pay me?",
-    answer:
-      "Directly, by bank transfer to the account you set once in your dashboard. When a buyer sends their receipt, Velte verifies it automatically and flags the order for you to confirm — no payment link, no processor holding your money.",
-  },
-  {
-    category: "vendor",
     question: "What happens if my wallet runs low?",
     answer:
       "You'll get a low-balance notice before you're dropped from results, so you can top up without losing visibility. Your store and listings stay exactly as they are — only new leads pause until you top up.",

@@ -4,6 +4,7 @@ import Hero from "@/components/landing/Hero";
 import VendorPitch from "@/components/landing/VendorPitch";
 import FAQ from "@/components/landing/FAQ";
 import Footer from "@/components/landing/Footer";
+import StandaloneHomeRedirect from "@/components/StandaloneHomeRedirect";
 
 // Velte's homepage — redesigned for the pivot (replaces the old
 // pre-pivot "WhatsApp AI Sales Rep" marketing site that used to live at
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 export default function HomePage() {
   return (
     <div className="min-h-screen">
+      <StandaloneHomeRedirect />
       <Navbar />
       <Hero />
       <VendorPitch />

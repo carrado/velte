@@ -227,6 +227,24 @@ export const SERVICE_DETAIL_PRESETS: AttributePresetGroup[] = [
     ],
   },
   {
+    group: "Barbing & Hair Styling",
+    items: [
+      {
+        name: "Services Offered",
+        example: "haircuts, shaves, braiding, weaving",
+        important: true,
+      },
+      {
+        name: "Location",
+        example: "home service or in-shop",
+        important: true,
+      },
+      { name: "Session Duration", example: "30–45 minutes" },
+      { name: "Hygiene", example: "sterilized clippers, single-use blades" },
+      { name: "Group Bookings", example: "available for events/parties" },
+    ],
+  },
+  {
     group: "Construction & Contracting",
     items: [
       {

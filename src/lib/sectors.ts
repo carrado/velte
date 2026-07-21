@@ -314,6 +314,12 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         listingConfig: { presetGroups: ["Nail Care"] },
       },
       {
+        value: "barbing_hair_styling",
+        label: "Barbing & Hair Styling",
+        classification: "service",
+        listingConfig: { presetGroups: ["Barbing & Hair Styling"] },
+      },
+      {
         value: "perfumes_fragrances",
         label: "Perfumes & Fragrances",
         classification: "retail",

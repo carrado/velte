@@ -365,8 +365,8 @@ export default function Privacy() {
                 />
                 <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden border border-gray-200 shadow-2xl shadow-gray-300/50">
                   <Image
-                    src="https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=900&q=80&auto=format&fit=crop"
-                    alt="A vendor managing their store securely on Velte"
+                    src="https://res.cloudinary.com/campnet/image/upload/v1784631782/ChatGPT_Image_Jul_21_2026_12_00_30_PM_teh3kf.png"
+                    alt="Interior of a Nigerian shopping mall, with shoppers browsing storefronts"
                     fill
                     priority
                     sizes="(max-width: 1024px) 90vw, 480px"
@@ -487,8 +487,8 @@ export default function Privacy() {
               {/* Image */}
               <div className="relative min-h-[260px] lg:min-h-full">
                 <Image
-                  src="https://images.unsplash.com/photo-1508243771214-6e95d137426b?w=900&q=80&auto=format&fit=crop"
-                  alt="A buyer searching for a nearby vendor on Velte"
+                  src="https://res.cloudinary.com/campnet/image/upload/v1784631782/ChatGPT_Image_Jul_21_2026_12_00_30_PM_teh3kf.png"
+                  alt="Interior of a Nigerian shopping mall, with shoppers browsing storefronts"
                   fill
                   sizes="(max-width: 1024px) 100vw, 520px"
                   className="object-cover"
