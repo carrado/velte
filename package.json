@@ -10,7 +10,9 @@
     "prettier-fix": "prettier --write .",
     "prettier-check": "prettier --check .",
     "prepare": "husky install",
-    "eval:search": "tsx scripts/eval-search-intent.ts"
+    "eval:search": "tsx scripts/eval-search-intent.ts",
+    "send-whatsapp": "node --env-file=.env scripts/send-whatsapp.js",
+    "send-waitlist-welcome": "node --env-file=.env scripts/send-waitlist-welcome.js"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,md,css}": [

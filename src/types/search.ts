@@ -82,7 +82,7 @@ export interface VendorMatch {
   score: number;
 }
 
-// Mirrors the shape searchStores() returns in velte-backend's
+// Mirrors the shape searchStores() returns in staffly-ai-backend's
 // retrieval.service.js — a business/vendor match, not a specific listing
 // (no price/image-per-product fields).
 export interface StoreMatch {
@@ -196,6 +196,11 @@ export type SearchStreamEvent =
       productsMatchTier: MatchTier;
       storesMatchTier: MatchTier;
       productsMatchQuality: MatchQuality;
+      // "similar" only reachable via the retrieval backend's weak-match
+      // fallback (see retrieval.service.js's weakByTier) — a near-miss
+      // vendor shown as a last resort before Google Places, since store
+      // bios often don't spell out every sector they're tagged with.
+      storesMatchQuality: MatchQuality;
       externalStoreSuggestions: NearbyBusiness[];
       // Populated only when getVendorProductsTool was called this turn —
       // one specific store's own catalog, requested after that store was

@@ -37,7 +37,7 @@ function ResetPasswordForm() {
       api.post("/api/auth/reset-password", data),
     onSuccess: () => {
       toast.success("Password updated! You can now log in.");
-      router.push("/login");
+      router.push("/auth/login");
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to reset password");
@@ -78,7 +78,7 @@ function ResetPasswordForm() {
             The password reset link is invalid. Please request a new password
             reset link.
           </p>
-          <Link href="/forgot-password">
+          <Link href="/auth/forgot-password">
             <Button className="w-full bg-orange-500 hover:bg-orange-400 text-white font-semibold shadow-lg shadow-orange-500/20 gap-2">
               Request new link
               <ArrowRight className="w-4 h-4" />

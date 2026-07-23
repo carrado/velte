@@ -3,8 +3,14 @@ import { stepCountIs, type ModelMessage, type UserContent } from "ai";
 import { callLLM } from "@/lib/server/ai/router";
 import { backendData } from "@/lib/server/backend";
 import { aiSearchFetch } from "@/lib/server/aiSearchBackend";
-import { searchProductsTool } from "@/lib/server/ai/searchProductsTool";
-import { searchStoresTool } from "@/lib/server/ai/searchStoresTool";
+import {
+  searchProductsTool,
+  searchProductsCore,
+} from "@/lib/server/ai/searchProductsTool";
+import {
+  searchStoresTool,
+  searchStoresCore,
+} from "@/lib/server/ai/searchStoresTool";
 import { getVendorProductsTool } from "@/lib/server/ai/getVendorProductsTool";
 import { askClarifyingQuestionTool } from "@/lib/server/ai/askClarifyingQuestionTool";
 import {
@@ -239,6 +245,7 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
     | {
         results?: StoreMatch[];
         matchTier?: MatchTier;
+        matchQuality?: MatchQuality;
         externalSuggestions?: NearbyBusiness[];
       }
     | undefined;
@@ -260,6 +267,7 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   const productsMatchTier = productResult?.matchTier ?? null;
   const storesMatchTier = storeResult?.matchTier ?? null;
   const productsMatchQuality = productResult?.matchQuality;
+  const storesMatchQuality = storeResult?.matchQuality;
   // What the model actually searched stores FOR this turn (e.g. "phone
   // repair shop", "tailor") — used to customize the WhatsApp pre-filled
   // message on a pure vendor/store card (no product attached) instead of the
@@ -308,6 +316,7 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
     productsMatchTier,
     storesMatchTier,
     productsMatchQuality,
+    storesMatchQuality,
     externalStoreSuggestions,
     vendorProducts,
     vendorProductsStore,
@@ -474,6 +483,113 @@ export async function POST(req: Request) {
           outcome = extractOutcome(result);
         }
 
+        // Deterministic cross-check — don't trust the model to reliably call
+        // the OTHER search tool when its own choice came back empty, even
+        // though systemPrompt.ts's symmetric-fallback paragraph tells it to.
+        // Found live: gpt-4o-mini calling searchStores alone for "I need a
+        // good developer to help build my web and mobile apps", getting zero
+        // real Velte stores, and settling for Google Places' generic results
+        // without ever trying searchProducts — even though a real Velte
+        // vendor's own listing ("Web & Mobile App development") matched the
+        // same query directly via searchProducts. Runs the missing tool's
+        // core logic directly here, bypassing the model entirely, exactly
+        // once, reusing the model's own extracted query text — this applies
+        // to every sector equally, not just tech, since the underlying gap
+        // (a vendor's real listing outscoring their own store description)
+        // can happen for any category. `replyOverride` keeps the buyer-facing
+        // text honest: the model's own closing note was written without
+        // knowing this fallback would run, so if it finds a real match, the
+        // original "couldn't find" narration would otherwise contradict the
+        // real result card now being shown.
+        let replyOverride: string | null = null;
+
+        if (
+          outcome.storeCall &&
+          !outcome.productCall &&
+          outcome.stores.length === 0
+        ) {
+          const storeInput = outcome.storeCall.input as {
+            businessType?: string;
+            location?: string;
+            radiusKm?: number;
+          };
+          if (storeInput.businessType) {
+            const fallback = await searchProductsCore(
+              {
+                product: storeInput.businessType,
+                location: storeInput.location,
+                radiusKm: storeInput.radiusKm,
+              },
+              {
+                buyerLocation: body?.buyerLocation,
+                push,
+                weakResultsOut: weakResultsRef,
+              },
+            );
+            if ("results" in fallback && fallback.results.length) {
+              outcome = {
+                ...outcome,
+                products: fallback.results,
+                productsMatchTier: fallback.matchTier,
+                productsMatchQuality: fallback.matchQuality,
+                clarification: null,
+              };
+              replyOverride =
+                "Found a real match on Velte for that — take a look below.";
+            }
+          }
+        } else if (
+          outcome.productCall &&
+          !outcome.storeCall &&
+          outcome.products.length === 0
+        ) {
+          const productInput = outcome.productCall.input as {
+            product?: string;
+            attributes?: string[];
+            location?: string;
+            radiusKm?: number;
+          };
+          if (productInput.product) {
+            const businessType = [
+              productInput.product,
+              ...(productInput.attributes ?? []),
+            ].join(" ");
+            const fallback = await searchStoresCore(
+              {
+                businessType,
+                location: productInput.location,
+                radiusKm: productInput.radiusKm,
+              },
+              { buyerLocation: body?.buyerLocation, push },
+            );
+            if (
+              "results" in fallback &&
+              (fallback.results.length || fallback.externalSuggestions.length)
+            ) {
+              outcome = {
+                ...outcome,
+                stores: fallback.results,
+                storesMatchTier: fallback.matchTier,
+                storesMatchQuality: fallback.matchQuality,
+                storesQuery: businessType,
+                externalStoreSuggestions: Array.from(
+                  new Map(
+                    [
+                      ...outcome.externalStoreSuggestions,
+                      ...fallback.externalSuggestions,
+                    ].map((b) => [b.placeId, b]),
+                  ).values(),
+                ),
+                clarification: null,
+              };
+              if (fallback.results.length) {
+                replyOverride =
+                  "Found a real vendor on Velte for that — take a look below.";
+              }
+            }
+          }
+        }
+
         const {
           clarification,
           products,
@@ -482,6 +598,7 @@ export async function POST(req: Request) {
           productsMatchTier,
           storesMatchTier,
           productsMatchQuality,
+          storesMatchQuality,
           externalStoreSuggestions,
           vendorProducts,
           vendorProductsStore,
@@ -518,7 +635,7 @@ export async function POST(req: Request) {
         controller.enqueue(
           encodeEvent({
             type: "final",
-            reply: sanitizeReply(result.text),
+            reply: replyOverride ?? sanitizeReply(result.text),
             toolCalled,
             clarification,
             products,
@@ -529,6 +646,7 @@ export async function POST(req: Request) {
             productsMatchTier,
             storesMatchTier,
             productsMatchQuality,
+            storesMatchQuality,
             externalStoreSuggestions,
             vendorProducts,
             vendorProductsStore,

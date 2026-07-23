@@ -1,6 +1,7 @@
 import { MapPin, Store as StoreIcon } from "lucide-react";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
+import { ExpandableText } from "@/components/search/ExpandableText";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import type { StoreMatch } from "@/types/search";
@@ -52,9 +53,10 @@ export function StoreResultCard({
       </div>
 
       {match.description && (
-        <p className="text-[13px] text-gray-500 leading-relaxed line-clamp-2">
-          {match.description}
-        </p>
+        <ExpandableText
+          text={match.description}
+          className="text-[13px] text-gray-500 leading-relaxed"
+        />
       )}
 
       {match.sectors.length > 0 && (

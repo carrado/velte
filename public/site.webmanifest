@@ -3,7 +3,7 @@
   "short_name": "Velte",
   "description": "Deploy an intelligent AI agent on your WhatsApp Business number that answers product questions, negotiates prices, checks inventory, and closes sales — 24/7.",
   "id": "/",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "lang": "en",
   "dir": "ltr",

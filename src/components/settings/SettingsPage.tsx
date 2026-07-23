@@ -812,8 +812,12 @@ function LogoutSection() {
   const logoutMutation = useMutation({
     mutationFn: () => usersApi.logout(),
     onSuccess: () => {
-      // Installed PWA: land on the app welcome screen, not the marketing homepage.
-      window.location.href = isStandalone ? "/welcome" : "/";
+      // Installed PWA: land on the app welcome screen, not the marketing
+      // homepage. .replace(), not .href= — see Header.tsx's identical
+      // logout handler for why (drops the pre-logout page from history so
+      // the back button can't return to it, and it can't be bfcache-served
+      // without a fresh middleware auth check).
+      window.location.replace(isStandalone ? "/welcome" : "/");
     },
     onError: (error: unknown) => {
       toast.error(error instanceof Error ? error.message : "Logout failed");

@@ -133,6 +133,20 @@ export default function AnchoredPopover({
   return createPortal(
     <div
       ref={panelRef}
+      data-anchored-popover-panel=""
+      // Stops the native pointerdown/mousedown from ever reaching document —
+      // this panel is portaled straight to document.body, so it sits OUTSIDE
+      // the DOM of any Base UI/Radix-style popover it's visually nested
+      // inside (e.g. NotificationDropdown's bell popover). Those libraries
+      // detect "outside" clicks with their own native document-level
+      // listener, checking real DOM containment — no amount of React-tree
+      // nesting or onOpenChange/eventDetails.cancel() filtering on the
+      // CONSUMER side changes that, since their listener fires (and decides
+      // to close) before that callback even runs. Stopping propagation here,
+      // at the source, is the only place that reliably prevents it — this
+      // fixes the same problem for every ancestor popover, not just one.
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
       style={{
         position: "fixed",
         top: pos.top,

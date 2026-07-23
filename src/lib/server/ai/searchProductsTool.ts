@@ -45,6 +45,152 @@ const inputSchema = z.object({
     .describe("Search radius in km. Defaults to 10 if not specified."),
 });
 
+export interface SearchProductsCoreInput {
+  product: string;
+  attributes?: string[];
+  location?: string;
+  radiusKm?: number;
+}
+
+export interface SearchProductsCoreResult {
+  results: VendorMatch[];
+  matchTier: MatchTier;
+  matchQuality: MatchQuality;
+  externalSuggestions: NearbyBusiness[];
+  locationNote?: string;
+}
+
+/**
+ * The actual product search — resolves location, calls the retrieval
+ * backend, reports progress via `push`. Split out from searchProductsTool so
+ * route.ts can invoke it directly, bypassing the model entirely, as a
+ * deterministic cross-check when the model called searchStores alone and
+ * came up empty — see route.ts's own comment on that fallback for why a
+ * prompt instruction alone (systemPrompt.ts's symmetric-fallback paragraph)
+ * wasn't reliable enough on its own: found live, gpt-4o-mini calling
+ * searchStores only for "I need a good developer to help build my web and
+ * mobile apps", getting zero real Velte stores, and settling for Google
+ * Places' generic results without ever trying searchProducts, despite the
+ * prompt mandating it — even though a real Velte vendor's own product
+ * listing ("Web & Mobile App development") matched the same query directly.
+ */
+export async function searchProductsCore(
+  { product, attributes, location, radiusKm }: SearchProductsCoreInput,
+  {
+    buyerLocation,
+    push,
+    isImageQuery = false,
+    imageUrl,
+    weakResultsOut,
+  }: {
+    buyerLocation?: BuyerLocation;
+    push?: (candidates: string[]) => void;
+    isImageQuery?: boolean;
+    imageUrl?: string;
+    weakResultsOut?: { current: VendorMatch[] };
+  } = {},
+): Promise<
+  SearchProductsCoreResult | { error: "location-not-found"; message: string }
+> {
+  // Best-effort status text before we know the resolved coordinates —
+  // an explicit place is shown as-is; otherwise "your area" if a
+  // device location is known, or nothing (nationwide phrasing) if not.
+  push?.(
+    searchingPhrase(
+      product,
+      location ?? (buyerLocation ? "your area" : undefined),
+    ),
+  );
+
+  const resolved = await resolveSearchLocation(buyerLocation, location);
+  if (resolved.kind === "not-found") {
+    return {
+      error: "location-not-found" as const,
+      message: `Couldn't find "${resolved.queriedText}" — ask the buyer for a more specific area.`,
+    };
+  }
+  const coords = resolved.kind === "coords" ? resolved.coords : undefined;
+
+  const queryText = [product, ...(attributes ?? [])].join(" ");
+  let results: VendorMatch[],
+    weakResults: VendorMatch[],
+    matchTier: MatchTier,
+    matchQuality: MatchQuality,
+    externalSuggestions: NearbyBusiness[] | null;
+  try {
+    ({ results, weakResults, matchTier, matchQuality, externalSuggestions } =
+      await aiSearchData<{
+        results: VendorMatch[];
+        weakResults: VendorMatch[];
+        matchTier: MatchTier;
+        matchQuality: MatchQuality;
+        externalSuggestions: NearbyBusiness[] | null;
+      }>("/search/products", {
+        method: "POST",
+        body: {
+          queryText,
+          lat: coords?.lat,
+          lng: coords?.lng,
+          radiusKm: radiusKm ?? 10,
+          isImageQuery,
+          imageUrl,
+        },
+      }));
+  } catch (err) {
+    // Was uncaught — the AI SDK swallows the thrown error into a generic
+    // tool-error the model then apologizes for, with no trace of *why*
+    // (timeout vs DNS vs 5xx) in Vercel's logs. Log before rethrowing so
+    // the failure is diagnosable instead of a silent LLM-authored apology.
+    console.error(
+      "[searchProductsTool] aiSearchData(/search/products) failed:",
+      err,
+    );
+    throw err;
+  }
+
+  if (results.length) {
+    if (isImageQuery && matchQuality === "direct") {
+      push?.(directMatchPhrase(results.length));
+    } else if (matchQuality === "similar") {
+      push?.(similarMatchPhrase(results.length));
+    } else {
+      push?.(foundCountPhrase(results.length, "product", matchTier));
+    }
+  } else {
+    push?.(noProductMatchPhrase());
+  }
+
+  // Side channel, not this function's return value — see weakResultsOut's
+  // own doc comment above for why.
+  if (weakResultsOut) weakResultsOut.current = weakResults;
+
+  // A mechanical fact, not left to the model's own inference: `coords`
+  // truthy means a REAL place was actually searched (the buyer's device
+  // location or a named place) — Tiers 1-3 (local/nearby/state) already
+  // ran and came up empty before this Tier-4 nationwide fallback ever
+  // fires, so a result here is genuinely from elsewhere in the country,
+  // not "close by". Found live: the model narrated a real-but-distant
+  // Tier-4 match (an Anambra caterer for an Enugu buyer) as if it were
+  // nearby — relying on the system prompt's general reasoning about
+  // matchTier + location context wasn't reliable enough on its own.
+  // Handing it this as a direct, already-resolved fact instead of
+  // something to re-derive removes that failure mode.
+  const locationNote =
+    matchTier === "nationwide"
+      ? coords
+        ? "Nothing matched within the search radius, the wider area, or even the buyer's own state — these results are from elsewhere in the country. You MUST say plainly that nothing was found nearby BEFORE presenting them, naming the actual state each result is in (its own `state` field) rather than implying it's close by."
+        : "No location signal existed for this search at all (no place named, no device location) — these results are ranked purely by relevance across all of Velte, not by distance. Say so honestly rather than implying proximity."
+      : undefined;
+
+  return {
+    results,
+    matchTier,
+    matchQuality,
+    externalSuggestions: externalSuggestions ?? [],
+    ...(locationNote ? { locationNote } : {}),
+  };
+}
+
 /**
  * For a buyer naming a *specific item* — as opposed to searchStoresTool,
  * which is for a buyer describing a kind of business/vendor rather than a
@@ -88,109 +234,10 @@ export function searchProductsTool(
     description:
       "Search the live catalog for a SPECIFIC PRODUCT OR SERVICE by meaning, proximity, and trust — use this when the buyer names an item they want to buy (e.g. 'white sneakers', 'Tecno fast charger'). For a buyer describing a kind of business/vendor/shop instead of an item, use searchStores. Returns real listings only — never invent a vendor, price, or stock level beyond what this tool returns.",
     inputSchema,
-    execute: async ({ product, attributes, location, radiusKm }) => {
-      // Best-effort status text before we know the resolved coordinates —
-      // an explicit place is shown as-is; otherwise "your area" if a
-      // device location is known, or nothing (nationwide phrasing) if not.
-      push?.(
-        searchingPhrase(
-          product,
-          location ?? (buyerLocation ? "your area" : undefined),
-        ),
-      );
-
-      const resolved = await resolveSearchLocation(buyerLocation, location);
-      if (resolved.kind === "not-found") {
-        return {
-          error: "location-not-found" as const,
-          message: `Couldn't find "${resolved.queriedText}" — ask the buyer for a more specific area.`,
-        };
-      }
-      const coords = resolved.kind === "coords" ? resolved.coords : undefined;
-
-      const queryText = [product, ...(attributes ?? [])].join(" ");
-      let results: VendorMatch[],
-        weakResults: VendorMatch[],
-        matchTier: MatchTier,
-        matchQuality: MatchQuality,
-        externalSuggestions: NearbyBusiness[] | null;
-      try {
-        ({
-          results,
-          weakResults,
-          matchTier,
-          matchQuality,
-          externalSuggestions,
-        } = await aiSearchData<{
-          results: VendorMatch[];
-          weakResults: VendorMatch[];
-          matchTier: MatchTier;
-          matchQuality: MatchQuality;
-          externalSuggestions: NearbyBusiness[] | null;
-        }>("/search/products", {
-          method: "POST",
-          body: {
-            queryText,
-            lat: coords?.lat,
-            lng: coords?.lng,
-            radiusKm: radiusKm ?? 10,
-            isImageQuery,
-            imageUrl,
-          },
-        }));
-      } catch (err) {
-        // Was uncaught — the AI SDK swallows the thrown error into a generic
-        // tool-error the model then apologizes for, with no trace of *why*
-        // (timeout vs DNS vs 5xx) in Vercel's logs. Log before rethrowing so
-        // the failure is diagnosable instead of a silent LLM-authored apology.
-        console.error(
-          "[searchProductsTool] aiSearchData(/search/products) failed:",
-          err,
-        );
-        throw err;
-      }
-
-      if (results.length) {
-        if (isImageQuery && matchQuality === "direct") {
-          push?.(directMatchPhrase(results.length));
-        } else if (matchQuality === "similar") {
-          push?.(similarMatchPhrase(results.length));
-        } else {
-          push?.(foundCountPhrase(results.length, "product", matchTier));
-        }
-      } else {
-        push?.(noProductMatchPhrase());
-      }
-
-      // Side channel, not this tool's return value — see weakResultsOut's
-      // own doc comment above for why.
-      if (weakResultsOut) weakResultsOut.current = weakResults;
-
-      // A mechanical fact, not left to the model's own inference: `coords`
-      // truthy means a REAL place was actually searched (the buyer's device
-      // location or a named place) — Tiers 1-3 (local/nearby/state) already
-      // ran and came up empty before this Tier-4 nationwide fallback ever
-      // fires, so a result here is genuinely from elsewhere in the country,
-      // not "close by". Found live: the model narrated a real-but-distant
-      // Tier-4 match (an Anambra caterer for an Enugu buyer) as if it were
-      // nearby — relying on the system prompt's general reasoning about
-      // matchTier + location context wasn't reliable enough on its own.
-      // Handing it this as a direct, already-resolved fact instead of
-      // something to re-derive removes that failure mode.
-      const locationNote =
-        matchTier === "nationwide"
-          ? coords
-            ? "Nothing matched within the search radius, the wider area, or even the buyer's own state — these results are from elsewhere in the country. You MUST say plainly that nothing was found nearby BEFORE presenting them, naming the actual state each result is in (its own `state` field) rather than implying it's close by."
-            : "No location signal existed for this search at all (no place named, no device location) — these results are ranked purely by relevance across all of Velte, not by distance. Say so honestly rather than implying proximity."
-          : undefined;
-
-      return {
-        results,
-        matchTier,
-        matchQuality,
-        externalSuggestions: externalSuggestions ?? [],
-        ...(locationNote ? { locationNote } : {}),
-      };
-    },
+    execute: async ({ product, attributes, location, radiusKm }) =>
+      searchProductsCore(
+        { product, attributes, location, radiusKm },
+        { buyerLocation, push, isImageQuery, imageUrl, weakResultsOut },
+      ),
   });
 }

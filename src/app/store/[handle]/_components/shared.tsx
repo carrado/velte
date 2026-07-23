@@ -126,7 +126,7 @@ export function OfferingCard({
             {product.description}
           </p>
         )}
-        <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2.5 border-t border-gray-100">
           <Price product={product} />
           {enquireHref && (
             <a
@@ -134,7 +134,7 @@ export function OfferingCard({
               target="_blank"
               rel="noreferrer"
               onClick={() => reportLead(vendorId, product.id)}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[12px] sm:text-[13px] font-semibold rounded-lg transition-colors shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[12px] sm:text-[13px] font-semibold rounded-lg transition-colors w-full sm:w-auto shrink-0"
             >
               <MessageCircle size={13} />
               Enquire

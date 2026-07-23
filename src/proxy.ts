@@ -57,8 +57,20 @@ export async function proxy(request: NextRequest) {
 
   const token = request.cookies.get("auth_token")?.value;
 
-  // If user visits "/" without token, allow landing page
+  // If user visits "/" without token, allow landing page — UNLESS this is
+  // the installed PWA launching (manifest start_url is "/?source=pwa", see
+  // site.webmanifest): redirect server-side, before any HTML ships, straight
+  // to /welcome instead of the marketing homepage. StandaloneHomeRedirect
+  // used to be the only guard against this and could only act client-side
+  // after hydration — by then the browser had already painted the SSR'd
+  // marketing page, so a logged-out PWA launch visibly flashed it before
+  // bouncing to /welcome. This redirect removes that flash entirely for the
+  // launch path; StandaloneHomeRedirect stays in place for in-app navigation
+  // back to "/" (e.g. the logo Link) while already running standalone.
   if (pathname === "/" && !token) {
+    if (request.nextUrl.searchParams.get("source") === "pwa") {
+      return NextResponse.redirect(new URL("/welcome", request.url));
+    }
     return NextResponse.next();
   }
 
@@ -83,9 +95,17 @@ export async function proxy(request: NextRequest) {
       return response;
     }
 
-    // 1) Logged-in user visits "/" -> "/:id/products"
+    // 1) Logged-in user visits "/" -> "/:id/products", UNLESS this is the
+    // installed PWA launching (manifest start_url "/?source=pwa" — see
+    // site.webmanifest and this file's logged-out "/" branch above), which
+    // always opens straight to the wallet instead — same page login itself
+    // already redirects to (see auth/login/page.tsx).
     if (pathname === "/") {
-      return NextResponse.redirect(new URL(`/${userId}/products`, request.url));
+      const dest =
+        request.nextUrl.searchParams.get("source") === "pwa"
+          ? "wallet"
+          : "products";
+      return NextResponse.redirect(new URL(`/${userId}/${dest}`, request.url));
     }
 
     // Break path into segments

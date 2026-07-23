@@ -17,7 +17,14 @@ export function NotificationDropdown() {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
+      {/* Explicit id — sidesteps Base UI's positional useId()-based id
+          generation, which produces a hydration mismatch whenever ANYTHING
+          earlier in the tree calls useId() a different number of times on
+          the server vs. the client's first render — unrelated to this
+          component itself. See Header.tsx's matching fix for its own
+          Popover trigger for the fuller explanation. */}
       <PopoverTrigger
+        id="header-notifications-trigger"
         className="relative text-[#6B7280] hover:text-[#111827] cursor-pointer focus:outline-none"
         aria-label="Open notifications"
       >

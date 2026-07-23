@@ -34,8 +34,13 @@ export default function Header({ title }: HeaderProps) {
   const logoutMutation = useMutation({
     mutationFn: () => usersApi.logout(),
     onSuccess: () => {
-      // Installed PWA: land on the app welcome screen, not the marketing homepage.
-      window.location.href = isStandalone ? "/welcome" : "/";
+      // Installed PWA: land on the app welcome screen, not the marketing
+      // homepage. .replace(), not .href= — a plain assignment pushes a new
+      // history entry, leaving the just-logged-out authenticated page one
+      // back-press away (and vulnerable to the browser's bfcache serving it
+      // without ever hitting the server/middleware again). replace() drops
+      // that entry from history entirely.
+      window.location.replace(isStandalone ? "/welcome" : "/");
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : "Logout failed";
@@ -99,7 +104,21 @@ export default function Header({ title }: HeaderProps) {
         {/* Desktop avatar with shadcn Popover */}
         <div className="hidden md:block">
           <Popover>
-            <PopoverTrigger className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold cursor-pointer flex-shrink-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-1">
+            {/* Explicit id — Base UI's own auto-generated id (useId()-based)
+                is positional, counted across every useId() call earlier in
+                the tree. A count that differs by even one call between the
+                server render and the client's hydration pass (e.g. from any
+                client-only conditional elsewhere in the layout) produces a
+                permanent hydration mismatch warning on this id — even though
+                nothing about THIS component actually differs. A hardcoded id
+                sidesteps that counting entirely: useBaseUiId() uses it
+                verbatim instead of generating one, so it's identical on both
+                passes by construction. See NotificationDropdown's matching
+                fix for the other Header popover that hit the same warning. */}
+            <PopoverTrigger
+              id="header-account-menu-trigger"
+              className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold cursor-pointer flex-shrink-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-1"
+            >
               {avatarInner}
             </PopoverTrigger>
             <PopoverContent

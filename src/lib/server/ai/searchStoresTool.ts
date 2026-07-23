@@ -10,6 +10,7 @@ import {
 } from "@/lib/server/ai/statusPhrases";
 import type {
   BuyerLocation,
+  MatchQuality,
   MatchTier,
   NearbyBusiness,
   StoreMatch,
@@ -38,6 +39,117 @@ const inputSchema = z.object({
     .describe("Search radius in km. Defaults to 10 if not specified."),
 });
 
+export interface SearchStoresCoreInput {
+  businessType: string;
+  location?: string;
+  radiusKm?: number;
+}
+
+export interface SearchStoresCoreResult {
+  results: StoreMatch[];
+  matchTier: MatchTier;
+  // "similar" only reachable via the retrieval backend's weak-match fallback
+  // (see retrieval.service.js's weakByTier) — a near-miss vendor shown as a
+  // last resort before Google Places, since store bios often don't spell out
+  // every sector they're tagged with. "direct" for an ordinary strong match,
+  // same distinction searchProducts already makes. `undefined` only when
+  // there are no results at all.
+  matchQuality: MatchQuality;
+  externalSuggestions: NearbyBusiness[];
+  locationNote?: string;
+}
+
+/**
+ * The actual store search — resolves location, calls the retrieval backend,
+ * reports progress via `push`. Split out from searchStoresTool, mirroring
+ * searchProductsCore, so route.ts can invoke it directly as a deterministic
+ * cross-check when the model called searchProducts alone and came up empty
+ * — see route.ts's own comment on that fallback.
+ */
+export async function searchStoresCore(
+  { businessType, location, radiusKm }: SearchStoresCoreInput,
+  {
+    buyerLocation,
+    push,
+  }: {
+    buyerLocation?: BuyerLocation;
+    push?: (candidates: string[]) => void;
+  } = {},
+): Promise<
+  SearchStoresCoreResult | { error: "location-not-found"; message: string }
+> {
+  push?.(
+    searchingPhrase(
+      businessType,
+      location ?? (buyerLocation ? "your area" : undefined),
+    ),
+  );
+
+  const resolved = await resolveSearchLocation(buyerLocation, location);
+  if (resolved.kind === "not-found") {
+    return {
+      error: "location-not-found" as const,
+      message: `Couldn't find "${resolved.queriedText}" — ask the buyer for a more specific area.`,
+    };
+  }
+  const coords = resolved.kind === "coords" ? resolved.coords : undefined;
+
+  let results: StoreMatch[],
+    matchTier: MatchTier,
+    matchQuality: MatchQuality,
+    externalSuggestions: NearbyBusiness[] | null;
+  try {
+    ({ results, matchTier, matchQuality, externalSuggestions } =
+      await aiSearchData<{
+        results: StoreMatch[];
+        matchTier: MatchTier;
+        matchQuality: MatchQuality;
+        externalSuggestions: NearbyBusiness[] | null;
+      }>("/search/stores", {
+        method: "POST",
+        body: {
+          queryText: businessType,
+          lat: coords?.lat,
+          lng: coords?.lng,
+          radiusKm: radiusKm ?? 10,
+        },
+      }));
+  } catch (err) {
+    // Same reasoning as searchProductsTool's own catch — see that comment.
+    console.error(
+      "[searchStoresTool] aiSearchData(/search/stores) failed:",
+      err,
+    );
+    throw err;
+  }
+
+  if (results.length) {
+    push?.(foundCountPhrase(results.length, "vendor", matchTier));
+  } else {
+    push?.(noVendorMatchPhrase(Boolean(externalSuggestions?.length)));
+  }
+
+  // Same mechanical-fact reasoning as searchProductsCore's own
+  // locationNote — see that file's comment. `coords` truthy means a real
+  // place was actually searched (Tiers 1-3 already ran and came up
+  // empty), so a Tier-4 nationwide store match here is genuinely from
+  // elsewhere in the country, not nearby.
+  const locationNote =
+    matchTier === "nationwide"
+      ? coords
+        ? "Nothing matched within the search radius, the wider area, or even the buyer's own state — these results are from elsewhere in the country. You MUST say plainly that nothing was found nearby BEFORE presenting them, naming the actual state each result is in (its own `state` field) rather than implying it's close by."
+        : "No location signal existed for this search at all (no place named, no device location) — these results are ranked purely by relevance across all of Velte, not by distance. Say so honestly rather than implying proximity."
+      : undefined;
+
+  return {
+    results,
+    matchTier,
+    matchQuality,
+    externalSuggestions: externalSuggestions ?? [],
+    ...(locationNote ? { locationNote } : {}),
+  };
+}
+
 /**
  * For a buyer describing a *kind of business/vendor* rather than a specific
  * product — the sibling of searchProductsTool. Matches against store-level
@@ -59,73 +171,10 @@ export function searchStoresTool(
     description:
       "Search for a TYPE OF BUSINESS/VENDOR/SHOP, not a specific product — use this when the buyer describes what kind of vendor they want (e.g. 'a phone repair shop', 'an electronics store near me', 'a tailor') rather than naming an item to buy. For a specific product, use searchProducts instead. Returns real vendor storefronts only.",
     inputSchema,
-    execute: async ({ businessType, location, radiusKm }) => {
-      push?.(
-        searchingPhrase(
-          businessType,
-          location ?? (buyerLocation ? "your area" : undefined),
-        ),
-      );
-
-      const resolved = await resolveSearchLocation(buyerLocation, location);
-      if (resolved.kind === "not-found") {
-        return {
-          error: "location-not-found" as const,
-          message: `Couldn't find "${resolved.queriedText}" — ask the buyer for a more specific area.`,
-        };
-      }
-      const coords = resolved.kind === "coords" ? resolved.coords : undefined;
-
-      let results: StoreMatch[],
-        matchTier: MatchTier,
-        externalSuggestions: NearbyBusiness[] | null;
-      try {
-        ({ results, matchTier, externalSuggestions } = await aiSearchData<{
-          results: StoreMatch[];
-          matchTier: MatchTier;
-          externalSuggestions: NearbyBusiness[] | null;
-        }>("/search/stores", {
-          method: "POST",
-          body: {
-            queryText: businessType,
-            lat: coords?.lat,
-            lng: coords?.lng,
-            radiusKm: radiusKm ?? 10,
-          },
-        }));
-      } catch (err) {
-        // Same reasoning as searchProductsTool's own catch — see that comment.
-        console.error(
-          "[searchStoresTool] aiSearchData(/search/stores) failed:",
-          err,
-        );
-        throw err;
-      }
-
-      if (results.length) {
-        push?.(foundCountPhrase(results.length, "vendor", matchTier));
-      } else {
-        push?.(noVendorMatchPhrase(Boolean(externalSuggestions?.length)));
-      }
-
-      // Same mechanical-fact reasoning as searchProductsTool's own
-      // locationNote — see that file's comment. `coords` truthy means a real
-      // place was actually searched (Tiers 1-3 already ran and came up
-      // empty), so a Tier-4 nationwide store match here is genuinely from
-      // elsewhere in the country, not nearby.
-      const locationNote =
-        matchTier === "nationwide"
-          ? coords
-            ? "Nothing matched within the search radius, the wider area, or even the buyer's own state — these results are from elsewhere in the country. You MUST say plainly that nothing was found nearby BEFORE presenting them, naming the actual state each result is in (its own `state` field) rather than implying it's close by."
-            : "No location signal existed for this search at all (no place named, no device location) — these results are ranked purely by relevance across all of Velte, not by distance. Say so honestly rather than implying proximity."
-          : undefined;
-
-      return {
-        results,
-        matchTier,
-        externalSuggestions: externalSuggestions ?? [],
-        ...(locationNote ? { locationNote } : {}),
-      };
-    },
+    execute: async ({ businessType, location, radiusKm }) =>
+      searchStoresCore(
+        { businessType, location, radiusKm },
+        { buyerLocation, push },
+      ),
   });
 }

@@ -7,6 +7,7 @@ interface NotificationsState {
   upsertNotifications: (incoming: AppNotification[]) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
+  removeNotification: (id: string) => void;
   setSeededForUser: (userId: string) => void;
   clearNotifications: () => void;
 }
@@ -31,6 +32,10 @@ export const useNotificationsStore = create<NotificationsState>()((set) => ({
   markAllAsRead: () =>
     set((state) => ({
       notifications: state.notifications.map((n) => ({ ...n, read: true })),
+    })),
+  removeNotification: (id) =>
+    set((state) => ({
+      notifications: state.notifications.filter((n) => n.id !== id),
     })),
   setSeededForUser: (userId) => set({ seededForUserId: userId }),
   clearNotifications: () => set({ notifications: [], seededForUserId: null }),

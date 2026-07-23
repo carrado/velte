@@ -102,11 +102,28 @@ function groupProductsByVendor(
   return groups;
 }
 
-function storesHeading(matchTier: MatchTier): string {
-  if (matchTier === "nationwide") return "Vendors across Velte";
-  if (matchTier === "state") return "Vendors — elsewhere in your state";
-  if (matchTier === "nearby") return "Vendors — a bit further out";
-  return "Vendors near you";
+function storesHeading(
+  matchTier: MatchTier,
+  matchQuality: MatchQuality,
+): string {
+  if (matchTier === "nationwide") {
+    return matchQuality === "similar"
+      ? "Similar vendors — across Velte"
+      : "Vendors across Velte";
+  }
+  if (matchTier === "state") {
+    return matchQuality === "similar"
+      ? "Similar vendors — elsewhere in your state"
+      : "Vendors — elsewhere in your state";
+  }
+  if (matchTier === "nearby") {
+    return matchQuality === "similar"
+      ? "Similar vendors — a bit further out"
+      : "Vendors — a bit further out";
+  }
+  return matchQuality === "similar"
+    ? "Similar vendors nearby"
+    : "Vendors near you";
 }
 
 // Renders the AI's reply text as lightweight markdown — bold and lists only
@@ -234,6 +251,7 @@ interface ConversationTurn {
   productsMatchTier: MatchTier;
   storesMatchTier: MatchTier;
   productsMatchQuality: MatchQuality;
+  storesMatchQuality: MatchQuality;
   externalStoreSuggestions: NearbyBusiness[];
   vendorProducts: StoreProductItem[];
   vendorProductsStore: {
@@ -402,9 +420,13 @@ function ConversationTurnView({
                     <div className="space-y-3">
                       {(turn.products.length > 0 ||
                         (turn.storesMatchTier &&
-                          turn.storesMatchTier !== "local")) && (
+                          turn.storesMatchTier !== "local") ||
+                        turn.storesMatchQuality) && (
                         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          {storesHeading(turn.storesMatchTier)}
+                          {storesHeading(
+                            turn.storesMatchTier,
+                            turn.storesMatchQuality,
+                          )}
                         </h2>
                       )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -709,6 +731,7 @@ export function SearchHome() {
         productsMatchTier: null,
         storesMatchTier: null,
         productsMatchQuality: undefined,
+        storesMatchQuality: undefined,
         externalStoreSuggestions: [],
         vendorProducts: [],
         vendorProductsStore: null,
@@ -766,6 +789,7 @@ export function SearchHome() {
             productsMatchTier: event.productsMatchTier,
             storesMatchTier: event.storesMatchTier,
             productsMatchQuality: event.productsMatchQuality,
+            storesMatchQuality: event.storesMatchQuality,
             externalStoreSuggestions: event.externalStoreSuggestions,
             vendorProducts: event.vendorProducts,
             vendorProductsStore: event.vendorProductsStore,
@@ -999,14 +1023,14 @@ export function SearchHome() {
               nearest vendor who actually has it.
             </p>
           </div>
-          <div className="w-full max-w-2xl">{inputForm}</div>
+          <div className="w-full max-w-3xl">{inputForm}</div>
         </main>
       ) : (
         <>
           {/* Newest content stays pinned to the bottom (bottomRef) as the
               thread grows, so scrolling reads bottom-up like a chat. */}
           <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-6">
-            <div className="max-w-2xl lg:max-w-3xl mx-auto space-y-8">
+            <div className="max-w-3xl lg:max-w-4xl mx-auto space-y-8">
               {turns.map((turn, i) => (
                 <ConversationTurnView
                   key={turn.id}
@@ -1019,7 +1043,7 @@ export function SearchHome() {
             </div>
           </div>
           <div className="shrink-0 px-5 sm:px-8 pt-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-            <div className="max-w-2xl lg:max-w-3xl mx-auto">{inputForm}</div>
+            <div className="max-w-3xl lg:max-w-4xl mx-auto">{inputForm}</div>
           </div>
         </>
       )}

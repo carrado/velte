@@ -12,6 +12,7 @@ import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
+import { ExpandableText } from "@/components/search/ExpandableText";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
@@ -125,9 +126,10 @@ export function VendorResultCard({ match }: { match: VendorMatch }) {
         {match.kind === "service" && (
           <>
             {match.description && (
-              <p className="text-xs text-gray-500 leading-relaxed">
-                {match.description}
-              </p>
+              <ExpandableText
+                text={match.description}
+                className="text-xs text-gray-500 leading-relaxed"
+              />
             )}
             {match.attributes.length > 0 && (
               <dl className="space-y-1 pt-1 border-t border-gray-100">
@@ -153,24 +155,24 @@ export function VendorResultCard({ match }: { match: VendorMatch }) {
         {isOwn ? (
           <OwnListingBadge label="This is your listing" />
         ) : (
-          <div className="flex items-center gap-2 mt-1">
-            {match.storeHandle && (
-              <Link
-                href={`/store/${match.storeHandle}`}
-                target="_blank"
-                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors"
-              >
-                <StoreIcon size={15} />
-                View Store
-              </Link>
-            )}
+          <div className="flex flex-col gap-2 mt-1">
             {chatHref && (
               <WhatsAppButton
                 href={chatHref}
                 label="Chat with vendor"
-                className="flex-1"
+                className="w-full"
                 onClick={() => reportLead(match.vendorId, match.productId)}
               />
+            )}
+            {match.storeHandle && (
+              <Link
+                href={`/store/${match.storeHandle}`}
+                target="_blank"
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors"
+              >
+                <StoreIcon size={15} />
+                View Store
+              </Link>
             )}
           </div>
         )}

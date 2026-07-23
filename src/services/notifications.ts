@@ -20,3 +20,7 @@ export async function markNotificationRead(id: string): Promise<void> {
 export async function markAllNotificationsRead(): Promise<void> {
   await api.patch("/api/notifications/read-all");
 }
+
+export async function deleteNotification(id: string): Promise<void> {
+  await api.del(`/api/notifications/${id}`);
+}

@@ -36,7 +36,10 @@ export default function Login() {
       usersApi.login(data),
     onSuccess: (response) => {
       toast.success("Welcome back!");
-      router.push(`/${response.user.id}/wallet`);
+      // .replace(), not .push() — otherwise the login form stays one
+      // back-press away from the dashboard, letting you "go back" into a
+      // page whose only job was already done.
+      router.replace(`/${response.user.id}/wallet`);
     },
     onError: (error: unknown, variables) => {
       const message =

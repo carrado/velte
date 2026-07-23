@@ -29,14 +29,28 @@ function PaymentCallbackContent() {
     (async () => {
       try {
         await walletApi.verifyTopup(reference);
-        const user = await usersApi.getMe();
-        setState("success");
-        setTimeout(() => {
-          router.replace(`/${user.id}/wallet?topup=success`);
-        }, 1200);
       } catch (err) {
         setState("failed");
         setMessage(err instanceof Error ? err.message : "Verification failed.");
+        return;
+      }
+
+      // Payment is confirmed at this point — show success regardless of
+      // what happens below. getMe() only resolves WHERE to send the vendor
+      // next; if it 401s (a session hiccup returning from Paystack's
+      // cross-origin redirect can momentarily look like this), that must
+      // never overwrite the success state already shown with a misleading
+      // "Payment not confirmed" — the top-up went through either way.
+      // api-client's own 401 handler already takes care of sending them to
+      // log back in when that happens, so there's nothing more to do here.
+      setState("success");
+      try {
+        const user = await usersApi.getMe();
+        setTimeout(() => {
+          router.replace(`/${user.id}/wallet?topup=success`);
+        }, 1200);
+      } catch {
+        /* handled globally by api-client's 401 handler */
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

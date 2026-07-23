@@ -34,3 +34,10 @@ export async function markNotificationRead(
 export async function markAllNotificationsRead(cookie: string): Promise<void> {
   await backendFetch("/notifications/read-all", { method: "PATCH", cookie });
 }
+
+export async function deleteNotification(
+  id: string,
+  cookie: string,
+): Promise<void> {
+  await backendFetch(`/notifications/${id}`, { method: "DELETE", cookie });
+}
