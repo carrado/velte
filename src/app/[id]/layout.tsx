@@ -14,6 +14,7 @@ import AppInitOverlay from "@/components/AppInitOverlay";
 import OnboardingTour from "@/components/OnboardingTour";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { usersApi } from "@/services/users";
+import { ApiError } from "@/lib/api-client";
 import { useUserStore } from "@/store/userStore";
 import { useNotificationsSync } from "@/hooks/useNotificationsSync";
 
@@ -70,9 +71,9 @@ export default function DashboardRootLayout({
   });
   // Seed from the store so we skip the overlay when the user is already loaded
   // (avoids a synchronous setState in the fetch effect below).
-  const [meStatus, setMeStatus] = useState<"loading" | "ready" | "error">(() =>
-    useUserStore.getState().user ? "ready" : "loading",
-  );
+  const [meStatus, setMeStatus] = useState<
+    "loading" | "ready" | "error-network" | "error-server"
+  >(() => (useUserStore.getState().user ? "ready" : "loading"));
   const mainRef = useRef<HTMLElement>(null);
   const userId = useUserStore((state) => state.user?.id);
   useNotificationsSync(userId);
@@ -90,8 +91,17 @@ export default function DashboardRootLayout({
     usersApi
       .getMe()
       .then(() => setMeStatus("ready"))
-      .catch(() => {
-        if (!hadUser) setMeStatus("error");
+      .catch((err) => {
+        if (!hadUser) {
+          // status 0 = fetch() itself rejected (offline/DNS/unreachable);
+          // any other failure means the request reached a server that
+          // responded with an error (5xx, bad gateway, etc).
+          setMeStatus(
+            err instanceof ApiError && err.status === 0
+              ? "error-network"
+              : "error-server",
+          );
+        }
       });
   }, []);
 

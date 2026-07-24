@@ -446,26 +446,37 @@ export async function POST(req: Request) {
         );
         let outcome = extractOutcome(result);
 
-        // gpt-4o-mini has been observed asking the location clarifying
-        // question (systemPrompt.ts's "tell me your area / search nationwide
-        // anyway" branch) even when the buyer's device location is already
-        // known and folded into the prompt via locationNote — a documented
-        // reliability gap the co-called-search fallback below doesn't catch
-        // on its own, since a compliant model makes askClarifyingQuestion its
-        // ONLY tool call that turn (per the prompt's "STOP there" rule),
-        // leaving no co-called search result to fall back on. Detected by
-        // shape, not exact text (the model paraphrases the question itself):
-        // a "choice" clarification with a "...nationwide..." option is
-        // unambiguously THIS question — never a sector-attribute one
-        // (color/size/budget never mention "nationwide"). Retried once, with
-        // askClarifyingQuestion itself removed from the tool set — a second
-        // plain request not to ask again is exactly the instruction that
-        // failed the first time, so the model is left with no way to repeat
-        // the mistake and must pick a real search tool instead.
+        // gpt-4o-mini has been observed asking a location clarifying question
+        // even when the buyer's device location is already known and folded
+        // into the prompt via locationNote — a documented reliability gap the
+        // co-called-search fallback below doesn't catch on its own, since a
+        // compliant model makes askClarifyingQuestion its ONLY tool call that
+        // turn (per the prompt's "STOP there" rule), leaving no co-called
+        // search result to fall back on. Detected by shape/content, not exact
+        // text (the model paraphrases the question itself either way): either
+        // the "choice" ".../search nationwide anyway" shape from searchStores'
+        // own branch, OR any clarification (choice or free "text") whose
+        // question is plainly asking where the buyer is — e.g. searchProducts
+        // territory has no legitimate location-clarify path at all (the
+        // prompt says to just search nationwide instead), so a "what
+        // city/area..." question there is always this same bug, just phrased
+        // as free text instead of a choice. Neither pattern collides with a
+        // real sector-attribute question (color/size/budget never mention a
+        // place). Retried once, with askClarifyingQuestion itself removed
+        // from the tool set — a second plain request not to ask again is
+        // exactly the instruction that failed the first time, so the model is
+        // left with no way to repeat the mistake and must pick a real search
+        // tool instead.
+        const LOCATION_CLARIFY_PATTERN =
+          /\b(city|area|location|neighbo(?:u)?rhood|which (?:state|town))\b/i;
         const looksLikeLocationClarify =
           Boolean(body?.buyerLocation) &&
-          outcome.clarifyCandidate?.kind === "choice" &&
-          outcome.clarifyCandidate.options.some((o) => /nationwide/i.test(o));
+          Boolean(outcome.clarifyCandidate) &&
+          ((outcome.clarifyCandidate!.kind === "choice" &&
+            outcome.clarifyCandidate!.options.some((o) =>
+              /nationwide/i.test(o),
+            )) ||
+            LOCATION_CLARIFY_PATTERN.test(outcome.clarifyCandidate!.question));
 
         if (looksLikeLocationClarify && !outcome.hasUsefulResults) {
           // Marks which path produced a given turn's result — the model

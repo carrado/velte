@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { RefreshCw, WifiOff } from "lucide-react";
+import { RefreshCw, ServerCrash, WifiOff } from "lucide-react";
 
 interface AppInitOverlayProps {
-  status: "loading" | "error";
+  status: "loading" | "error-network" | "error-server";
 }
 
 export default function AppInitOverlay({ status }: AppInitOverlayProps) {
@@ -40,18 +40,25 @@ export default function AppInitOverlay({ status }: AppInitOverlayProps) {
           </div>
         )}
 
-        {status === "error" && (
+        {status !== "loading" && (
           <div className="mt-9 flex max-w-xs flex-col items-center gap-4 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
-              <WifiOff className="h-5 w-5 text-red-500" />
+              {status === "error-network" ? (
+                <WifiOff className="h-5 w-5 text-red-500" />
+              ) : (
+                <ServerCrash className="h-5 w-5 text-red-500" />
+              )}
             </div>
             <div className="space-y-1">
               <p className="text-sm font-semibold text-gray-900">
-                Connection problem
+                {status === "error-network"
+                  ? "Connection problem"
+                  : "Server problem"}
               </p>
               <p className="text-xs text-gray-500">
-                We couldn&apos;t reach the server. Check your internet
-                connection and try again.
+                {status === "error-network"
+                  ? "We couldn't reach the server. Check your internet connection and try again."
+                  : "Our servers are having trouble right now. Please try again in a moment."}
               </p>
             </div>
             <button
@@ -63,14 +70,6 @@ export default function AppInitOverlay({ status }: AppInitOverlayProps) {
             </button>
           </div>
         )}
-      </div>
-
-      {/* Wordmark pinned near the bottom — the classic app-launch signature */}
-      <div className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+2rem)] flex flex-col items-center gap-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-gray-500">
-          Velte
-        </p>
-        <p className="text-[10px] text-gray-400">Your AI sales rep</p>
       </div>
     </div>
   );
