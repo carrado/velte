@@ -16,17 +16,14 @@ import AnchoredPopover from "../AnchoredPopover";
 
 export default function ProductActionsPopover({
   product,
-  isFood = false,
   onChangePrice,
   onSwitchToQuote,
   onDelete,
 }: ProductActionsPopoverProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  // Menu labels follow the listing's identity — a service is not a product,
-  // and on a food account the product side is a dish.
-  const noun =
-    product.kind === "service" ? "Service" : isFood ? "Dish" : "Product";
+  // Action labels follow the listing's identity — a service is not a product.
+  const noun = product.kind === "service" ? "Service" : "Product";
 
   const pathname = usePathname();
   const userId = pathname.split("/").filter(Boolean)[0];

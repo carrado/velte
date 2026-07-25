@@ -25,9 +25,12 @@ import {
   Flame,
   ChefHat,
   Wrench,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { computePrice, fmt } from "@/lib/product-price";
+import FullscreenVideoModal from "@/components/FullscreenVideoModal";
+import VideoPosterImage from "./VideoPosterImage";
 
 // Raw ISO timestamp → "9 Jul 2026" (same en-NG format the wallet and
 // referrals pages use).
@@ -250,6 +253,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
   const userId = pathname.split("/").filter(Boolean)[0];
   const { navigate } = useNavigation();
   const { hasFood: isFood } = useVendorSectorCapabilities();
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
 
   const { data: product, isLoading: productsLoading } = useQuery({
     queryKey: queryKeys.products.detail(productId),
@@ -329,21 +333,56 @@ export default function ViewProductPage({ productId }: { productId: string }) {
         {/* ── Left: Carousel + name ── */}
         <div className="lg:col-span-1">
           <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            {/* Media — real images when they exist; a video-only listing
-                gets a player; otherwise the gradient placeholder slides. */}
-            {mediaImages.length === 0 && product.videoUrl ? (
-              <video
-                src={product.videoUrl}
-                controls
-                playsInline
-                className="w-full aspect-square object-cover bg-black"
-              />
-            ) : (
-              <ProductCarousel
-                productName={product.name}
-                colorClass={product.colorClass}
-                featured={product.featured}
-                images={mediaImages}
+            {/* Media — a video with no real photos gets its own poster +
+                centered play treatment (the video IS the cover here, same
+                priority ProductsTable gives it in the listings grid).
+                Otherwise real images (or the gradient placeholder) render as
+                the carousel, and the video — now genuinely supplementary —
+                is a small corner badge rather than competing for the same
+                space. */}
+            <div className="relative">
+              {mediaImages.length === 0 && product.videoUrl ? (
+                <button
+                  onClick={() => setVideoModalOpen(true)}
+                  aria-label="Play video"
+                  className="group relative block w-full aspect-square overflow-hidden"
+                >
+                  <VideoPosterImage
+                    videoUrl={product.videoUrl}
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/10 transition-colors group-hover:bg-black/20">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
+                      <Play size={22} fill="white" className="ml-1" />
+                    </span>
+                  </div>
+                </button>
+              ) : (
+                <>
+                  <ProductCarousel
+                    productName={product.name}
+                    colorClass={product.colorClass}
+                    featured={product.featured}
+                    images={mediaImages}
+                  />
+                  {product.videoUrl && (
+                    <button
+                      onClick={() => setVideoModalOpen(true)}
+                      aria-label="Play video"
+                      className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                    >
+                      <Play size={16} fill="white" className="ml-0.5" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            {product.videoUrl && (
+              <FullscreenVideoModal
+                videoUrl={product.videoUrl}
+                open={videoModalOpen}
+                onClose={() => setVideoModalOpen(false)}
               />
             )}
 
@@ -461,9 +500,9 @@ export default function ViewProductPage({ productId }: { productId: string }) {
             </SectionCard>
           )}
 
-          {/* ── Dish: what actually matters for a dish leads — real-time
-              availability, daily limit, dietary flags, the days/hours it's
-              served, and its modifiers. ── */}
+          {/* ── Food listing: what actually matters for a food listing —
+              real-time availability, daily limit, dietary flags, the
+              days/hours it's served, and its modifiers. ── */}
           {hasFoodDetails && (
             <SectionCard title="Food Details" icon={ChefHat}>
               <div className="flex flex-wrap gap-3">
@@ -596,9 +635,9 @@ export default function ViewProductPage({ productId }: { productId: string }) {
             </SectionCard>
           )}
 
-          {/* ── Dish attributes (if the vendor added any beyond the
-              food-specific fields above) — a dish CAN carry these too, same
-              generic name/value shape as a retail product's. ── */}
+          {/* ── Food listing attributes (if the vendor added any beyond the
+              food-specific fields above) — a food listing CAN carry these
+              too, same generic name/value shape as a retail product's. ── */}
           {isFood && hasAttributes && (
             <SectionCard title="Attributes" icon={Hash}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

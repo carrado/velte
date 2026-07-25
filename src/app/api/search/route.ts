@@ -185,6 +185,147 @@ async function getVendorStoresForProducts(
   return stores.filter((s): s is StoreMatch => s !== null);
 }
 
+// Cheap, no-embedding-call relevance check for getMatchingServicesForStores
+// below — good enough to tell "this vendor's own service listing is about
+// what the buyer asked for" from "unrelated", not a real semantic ranking.
+// Common filler words are stripped so e.g. "a tailor for wedding dresses"
+// doesn't just match on "a"/"for" against every listing.
+const STOPWORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "for",
+  "with",
+  "of",
+  "in",
+  "on",
+  "to",
+  "your",
+  "you",
+  "i",
+  "me",
+  "need",
+  "needs",
+  "want",
+  "wants",
+  "looking",
+  "find",
+  "get",
+  "near",
+  "nearby",
+]);
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 1 && !STOPWORDS.has(t));
+}
+// Fraction of the query's own (non-stopword) tokens that also appear in the
+// candidate text — deliberately query-token-normalized, not candidate-
+// normalized: a long service description shouldn't get penalized for
+// containing lots of words the query didn't ask about.
+function relevanceScore(query: string, candidateText: string): number {
+  const queryTokens = new Set(tokenize(query));
+  if (queryTokens.size === 0) return 0;
+  const candidateTokens = new Set(tokenize(candidateText));
+  let hits = 0;
+  for (const t of queryTokens) if (candidateTokens.has(t)) hits++;
+  return hits / queryTokens.size;
+}
+
+const MAX_MATCHING_SERVICES_PER_STORE = 3;
+
+interface PublicStoreCatalogItem {
+  id: string;
+  name: string;
+  kind: "product" | "service";
+  quoteOnRequest?: boolean;
+  price: number;
+  priceMax: number | null;
+  currency: string;
+  mainImageUrl: string | null;
+  description: string | null;
+}
+
+// The reverse direction of getVendorStoresForProducts: for a searchStores
+// turn, each matched vendor's OWN service listings that actually match what
+// the buyer asked for — so "I need a wedding photographer in Lekki" doesn't
+// just surface a matched studio's bare storefront, it surfaces the specific
+// "Wedding Photography Package" listing they'd otherwise only find by
+// clicking through. Reuses the existing public /store/by-handle/:handle
+// catalog endpoint (same one getVendorProductsTool already calls) rather
+// than a new vector-search endpoint — a cheap keyword-overlap match against
+// each candidate's name+description, not a real embedding search (see
+// relevanceScore above). Best-effort per store: one failed lookup never
+// takes down the rest.
+async function getMatchingServicesForStores(
+  stores: StoreMatch[],
+  queryText: string | null,
+): Promise<VendorMatch[]> {
+  if (!queryText || stores.length === 0) return [];
+
+  const perStore = await Promise.all(
+    stores.map(async (store): Promise<VendorMatch[]> => {
+      try {
+        const data = await backendData<{
+          products: PublicStoreCatalogItem[];
+        }>(`/store/by-handle/${encodeURIComponent(store.handle)}`);
+
+        return (data.products ?? [])
+          .filter((item) => item.kind === "service")
+          .map((item) => ({
+            item,
+            score: relevanceScore(
+              queryText,
+              `${item.name} ${item.description ?? ""}`,
+            ),
+          }))
+          .filter(({ score }) => score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, MAX_MATCHING_SERVICES_PER_STORE)
+          .map(
+            ({ item, score }): VendorMatch => ({
+              productId: item.id,
+              kind: "service",
+              name: item.name,
+              price: item.price / 100,
+              priceMax: item.priceMax != null ? item.priceMax / 100 : null,
+              quoteOnRequest: Boolean(item.quoteOnRequest),
+              currency: item.currency,
+              mainImageUrl: item.mainImageUrl,
+              // Not selected by the lightweight public-catalog endpoint this
+              // reuses — a known tradeoff of the cheap-match approach over a
+              // real per-listing fetch. See this function's own doc comment.
+              thumbnailUrls: [],
+              videoUrl: null,
+              storeHandle: store.handle,
+              description: item.description,
+              attributes: [],
+              vendorId: store.vendorId,
+              vendorName: store.name,
+              area: store.area,
+              state: store.state,
+              whatsapp: store.whatsapp,
+              distanceKm: store.distanceKm,
+              score,
+            }),
+          );
+      } catch (err) {
+        console.error(
+          `[search] matching-services lookup failed for store "${store.handle}":`,
+          err,
+        );
+        return [];
+      }
+    }),
+  );
+
+  return perStore.flat();
+}
+
 // Pure post-processing of one callLLM result into everything the route needs
 // downstream — pulled out so a retry (see POST's "looksLikeLocationClarify"
 // comment) can re-run this exact same extraction on a second model call
@@ -630,6 +771,14 @@ export async function POST(req: Request) {
             ? await getVendorStoresForProducts(productKindResults)
             : [];
 
+        // Same "skipped when the clarification actually won" reasoning —
+        // only worth the extra per-store lookups when the buyer is actually
+        // going to see `stores` this turn.
+        const storeServices =
+          stores.length && !clarification
+            ? await getMatchingServicesForStores(stores, storesQuery)
+            : [];
+
         // A real SEARCH tool's results are what the buyer sees this turn
         // whenever any exist — see hasUsefulResults inside extractOutcome.
         // Only a genuinely empty outcome (or no search tool call at all)
@@ -654,6 +803,7 @@ export async function POST(req: Request) {
             stores,
             storesQuery,
             productStores,
+            storeServices,
             productsMatchTier,
             storesMatchTier,
             productsMatchQuality,

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import Link from "next/link";
+import { Search as SearchIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import Image from "next/image";
 
@@ -49,7 +50,8 @@ export default function Navbar() {
               </Button>
             </Link>
             <Link href="/search">
-              <Button className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 text-xs sm:text-sm px-3 sm:px-5">
+              <Button className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 text-xs sm:text-sm px-3 sm:px-5 gap-1.5">
+                <SearchIcon className="w-3.5 h-3.5" />
                 AI Search
               </Button>
             </Link>

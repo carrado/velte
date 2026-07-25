@@ -234,12 +234,10 @@ export default function ProductsPage() {
       <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-dash-title font-black text-[#023337]">
-            {isFood ? "My Menu" : "My Listings"}
+            My Listings
           </h2>
           <p className="text-dash-body text-gray-400 mt-0.5">
-            {isFood
-              ? "Manage your dishes, drinks and menu items"
-              : "Manage and track your products and services"}
+            Manage and track your products and services
           </p>
         </div>
         <button
@@ -248,7 +246,7 @@ export default function ProductsPage() {
           className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
         >
           <Plus size={16} />
-          {isFood ? "Add Dish" : "Add Listing"}
+          Add Listing
         </button>
       </div>
 
@@ -265,21 +263,12 @@ export default function ProductsPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={
-                isFood ? "Search your menu…" : "Search your listings by name…"
-              }
+              placeholder="Search your listings by name…"
               className="pl-10 pr-3 h-11 text-dash-body bg-gray-50 border border-gray-200 rounded-xl w-full focus-visible:ring-2 focus-visible:ring-orange-500/30"
             />
           </div>
           <p className="text-dash-caption text-gray-400">
-            {totalInView}{" "}
-            {isFood
-              ? totalInView === 1
-                ? "dish"
-                : "dishes"
-              : totalInView === 1
-                ? "listing"
-                : "listings"}
+            {totalInView} {totalInView === 1 ? "listing" : "listings"}
           </p>
         </div>
 
@@ -321,6 +310,7 @@ export default function ProductsPage() {
       <DeleteProductModal
         open={deleteModal.open}
         product={deleteModal.product}
+        isDeleting={deleteMutation.isPending}
         onClose={() => setDeleteModal({ open: false, product: null })}
         onConfirm={handleDeleteProduct}
       />

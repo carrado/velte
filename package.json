@@ -12,7 +12,8 @@
     "prepare": "husky install",
     "eval:search": "tsx scripts/eval-search-intent.ts",
     "send-whatsapp": "node --env-file=.env scripts/send-whatsapp.js",
-    "send-waitlist-welcome": "node --env-file=.env scripts/send-waitlist-welcome.js"
+    "send-waitlist-welcome": "node --env-file=.env scripts/send-waitlist-welcome.js",
+    "send-vendor-prelaunch": "node --env-file=.env scripts/send-vendor-prelaunch.js"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,md,css}": [
@@ -23,6 +24,8 @@
     "@ai-sdk/groq": "^4.0.5",
     "@ai-sdk/openai": "^4.0.7",
     "@base-ui/react": "^1.3.0",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@tanstack/query-core": "^5.90.20",
     "@tanstack/query-db-collection": "^1.0.30",
     "@tanstack/react-db": "^0.1.77",
@@ -41,6 +44,7 @@
     "shadcn": "^4.0.5",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "tus-js-client": "^4.3.1",
     "web-push": "^3.6.7",
     "zod": "4.3.6",
     "zustand": "^5.0.12"

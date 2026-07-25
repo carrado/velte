@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { MapPin, Package, Wrench } from "lucide-react";
 import { getPublicStore } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
-import { isFoodBusiness } from "@/hooks/useBusinessType";
 import type {
   IntroCardProps,
   PublicStore,
@@ -57,10 +56,8 @@ function IntroCard({
   store,
   goodsCount,
   servicesCount,
-  isFood,
   whatsappHref,
 }: IntroCardProps) {
-  const goodsUnit = isFood ? "dish" : "product";
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
       <h3 className="text-sm font-bold text-[#023337] uppercase tracking-wide">
@@ -81,7 +78,7 @@ function IntroCard({
         {goodsCount > 0 && (
           <li className="flex items-center gap-2.5 text-sm text-gray-600">
             <Package size={15} className="text-orange-500 flex-shrink-0" />
-            {goodsCount} {goodsCount === 1 ? goodsUnit : `${goodsUnit}s`} listed
+            {goodsCount} {goodsCount === 1 ? "product" : "products"} listed
           </li>
         )}
         {servicesCount > 0 && (
@@ -131,9 +128,6 @@ export default async function PublicStorePage({
       )}`
     : null;
 
-  // Was `=== "food"` — silently missed food_both stores.
-  const isFood = isFoodBusiness(store.businessType);
-  const goodsUnit = isFood ? "dish" : "product";
   const goods = store.products.filter((p) => p.kind === "product");
   const services = store.products.filter((p) => p.kind === "service");
   // Lead with whichever offering the store actually deals in.
@@ -159,7 +153,6 @@ export default async function PublicStorePage({
         sectors={store.sectors}
         goodsCount={goods.length}
         servicesCount={services.length}
-        goodsUnit={goodsUnit}
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8">
@@ -167,7 +160,6 @@ export default async function PublicStorePage({
         <StoreTabs
           goods={goods}
           services={services}
-          isFood={isFood}
           storeName={store.name}
           whatsapp={store.whatsapp}
           vendorId={store.vendorId}
@@ -177,7 +169,6 @@ export default async function PublicStorePage({
               store={store}
               goodsCount={goods.length}
               servicesCount={services.length}
-              isFood={isFood}
               whatsappHref={whatsappHref}
             />
           }

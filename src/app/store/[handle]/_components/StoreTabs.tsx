@@ -15,7 +15,6 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 export default function StoreTabs({
   goods,
   services,
-  isFood,
   storeName,
   whatsapp,
   vendorId,
@@ -23,7 +22,6 @@ export default function StoreTabs({
   sidebar,
 }: StoreTabsProps) {
   const [active, setActive] = useState<PublicStoreTab>(defaultTab);
-  const goodsLabel = isFood ? "Menu" : "Products";
   const isEmpty = goods.length === 0 && services.length === 0;
 
   const whatsappHref = whatsapp
@@ -72,7 +70,7 @@ export default function StoreTabs({
 
   const tabs = (
     [
-      goods.length > 0 && { key: "products" as const, label: goodsLabel },
+      goods.length > 0 && { key: "products" as const, label: "Products" },
       services.length > 0 && { key: "services" as const, label: "Services" },
     ] as const
   ).filter(Boolean) as { key: PublicStoreTab; label: string }[];

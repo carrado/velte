@@ -1,6 +1,11 @@
 const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
+// Images only — video moved to Bunny Stream (see bunnyStream.ts) after
+// Cloudinary's plan-tier 100MB video ceiling turned out to reject a large
+// share of real iPhone footage, with no server-side recovery once a file
+// was already too big.
+
 // Resize to maxPx on the longest side and encode as WebP at the given quality.
 // Falls back to the original file if the browser doesn't support Canvas or toBlob.
 function compressImage(file: File, maxPx = 1200, quality = 0.8): Promise<File> {
@@ -42,7 +47,6 @@ function compressImage(file: File, maxPx = 1200, quality = 0.8): Promise<File> {
 
 export async function uploadProductMedia(
   file: File,
-  resourceType: "image" | "video" = "image",
   folder = "velte/products",
 ): Promise<string> {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
@@ -51,8 +55,7 @@ export async function uploadProductMedia(
     );
   }
 
-  const uploadFile =
-    resourceType === "image" ? await compressImage(file) : file;
+  const uploadFile = await compressImage(file);
 
   const form = new FormData();
   form.append("file", uploadFile);
@@ -60,7 +63,7 @@ export async function uploadProductMedia(
   form.append("folder", folder);
 
   const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`,
+    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
     { method: "POST", body: form },
   );
 
@@ -77,7 +80,13 @@ export async function uploadProductMedia(
 }
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+// Not a real business limit — compressImage() above always re-encodes to a
+// ~1200px WebP before upload regardless of the original's size, so the
+// actual uploaded bytes are already optimized. This is purely a browser
+// crash-prevention ceiling: decoding a truly enormous original (e.g. a
+// 50MP camera RAW-adjacent JPEG) into an <img>/Canvas can still stall or OOM
+// a low-end phone before compression even gets a chance to run.
+const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
 
 // Cloudinary auto-optimizes format (serves WebP/AVIF per what the requesting
 // browser supports) and quality on the fly through this transform — a large
@@ -93,7 +102,7 @@ export function optimizedImageUrl(url: string): string {
 export function validateImageFile(file: File): string | null {
   if (!ALLOWED_TYPES.includes(file.type))
     return "Only JPG, PNG, or WebP images are allowed";
-  if (file.size > MAX_BYTES) return "Photo must be under 2MB";
+  if (file.size > MAX_BYTES) return "That photo is too large to process";
   return null;
 }
 

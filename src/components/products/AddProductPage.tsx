@@ -9,6 +9,13 @@ import { useNavigation } from "@/components/NavigationProgressContext";
 import { queryKeys } from "@/lib/query-keys";
 import { categoriesApi } from "@/services/products";
 import { uploadProductMedia } from "@/lib/cloudinary";
+import {
+  uploadVideoToBunny,
+  validateVideoFile,
+  validateVideoDuration,
+  MAX_VIDEO_MB,
+  MAX_VIDEO_DURATION_S,
+} from "@/lib/bunnyStream";
 import { getErrorMessage } from "@/lib/error-message";
 import {
   getServiceDetailPresets,
@@ -19,6 +26,8 @@ import { SECTOR_BY_VALUE } from "@/lib/sectors";
 import type { SectorClassification } from "@/types/sectors";
 import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import AttributePickerModal from "./AttributePickerModal";
+import VideoTrimModal from "./VideoTrimModal";
+import VideoPosterImage from "./VideoPosterImage";
 import {
   Save,
   ChevronDown,
@@ -46,6 +55,8 @@ import {
   Loader2,
   Sparkle,
   Info,
+  Video as VideoIcon,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -206,7 +217,7 @@ function downloadTemplate(isFood: boolean) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = isFood ? "menu_items_template.csv" : "products_template.csv";
+  a.download = isFood ? "food_items_template.csv" : "products_template.csv";
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -228,7 +239,7 @@ function stripExt(filename: string): string {
   return filename.replace(/\.[^.]+$/, "");
 }
 
-// Retail only — dishes carry no category (see Basics).
+// Retail only — food listings carry no category (see Basics).
 function matchCategoryId(
   value: string,
   retailCategories: Category[],
@@ -745,7 +756,7 @@ function ImportCatalogModal({
       try {
         let payload = row.payload!;
         if (row.imageFile) {
-          const url = await uploadProductMedia(row.imageFile, "image");
+          const url = await uploadProductMedia(row.imageFile);
           payload = { ...payload, main_image_url: url };
         }
         await categoriesApi.createProduct(payload);
@@ -771,9 +782,7 @@ function ImportCatalogModal({
     });
 
     if (failed.length === 0) {
-      toast.success(
-        `Imported ${success} ${isFood ? "menu items" : "products"}.`,
-      );
+      toast.success(`Imported ${success} products.`);
       closeAll();
     } else if (success === 0) {
       toast.error(`All ${failed.length} rows failed to import.`);
@@ -857,7 +866,7 @@ function ImportCatalogModal({
                   </p>
                   <p className="text-dash-caption text-blue-500">
                     {isFood
-                      ? "Fill in your dishes — we included 5 examples to guide you"
+                      ? "Fill in your items — we included 5 examples to guide you"
                       : "Fill in the CSV template, then upload it below"}
                   </p>
                 </div>
@@ -892,9 +901,7 @@ function ImportCatalogModal({
                   <Upload size={20} className="text-gray-400" />
                 </div>
                 <p className="text-dash-body font-semibold text-gray-600">
-                  {isFood
-                    ? "Drop your menu CSV here, or "
-                    : "Drop your CSV here, or "}
+                  Drop your CSV here, or{" "}
                   <span className="text-orange-500">browse</span>
                 </p>
                 <p className="text-dash-caption text-gray-400">
@@ -947,7 +954,7 @@ function ImportCatalogModal({
                     <CheckCircle2 size={15} className="text-green-500" />
                     <p className="text-dash-body font-semibold text-gray-700">
                       {fileName} — {validRows.length} of {allRows.length}{" "}
-                      {isFood ? "dishes" : "products"} ready to import
+                      products ready to import
                     </p>
                   </div>
                   <button
@@ -1272,7 +1279,7 @@ function ImportCatalogModal({
                   Importing…
                 </>
               ) : (
-                `Import ${validRows.length} ${isFood ? "Items" : "Products"}`
+                `Import ${validRows.length} Products`
               )}
             </button>
           )}
@@ -1380,19 +1387,11 @@ function PublishProgressModal({
           <h2 className="text-dash-heading font-black text-[#023337]">
             {done
               ? isEditMode
-                ? isFood
-                  ? "Dish Updated!"
-                  : "Changes Saved!"
-                : isFood
-                  ? "Dish is Live!"
-                  : "Listing is Live!"
+                ? "Changes Saved!"
+                : "Listing is Live!"
               : isEditMode
-                ? isFood
-                  ? "Updating Your Dish"
-                  : "Saving Your Changes"
-                : isFood
-                  ? "Publishing Your Dish"
-                  : "Publishing Your Listing"}
+                ? "Saving Your Changes"
+                : "Publishing Your Listing"}
           </h2>
           <p className="text-dash-caption text-gray-400 leading-relaxed">
             {done
@@ -1400,8 +1399,8 @@ function PublishProgressModal({
                 ? "Your changes have been saved. Customers will see the updated listing right away."
                 : "Everything's set. Your customers can now find this listing on your store."
               : isEditMode
-                ? `Hang tight — we're uploading any new media and saving your ${isFood ? "dish" : "listing"} changes. This usually takes a few seconds.`
-                : `Hang tight — we're uploading your media and saving your ${isFood ? "dish" : "listing"} to your store. This usually takes a few seconds.`}
+                ? "Hang tight — we're uploading any new media and saving your listing changes. This usually takes a few seconds."
+                : "Hang tight — we're uploading your media and saving your listing to your store. This usually takes a few seconds."}
           </p>
         </div>
 
@@ -1432,7 +1431,7 @@ function PublishProgressModal({
             </p>
             <p className="text-dash-caption text-gray-500 leading-relaxed">
               {isFood
-                ? "Dishes with bright, clear photos get up to 3× more orders. A good cover photo makes all the difference."
+                ? "Listings with bright, clear photos get up to 3× more orders. A good cover photo makes all the difference."
                 : "Listings with detailed descriptions and multiple images sell significantly faster than those with minimal info."}
             </p>
           </div>
@@ -1604,6 +1603,18 @@ export default function AddProductPage({
   const [mainImageFile, setMainImageFile] = useState<File | null>(null);
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [isValidatingVideo, setIsValidatingVideo] = useState(false);
+  // Set instead of rejecting outright when a picked video runs over
+  // MAX_VIDEO_DURATION_S — holding the file here opens the trim modal so the
+  // vendor can cut it down instead of having to leave the app to do it.
+  const [trimCandidate, setTrimCandidate] = useState<File | null>(null);
+  // Cover media is one slot, either a photo or a video — this only picks
+  // which upload control shows, it doesn't clear whichever one isn't active
+  // (e.g. an existing listing edited from "video" back to "photo" keeps its
+  // video until the vendor explicitly clears it).
+  const [coverTab, setCoverTab] = useState<"photo" | "video">("photo");
 
   // Tags + attributes
   const [tagInput, setTagInput] = useState("");
@@ -1690,6 +1701,7 @@ export default function AddProductPage({
   const expirationDateRef = useRef<HTMLInputElement>(null);
   const mainImageRef = useRef<HTMLInputElement>(null);
   const thumbRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -1774,6 +1786,13 @@ export default function AddProductPage({
       setMainImage(existingProduct.mainImageUrl);
     if (existingProduct.thumbnailUrls?.length)
       setThumbnails(existingProduct.thumbnailUrls);
+    if (existingProduct.videoUrl) {
+      setVideoPreview(existingProduct.videoUrl);
+      // A listing edited before it had a cover photo — open straight on the
+      // video tab so the vendor sees their existing media, not an empty
+      // "Photo" tab with their real cover one click away.
+      if (!existingProduct.mainImageUrl) setCoverTab("video");
+    }
     if (existingProduct.isCurrentlyAvailable !== undefined)
       setIsCurrentlyAvailable(existingProduct.isCurrentlyAvailable);
   }, [existingProduct]);
@@ -1832,6 +1851,47 @@ export default function AddProductPage({
     const urls = files.map((f) => URL.createObjectURL(f));
     setThumbnails((prev) => [...prev, ...urls].slice(0, 4));
     setThumbnailFiles((prev) => [...prev, ...files].slice(0, 4));
+  };
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file after a rejection
+    if (!file) return;
+
+    const syncError = validateVideoFile(file);
+    if (syncError) {
+      toast.error(syncError);
+      return;
+    }
+    setIsValidatingVideo(true);
+    const durationError = await validateVideoDuration(file);
+    setIsValidatingVideo(false);
+    if (durationError) {
+      // The only failure validateVideoDuration ever produces is "too long"
+      // (it fails open on anything else, see its own doc comment) — so
+      // instead of rejecting outright, offer to trim it down.
+      setTrimCandidate(file);
+      return;
+    }
+
+    setVideoPreview(URL.createObjectURL(file));
+    setVideoFile(file);
+  };
+  const clearVideo = () => {
+    setVideoPreview(null);
+    setVideoFile(null);
+    if (videoRef.current) videoRef.current.value = "";
+  };
+  const handleTrimmed = (trimmedFile: File) => {
+    setTrimCandidate(null);
+    // Trimming should always land comfortably under the size cap — this is
+    // just a defensive re-check, not an expected path.
+    const sizeError = validateVideoFile(trimmedFile);
+    if (sizeError) {
+      toast.error(sizeError);
+      return;
+    }
+    setVideoPreview(URL.createObjectURL(trimmedFile));
+    setVideoFile(trimmedFile);
   };
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1913,7 +1973,9 @@ export default function AddProductPage({
     (!isService || description.trim().length > 0) &&
     (isQuote || parseFloat(price) > 0) && // quote services need no price
     (isQuote || !isRange || parseFloat(priceMax) > parseFloat(price)) &&
-    mainImage !== null &&
+    // A photo OR a video satisfies this — see the media phase's own `valid`
+    // flag above, same reasoning.
+    (mainImage !== null || videoPreview !== null) &&
     // Stock quantity/threshold are no longer collected on this form (see the
     // "Additional Details" block's own comment) — only the conditional
     // expiration/guarantee date still applies, matching that phase's own
@@ -2020,11 +2082,7 @@ export default function AddProductPage({
     }
     if (!productName.trim()) {
       toast.error(
-        isFood
-          ? "Dish name is required"
-          : isService
-            ? "Service name is required"
-            : "Product name is required",
+        isService ? "Service name is required" : "Product name is required",
       );
       return;
     }
@@ -2056,7 +2114,8 @@ export default function AddProductPage({
 
     try {
       // Calculate how many uploads we'll do so each gets an equal share of 0–75%
-      const uploadCount = (mainImageFile ? 1 : 0) + thumbnailFiles.length;
+      const uploadCount =
+        (mainImageFile ? 1 : 0) + thumbnailFiles.length + (videoFile ? 1 : 0);
       const uploadShare = uploadCount > 0 ? Math.floor(75 / uploadCount) : 0;
       let uploadsCompleted = 0;
 
@@ -2073,7 +2132,7 @@ export default function AddProductPage({
       let mainImageUrl: string | null = null;
       if (mainImageFile) {
         setPublishModal((prev) => ({ ...prev, step: "Uploading main image…" }));
-        mainImageUrl = await uploadProductMedia(mainImageFile, "image");
+        mainImageUrl = await uploadProductMedia(mainImageFile);
         advanceUpload("Main image ready");
       } else if (mainImage && !mainImage.startsWith("blob:")) {
         mainImageUrl = mainImage;
@@ -2089,7 +2148,7 @@ export default function AddProductPage({
               ? `Uploading photo ${i + 1} of ${thumbnailFiles.length}…`
               : "Uploading extra photo…",
         }));
-        const url = await uploadProductMedia(thumbnailFiles[i], "image");
+        const url = await uploadProductMedia(thumbnailFiles[i]);
         thumbnailUrls.push(url);
         advanceUpload(
           thumbnailFiles.length > 1
@@ -2100,12 +2159,47 @@ export default function AddProductPage({
       const remoteThumbUrls = thumbnails.filter((u) => !u.startsWith("blob:"));
       thumbnailUrls = [...remoteThumbUrls, ...thumbnailUrls].slice(0, 5);
 
-      // Save to backend
+      // Upload video — real byte progress feeds straight into the shared
+      // bar's slice for this upload (videoBaseProgress → +uploadShare)
+      // instead of showing its own separate percentage, so the one bar
+      // just keeps climbing instead of sitting still while a number ticks
+      // up next to it.
+      let videoUrl: string | null = null;
+      if (videoFile) {
+        setPublishModal((prev) => ({ ...prev, step: "Uploading video…" }));
+        const videoBaseProgress = uploadsCompleted * uploadShare;
+        videoUrl = await uploadVideoToBunny(
+          videoFile,
+          productName.trim() || "Product video",
+          (pct) =>
+            setPublishModal((prev) => ({
+              ...prev,
+              progress: Math.min(
+                75,
+                Math.round(videoBaseProgress + pct * uploadShare),
+              ),
+            })),
+        );
+        advanceUpload("Video ready");
+      } else if (videoPreview && !videoPreview.startsWith("blob:")) {
+        videoUrl = videoPreview;
+      }
+
+      // Save to backend — a plain API call has no real progress signal of
+      // its own, so this creeps the bar up gradually while waiting instead
+      // of leaving it frozen at 82% for however long the request takes.
+      // The creep is capped short of 100 — actual completion below always
+      // snaps it the rest of the way, never the timer.
       setPublishModal((prev) => ({
         ...prev,
         progress: 82,
         step: "Saving to your store…",
       }));
+      const savingTimer = setInterval(() => {
+        setPublishModal((prev) =>
+          prev.progress >= 95 ? prev : { ...prev, progress: prev.progress + 1 },
+        );
+      }, 300);
 
       const priceKobo = isQuote ? 0 : Math.round(parseFloat(price) * 100);
       const priceMaxKobo =
@@ -2125,6 +2219,7 @@ export default function AddProductPage({
         tags,
         main_image_url: mainImageUrl,
         thumbnail_urls: thumbnailUrls,
+        video_url: videoUrl,
       };
 
       let payload: RetailProductPayload | FoodProductPayload;
@@ -2159,10 +2254,14 @@ export default function AddProductPage({
         } as RetailProductPayload;
       }
 
-      if (isEditMode && productId) {
-        await categoriesApi.updateProduct(productId, payload);
-      } else {
-        await categoriesApi.createProduct(payload);
+      try {
+        if (isEditMode && productId) {
+          await categoriesApi.updateProduct(productId, payload);
+        } else {
+          await categoriesApi.createProduct(payload);
+        }
+      } finally {
+        clearInterval(savingTimer);
       }
 
       setPublishModal((prev) => ({
@@ -2269,7 +2368,9 @@ export default function AddProductPage({
     {
       id: "media",
       label: "Media",
-      valid: mainImage !== null,
+      // A photo OR a video satisfies the cover-media requirement — see the
+      // Photo/Video tab switcher above, either is a valid choice now.
+      valid: mainImage !== null || videoPreview !== null,
     },
     !isFood && {
       id: "tags",
@@ -2317,6 +2418,9 @@ export default function AddProductPage({
     setMainImageFile(null);
     setThumbnails([]);
     setThumbnailFiles([]);
+    setVideoPreview(null);
+    setVideoFile(null);
+    setCoverTab("photo");
     setTags([]);
     setTagInput("");
     setAttributes([]);
@@ -2337,11 +2441,9 @@ export default function AddProductPage({
     >
       {isSubmitting
         ? "Publishing…"
-        : isFood
-          ? "Publish Dish"
-          : isService
-            ? "Publish Service"
-            : "Publish Product"}
+        : isService
+          ? "Publish Service"
+          : "Publish Product"}
     </button>
   );
 
@@ -2367,34 +2469,38 @@ export default function AddProductPage({
         sectorValue={sectorValue}
       />
 
-      <div className="space-y-5 sm:pb-10 pb-10">
+      <VideoTrimModal
+        open={trimCandidate !== null}
+        file={trimCandidate}
+        maxDurationS={MAX_VIDEO_DURATION_S}
+        onCancel={() => setTrimCandidate(null)}
+        onTrimmed={handleTrimmed}
+      />
+
+      <div
+        className={cn(
+          "space-y-5 sm:pb-10 pb-10",
+          // The bottom bar below is `fixed`, out of normal flow — reserve
+          // real space here so it doesn't overlap the last phase block's
+          // content once scrolled all the way down.
+          isEditMode && "pb-16 md:pb-24",
+        )}
+      >
         {/* Page header */}
         <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <div>
               <h2 className="text-dash-title font-black text-[#023337]">
-                {isEditMode
-                  ? isFood
-                    ? "Edit Dish"
-                    : "Edit Listing"
-                  : isFood
-                    ? "Add a Dish"
-                    : "Add Listing"}
+                {isEditMode ? "Edit Listing" : "Add Listing"}
               </h2>
               <p className="text-dash-body text-gray-400 mt-0.5">
                 {isEditMode
-                  ? isFood
-                    ? `Editing: ${existingProduct?.name ?? ""}`
-                    : `Editing: ${existingProduct?.name ?? ""}`
-                  : foodAccount
-                    ? showKindToggle
-                      ? "Add a dish or list a service you offer"
-                      : "Add a new dish, drink or snack to your menu"
-                    : classification === "service"
-                      ? "List a service you offer"
-                      : showKindToggle
-                        ? "List a product or service in your store"
-                        : "List a product in your store"}
+                  ? `Editing: ${existingProduct?.name ?? ""}`
+                  : classification === "service"
+                    ? "List a service you offer"
+                    : showKindToggle
+                      ? "List a product or service in your store"
+                      : "List a product in your store"}
               </p>
             </div>
           </div>
@@ -2461,9 +2567,7 @@ export default function AddProductPage({
                   <div className="grid grid-cols-2 gap-2">
                     {(
                       [
-                        foodAccount
-                          ? ["product", "Dish", "A menu item you cook & sell"]
-                          : ["product", "Product", "A physical item you stock"],
+                        ["product", "Product", "A physical item you stock"],
                         [
                           "service",
                           "Service",
@@ -2525,9 +2629,7 @@ export default function AddProductPage({
                   <Upload size={14} className="text-orange-500 flex-shrink-0" />
                   <span className="text-left">
                     <span className="block text-dash-body font-semibold text-orange-600">
-                      {isFood
-                        ? "Bring in your menu instead"
-                        : "Bring in your catalogue instead"}
+                      Bring in your catalogue instead
                     </span>
                     <span className="block text-dash-caption text-orange-400">
                       Upload a spreadsheet or connect Shopify / WooCommerce
@@ -2537,11 +2639,7 @@ export default function AddProductPage({
               )}
               <div>
                 <FieldLabel required>
-                  {isFood
-                    ? "Dish Name"
-                    : isService
-                      ? "Service Name"
-                      : "Product Name"}
+                  {isService ? "Service Name" : "Product Name"}
                 </FieldLabel>
                 <Input
                   value={productName}
@@ -2564,7 +2662,7 @@ export default function AddProductPage({
                 )}
                 {!fieldErrors.name && isFood && (
                   <p className="text-dash-caption text-gray-400 mt-1.5">
-                    Write it exactly as you call it on your menu
+                    Write it exactly as you&apos;d list it for customers
                   </p>
                 )}
               </div>
@@ -2685,11 +2783,7 @@ export default function AddProductPage({
               {!isQuote && (
                 <div>
                   <FieldLabel required>
-                    {isFood
-                      ? "Dish Price"
-                      : isService
-                        ? "Service Price"
-                        : "Product Price"}
+                    {isService ? "Service Price" : "Product Price"}
                   </FieldLabel>
                   <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-md overflow-hidden">
                     <Input
@@ -2907,97 +3001,217 @@ export default function AddProductPage({
                   are what convince buyers to reach out.
                 </p>
               )}
-              {/* Main image */}
-              <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
-                {mainImage ? (
-                  <img
-                    src={mainImage}
-                    alt="Product"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                      <ImageIcon size={20} className="text-gray-300" />
-                    </div>
-                    <span className="text-dash-body text-gray-400">
-                      No image selected
-                    </span>
-                  </div>
-                )}
-                <button
-                  onClick={() => mainImageRef.current?.click()}
-                  className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
-                >
-                  <ImageIcon size={13} /> Browse
-                </button>
-                {mainImage && (
-                  <>
+              {/* Cover media — one slot, switch between a photo or a video */}
+              <div>
+                <div className="inline-flex p-0.5 bg-gray-100 rounded-lg mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setCoverTab("photo")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3.5 h-8 rounded-md text-dash-caption font-medium transition-colors cursor-pointer",
+                      coverTab === "photo"
+                        ? "bg-white text-[#023337] shadow-sm"
+                        : "text-gray-500 hover:text-gray-700",
+                    )}
+                  >
+                    <ImageIcon size={13} /> Photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCoverTab("video")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3.5 h-8 rounded-md text-dash-caption font-medium transition-colors cursor-pointer",
+                      coverTab === "video"
+                        ? "bg-white text-[#023337] shadow-sm"
+                        : "text-gray-500 hover:text-gray-700",
+                    )}
+                  >
+                    <VideoIcon size={13} /> Video
+                  </button>
+                </div>
+
+                {coverTab === "photo" ? (
+                  <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
+                    {mainImage ? (
+                      <img
+                        src={mainImage}
+                        alt="Product"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                          <ImageIcon size={20} className="text-gray-300" />
+                        </div>
+                        <span className="text-dash-body text-gray-400">
+                          No image selected
+                        </span>
+                      </div>
+                    )}
                     <button
                       onClick={() => mainImageRef.current?.click()}
-                      className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                      className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
                     >
-                      <RefreshCcw size={12} /> Replace
+                      <ImageIcon size={13} /> Browse
                     </button>
+                    {mainImage && (
+                      <>
+                        <button
+                          onClick={() => mainImageRef.current?.click()}
+                          className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                        >
+                          <RefreshCcw size={12} /> Replace
+                        </button>
+                        <button
+                          onClick={clearMainImage}
+                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={12} /> Clear
+                        </button>
+                      </>
+                    )}
+                    <input
+                      ref={mainImageRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleMainImage}
+                    />
+                  </div>
+                ) : (
+                  <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
+                    {videoPreview ? (
+                      <>
+                        {/* A freshly-picked file is a local blob: URL — a
+                            real media file, plays natively. An existing
+                            listing's videoPreview (edit mode) is a Bunny
+                            embed URL instead — an HTML page, not something
+                            a <video> tag can play — so that case shows the
+                            same poster image the listings views use. */}
+                        {videoPreview.startsWith("blob:") ? (
+                          <video
+                            src={videoPreview}
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                          />
+                        ) : (
+                          <VideoPosterImage
+                            videoUrl={videoPreview}
+                            alt="Video preview"
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-11 h-11 rounded-full bg-black/50 flex items-center justify-center">
+                            <Play
+                              size={16}
+                              fill="white"
+                              className="text-white ml-0.5"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                          <VideoIcon size={20} className="text-gray-300" />
+                        </div>
+                        <span className="text-dash-body text-gray-400">
+                          No video selected
+                        </span>
+                        <span className="text-dash-caption text-gray-400">
+                          Up to {MAX_VIDEO_MB}MB, {MAX_VIDEO_DURATION_S} seconds
+                        </span>
+                      </div>
+                    )}
                     <button
-                      onClick={clearMainImage}
-                      className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                      onClick={() => videoRef.current?.click()}
+                      disabled={isValidatingVideo}
+                      className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
                     >
-                      <Trash2 size={12} /> Clear
+                      <VideoIcon size={13} />
+                      {isValidatingVideo ? "Checking…" : "Browse"}
                     </button>
-                  </>
+                    {videoPreview && (
+                      <>
+                        <button
+                          onClick={() => videoRef.current?.click()}
+                          disabled={isValidatingVideo}
+                          className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <RefreshCcw size={12} /> Replace
+                        </button>
+                        <button
+                          onClick={clearVideo}
+                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={12} /> Clear
+                        </button>
+                      </>
+                    )}
+                    <input
+                      ref={videoRef}
+                      type="file"
+                      // Broad accept, not the narrow explicit MIME list —
+                      // iOS Safari's native picker can behave inconsistently
+                      // (sometimes hiding the "Videos" option entirely) with
+                      // a multi-type comma-separated accept. This is only a
+                      // UI filter hint either way; validateVideoFile() below
+                      // is the real gatekeeper on what's actually accepted.
+                      accept="video/*"
+                      className="hidden"
+                      onChange={handleVideoUpload}
+                    />
+                  </div>
                 )}
-                <input
-                  ref={mainImageRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleMainImage}
-                />
               </div>
 
-              {/* Thumbnails */}
-              <div className="flex gap-2.5 flex-wrap">
-                {thumbnails.map((url, i) => (
-                  <div
-                    key={i}
-                    className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
-                  >
-                    <img
-                      src={url}
-                      alt={`Thumb ${i + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      onClick={() =>
-                        setThumbnails((p) => p.filter((_, j) => j !== i))
-                      }
-                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              {/* Thumbnails — extra photos alongside the cover photo; not
+                  applicable when the cover slot is a video. */}
+              {coverTab === "photo" && (
+                <div className="flex gap-2.5 flex-wrap">
+                  {thumbnails.map((url, i) => (
+                    <div
+                      key={i}
+                      className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
                     >
-                      <X size={11} />
+                      <img
+                        src={url}
+                        alt={`Thumb ${i + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() =>
+                          setThumbnails((p) => p.filter((_, j) => j !== i))
+                        }
+                        className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ))}
+                  {thumbnails.length < 4 && (
+                    <button
+                      onClick={() => thumbRef.current?.click()}
+                      className="w-20 h-20 border border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
+                    >
+                      <PlusCircle size={18} className="text-orange-400" />
+                      <span className="text-dash-caption text-orange-400">
+                        Add
+                      </span>
                     </button>
-                  </div>
-                ))}
-                {thumbnails.length < 4 && (
-                  <button
-                    onClick={() => thumbRef.current?.click()}
-                    className="w-20 h-20 border border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
-                  >
-                    <PlusCircle size={18} className="text-orange-400" />
-                    <span className="text-dash-caption text-orange-400">
-                      Add
-                    </span>
-                  </button>
-                )}
-                <input
-                  ref={thumbRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleThumbUpload}
-                />
-              </div>
+                  )}
+                  <input
+                    ref={thumbRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleThumbUpload}
+                  />
+                </div>
+              )}
             </FormSection>
           </PhaseBlock>
 
@@ -3208,7 +3422,7 @@ export default function AddProductPage({
                       Currently Available
                     </p>
                     <p className="text-dash-caption text-gray-400 mt-0.5">
-                      Turn off if this dish is not ready to order right now
+                      Turn off if this listing is not ready to order right now
                     </p>
                   </div>
                   <Toggle
@@ -3224,7 +3438,7 @@ export default function AddProductPage({
           {isFood && (
             <PhaseBlock {...phaseProps("choices")}>
               <FormSection title="Customer Choices & Extras" icon={Layers}>
-                {/* Default state: reads as safely skippable — most dishes
+                {/* Default state: reads as safely skippable — most listings
                     have no modifiers, so this shouldn't require parsing the
                     builder UI below just to confirm there's nothing to do. */}
                 {modifiers.length === 0 && !choicesExpanded && (
@@ -3235,7 +3449,7 @@ export default function AddProductPage({
                     />
                     <div className="flex-1">
                       <p className="text-dash-body font-bold text-[#023337]">
-                        No extra choices for this dish
+                        No extra choices for this listing
                       </p>
                       <p className="text-dash-caption text-gray-400 mt-0.5">
                         Buyers order it exactly as described. Only add choices
@@ -3248,7 +3462,7 @@ export default function AddProductPage({
                         className="mt-2.5 flex items-center gap-1.5 text-dash-caption font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
                       >
                         <Plus size={12} />
-                        This dish has choices to add
+                        This listing has choices to add
                       </button>
                     </div>
                   </div>
@@ -3259,14 +3473,14 @@ export default function AddProductPage({
                     {/* Explainer */}
                     <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 -mt-1 space-y-1">
                       <p className="text-dash-body font-semibold text-blue-700">
-                        What will customers pick when ordering this dish?
+                        What will customers pick when ordering this?
                       </p>
                       <p className="text-dash-caption text-blue-500">
                         Add the choices below — e.g. which protein, what size,
-                        which side dish. Only the options you add here will
-                        appear to customers at checkout. Remove any option your
-                        kitchen does not offer, and set the extra cost for each
-                        (type 0 if it&apos;s included in the base price).
+                        which side. Only the options you add here will appear to
+                        customers at checkout. Remove any option you do not
+                        offer, and set the extra cost for each (type 0 if
+                        it&apos;s included in the base price).
                       </p>
                     </div>
 
@@ -3384,7 +3598,7 @@ export default function AddProductPage({
                                   <span className="font-semibold text-gray-500">
                                     0
                                   </span>{" "}
-                                  if it&apos;s included in the dish price.
+                                  if it&apos;s included in the base price.
                                   Delete any option you don&apos;t offer.
                                 </p>
                                 {group.options.map((opt) => (
@@ -3512,9 +3726,14 @@ export default function AddProductPage({
         </div>
 
         {/* Edit mode keeps the classic bottom bar; in add mode the Publish
-            button lives inside the last phase block. */}
+            button lives inside the last phase block. `fixed` (not
+            `absolute`) so it's pinned to the viewport, not the bottom of
+            this scrolling page's full content height — same recipe as
+            StorePage.tsx's own fixed bottom bar: lg:left matches the
+            w-[260px] sidebar, and the mobile bottom offset clears
+            BottomNav (fixed, ~4.5rem tall, mobile-only). */}
         {isEditMode && (
-          <div className="flex justify-end absolute py-2 w-full bg-white px-5 bottom-0 right-0 gap-3">
+          <div className="flex justify-end fixed inset-x-0 lg:left-[260px] bottom-[calc(env(safe-area-inset-bottom)+4rem)] md:bottom-0 z-40 py-2 bg-white border-t border-gray-100 px-5 gap-3">
             <button
               onClick={() => navigate(`/${userId}/products`)}
               disabled={isSubmitting}
@@ -3527,11 +3746,7 @@ export default function AddProductPage({
               disabled={isSubmitting || !canSubmit}
               className="bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-5 h-10 rounded-md whitespace-nowrap transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isSubmitting
-                ? "Saving…"
-                : isFood
-                  ? "Update Dish"
-                  : "Save Changes"}
+              {isSubmitting ? "Saving…" : "Save Changes"}
             </button>
           </div>
         )}

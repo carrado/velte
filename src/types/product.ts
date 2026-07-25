@@ -187,6 +187,7 @@ export interface PriceModalProps {
 export interface DeleteProductModalProps {
   open: boolean;
   product: CategoryProduct | null;
+  isDeleting?: boolean;
   onClose: () => void;
   onConfirm: (productId: string) => void;
 }
@@ -206,6 +207,24 @@ export interface ProductsTableProps {
   onSwitchToQuote: (product: CategoryProduct) => void;
   onDelete: (product: CategoryProduct) => void;
   isFood?: boolean;
+}
+
+export interface VideoPosterImageProps {
+  videoUrl: string;
+  alt: string;
+  className?: string;
+}
+
+export interface VideoTrimModalProps {
+  open: boolean;
+  /** The over-length file the vendor picked — trimming works off this
+   * directly, never re-reads from the file input. */
+  file: File | null;
+  maxDurationS: number;
+  onCancel: () => void;
+  /** Fires once with the trimmed file — the caller feeds it through the
+   * same path a normal (already short enough) pick would take. */
+  onTrimmed: (file: File) => void;
 }
 
 export type AddProductTaxOption = "yes" | "no";

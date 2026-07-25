@@ -62,6 +62,9 @@ export interface VendorMatch {
   // gallery instead of pinning the buyer to whichever single photo the
   // vendor set as "main".
   thumbnailUrls: string[];
+  // A video-only listing (no photos at all) still needs something to show
+  // in the card's media slot — see VendorResultCard's own fallback order.
+  videoUrl: string | null;
   // Null when the vendor has no Store record at all (shouldn't normally
   // happen — every vendor gets one at signup — but a matched product should
   // never be unrenderable over a missing storefront link).
@@ -193,6 +196,17 @@ export type SearchStreamEvent =
       // already shows everything the vendor uploaded plus its own WhatsApp
       // CTA, so a companion store card would just duplicate that contact).
       productStores: StoreMatch[];
+      // The reverse direction of productStores: for a searchStores turn
+      // (buyer describing a kind of vendor, not a specific item), each
+      // matched store's OWN service listings that match what the buyer
+      // actually asked for — deterministic enrichment (a plain lookup of
+      // that store's public catalog, not a model tool call), keyed by
+      // `vendorId` so the frontend renders each as a companion card under
+      // its own store's card (see getMatchingServicesForStores in route.ts).
+      // Up to a few per vendor, cheap keyword-overlap matched against the
+      // store's own name/description text — not a full semantic search, so
+      // treat this as "worth a look," not a guaranteed exact match.
+      storeServices: VendorMatch[];
       productsMatchTier: MatchTier;
       storesMatchTier: MatchTier;
       productsMatchQuality: MatchQuality;

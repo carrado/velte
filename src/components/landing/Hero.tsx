@@ -235,6 +235,7 @@ export default function Hero() {
                 size="lg"
                 className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-xl shadow-orange-500/20 text-[15px] px-8 gap-2 h-12 w-full sm:w-auto"
               >
+                <SearchIcon className="w-4 h-4" />
                 AI Search
                 <ArrowRight className="w-4 h-4" />
               </Button>

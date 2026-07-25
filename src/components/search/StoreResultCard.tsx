@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MapPin, Store as StoreIcon } from "lucide-react";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
@@ -85,14 +86,24 @@ export function StoreResultCard({
       {isOwn ? (
         <OwnListingBadge label="This is your store" />
       ) : (
-        chatHref && (
-          <WhatsAppButton
-            href={chatHref}
-            label="Chat on WhatsApp"
-            className="w-full mt-1"
-            onClick={() => reportLead(match.vendorId)}
-          />
-        )
+        <div className="flex flex-col gap-2 mt-1">
+          {chatHref && (
+            <WhatsAppButton
+              href={chatHref}
+              label="Chat on WhatsApp"
+              className="w-full"
+              onClick={() => reportLead(match.vendorId)}
+            />
+          )}
+          <Link
+            href={`/store/${match.handle}`}
+            target="_blank"
+            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors"
+          >
+            <StoreIcon size={15} />
+            View Store
+          </Link>
+        </div>
       )}
     </div>
   );

@@ -15,6 +15,7 @@ import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
 import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
 import { LocationPermissionModal } from "@/components/search/LocationPermissionModal";
+import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { getInitial } from "@/lib/initials";
@@ -248,6 +249,10 @@ interface ConversationTurn {
   // per unique vendor already in `products`, so a matched item also surfaces
   // who actually sells it, not just the WhatsApp contact already on its card.
   productStores: StoreMatch[];
+  // Each matched store's own service listing(s) that match what the buyer
+  // asked for (see route.ts's getMatchingServicesForStores) — rendered as a
+  // companion card under that store's own card, grouped by vendorId.
+  storeServices: VendorMatch[];
   productsMatchTier: MatchTier;
   storesMatchTier: MatchTier;
   productsMatchQuality: MatchQuality;
@@ -369,6 +374,12 @@ function ConversationTurnView({
                               <VendorResultCard
                                 key={match.productId}
                                 match={match}
+                                // Hidden here once a "Sold by" store card
+                                // exists below — that card is now where View
+                                // Store lives. Kept for a service-only group
+                                // (group.store is always null there — see
+                                // route.ts), which has no store card at all.
+                                showViewStore={!group.store}
                               />
                             ))}
                           </div>
@@ -429,21 +440,48 @@ function ConversationTurnView({
                           )}
                         </h2>
                       )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {turn.stores.map((match) => (
-                          <StoreResultCard
-                            key={match.storeId}
-                            match={match}
-                            // Only when this is a pure vendor/store result (no
-                            // product attached) — a dual-intent turn already has
-                            // a product for the buyer to reference instead.
-                            searchQuery={
-                              turn.products.length === 0
-                                ? turn.storesQuery
-                                : null
-                            }
-                          />
-                        ))}
+                      <div className="space-y-5">
+                        {turn.stores.map((store) => {
+                          const services = turn.storeServices.filter(
+                            (s) => s.vendorId === store.vendorId,
+                          );
+                          return (
+                            <div key={store.storeId} className="space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <StoreResultCard
+                                  match={store}
+                                  // Only when this is a pure vendor/store
+                                  // result (no product attached) — a
+                                  // dual-intent turn already has a product
+                                  // for the buyer to reference instead.
+                                  searchQuery={
+                                    turn.products.length === 0
+                                      ? turn.storesQuery
+                                      : null
+                                  }
+                                />
+                              </div>
+                              {services.length > 0 && (
+                                <div className="pl-3 border-l-2 border-orange-100 space-y-2">
+                                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                                    {services.length === 1
+                                      ? "Matching service"
+                                      : "Matching services"}
+                                  </p>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {services.map((svc) => (
+                                      <VendorResultCard
+                                        key={svc.productId}
+                                        match={svc}
+                                        showViewStore={false}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -658,11 +696,7 @@ export function SearchHome() {
     setImageUrl(null);
     setUploadingImage(true);
     try {
-      const url = await uploadProductMedia(
-        file,
-        "image",
-        "velte/search-queries",
-      );
+      const url = await uploadProductMedia(file, "velte/search-queries");
       setImageUrl(url);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Photo upload failed");
@@ -728,6 +762,7 @@ export function SearchHome() {
         stores: [],
         storesQuery: null,
         productStores: [],
+        storeServices: [],
         productsMatchTier: null,
         storesMatchTier: null,
         productsMatchQuality: undefined,
@@ -786,6 +821,7 @@ export function SearchHome() {
             stores: dedupedStores,
             storesQuery: event.storesQuery,
             productStores: event.productStores,
+            storeServices: event.storeServices,
             productsMatchTier: event.productsMatchTier,
             storesMatchTier: event.storesMatchTier,
             productsMatchQuality: event.productsMatchQuality,
@@ -957,6 +993,7 @@ export function SearchHome() {
         onAllow={handleAllowLocation}
         onDismiss={() => setShowLocationModal(false)}
       />
+      <BuyerInstallPrompt />
       <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-white border-b border-gray-100 z-10">
         <Link href="/" className="shrink-0">
           <Image

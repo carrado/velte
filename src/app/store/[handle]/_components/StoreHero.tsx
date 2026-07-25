@@ -19,7 +19,6 @@ export interface StoreHeroProps {
   sectors: string[];
   goodsCount: number;
   servicesCount: number;
-  goodsUnit: string;
 }
 
 // Full-bleed hero: real gallery photos auto-sliding when the vendor has any,
@@ -36,7 +35,6 @@ export default function StoreHero({
   sectors,
   goodsCount,
   servicesCount,
-  goodsUnit,
 }: StoreHeroProps) {
   const hasPhotos = gallery.length > 0;
   const theme = getStoreHeroTheme(sectors);
@@ -182,8 +180,7 @@ export default function StoreHero({
                 )}
                 {goodsCount > 0 && (
                   <span>
-                    {goodsCount}{" "}
-                    {goodsCount === 1 ? goodsUnit : `${goodsUnit}s`}
+                    {goodsCount} {goodsCount === 1 ? "product" : "products"}
                   </span>
                 )}
                 {servicesCount > 0 && (

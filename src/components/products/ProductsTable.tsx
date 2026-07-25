@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { computePrice, fmt } from "@/lib/product-price";
 import type { ProductsTableProps } from "@/types/product";
 import type { CategoryProduct } from "@/types/product";
 import ProductActionsPopover from "./ProductActionsPopover";
-import { Star, Package } from "lucide-react";
+import FullscreenVideoModal from "@/components/FullscreenVideoModal";
+import VideoPosterImage from "./VideoPosterImage";
+import { Star, Package, Play } from "lucide-react";
 
 function ProductCard({
   product,
@@ -21,12 +24,22 @@ function ProductCard({
   onDelete: () => void;
 }) {
   const pricing = computePrice(product);
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
 
   return (
     <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
-      {/* Product image */}
+      {/* Product image — a video, when present, takes the thumbnail slot
+          over a plain photo: its poster frame plays the same "this is the
+          cover" role a photo would, and the centered play button is what
+          actually signals there's something to watch. */}
       <div className="relative w-full aspect-square overflow-hidden bg-gray-50">
-        {product.mainImageUrl ? (
+        {product.videoUrl ? (
+          <VideoPosterImage
+            videoUrl={product.videoUrl}
+            alt={product.name}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+          />
+        ) : product.mainImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={product.mainImageUrl}
@@ -44,10 +57,25 @@ function ProductCard({
           </div>
         )}
 
+        {product.videoUrl && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setVideoModalOpen(true);
+            }}
+            aria-label="Play video"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/10 transition-colors hover:bg-black/20"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
+              <Play size={18} fill="white" className="ml-0.5" />
+            </span>
+          </button>
+        )}
+
         {/* Bottom scrim so the status badges stay legible over any photo */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/35 to-transparent" />
 
-        <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1.5">
+        <div className="absolute bottom-2 left-2 z-20 flex flex-wrap items-center gap-1.5">
           {product.kind === "service" ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-white/90 text-teal-700 backdrop-blur-sm">
               Service
@@ -76,7 +104,7 @@ function ProductCard({
           )}
         </div>
 
-        <div className="absolute top-2 right-2">
+        <div className="absolute top-2 right-2 z-20">
           <ProductActionsPopover
             product={product}
             isFood={isFood}
@@ -109,18 +137,26 @@ function ProductCard({
           </p>
         )}
       </div>
+
+      {product.videoUrl && (
+        <FullscreenVideoModal
+          videoUrl={product.videoUrl}
+          open={videoModalOpen}
+          onClose={() => setVideoModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
-function EmptyState({ isFood }: { isFood: boolean }) {
+function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3">
       <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
         <Package size={24} className="text-gray-300" />
       </div>
       <p className="text-dash-body font-semibold text-gray-400">
-        {isFood ? "No dishes found." : "No listings found."}
+        No listings found.
       </p>
     </div>
   );
@@ -133,7 +169,7 @@ export default function ProductsTable({
   onDelete,
   isFood = false,
 }: ProductsTableProps) {
-  if (products.length === 0) return <EmptyState isFood={isFood} />;
+  if (products.length === 0) return <EmptyState />;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5">

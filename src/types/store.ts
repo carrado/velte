@@ -82,7 +82,6 @@ export interface PublicStoreProductProps {
 export interface StoreTabsProps {
   goods: PublicStoreProduct[];
   services: PublicStoreProduct[];
-  isFood: boolean;
   storeName: string;
   whatsapp: string | null;
   vendorId: string;
@@ -94,6 +93,5 @@ export interface IntroCardProps {
   store: PublicStore;
   goodsCount: number;
   servicesCount: number;
-  isFood: boolean;
   whatsappHref: string | null;
 }

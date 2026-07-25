@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
-import { ArrowRight, MessageCircleQuestion } from "lucide-react";
+import {
+  ArrowRight,
+  MessageCircleQuestion,
+  Search as SearchIcon,
+} from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -197,6 +201,7 @@ export default function FaqPage() {
                     size="lg"
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   >
+                    <SearchIcon className="w-4 h-4" />
                     AI Search
                     <ArrowRight className="w-4 h-4" />
                   </Button>
