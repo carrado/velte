@@ -50,7 +50,12 @@ export interface PublicStoreProduct {
   priceMax?: number | null;
   currency: string;
   mainImageUrl: string | null;
+  videoUrl: string | null;
   description: string | null;
+  /** Vendor-entered "service details" — a service's own attributes, shown in
+   *  full only in OfferingDetailModal (the card itself only has room for a
+   *  truncated description). */
+  attributes: { name: string; value: string }[];
 }
 
 /** What the public /store/[handle] page renders. */
