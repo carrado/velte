@@ -8,7 +8,12 @@ import { fetchFile, toBlobURL } from "@ffmpeg/util";
 // cost of snapping to the nearest keyframe (~1-2s drift from the exact
 // picked window) and NOT fixing an unsupported source codec (see the MJPEG
 // case this app has already hit) — a trimmed MJPEG file is still MJPEG.
-const CORE_BASE_URL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+// Self-hosted (public/ffmpeg/, copied from @ffmpeg/core's dist/umd at
+// install time) rather than pulled from unpkg — the CDN round-trip was
+// adding a visible "Loading video engine…" wait even for vendors who moved
+// fast, since preloadFFmpeg's warm-up had to fight cold CDN latency instead
+// of just hitting the app's own edge cache.
+const CORE_BASE_URL = "/ffmpeg";
 
 let ffmpegPromise: Promise<FFmpeg> | null = null;
 
