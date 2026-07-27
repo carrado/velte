@@ -9,6 +9,7 @@ import { useNavigation } from "@/components/NavigationProgressContext";
 import { queryKeys } from "@/lib/query-keys";
 import { categoriesApi } from "@/services/products";
 import { uploadProductMedia } from "@/lib/cloudinary";
+import { preloadFFmpeg } from "@/lib/videoTrim";
 import {
   uploadVideoToBunny,
   validateVideoFile,
@@ -1518,6 +1519,14 @@ export default function AddProductPage({
   productId?: string;
 }) {
   const isEditMode = mode === "edit";
+
+  // Warm the ffmpeg trim engine as soon as the form mounts, not when a
+  // vendor happens to pick an over-length video — by the time they get to
+  // video upload the ~30MB core is often already cached (loadFFmpeg() is a
+  // singleton, so VideoTrimModal's own preload later just reuses this).
+  useEffect(() => {
+    preloadFFmpeg();
+  }, []);
 
   // The vendor's own operating sectors (slugs, up to 5) — chosen at signup,
   // editable from the Store editor.

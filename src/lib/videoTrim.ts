@@ -17,10 +17,11 @@ const CORE_BASE_URL = "/ffmpeg";
 
 let ffmpegPromise: Promise<FFmpeg> | null = null;
 
-// Lazy singleton — the ~30MB wasm core only ever downloads the first time a
-// vendor actually opens the trim modal (never part of the app bundle, never
-// fetched for a video that's already under the limit), and only once per
-// session after that.
+// Lazy singleton — the ~30MB wasm core is never part of the app's main
+// bundle. It's fetched once per session, kicked off by preloadFFmpeg() as
+// soon as the vendor lands on the Add/Edit product page (see
+// AddProductPage's mount effect) rather than waiting for a video to be
+// picked, so it's usually already warm by the time the trim modal opens.
 function loadFFmpeg(): Promise<FFmpeg> {
   if (!ffmpegPromise) {
     ffmpegPromise = (async () => {
@@ -47,11 +48,12 @@ function loadFFmpeg(): Promise<FFmpeg> {
   return ffmpegPromise;
 }
 
-// Called as soon as the trim modal opens, before the vendor has even picked
-// a window — by the time they hit "Trim & Continue" the engine is often
-// already warm. Resolves (never rejects) so callers can use it purely to
-// flip a "ready" flag; trimVideo() below does its own retrying load
-// regardless of whether this succeeded.
+// Called both from AddProductPage on mount (the real warm-up) and again from
+// the trim modal on open as a safety net for edit-mode deep links or a
+// failed first attempt — loadFFmpeg()'s singleton promise means the second
+// call is a no-op once the first has succeeded. Resolves (never rejects) so
+// callers can use it purely to flip a "ready" flag; trimVideo() below does
+// its own retrying load regardless of whether this succeeded.
 export function preloadFFmpeg(): Promise<boolean> {
   return loadFFmpeg().then(
     () => true,
