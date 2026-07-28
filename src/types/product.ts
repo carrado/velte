@@ -222,9 +222,10 @@ export interface VideoTrimModalProps {
   file: File | null;
   maxDurationS: number;
   onCancel: () => void;
-  /** Fires once with the trimmed file — the caller feeds it through the
-   * same path a normal (already short enough) pick would take. */
-  onTrimmed: (file: File) => void;
+  /** Fires once the video-trim service has cut the clip and pushed it to
+   * Bunny — the resulting playback URL, ready to store as-is (no further
+   * upload needed, unlike a normal already-short-enough pick). */
+  onTrimmed: (url: string) => void;
 }
 
 export type AddProductTaxOption = "yes" | "no";

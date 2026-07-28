@@ -10,7 +10,6 @@ const alwaysPublicRoutes = [
   "/favicon.ico",
   "/site.webmanifest",
   "/payment/callback",
-  "/ffmpeg",
 ];
 
 // Genuinely public PAGES that stay viewable even by a logged-in user — each

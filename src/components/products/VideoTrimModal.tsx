@@ -4,7 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, Loader2, Pause, Play, Scissors, X } from "lucide-react";
 import type { VideoTrimModalProps } from "@/types/product";
-import { preloadFFmpeg, trimVideo } from "@/lib/videoTrim";
+import { trimVideoServerSide, type TrimPhase } from "@/lib/videoTrim";
+
+// Same fail-open reasoning as validateVideoDuration in bunnyStream.ts: a
+// desktop/mobile browser's <video> metadata read can hang indefinitely on a
+// large file (moov atom at the end of the container, needing to be
+// streamed-through first) or on a codec it can't decode at all (HEVC on a
+// lot of Android Chrome builds) — without this, that shows as an infinite
+// "Reading video…" spinner with no way out. Past this point, fall back to
+// letting the vendor type a start/end instead of dragging a scrubber they
+// can't see a preview for.
+const METADATA_TIMEOUT_MS = 8000;
 
 function formatTime(s: number): string {
   const mins = Math.floor(s / 60);
@@ -105,39 +115,46 @@ export default function VideoTrimModal({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  const [metadataError, setMetadataError] = useState(false);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
-  const [engineReady, setEngineReady] = useState(false);
   const [trimming, setTrimming] = useState(false);
+  const [phase, setPhase] = useState<TrimPhase>("uploading");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Fresh file → fresh preview + reset the picked window + start warming the
-  // ffmpeg core in the background so it's often already loaded by the time
-  // the vendor finishes choosing where to cut.
+  // Fresh file → fresh preview + reset the picked window.
   useEffect(() => {
     if (!open || !file) return;
     const url = URL.createObjectURL(file);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setObjectUrl(url);
     setDuration(null);
+    setMetadataError(false);
     setStart(0);
     setEnd(0);
     setTrimming(false);
     setProgress(0);
     setError(null);
-    setEngineReady(false);
     setIsPlaying(false);
-    let cancelled = false;
-    preloadFFmpeg().then((ready) => {
-      if (!cancelled && ready) setEngineReady(true);
-    });
     return () => {
-      cancelled = true;
       URL.revokeObjectURL(url);
     };
   }, [open, file]);
+
+  // See METADATA_TIMEOUT_MS above — bails out of waiting on the browser to
+  // ever fire onLoadedMetadata. Re-runs (and its cleanup clears the pending
+  // timer) whenever duration actually resolves, so this is a no-op once
+  // reading succeeds.
+  useEffect(() => {
+    if (!open || !file || duration !== null || metadataError) return;
+    const timeoutId = setTimeout(
+      () => setMetadataError(true),
+      METADATA_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timeoutId);
+  }, [open, file, duration, metadataError]);
 
   if (!open || !file) return null;
 
@@ -169,20 +186,27 @@ export default function VideoTrimModal({
 
   const handleTrim = async () => {
     setTrimming(true);
+    setPhase("uploading");
     setProgress(0);
     setError(null);
     try {
-      const trimmed = await trimVideo(file, start, end, setProgress);
-      onTrimmed(trimmed);
+      const url = await trimVideoServerSide(file, start, end, (p, pct) => {
+        setPhase(p);
+        setProgress(pct);
+      });
+      onTrimmed(url);
     } catch {
       setError(
-        "Couldn't process this video on your device. Try trimming it in your phone's gallery app first, then upload the shorter clip.",
+        "Couldn't process this video. Check your connection and try again, or trim it in your phone's gallery app first and upload the shorter clip.",
       );
       setTrimming(false);
     }
   };
 
   const selectedSeconds = Math.max(0, end - start);
+  const canTrim = metadataError
+    ? end > start && selectedSeconds <= maxDurationS
+    : duration !== null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start h-full justify-center bg-black/50 backdrop-blur-sm px-4 pt-12 pb-6 overflow-y-auto">
@@ -211,78 +235,134 @@ export default function VideoTrimModal({
         </div>
 
         <div className="px-6 py-5 space-y-4">
-          <div className="relative border border-gray-200 rounded-md overflow-hidden bg-black">
-            {objectUrl && (
-              <video
-                ref={videoRef}
-                src={objectUrl}
-                className="w-full max-h-64 object-contain mx-auto"
-                onLoadedMetadata={handleLoadedMetadata}
-                onTimeUpdate={handleTimeUpdate}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                playsInline
-              />
-            )}
-          </div>
+          {!metadataError && (
+            <div className="relative border border-gray-200 rounded-md overflow-hidden bg-black">
+              {objectUrl && (
+                <video
+                  ref={videoRef}
+                  src={objectUrl}
+                  className="w-full max-h-64 object-contain mx-auto"
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onError={() => setMetadataError(true)}
+                  onTimeUpdate={handleTimeUpdate}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  playsInline
+                />
+              )}
+            </div>
+          )}
 
-          {duration === null ? (
+          {metadataError ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2.5 p-3.5 bg-amber-50 border border-amber-200 rounded-md">
+                <AlertCircle
+                  size={15}
+                  className="text-amber-500 mt-0.5 flex-shrink-0"
+                />
+                <p className="text-dash-caption text-amber-700">
+                  Couldn&apos;t preview this video on your device. Check your
+                  phone&apos;s gallery app for the times you want, then enter
+                  them below — trimming still works.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-dash-caption text-gray-500">
+                  Start (seconds)
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={start}
+                    disabled={trimming}
+                    onChange={(e) =>
+                      setStart(Math.max(0, Number(e.target.value) || 0))
+                    }
+                    className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-dash-body disabled:opacity-50"
+                  />
+                </label>
+                <label className="text-dash-caption text-gray-500">
+                  End (seconds)
+                  <input
+                    type="number"
+                    min={start + 1}
+                    step={1}
+                    value={end}
+                    disabled={trimming}
+                    onChange={(e) =>
+                      setEnd(
+                        Math.max(
+                          start + 1,
+                          Number(e.target.value) || start + 1,
+                        ),
+                      )
+                    }
+                    className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-dash-body disabled:opacity-50"
+                  />
+                </label>
+              </div>
+              {selectedSeconds > maxDurationS && (
+                <p className="text-dash-caption text-red-600">
+                  Keep the window to {maxDurationS} seconds or less (currently{" "}
+                  {selectedSeconds.toFixed(0)}s).
+                </p>
+              )}
+            </div>
+          ) : duration === null ? (
             <div className="flex items-center justify-center gap-2 py-3 text-dash-body text-gray-400">
               <Loader2 size={15} className="animate-spin" />
               Reading video…
             </div>
           ) : (
-            <>
-              <div className="space-y-2">
-                <TrimScrubber
-                  duration={duration}
-                  start={start}
-                  end={end}
-                  maxWindow={maxDurationS}
-                  onChange={(s, e) => {
-                    setStart(s);
-                    setEnd(e);
-                    // Scrubbing should show where the cut will actually
-                    // start — pausing first avoids the preview racing
-                    // ahead of a drag that's still in progress.
-                    const v = videoRef.current;
-                    if (v) {
-                      v.pause();
-                      v.currentTime = s;
-                    }
-                  }}
-                />
-                <div className="flex items-center justify-between text-dash-caption text-gray-500">
-                  <span>
-                    Selected: {formatTime(start)} – {formatTime(end)} (
-                    {selectedSeconds.toFixed(1)}s)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleTogglePlay}
-                    disabled={trimming}
-                    className="flex items-center gap-1 font-semibold text-orange-500 hover:text-orange-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isPlaying ? (
-                      <Pause size={12} fill="currentColor" />
-                    ) : (
-                      <Play size={12} fill="currentColor" />
-                    )}
-                    {isPlaying ? "Pause" : "Preview"}
-                  </button>
-                </div>
+            <div className="space-y-2">
+              <TrimScrubber
+                duration={duration}
+                start={start}
+                end={end}
+                maxWindow={maxDurationS}
+                onChange={(s, e) => {
+                  setStart(s);
+                  setEnd(e);
+                  // Scrubbing should show where the cut will actually
+                  // start — pausing first avoids the preview racing
+                  // ahead of a drag that's still in progress.
+                  const v = videoRef.current;
+                  if (v) {
+                    v.pause();
+                    v.currentTime = s;
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between text-dash-caption text-gray-500">
+                <span>
+                  Selected: {formatTime(start)} – {formatTime(end)} (
+                  {selectedSeconds.toFixed(1)}s)
+                </span>
+                <button
+                  type="button"
+                  onClick={handleTogglePlay}
+                  disabled={trimming}
+                  className="flex items-center gap-1 font-semibold text-orange-500 hover:text-orange-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isPlaying ? (
+                    <Pause size={12} fill="currentColor" />
+                  ) : (
+                    <Play size={12} fill="currentColor" />
+                  )}
+                  {isPlaying ? "Pause" : "Preview"}
+                </button>
               </div>
+            </div>
+          )}
 
-              {error && (
-                <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-md">
-                  <AlertCircle
-                    size={15}
-                    className="text-red-500 mt-0.5 flex-shrink-0"
-                  />
-                  <p className="text-dash-caption text-red-600">{error}</p>
-                </div>
-              )}
-            </>
+          {error && (
+            <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-md">
+              <AlertCircle
+                size={15}
+                className="text-red-500 mt-0.5 flex-shrink-0"
+              />
+              <p className="text-dash-caption text-red-600">{error}</p>
+            </div>
           )}
         </div>
 
@@ -296,15 +376,15 @@ export default function VideoTrimModal({
           </button>
           <button
             onClick={handleTrim}
-            disabled={duration === null || trimming}
+            disabled={!canTrim || trimming}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-body font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {trimming ? (
               <>
                 <Loader2 size={15} className="animate-spin" />
-                {!engineReady && progress === 0
-                  ? "Loading video engine…"
-                  : `Trimming… ${Math.round(progress * 100)}%`}
+                {phase === "uploading"
+                  ? `Uploading… ${Math.round(progress * 100)}%`
+                  : `Processing… ${Math.round(progress * 100)}%`}
               </>
             ) : (
               "Trim & Continue"
