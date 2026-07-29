@@ -871,9 +871,10 @@ export default function AddProductPage({
     const durationError = await validateVideoDuration(file);
     setIsValidatingVideo(false);
     if (durationError) {
-      // The only failure validateVideoDuration ever produces is "too long"
-      // (it fails open on anything else, see its own doc comment) — so
-      // instead of rejecting outright, offer to trim it down.
+      // Covers both a confirmed over-length video AND one whose length
+      // couldn't be verified at all (see validateVideoDuration's own doc
+      // comment) — either way, route to the trim flow rather than
+      // rejecting outright or uploading something unverified.
       setTrimCandidate(file);
       return;
     }

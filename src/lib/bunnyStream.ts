@@ -57,18 +57,24 @@ export function validateVideoFile(file: File): string | null {
 // A long product "demo" defeats the point (buyers skim, they don't watch a
 // pitch) — capped client-side before ever uploading.
 //
-// This can only ever fail OPEN (resolve null — "no problem found"), never
-// block on its own inability to read the file: a desktop browser's <video>
-// decode support is a real, common gap unrelated to whether the file itself
-// is valid — Chrome/Edge on Windows in particular frequently can't decode a
-// .mov at all (QuickTime container + HEVC, iPhone's default recording
-// format, has far weaker support outside Safari/macOS) and fires onerror on
-// a completely fine file. The timeout covers the same failure mode for the
-// case where the browser neither fires onloadedmetadata NOR onerror and
-// just hangs — found live, this previously left the upload button stuck
-// disabled forever, which reads as a silently broken feature, not a
-// rejected file.
-const DURATION_CHECK_TIMEOUT_MS = 8000;
+// Base timeout for a small file — scaled up for larger ones below. A
+// desktop browser's <video> decode support is a real, common gap unrelated
+// to whether the file itself is valid — Chrome/Edge on Windows in
+// particular frequently can't decode a .mov at all (QuickTime container +
+// HEVC, iPhone's default recording format, has far weaker support outside
+// Safari/macOS) and fires onerror on a completely fine file. The timeout
+// covers the same failure mode for the case where the browser neither fires
+// onloadedmetadata NOR onerror and just hangs — found live, this previously
+// left the upload button stuck disabled forever, which reads as a silently
+// broken feature, not a rejected file.
+const DURATION_CHECK_BASE_TIMEOUT_MS = 8000;
+const DURATION_CHECK_MAX_TIMEOUT_MS = 30_000;
+// Roughly 1s of extra headroom per 10MB — a large file (found live: a
+// 381MB/2m41s clip picked from an Android PWA) can genuinely take longer
+// than a small one to have its metadata read, especially on a lower-end
+// device, and that shouldn't get less time just because it's the case this
+// matters most for.
+const DURATION_CHECK_MS_PER_BYTE = 1000 / (10 * 1024 * 1024);
 
 export function validateVideoDuration(file: File): Promise<string | null> {
   return new Promise((resolve) => {
@@ -82,12 +88,30 @@ export function validateVideoDuration(file: File): Promise<string | null> {
       URL.revokeObjectURL(objectUrl);
       resolve(result);
     };
+    // Unlike the old behavior, this does NOT fail open to "upload
+    // unverified" — a video whose length genuinely can't be confirmed gets
+    // routed into the trim flow instead (same non-null return the vendor
+    // sees for a real over-length file), never straight to Bunny with no
+    // safety net. VideoTrimModal already has its own graceful fallback for
+    // this exact situation (manual start/end entry when ITS OWN metadata
+    // read also fails), so this converges on a flow that's already built to
+    // handle "can't read this video's metadata" rather than silently
+    // shipping a possibly-over-length clip.
+    const unverified = () =>
+      `Couldn't verify this video's length — trim it to be safe`;
+    const timeoutMs = Math.min(
+      DURATION_CHECK_MAX_TIMEOUT_MS,
+      Math.max(
+        DURATION_CHECK_BASE_TIMEOUT_MS,
+        file.size * DURATION_CHECK_MS_PER_BYTE,
+      ),
+    );
     const timeoutId = setTimeout(() => {
       console.warn(
-        "[bunnyStream] Video metadata read timed out — uploading unverified",
+        "[bunnyStream] Video metadata read timed out — routing to the trim flow instead of uploading unverified",
       );
-      finish(null);
-    }, DURATION_CHECK_TIMEOUT_MS);
+      finish(unverified());
+    }, timeoutMs);
 
     video.preload = "metadata";
     video.onloadedmetadata = () => {
@@ -99,9 +123,9 @@ export function validateVideoDuration(file: File): Promise<string | null> {
     };
     video.onerror = () => {
       console.warn(
-        "[bunnyStream] Browser couldn't decode this video for a duration check — uploading unverified",
+        "[bunnyStream] Browser couldn't decode this video for a duration check — routing to the trim flow instead of uploading unverified",
       );
-      finish(null);
+      finish(unverified());
     };
     video.src = objectUrl;
   });
