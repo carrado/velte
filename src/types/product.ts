@@ -237,6 +237,17 @@ export interface VideoTrimModalProps {
   onConfirm: (startS: number, endS: number) => void;
 }
 
+// Shown instead of VideoTrimModal when the browser can't preview the picked
+// video at all (see bunnyStream.ts's checkVideoDuration "trim-fallback"
+// case) — no scrubber to drag, so this just proposes a fixed first-N-second
+// window rather than asking the vendor to type start/end numbers blind.
+export interface TrimFallbackModalProps {
+  open: boolean;
+  maxDurationS: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
 export type VideoJobPhase = "uploading" | "trimming";
 
 export interface VideoUploadProgressBarProps {

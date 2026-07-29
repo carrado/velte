@@ -1,4 +1,5 @@
 import { Upload } from "tus-js-client";
+import { parseMp4Duration } from "./mp4Duration";
 
 // Bunny Stream — video upload/playback only. Images stay on Cloudinary (see
 // cloudinary.ts); video moved here entirely after Cloudinary's plan-tier
@@ -76,29 +77,25 @@ const DURATION_CHECK_MAX_TIMEOUT_MS = 30_000;
 // matters most for.
 const DURATION_CHECK_MS_PER_BYTE = 1000 / (10 * 1024 * 1024);
 
-export function validateVideoDuration(file: File): Promise<string | null> {
+// Resolves the REAL <video> element's duration, or null if the browser
+// can't read it within the (size-scaled) timeout, or fires onerror trying.
+// A success here means more than just "we know the duration" — it means
+// the vendor will actually be able to see/drag a scrubber preview too
+// (VideoTrimModal depends on this exact same browser capability), which is
+// why checkVideoDuration below treats "worked" vs "didn't" as the deciding
+// factor for which trim UI to show, not just the number itself.
+function readVideoElementDurationS(file: File): Promise<number | null> {
   return new Promise((resolve) => {
     const video = document.createElement("video");
     const objectUrl = URL.createObjectURL(file);
     let settled = false;
-    const finish = (result: string | null) => {
+    const finish = (result: number | null) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
       URL.revokeObjectURL(objectUrl);
       resolve(result);
     };
-    // Unlike the old behavior, this does NOT fail open to "upload
-    // unverified" — a video whose length genuinely can't be confirmed gets
-    // routed into the trim flow instead (same non-null return the vendor
-    // sees for a real over-length file), never straight to Bunny with no
-    // safety net. VideoTrimModal already has its own graceful fallback for
-    // this exact situation (manual start/end entry when ITS OWN metadata
-    // read also fails), so this converges on a flow that's already built to
-    // handle "can't read this video's metadata" rather than silently
-    // shipping a possibly-over-length clip.
-    const unverified = () =>
-      `Couldn't verify this video's length — trim it to be safe`;
     const timeoutMs = Math.min(
       DURATION_CHECK_MAX_TIMEOUT_MS,
       Math.max(
@@ -106,29 +103,53 @@ export function validateVideoDuration(file: File): Promise<string | null> {
         file.size * DURATION_CHECK_MS_PER_BYTE,
       ),
     );
-    const timeoutId = setTimeout(() => {
-      console.warn(
-        "[bunnyStream] Video metadata read timed out — routing to the trim flow instead of uploading unverified",
-      );
-      finish(unverified());
-    }, timeoutMs);
+    const timeoutId = setTimeout(() => finish(null), timeoutMs);
 
     video.preload = "metadata";
-    video.onloadedmetadata = () => {
-      finish(
-        video.duration > MAX_VIDEO_DURATION_S
-          ? `Video must be ${MAX_VIDEO_DURATION_S} seconds or shorter`
-          : null,
-      );
-    };
-    video.onerror = () => {
-      console.warn(
-        "[bunnyStream] Browser couldn't decode this video for a duration check — routing to the trim flow instead of uploading unverified",
-      );
-      finish(unverified());
-    };
+    video.onloadedmetadata = () => finish(video.duration || null);
+    video.onerror = () => finish(null);
     video.src = objectUrl;
   });
+}
+
+export type VideoDurationCheck =
+  /** Under the cap — upload as-is, no trim needed at all. */
+  | { kind: "ok" }
+  /** Over the cap, and the browser CAN preview it — show the real,
+   * scrubber-based VideoTrimModal so the vendor picks their own window. */
+  | { kind: "trim-with-preview" }
+  /** Either confirmed over the cap with no usable preview, or the duration
+   * genuinely couldn't be determined at all — the vendor can't see/drag a
+   * scrubber either way, so offer a fixed first-N-seconds trim instead of
+   * an interactive one they can't actually preview. */
+  | { kind: "trim-fallback" };
+
+// Classifies a picked video for AddProductPage's handleVideoUpload. Tries
+// the real <video> element first (authoritative when it works, and the
+// same check the scrubber preview itself depends on). If the browser can't
+// read it at all — found live: HEVC decode gaps on Android Chrome/WebView,
+// or a moov atom positioned at the end of a large file taking too long —
+// falls back to parseMp4Duration (container-level, works regardless of
+// codec support) before concluding the vendor genuinely can't get a
+// preview here.
+export async function checkVideoDuration(
+  file: File,
+): Promise<VideoDurationCheck> {
+  const previewDurationS = await readVideoElementDurationS(file);
+  if (previewDurationS != null) {
+    return previewDurationS > MAX_VIDEO_DURATION_S
+      ? { kind: "trim-with-preview" }
+      : { kind: "ok" };
+  }
+
+  console.warn(
+    "[bunnyStream] Browser couldn't preview this video — falling back to container-level duration parsing",
+  );
+  const parsedDurationS = await parseMp4Duration(file);
+  if (parsedDurationS != null && parsedDurationS <= MAX_VIDEO_DURATION_S) {
+    return { kind: "ok" };
+  }
+  return { kind: "trim-fallback" };
 }
 
 interface BunnyUploadAuth {

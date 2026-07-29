@@ -12,7 +12,7 @@ import { uploadProductMedia } from "@/lib/cloudinary";
 import {
   uploadVideoToBunny,
   validateVideoFile,
-  validateVideoDuration,
+  checkVideoDuration,
   MAX_VIDEO_MB,
   MAX_VIDEO_DURATION_S,
 } from "@/lib/bunnyStream";
@@ -27,6 +27,7 @@ import { SECTOR_BY_VALUE } from "@/lib/sectors";
 import type { SectorClassification } from "@/types/sectors";
 import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import AttributePickerModal from "./AttributePickerModal";
+import TrimFallbackModal from "./TrimFallbackModal";
 import VideoTrimModal from "./VideoTrimModal";
 import VideoUploadProgressBar from "./VideoUploadProgressBar";
 import VideoPosterImage from "./VideoPosterImage";
@@ -601,6 +602,11 @@ export default function AddProductPage({
   // MAX_VIDEO_DURATION_S — holding the file here opens the trim modal so the
   // vendor can cut it down instead of having to leave the app to do it.
   const [trimCandidate, setTrimCandidate] = useState<File | null>(null);
+  // Same idea, but for a video the browser can't preview at all (see
+  // checkVideoDuration's "trim-fallback" case) — no scrubber to drag, so
+  // this opens TrimFallbackModal (fixed first-N-seconds) instead of the
+  // interactive VideoTrimModal.
+  const [trimFallbackFile, setTrimFallbackFile] = useState<File | null>(null);
   // Upload/trim now starts the moment a video's picked (or a trim window's
   // confirmed), not deferred to publish time — this is the single source of
   // truth both the floating VideoUploadProgressBar and PublishProgressModal
@@ -868,14 +874,21 @@ export default function AddProductPage({
       return;
     }
     setIsValidatingVideo(true);
-    const durationError = await validateVideoDuration(file);
+    const check = await checkVideoDuration(file);
     setIsValidatingVideo(false);
-    if (durationError) {
-      // Covers both a confirmed over-length video AND one whose length
-      // couldn't be verified at all (see validateVideoDuration's own doc
-      // comment) — either way, route to the trim flow rather than
-      // rejecting outright or uploading something unverified.
+
+    if (check.kind === "trim-with-preview") {
+      // Over the cap, and the browser can actually preview it — the real
+      // scrubber-based trim modal.
       setTrimCandidate(file);
+      return;
+    }
+    if (check.kind === "trim-fallback") {
+      // Either confirmed over the cap with no usable preview, or the
+      // length genuinely couldn't be determined at all — no scrubber to
+      // drag either way, so offer the fixed first-N-second trim instead of
+      // an interactive modal the vendor can't actually see a preview in.
+      setTrimFallbackFile(file);
       return;
     }
 
@@ -983,6 +996,11 @@ export default function AddProductPage({
     const file = trimCandidate;
     setTrimCandidate(null);
     if (file) startTrimUpload(file, startS, endS);
+  };
+  const handleConfirmTrimFallback = () => {
+    const file = trimFallbackFile;
+    setTrimFallbackFile(null);
+    if (file) startTrimUpload(file, 0, MAX_VIDEO_DURATION_S);
   };
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1568,6 +1586,13 @@ export default function AddProductPage({
         maxDurationS={MAX_VIDEO_DURATION_S}
         onCancel={() => setTrimCandidate(null)}
         onConfirm={handleConfirmTrim}
+      />
+
+      <TrimFallbackModal
+        open={trimFallbackFile !== null}
+        maxDurationS={MAX_VIDEO_DURATION_S}
+        onCancel={() => setTrimFallbackFile(null)}
+        onConfirm={handleConfirmTrimFallback}
       />
 
       {videoJob?.active && !publishModal.open && (

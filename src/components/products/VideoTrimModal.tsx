@@ -5,12 +5,15 @@ import { createPortal } from "react-dom";
 import { AlertCircle, Loader2, Pause, Play, Scissors, X } from "lucide-react";
 import type { VideoTrimModalProps } from "@/types/product";
 
-// Same fail-open reasoning as validateVideoDuration in bunnyStream.ts: a
-// desktop/mobile browser's <video> metadata read can hang indefinitely on a
-// large file (moov atom at the end of the container, needing to be
-// streamed-through first) or on a codec it can't decode at all (HEVC on a
-// lot of Android Chrome builds) — without this, that shows as an infinite
-// "Reading video…" spinner with no way out. Past this point, fall back to
+// Same reasoning as checkVideoDuration in bunnyStream.ts: a desktop/mobile
+// browser's <video> metadata read can hang indefinitely on a large file
+// (moov atom at the end of the container, needing to be streamed-through
+// first) or on a codec it can't decode at all (HEVC on a lot of Android
+// Chrome builds) — without this, that shows as an infinite "Reading
+// video…" spinner with no way out. In practice this modal only opens once
+// AddProductPage's own pre-check already confirmed the browser CAN preview
+// this file (see checkVideoDuration's "trim-with-preview" case), so this
+// fallback is now a rare defensive backstop rather than the common path —
 // letting the vendor type a start/end instead of dragging a scrubber they
 // can't see a preview for.
 const METADATA_TIMEOUT_MS = 8000;
