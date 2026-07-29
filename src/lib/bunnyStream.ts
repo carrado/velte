@@ -12,12 +12,23 @@ const TUS_ENDPOINT = "https://video.bunnycdn.com/tusupload";
 
 const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 const ALLOWED_VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov"];
-// A sanity ceiling, not a technical requirement the way Cloudinary's 100MB
-// was — Bunny will happily accept a larger file, this just guards against
-// something pathological (a vendor picking the wrong file entirely) rather
-// than rejecting real footage. 600MB covers even a 90s 4K60 iPhone clip
-// (~450-560MB at default HEVC settings) with real margin.
-const MAX_VIDEO_BYTES = 600 * 1024 * 1024; // 600 MB
+// A sanity ceiling, not a technical requirement — Bunny will happily accept
+// a larger file, and the trim-service's original-upload leg doesn't get
+// meaningfully more expensive as the original grows (parallel multipart
+// straight to R2, and ffmpeg only ever reads the trim window back out, not
+// the whole file — see velte-video-trim-service's processJob.js). This just
+// guards against something pathological (a vendor picking the wrong file
+// entirely) rather than rejecting real footage.
+//
+// Sized for someone recording MORE than the 90s they'll keep and trimming
+// down, not just uploading something already ~90s long: 4K60 HEVC on an
+// iPhone runs ~450-560MB per 90s, so a 600MB cap left almost no room to
+// record extra and cut it down — a vendor with 4K60 enabled (not the
+// out-of-the-box default, but a real setting some vendors use) could get
+// hard-rejected before the trim modal ever opened, no in-app way out. 2GB
+// covers a ~5 minute 4K60 original with real margin to actually use the
+// trim feature as intended.
+const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
 const MAX_VIDEO_DURATION_S = 90;
 
 export const MAX_VIDEO_MB = MAX_VIDEO_BYTES / (1024 * 1024);
@@ -124,14 +135,30 @@ async function getUploadAuth(title: string): Promise<BunnyUploadAuth> {
 // video's embed player URL, which is what gets stored as the listing's
 // videoUrl (a real, working URL end to end — nothing else in the app needs
 // to know it's Bunny-specific to use it).
+//
+// `signal` lets a caller cancel an in-flight upload (AddProductPage's
+// floating progress bar) — this doesn't just stop the TUS transfer
+// client-side, it also deletes the video container Bunny already created
+// at auth time (see deleteBunnyVideo), so a cancelled upload doesn't leave
+// an orphaned, partially-uploaded video sitting in the library forever.
 export function uploadVideoToBunny(
   file: File,
   title: string,
   onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
     getUploadAuth(title)
       .then(({ videoId, libraryId, signature, expire }) => {
+        if (signal?.aborted) {
+          fetch(`/api/videos/${videoId}`, { method: "DELETE" }).catch(() => {});
+          reject(new DOMException("Aborted", "AbortError"));
+          return;
+        }
         const upload = new Upload(file, {
           endpoint: TUS_ENDPOINT,
           retryDelays: [0, 3000, 5000, 10000, 20000],
@@ -145,17 +172,26 @@ export function uploadVideoToBunny(
             filetype: file.type || "video/mp4",
             title,
           },
-          onError: (err) =>
-            reject(err instanceof Error ? err : new Error(String(err))),
+          onError: (err) => {
+            signal?.removeEventListener("abort", onAbort);
+            reject(err instanceof Error ? err : new Error(String(err)));
+          },
           onProgress: (bytesSent, bytesTotal) => {
             onProgress?.(bytesTotal > 0 ? bytesSent / bytesTotal : 0);
           },
           onSuccess: () => {
+            signal?.removeEventListener("abort", onAbort);
             resolve(
               `https://player.mediadelivery.net/embed/${libraryId}/${videoId}`,
             );
           },
         });
+        const onAbort = () => {
+          upload.abort();
+          fetch(`/api/videos/${videoId}`, { method: "DELETE" }).catch(() => {});
+          reject(new DOMException("Aborted", "AbortError"));
+        };
+        signal?.addEventListener("abort", onAbort);
         upload.start();
       })
       .catch(reject);
@@ -167,18 +203,41 @@ function extractVideoId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+// A listing's videoUrl is one of two shapes depending on how it got here:
+// Bunny's embed-player URL (short clips uploaded directly, still via
+// uploadVideoToBunny above) or a plain R2 file URL (anything that went
+// through the trim flow — see velte-video-trim-service's processJob.js,
+// which no longer talks to Bunny at all). Callers that render playback
+// (FullscreenVideoModal) need to know which one they've got: an iframe
+// pointed at Bunny's embed player vs. a native <video> tag for a raw file.
+export function isBunnyEmbedUrl(url: string): boolean {
+  return extractVideoId(url) !== null;
+}
+
 // Bunny auto-generates a thumbnail for every video, served from the
 // library's own CDN pull zone (a different host than the embed player) —
 // extracts the videoId back out of the embed URL we generated in
 // uploadVideoToBunny above and rebuilds that thumbnail path. Falls back to
 // the embed URL itself (won't render as an image, but fails visibly rather
-// than silently) if the pull zone isn't configured or the URL isn't one of
-// ours — should only happen from a missing env var, not real usage.
+// than silently) if the pull zone isn't configured — should only happen
+// from a missing env var, not real usage.
+//
+// A non-Bunny videoUrl is a plain R2 file URL from the trim flow instead
+// (see uploadVideoToBunny's comment above) — R2 has no auto-thumbnail
+// equivalent, so the trim-service's processJob.js mints one itself and
+// writes it under the SAME key as the trimmed clip with a .jpg extension
+// (videos/<jobId>.mp4 -> videos/<jobId>.jpg). Swapping the extension here
+// is all that's needed to find it; nothing else has to carry a separate
+// posterUrl field around. If that poster failed to generate (best-effort on
+// the trim-service side), this just 404s and VideoPosterImage's onError
+// falls back to a placeholder, same as a Bunny thumbnail not being ready yet.
 export function videoPosterUrl(url: string): string {
-  const pullZone = process.env.NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE;
   const videoId = extractVideoId(url);
-  if (!pullZone || !videoId) return url;
-  return `https://${pullZone}/${videoId}/thumbnail.jpg`;
+  if (videoId) {
+    const pullZone = process.env.NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE;
+    return pullZone ? `https://${pullZone}/${videoId}/thumbnail.jpg` : url;
+  }
+  return url.replace(/\.(mp4|webm)$/, ".jpg");
 }
 
 export interface VideoStatus {

@@ -16,6 +16,7 @@ import {
   MAX_VIDEO_MB,
   MAX_VIDEO_DURATION_S,
 } from "@/lib/bunnyStream";
+import { trimVideoServerSide } from "@/lib/videoTrim";
 import { getErrorMessage } from "@/lib/error-message";
 import {
   getServiceDetailPresets,
@@ -27,6 +28,7 @@ import type { SectorClassification } from "@/types/sectors";
 import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import AttributePickerModal from "./AttributePickerModal";
 import VideoTrimModal from "./VideoTrimModal";
+import VideoUploadProgressBar from "./VideoUploadProgressBar";
 import VideoPosterImage from "./VideoPosterImage";
 import {
   Save,
@@ -66,6 +68,7 @@ import type {
   FoodProductPayload,
   CreateProductPayload,
   Category,
+  VideoJob,
 } from "@/types/product";
 import { storeApi } from "@/services/store";
 import type { ConnectedCatalog, CatalogPlatform } from "@/types/store";
@@ -1604,12 +1607,26 @@ export default function AddProductPage({
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [isValidatingVideo, setIsValidatingVideo] = useState(false);
   // Set instead of rejecting outright when a picked video runs over
   // MAX_VIDEO_DURATION_S — holding the file here opens the trim modal so the
   // vendor can cut it down instead of having to leave the app to do it.
   const [trimCandidate, setTrimCandidate] = useState<File | null>(null);
+  // Upload/trim now starts the moment a video's picked (or a trim window's
+  // confirmed), not deferred to publish time — this is the single source of
+  // truth both the floating VideoUploadProgressBar and PublishProgressModal
+  // (if Publish is clicked mid-flight) read live progress from. null once
+  // nothing's in flight; videoFile is gone entirely since a video is always
+  // either still uploading (this) or already resolved into a real URL
+  // (videoPreview).
+  const [videoJob, setVideoJob] = useState<VideoJob | null>(null);
+  // uploadShare/videoBaseProgress for the video's slice of the publish
+  // bar (see handleSubmit) need to reach the JSX below where
+  // PublishProgressModal is rendered — refs, not state, since they're set
+  // once per submit and read on every videoJob progress tick without
+  // needing their own re-render.
+  const videoUploadBaseRef = useRef(0);
+  const videoUploadShareRef = useRef(0);
   // Cover media is one slot, either a photo or a video — this only picks
   // which upload control shows, it doesn't clear whichever one isn't active
   // (e.g. an existing listing edited from "video" back to "photo" keeps its
@@ -1873,21 +1890,110 @@ export default function AddProductPage({
       return;
     }
 
-    setVideoPreview(URL.createObjectURL(file));
-    setVideoFile(file);
+    startDirectUpload(file);
   };
+
+  // Kicks off the actual upload the instant a file's accepted (either a
+  // plain ≤90s pick, or right after "Trim & Continue" is clicked below) —
+  // no longer deferred to publish time. The floating VideoUploadProgressBar
+  // shows live progress while the vendor keeps editing the rest of the
+  // form; handleSubmit awaits `videoJob.promise` directly instead of
+  // starting a second upload if Publish is clicked before this resolves.
+  const startDirectUpload = (file: File) => {
+    setVideoPreview(URL.createObjectURL(file));
+    const controller = new AbortController();
+    const promise = uploadVideoToBunny(
+      file,
+      productName.trim() || "Product video",
+      (pct) => {
+        const progress = Math.round(pct * 100);
+        setVideoJob((prev) => (prev ? { ...prev, progress } : prev));
+      },
+      controller.signal,
+    ).then(
+      (url) => {
+        setVideoPreview(url);
+        setVideoJob(null);
+        return url;
+      },
+      (err: unknown) => {
+        setVideoJob(null);
+        if (!(err instanceof DOMException && err.name === "AbortError")) {
+          toast.error(getErrorMessage(err, "Couldn't upload this video"));
+        }
+        throw err;
+      },
+    );
+    setVideoJob({
+      active: true,
+      phase: "uploading",
+      progress: 0,
+      promise,
+      controller,
+    });
+  };
+
+  const startTrimUpload = (file: File, startS: number, endS: number) => {
+    const controller = new AbortController();
+    const promise = trimVideoServerSide(
+      file,
+      startS,
+      endS,
+      (phase, pct) => {
+        const progress = Math.round(pct * 100);
+        setVideoJob((prev) =>
+          prev
+            ? {
+                ...prev,
+                phase: phase === "processing" ? "trimming" : "uploading",
+                progress,
+              }
+            : prev,
+        );
+      },
+      controller.signal,
+    ).then(
+      (url) => {
+        setVideoPreview(url);
+        setVideoJob(null);
+        return url;
+      },
+      (err: unknown) => {
+        setVideoJob(null);
+        if (!(err instanceof DOMException && err.name === "AbortError")) {
+          toast.error(getErrorMessage(err, "Couldn't process this video"));
+        }
+        throw err;
+      },
+    );
+    setVideoJob({
+      active: true,
+      phase: "uploading",
+      progress: 0,
+      promise,
+      controller,
+    });
+  };
+
   const clearVideo = () => {
     setVideoPreview(null);
-    setVideoFile(null);
     if (videoRef.current) videoRef.current.value = "";
   };
-  const handleTrimmed = (url: string) => {
+  // Floating bar's Cancel button — the sole way to cancel a background
+  // upload/trim. Aborting doesn't just stop polling client-side: the
+  // signal listeners inside uploadVideoToBunny/trimVideoServerSide also
+  // delete whatever was already pushed to Bunny/R2 (best-effort), so
+  // nothing orphaned lingers server-side.
+  const cancelVideoJob = () => {
+    videoJob?.controller.abort();
+    setVideoJob(null);
+    setVideoPreview(null);
+    if (videoRef.current) videoRef.current.value = "";
+  };
+  const handleConfirmTrim = (startS: number, endS: number) => {
+    const file = trimCandidate;
     setTrimCandidate(null);
-    // The trim service already pushed the cut clip to Bunny — this is a
-    // real, playable URL already, same as an existing listing's videoUrl in
-    // edit mode, so no further upload is needed at publish time.
-    setVideoPreview(url);
-    setVideoFile(null);
+    if (file) startTrimUpload(file, startS, endS);
   };
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -2111,7 +2217,9 @@ export default function AddProductPage({
     try {
       // Calculate how many uploads we'll do so each gets an equal share of 0–75%
       const uploadCount =
-        (mainImageFile ? 1 : 0) + thumbnailFiles.length + (videoFile ? 1 : 0);
+        (mainImageFile ? 1 : 0) +
+        thumbnailFiles.length +
+        (videoJob?.active ? 1 : 0);
       const uploadShare = uploadCount > 0 ? Math.floor(75 / uploadCount) : 0;
       let uploadsCompleted = 0;
 
@@ -2155,27 +2263,25 @@ export default function AddProductPage({
       const remoteThumbUrls = thumbnails.filter((u) => !u.startsWith("blob:"));
       thumbnailUrls = [...remoteThumbUrls, ...thumbnailUrls].slice(0, 5);
 
-      // Upload video — real byte progress feeds straight into the shared
-      // bar's slice for this upload (videoBaseProgress → +uploadShare)
-      // instead of showing its own separate percentage, so the one bar
-      // just keeps climbing instead of sitting still while a number ticks
-      // up next to it.
+      // Video — if it's still uploading/trimming in the background (the
+      // floating bar case), don't start a second upload: await the SAME
+      // promise, with PublishProgressModal deriving its displayed
+      // progress/step live off `videoJob` for as long as this is pending
+      // (see the <PublishProgressModal> render below) via these two refs.
+      // If it already finished before Publish was clicked (the common
+      // case), videoJob is null here and this is a no-op, same as today.
       let videoUrl: string | null = null;
-      if (videoFile) {
-        setPublishModal((prev) => ({ ...prev, step: "Uploading video…" }));
-        const videoBaseProgress = uploadsCompleted * uploadShare;
-        videoUrl = await uploadVideoToBunny(
-          videoFile,
-          productName.trim() || "Product video",
-          (pct) =>
-            setPublishModal((prev) => ({
-              ...prev,
-              progress: Math.min(
-                75,
-                Math.round(videoBaseProgress + pct * uploadShare),
-              ),
-            })),
-        );
+      if (videoJob?.active) {
+        videoUploadBaseRef.current = uploadsCompleted * uploadShare;
+        videoUploadShareRef.current = uploadShare;
+        try {
+          videoUrl = await videoJob.promise;
+        } catch {
+          // Already toasted by startDirectUpload/startTrimUpload's own
+          // handler — just stop the publish flow here, don't toast again.
+          setPublishModal((prev) => ({ ...prev, open: false }));
+          return;
+        }
         advanceUpload("Video ready");
       } else if (videoPreview && !videoPreview.startsWith("blob:")) {
         videoUrl = videoPreview;
@@ -2414,8 +2520,12 @@ export default function AddProductPage({
     setMainImageFile(null);
     setThumbnails([]);
     setThumbnailFiles([]);
+    // Abort rather than just clearing the preview — switching shape mid-
+    // upload shouldn't leave an orphaned video pushed to Bunny/R2 for a
+    // listing that no longer references it.
+    videoJob?.controller.abort();
+    setVideoJob(null);
     setVideoPreview(null);
-    setVideoFile(null);
     setCoverTab("photo");
     setTags([]);
     setTagInput("");
@@ -2470,8 +2580,16 @@ export default function AddProductPage({
         file={trimCandidate}
         maxDurationS={MAX_VIDEO_DURATION_S}
         onCancel={() => setTrimCandidate(null)}
-        onTrimmed={handleTrimmed}
+        onConfirm={handleConfirmTrim}
       />
+
+      {videoJob?.active && !publishModal.open && (
+        <VideoUploadProgressBar
+          phase={videoJob.phase}
+          progress={videoJob.progress}
+          onCancel={cancelVideoJob}
+        />
+      )}
 
       <div
         className={cn(
@@ -3123,7 +3241,7 @@ export default function AddProductPage({
                     )}
                     <button
                       onClick={() => videoRef.current?.click()}
-                      disabled={isValidatingVideo}
+                      disabled={isValidatingVideo || videoJob?.active}
                       className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
                     >
                       <VideoIcon size={13} />
@@ -3133,14 +3251,15 @@ export default function AddProductPage({
                       <>
                         <button
                           onClick={() => videoRef.current?.click()}
-                          disabled={isValidatingVideo}
-                          className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+                          disabled={isValidatingVideo || videoJob?.active}
+                          className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <RefreshCcw size={12} /> Replace
                         </button>
                         <button
                           onClick={clearVideo}
-                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                          disabled={videoJob?.active}
+                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Trash2 size={12} /> Clear
                         </button>
@@ -3750,8 +3869,24 @@ export default function AddProductPage({
 
       <PublishProgressModal
         open={publishModal.open}
-        progress={publishModal.progress}
-        step={publishModal.step}
+        progress={
+          publishModal.open && videoJob?.active
+            ? Math.min(
+                75,
+                Math.round(
+                  videoUploadBaseRef.current +
+                    (videoJob.progress / 100) * videoUploadShareRef.current,
+                ),
+              )
+            : publishModal.progress
+        }
+        step={
+          publishModal.open && videoJob?.active
+            ? videoJob.phase === "trimming"
+              ? "Trimming video…"
+              : "Uploading video…"
+            : publishModal.step
+        }
         done={publishModal.done}
         isFood={isFood}
         isEditMode={isEditMode}

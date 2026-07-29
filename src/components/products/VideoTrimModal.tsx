@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, Loader2, Pause, Play, Scissors, X } from "lucide-react";
 import type { VideoTrimModalProps } from "@/types/product";
-import { trimVideoServerSide, type TrimPhase } from "@/lib/videoTrim";
 
 // Same fail-open reasoning as validateVideoDuration in bunnyStream.ts: a
 // desktop/mobile browser's <video> metadata read can hang indefinitely on a
@@ -110,7 +109,7 @@ export default function VideoTrimModal({
   file,
   maxDurationS,
   onCancel,
-  onTrimmed,
+  onConfirm,
 }: VideoTrimModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
@@ -118,10 +117,6 @@ export default function VideoTrimModal({
   const [metadataError, setMetadataError] = useState(false);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
-  const [trimming, setTrimming] = useState(false);
-  const [phase, setPhase] = useState<TrimPhase>("uploading");
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Fresh file → fresh preview + reset the picked window.
@@ -134,9 +129,6 @@ export default function VideoTrimModal({
     setMetadataError(false);
     setStart(0);
     setEnd(0);
-    setTrimming(false);
-    setProgress(0);
-    setError(null);
     setIsPlaying(false);
     return () => {
       URL.revokeObjectURL(url);
@@ -184,25 +176,6 @@ export default function VideoTrimModal({
     if (v && v.currentTime >= end) v.pause();
   };
 
-  const handleTrim = async () => {
-    setTrimming(true);
-    setPhase("uploading");
-    setProgress(0);
-    setError(null);
-    try {
-      const url = await trimVideoServerSide(file, start, end, (p, pct) => {
-        setPhase(p);
-        setProgress(pct);
-      });
-      onTrimmed(url);
-    } catch {
-      setError(
-        "Couldn't process this video. Check your connection and try again, or trim it in your phone's gallery app first and upload the shorter clip.",
-      );
-      setTrimming(false);
-    }
-  };
-
   const selectedSeconds = Math.max(0, end - start);
   const canTrim = metadataError
     ? end > start && selectedSeconds <= maxDurationS
@@ -227,8 +200,7 @@ export default function VideoTrimModal({
           </div>
           <button
             onClick={onCancel}
-            disabled={trimming}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -274,11 +246,10 @@ export default function VideoTrimModal({
                     min={0}
                     step={1}
                     value={start}
-                    disabled={trimming}
                     onChange={(e) =>
                       setStart(Math.max(0, Number(e.target.value) || 0))
                     }
-                    className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-dash-body disabled:opacity-50"
+                    className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-dash-body"
                   />
                 </label>
                 <label className="text-dash-caption text-gray-500">
@@ -288,7 +259,6 @@ export default function VideoTrimModal({
                     min={start + 1}
                     step={1}
                     value={end}
-                    disabled={trimming}
                     onChange={(e) =>
                       setEnd(
                         Math.max(
@@ -297,7 +267,7 @@ export default function VideoTrimModal({
                         ),
                       )
                     }
-                    className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-dash-body disabled:opacity-50"
+                    className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-dash-body"
                   />
                 </label>
               </div>
@@ -341,8 +311,7 @@ export default function VideoTrimModal({
                 <button
                   type="button"
                   onClick={handleTogglePlay}
-                  disabled={trimming}
-                  className="flex items-center gap-1 font-semibold text-orange-500 hover:text-orange-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
                 >
                   {isPlaying ? (
                     <Pause size={12} fill="currentColor" />
@@ -354,41 +323,21 @@ export default function VideoTrimModal({
               </div>
             </div>
           )}
-
-          {error && (
-            <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-md">
-              <AlertCircle
-                size={15}
-                className="text-red-500 mt-0.5 flex-shrink-0"
-              />
-              <p className="text-dash-caption text-red-600">{error}</p>
-            </div>
-          )}
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
           <button
             onClick={onCancel}
-            disabled={trimming}
-            className="flex-1 py-2.5 text-dash-body font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-2.5 text-dash-body font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
-            onClick={handleTrim}
-            disabled={!canTrim || trimming}
+            onClick={() => onConfirm(start, end)}
+            disabled={!canTrim}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-body font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {trimming ? (
-              <>
-                <Loader2 size={15} className="animate-spin" />
-                {phase === "uploading"
-                  ? `Uploading… ${Math.round(progress * 100)}%`
-                  : `Processing… ${Math.round(progress * 100)}%`}
-              </>
-            ) : (
-              "Trim & Continue"
-            )}
+            Trim & Continue
           </button>
         </div>
       </div>

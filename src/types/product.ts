@@ -222,10 +222,37 @@ export interface VideoTrimModalProps {
   file: File | null;
   maxDurationS: number;
   onCancel: () => void;
-  /** Fires once the video-trim service has cut the clip and pushed it to
-   * Bunny — the resulting playback URL, ready to store as-is (no further
-   * upload needed, unlike a normal already-short-enough pick). */
-  onTrimmed: (url: string) => void;
+  /** Fires the moment the vendor picks a window and confirms — the modal
+   * closes immediately; the parent owns starting the actual upload/trim
+   * (AddProductPage's floating progress bar), not this modal. */
+  onConfirm: (startS: number, endS: number) => void;
+}
+
+export type VideoJobPhase = "uploading" | "trimming";
+
+export interface VideoUploadProgressBarProps {
+  /** "trimming" only ever applies to the over-length path (server-side cut
+   * after the original's uploaded) — a plain short video only ever shows
+   * "uploading". */
+  phase: VideoJobPhase;
+  /** 0–100 */
+  progress: number;
+  onCancel: () => void;
+}
+
+// AddProductPage's single source of truth for an in-flight video
+// upload/trim — read live by both VideoUploadProgressBar and (if Publish is
+// clicked mid-flight) PublishProgressModal.
+export interface VideoJob {
+  active: boolean;
+  phase: VideoJobPhase;
+  /** 0–100 */
+  progress: number;
+  /** Resolves to the real, playable video URL once upload (+ trim, if
+   * applicable) finishes — awaited directly by handleSubmit if Publish is
+   * clicked before it settles, instead of starting a duplicate upload. */
+  promise: Promise<string>;
+  controller: AbortController;
 }
 
 export type AddProductTaxOption = "yes" | "no";

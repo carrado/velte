@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, X } from "lucide-react";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
-import { getVideoStatus } from "@/lib/bunnyStream";
+import { getVideoStatus, isBunnyEmbedUrl } from "@/lib/bunnyStream";
 
 interface FullscreenVideoModalProps {
   videoUrl: string;
@@ -30,6 +30,7 @@ export default function FullscreenVideoModal({
 }: FullscreenVideoModalProps) {
   const [ready, setReady] = useState(false);
   const [progress, setProgress] = useState(0);
+  const isBunny = isBunnyEmbedUrl(videoUrl);
 
   useEffect(() => {
     if (!open) return;
@@ -49,12 +50,21 @@ export default function FullscreenVideoModal({
 
   // Checks Bunny's transcode status on open and, if it's not finished yet,
   // polls until it is (or MAX_WAIT_MS passes) instead of handing the vendor
-  // straight to Bunny's own embed player mid-"not ready" state.
+  // straight to Bunny's own embed player mid-"not ready" state. Only
+  // applies to Bunny URLs — an R2-stored (trimmed) video is already the
+  // finished file the moment its URL exists, no async transcode step to
+  // wait on, so it's ready immediately.
   useEffect(() => {
     if (!open) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setReady(false);
     setProgress(0);
+
+    if (!isBunny) {
+      setReady(true);
+      return;
+    }
+
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const startedAt = Date.now();
@@ -77,7 +87,7 @@ export default function FullscreenVideoModal({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [open, videoUrl]);
+  }, [open, videoUrl, isBunny]);
 
   if (!open) return null;
 
@@ -92,17 +102,32 @@ export default function FullscreenVideoModal({
       </button>
 
       {ready ? (
-        // Bunny Stream's own embed player — handles HLS/adaptive bitrate
-        // and codec selection, so there's no client-side video/HLS logic
-        // to maintain here. Only mounted once we know transcoding is done
-        // (or our own status check gave up), so it never has to show its
-        // own "not ready" state.
-        <iframe
-          src={`${videoUrl}?autoplay=true`}
-          allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;"
-          allowFullScreen
-          className="aspect-video w-full max-w-4xl border-0"
-        />
+        isBunny ? (
+          // Bunny Stream's own embed player — handles HLS/adaptive bitrate
+          // and codec selection, so there's no client-side video/HLS logic
+          // to maintain here. Only mounted once we know transcoding is done
+          // (or our own status check gave up), so it never has to show its
+          // own "not ready" state.
+          <iframe
+            src={`${videoUrl}?autoplay=true`}
+            allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;"
+            allowFullScreen
+            className="aspect-video w-full max-w-4xl border-0"
+          />
+        ) : (
+          // R2-stored (trimmed) video — a plain file, not a hosted embed
+          // player. Progressive playback via HTTP range requests (which R2
+          // supports natively) is enough for a capped-length clip; no
+          // adaptive bitrate here, see the trim-service README for why
+          // that tradeoff was made deliberately.
+          <video
+            src={videoUrl}
+            controls
+            autoPlay
+            playsInline
+            className="aspect-video w-full max-w-4xl border-0 bg-black"
+          />
+        )
       ) : (
         <div className="flex flex-col items-center gap-3 text-white">
           <Loader2 size={28} className="animate-spin" />

@@ -1,10 +1,7 @@
 import { createHash } from "crypto";
 
-// Shared by both bunny-upload-auth (user session, browser-initiated upload)
-// and bunny-upload-auth-internal (shared-secret, called by the video-trim
-// service after it's cut a clip server-side) — same Bunny "create video +
-// sign the TUS upload" step either way, just two different callers with
-// different auth models.
+// Shared server-side Bunny Stream helpers — the API key never reaches the
+// browser, every call here happens from a Next.js route handler.
 const BUNNY_API_BASE = "https://video.bunnycdn.com";
 
 export interface SignedBunnyUpload {
@@ -50,4 +47,32 @@ export async function createSignedBunnyUpload(
     .digest("hex");
 
   return { videoId, libraryId, signature, expire };
+}
+
+// Called when a vendor cancels a still-in-flight direct upload (see
+// bunnyStream.ts's uploadVideoToBunny) — the video "container" createSigned
+// BunnyUpload above already created on Bunny needs deleting too, not just
+// abandoning client-side, or it lingers in the library forever with
+// whatever partial bytes it got. A 404 (already gone, e.g. a double-cancel)
+// isn't a real failure here.
+export async function deleteBunnyVideo(videoId: string): Promise<void> {
+  const libraryId = process.env.BUNNY_STREAM_LIBRARY_ID;
+  const apiKey = process.env.BUNNY_STREAM_API_KEY;
+  if (!libraryId || !apiKey) {
+    throw new Error(
+      "Video upload is not configured — add BUNNY_STREAM_LIBRARY_ID and BUNNY_STREAM_API_KEY to the server .env",
+    );
+  }
+
+  const res = await fetch(
+    `${BUNNY_API_BASE}/library/${libraryId}/videos/${videoId}`,
+    {
+      method: "DELETE",
+      headers: { AccessKey: apiKey, Accept: "application/json" },
+    },
+  );
+  if (!res.ok && res.status !== 404) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Bunny delete-video failed (${res.status}): ${errBody}`);
+  }
 }
