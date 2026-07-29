@@ -46,7 +46,9 @@ function fmtDate(iso: string): string {
 }
 import { NIGERIAN_FOOD_CATEGORIES } from "@/lib/food-categories";
 import type { Category } from "@/types/product";
-import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
+import { isFoodBusiness } from "@/hooks/useBusinessType";
+import { SECTOR_BY_VALUE } from "@/lib/sectors";
+import type { SectorClassification } from "@/types/sectors";
 
 // ── Carousel placeholder images (swap for real product images when available) ─
 
@@ -252,13 +254,25 @@ export default function ViewProductPage({ productId }: { productId: string }) {
   const pathname = usePathname();
   const userId = pathname.split("/").filter(Boolean)[0];
   const { navigate } = useNavigation();
-  const { hasFood: isFood } = useVendorSectorCapabilities();
   const [videoModalOpen, setVideoModalOpen] = useState(false);
 
   const { data: product, isLoading: productsLoading } = useQuery({
     queryKey: queryKeys.products.detail(productId),
     queryFn: () => categoriesApi.getProduct(productId),
   });
+
+  // This LISTING's own food-ness — never the vendor's account-wide
+  // capability (see useVendorSectorCapabilities' own doc comment: it's an
+  // account-wide shim for dashboard chrome, not meant for a single
+  // product's page). Using the account-wide flag here meant a service
+  // listing, for a vendor who ALSO has a food sector elsewhere, got treated
+  // as food too — duplicating this same product's attributes into both a
+  // "Service Details" section and a separate "Attributes" section further
+  // down. Mirrors AddProductPage's own per-listing derivation.
+  const classification: SectorClassification = product?.sectorValue
+    ? (SECTOR_BY_VALUE[product.sectorValue]?.classification ?? "retail")
+    : "retail";
+  const isFood = isFoodBusiness(classification) && product?.kind !== "service";
 
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.products.categories,

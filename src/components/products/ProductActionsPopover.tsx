@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   Trash2,
   Eye,
+  Play,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -19,6 +20,7 @@ export default function ProductActionsPopover({
   onChangePrice,
   onSwitchToQuote,
   onDelete,
+  onViewVideo,
 }: ProductActionsPopoverProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -34,7 +36,7 @@ export default function ProductActionsPopover({
       <button
         ref={triggerRef}
         onClick={() => setPopoverOpen(!popoverOpen)}
-        className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-300 bg-gray-100 transition-colors cursor-pointer"
+        className="p-1.5 rounded-md text-gray-500 hover:text-gray-700 bg-white/90 hover:bg-white backdrop-blur-sm transition-colors cursor-pointer"
       >
         <MoreHorizontal size={16} />
       </button>
@@ -55,6 +57,18 @@ export default function ProductActionsPopover({
           <Eye size={14} className="text-orange-500" />
           View {noun}
         </button>
+        {onViewVideo && (
+          <button
+            onClick={() => {
+              setPopoverOpen(false);
+              onViewVideo();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
+          >
+            <Play size={14} className="text-purple-500" />
+            View Video
+          </button>
+        )}
         <button
           onClick={() => {
             setPopoverOpen(false);

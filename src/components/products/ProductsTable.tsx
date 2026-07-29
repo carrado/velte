@@ -8,7 +8,27 @@ import type { CategoryProduct } from "@/types/product";
 import ProductActionsPopover from "./ProductActionsPopover";
 import FullscreenVideoModal from "@/components/FullscreenVideoModal";
 import VideoPosterImage from "./VideoPosterImage";
-import { Star, Package, Play } from "lucide-react";
+import { Star, Package, Play, Plus, SearchX } from "lucide-react";
+
+// Small, local, and deliberately coarse — a card caption, not a precise
+// audit timestamp, so a handful of thresholds is enough (same spirit as
+// product-price.ts's fmt()). Returns null on anything unparseable so the
+// caller can just omit the line rather than ever showing "Invalid date".
+function timeAgo(dateStr: string): string | null {
+  const then = new Date(dateStr).getTime();
+  if (Number.isNaN(then)) return null;
+  const diffMs = Date.now() - then;
+  if (diffMs < 0) return null;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return mins <= 1 ? "Added just now" : `Added ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Added ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `Added ${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `Added ${months}mo ago`;
+  return `Added ${Math.floor(months / 12)}y ago`;
+}
 
 function ProductCard({
   product,
@@ -24,6 +44,7 @@ function ProductCard({
   onDelete: () => void;
 }) {
   const pricing = computePrice(product);
+  const posted = timeAgo(product.createdDate);
   const [videoModalOpen, setVideoModalOpen] = useState(false);
 
   return (
@@ -49,11 +70,14 @@ function ProductCard({
         ) : (
           <div
             className={cn(
-              "w-full h-full flex items-center justify-center text-white font-black text-4xl",
+              "w-full h-full flex flex-col items-center justify-center gap-1 text-white",
               product.colorClass,
             )}
           >
-            {product.name.charAt(0)}
+            <span className="font-black text-4xl leading-none">
+              {product.name.charAt(0)}
+            </span>
+            <Package size={14} className="text-white/70" />
           </div>
         )}
 
@@ -136,6 +160,10 @@ function ProductCard({
             {fmt(pricing.price, pricing.currencySymbol)}
           </p>
         )}
+
+        {posted && (
+          <p className="text-dash-caption text-gray-400 mt-1">{posted}</p>
+        )}
       </div>
 
       {product.videoUrl && (
@@ -149,15 +177,179 @@ function ProductCard({
   );
 }
 
-function EmptyState() {
+// Mobile-only list row — a 2-column grid of square-image cards left every
+// listing too narrow to fit name + price + badges + a tap target for the
+// menu without feeling clustered (found live: user feedback on a phone
+// screen). This trades photo prominence for a layout that actually scans
+// on a narrow screen — one listing per row, thumbnail left, everything
+// else right — the same shape WhatsApp Business/Shopify's own mobile
+// catalog lists use. Desktop/tablet keep the richer photo-forward grid
+// below (see the `hidden sm:grid` / `sm:hidden` split in ProductsTable).
+function ProductRow({
+  product,
+  isFood,
+  onChangePrice,
+  onSwitchToQuote,
+  onDelete,
+}: {
+  product: CategoryProduct;
+  isFood: boolean;
+  onChangePrice: () => void;
+  onSwitchToQuote: () => void;
+  onDelete: () => void;
+}) {
+  const pricing = computePrice(product);
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
+
   return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3">
-      <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
-        <Package size={24} className="text-gray-300" />
+    <div className="flex items-center gap-3 px-4 py-3 active:bg-gray-50 transition-colors">
+      <button
+        onClick={() => product.videoUrl && setVideoModalOpen(true)}
+        aria-label={product.videoUrl ? "Play video" : undefined}
+        className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0"
+      >
+        {product.videoUrl ? (
+          <VideoPosterImage
+            videoUrl={product.videoUrl}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        ) : product.mainImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.mainImageUrl}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div
+            className={cn(
+              "w-full h-full flex items-center justify-center text-white font-black text-lg",
+              product.colorClass,
+            )}
+          >
+            {product.name.charAt(0)}
+          </div>
+        )}
+        {product.videoUrl && (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/10">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white">
+              <Play size={10} fill="white" className="ml-0.5" />
+            </span>
+          </span>
+        )}
+      </button>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-dash-body font-semibold text-[#023337] truncate">
+          {product.name}
+        </p>
+
+        {pricing.quoteOnRequest ? (
+          <p className="text-dash-body font-bold text-orange-500 mt-0.5">
+            Contact for quote
+          </p>
+        ) : pricing.isRange ? (
+          <p className="text-dash-body font-bold text-orange-500 mt-0.5">
+            {fmt(pricing.price, pricing.currencySymbol)}{" "}
+            <span className="text-gray-400 font-medium">–</span>{" "}
+            {fmt(pricing.priceMax!, pricing.currencySymbol)}
+          </p>
+        ) : (
+          <p className="text-dash-body font-bold text-orange-500 mt-0.5">
+            {fmt(pricing.price, pricing.currencySymbol)}
+          </p>
+        )}
+
+        {(product.kind === "service" || isFood || product.featured) && (
+          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+            {product.kind === "service" ? (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-teal-50 text-teal-700">
+                Service
+              </span>
+            ) : isFood ? (
+              <span
+                className={cn(
+                  "inline-flex items-center px-1.5 py-0.5 rounded text-dash-caption font-semibold",
+                  product.isCurrentlyAvailable === false
+                    ? "bg-red-50 text-red-700"
+                    : "bg-green-50 text-green-700",
+                )}
+              >
+                {product.isCurrentlyAvailable === false
+                  ? "Not Available"
+                  : "Available"}
+              </span>
+            ) : null}
+            {product.featured && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-amber-50 text-amber-700">
+                <Star size={9} className="fill-amber-500 text-amber-500" />
+                Featured
+              </span>
+            )}
+          </div>
+        )}
       </div>
-      <p className="text-dash-body font-semibold text-gray-400">
-        No listings found.
-      </p>
+
+      <ProductActionsPopover
+        product={product}
+        isFood={isFood}
+        onChangePrice={onChangePrice}
+        onSwitchToQuote={onSwitchToQuote}
+        onDelete={onDelete}
+        onViewVideo={
+          product.videoUrl ? () => setVideoModalOpen(true) : undefined
+        }
+      />
+
+      {product.videoUrl && (
+        <FullscreenVideoModal
+          videoUrl={product.videoUrl}
+          open={videoModalOpen}
+          onClose={() => setVideoModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function EmptyState({
+  hasActiveSearch,
+  onAddListing,
+}: {
+  hasActiveSearch: boolean;
+  onAddListing?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+        {hasActiveSearch ? (
+          <SearchX size={24} className="text-gray-300" />
+        ) : (
+          <Package size={24} className="text-gray-300" />
+        )}
+      </div>
+      <div>
+        <p className="text-dash-body font-semibold text-gray-500">
+          {hasActiveSearch
+            ? "No listings match your search"
+            : "No listings yet"}
+        </p>
+        <p className="text-dash-caption text-gray-400 mt-0.5">
+          {hasActiveSearch
+            ? "Try a different name or clear the search."
+            : "Once you add a product or service, it'll show up here."}
+        </p>
+      </div>
+      {!hasActiveSearch && onAddListing && (
+        <button
+          onClick={onAddListing}
+          className="mt-1 flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer"
+        >
+          <Plus size={14} />
+          Add your first listing
+        </button>
+      )}
     </div>
   );
 }
@@ -168,21 +360,47 @@ export default function ProductsTable({
   onSwitchToQuote,
   onDelete,
   isFood = false,
+  hasActiveSearch = false,
+  onAddListing,
 }: ProductsTableProps) {
-  if (products.length === 0) return <EmptyState />;
+  if (products.length === 0)
+    return (
+      <EmptyState
+        hasActiveSearch={hasActiveSearch}
+        onAddListing={onAddListing}
+      />
+    );
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5">
-      {products.map((product) => (
-        <ProductCard
-          key={product.id}
-          product={product}
-          isFood={isFood}
-          onChangePrice={() => onChangePrice(product)}
-          onSwitchToQuote={() => onSwitchToQuote(product)}
-          onDelete={() => onDelete(product)}
-        />
-      ))}
-    </div>
+    <>
+      {/* Mobile: one listing per row — see ProductRow's own comment for why
+          a narrow grid card doesn't work here. */}
+      <div className="sm:hidden divide-y divide-gray-100">
+        {products.map((product) => (
+          <ProductRow
+            key={product.id}
+            product={product}
+            isFood={isFood}
+            onChangePrice={() => onChangePrice(product)}
+            onSwitchToQuote={() => onSwitchToQuote(product)}
+            onDelete={() => onDelete(product)}
+          />
+        ))}
+      </div>
+
+      {/* Tablet/desktop: the photo-forward card grid. */}
+      <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-5">
+        {products.map((product) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            isFood={isFood}
+            onChangePrice={() => onChangePrice(product)}
+            onSwitchToQuote={() => onSwitchToQuote(product)}
+            onDelete={() => onDelete(product)}
+          />
+        ))}
+      </div>
+    </>
   );
 }

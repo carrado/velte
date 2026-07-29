@@ -1,20 +1,6 @@
 import type { ReactNode } from "react";
 import type { SectorClassification } from "@/types/sectors";
 
-/** How Velte pulls a connected catalog (spec §16.1 adapters). */
-export type CatalogPlatform = "woocommerce" | "shopify" | "feed" | "unknown";
-
-/** A connected website mirrored into Velte. `status: "review"` means the site
- *  wasn't auto-detectable and needs manual onboarding. */
-export interface ConnectedCatalog {
-  sourceUrl: string;
-  platform: CatalogPlatform;
-  status: "connected" | "review";
-  productCount: number;
-  connectedAt: string | null;
-  lastSyncedAt: string | null;
-}
-
 /** The vendor's own store profile — editable fields only. */
 export interface Store {
   handle: string;
@@ -23,21 +9,11 @@ export interface Store {
   sectors: string[];
   whatsapp: string | null;
   gallery: string[];
-  /** The vendor's own store only. Null until they connect a website; absent on
-   *  the public storefront. */
-  connectedCatalog?: ConnectedCatalog | null;
 }
 
-// `connectedCatalog` is managed via its own endpoint, not the profile PUT.
-// `sectors` is read-only here too — it's a derived cache of User.sectors,
+// `sectors` is read-only here — it's a derived cache of User.sectors,
 // written only via PATCH /api/auth/sectors (see settingsApi.updateSectors).
-export type UpdateStorePayload = Partial<
-  Omit<Store, "connectedCatalog" | "sectors">
->;
-
-export interface ConnectCatalogPayload {
-  sourceUrl: string;
-}
+export type UpdateStorePayload = Partial<Omit<Store, "sectors">>;
 
 export interface PublicStoreProduct {
   id: string;

@@ -9,7 +9,7 @@ import {
   useMutation,
   keepPreviousData,
 } from "@tanstack/react-query";
-import { Plus, Search, X } from "lucide-react";
+import { DollarSign, Plus, Search, X } from "lucide-react";
 import { categoriesApi } from "@/services/products";
 import { queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
@@ -58,11 +58,16 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-dash-heading font-semibold text-[#023337]">
-            {isQuote ? "Set Price" : "Change Price"}
-          </h2>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+              <DollarSign size={16} className="text-orange-600" />
+            </div>
+            <h2 className="text-dash-heading font-semibold text-[#023337]">
+              {isQuote ? "Set Price" : "Change Price"}
+            </h2>
+          </div>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 cursor-pointer"
@@ -233,9 +238,16 @@ export default function ProductsPage() {
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-dash-title font-black text-[#023337]">
-            My Listings
-          </h2>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-dash-title font-black text-[#023337]">
+              My Listings
+            </h2>
+            {totalInView > 0 && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-dash-caption font-semibold bg-orange-50 text-orange-600">
+                {totalInView} {totalInView === 1 ? "listing" : "listings"}
+              </span>
+            )}
+          </div>
           <p className="text-dash-body text-gray-400 mt-0.5">
             Manage and track your products and services
           </p>
@@ -253,7 +265,7 @@ export default function ProductsPage() {
       {/* ── Products panel ───────────────────────────────────────────────── */}
       <div className="bg-white sm:rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {/* Toolbar — search is the only tool here now. */}
-        <div className="flex flex-col gap-3 px-4 pt-4 pb-4 sm:px-5 border-b border-gray-100">
+        <div className="px-4 pt-4 pb-4 sm:px-5 border-b border-gray-100">
           <div className="relative">
             <Search
               size={16}
@@ -267,21 +279,44 @@ export default function ProductsPage() {
               className="pl-10 pr-3 h-11 text-dash-body bg-gray-50 border border-gray-200 rounded-xl w-full focus-visible:ring-2 focus-visible:ring-orange-500/30"
             />
           </div>
-          <p className="text-dash-caption text-gray-400">
-            {totalInView} {totalInView === 1 ? "listing" : "listings"}
-          </p>
         </div>
 
         {/* Product list */}
         {productsLoading ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-52 bg-gray-100 rounded-2xl animate-pulse"
-              />
-            ))}
-          </div>
+          <>
+            {/* Mobile: row skeletons, matching ProductRow's shape. */}
+            <div className="sm:hidden divide-y divide-gray-100">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 px-4 py-3 animate-pulse"
+                >
+                  <div className="w-16 h-16 rounded-xl bg-gray-100 flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 bg-gray-100 rounded w-3/5" />
+                    <div className="h-3.5 bg-gray-100 rounded w-1/4" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tablet/desktop: card skeletons, matching ProductCard's shape. */}
+            <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-gray-100 overflow-hidden animate-pulse"
+                >
+                  <div className="w-full aspect-square bg-gray-100" />
+                  <div className="p-3.5 space-y-2">
+                    <div className="h-3.5 bg-gray-100 rounded w-4/5" />
+                    <div className="h-3.5 bg-gray-100 rounded w-2/5" />
+                    <div className="h-3 bg-gray-100 rounded w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <ProductsTable
             products={products}
@@ -289,6 +324,8 @@ export default function ProductsPage() {
             onSwitchToQuote={(p) => switchToQuoteMutation.mutate(p.id)}
             onDelete={(p) => setDeleteModal({ open: true, product: p })}
             isFood={isFood}
+            hasActiveSearch={debouncedSearch.trim().length > 0}
+            onAddListing={() => navigate(`/${userId}/products/add`)}
           />
         )}
 

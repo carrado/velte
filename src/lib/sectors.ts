@@ -400,8 +400,16 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
       {
         value: "real_estate_property_sales",
         label: "Real Estate & Property Sales",
-        classification: "service",
-        listingConfig: { presetGroups: ["Real Estate & Property"] },
+        // "both": a pure "service" classification only let a vendor offer to
+        // find/manage a property, never list the actual house/land/office
+        // itself for sale or rent as its own listing.
+        classification: "both",
+        listingConfig: {
+          presetGroups: ["Real Estate & Property"],
+          attributeCategoryId: "real-estate",
+          productNamePlaceholder:
+            "e.g., 3-bedroom duplex in Lekki, Plot of land in Epe…",
+        },
       },
       {
         value: "property_management",

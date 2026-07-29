@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef, useEffect } from "react";
@@ -42,18 +42,14 @@ import {
   Plus,
   ChevronUp,
   Upload,
-  FileSpreadsheet,
-  Download,
   Package,
   ChefHat,
   Tag,
   Layers,
   BarChart3,
-  AlertCircle,
   CheckCircle2,
   ArrowLeft,
   ArrowRight,
-  Globe,
   Loader2,
   Sparkle,
   Info,
@@ -66,12 +62,8 @@ import type {
   ModifierOption,
   RetailProductPayload,
   FoodProductPayload,
-  CreateProductPayload,
-  Category,
   VideoJob,
 } from "@/types/product";
-import { storeApi } from "@/services/store";
-import type { ConnectedCatalog, CatalogPlatform } from "@/types/store";
 import {
   isFoodBusiness,
   businessOffersProducts,
@@ -92,274 +84,6 @@ interface ProductAttribute {
   id: string;
   name: string;
   value: string;
-}
-
-interface ImportedRow {
-  [key: string]: string;
-}
-
-// ── CSV utilities ─────────────────────────────────────────────────────────────
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    if (line[i] === '"') {
-      inQuotes = !inQuotes;
-    } else if (line[i] === "," && !inQuotes) {
-      result.push(current.trim());
-      current = "";
-    } else {
-      current += line[i];
-    }
-  }
-  result.push(current.trim());
-  return result;
-}
-
-function parseCSV(text: string): ImportedRow[] {
-  const lines = text.split("\n").filter((l) => l.trim());
-  if (lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]);
-  return lines.slice(1).map((line) => {
-    const values = parseCSVLine(line);
-    const row: ImportedRow = {};
-    headers.forEach((h, i) => {
-      row[h] = values[i] ?? "";
-    });
-    return row;
-  });
-}
-
-function downloadTemplate(isFood: boolean) {
-  const retailHeaders = [
-    "Name",
-    "Description",
-    "Price",
-    "Category",
-    "Tags",
-    "SKU",
-    "Manufacturing Date",
-    "Expiration Date",
-    "Image Filename",
-  ];
-  const retailExample = [
-    '"Wireless Headphones"',
-    '"Premium wireless audio with noise cancellation"',
-    "15000",
-    "Electronics",
-    '"bluetooth,audio,headphones"',
-    "WH-001",
-    "2024-01-01",
-    "2026-12-31",
-    "wireless-headphones.jpg",
-  ];
-
-  const foodHeaders = [
-    "Name",
-    "Description",
-    "Price",
-    "Vegetarian",
-    "Spicy",
-    "Halal",
-    "Image Filename",
-  ];
-  const foodExamples = [
-    [
-      '"Jollof Rice"',
-      '"Smoky party jollof rice served with your choice of protein"',
-      "2500",
-      "no",
-      "no",
-      "no",
-      "jollof-rice.jpg",
-    ],
-    [
-      '"Egusi Soup"',
-      '"Rich egusi soup cooked with assorted meat and stockfish"',
-      "3500",
-      "no",
-      "no",
-      "yes",
-      "egusi-soup.jpg",
-    ],
-    [
-      '"Pounded Yam"',
-      '"Smooth pounded yam — pairs with any soup"',
-      "500",
-      "yes",
-      "no",
-      "yes",
-      "pounded-yam.jpg",
-    ],
-    [
-      '"Suya (Full Stick)"',
-      '"Spiced beef suya grilled over open flame"',
-      "1500",
-      "no",
-      "yes",
-      "yes",
-      "suya.jpg",
-    ],
-    [
-      '"Chin Chin (Pack)"',
-      '"Crunchy homemade chin chin — sweet or plain"',
-      "800",
-      "yes",
-      "no",
-      "yes",
-      "chin-chin.jpg",
-    ],
-  ];
-
-  const headers = isFood ? foodHeaders : retailHeaders;
-  const rows = isFood ? foodExamples : [retailExample];
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = isFood ? "food_items_template.csv" : "products_template.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// ── Bulk-import row mapping ──────────────────────────────────────────────────
-// Reads a CSV row into a create payload. Header lookups are case/whitespace
-// insensitive since vendors retype template headers by hand.
-
-function getCell(row: ImportedRow, ...names: string[]): string {
-  const keys = Object.keys(row);
-  for (const name of names) {
-    const key = keys.find((k) => k.trim().toLowerCase() === name.toLowerCase());
-    if (key) return (row[key] ?? "").trim();
-  }
-  return "";
-}
-
-function stripExt(filename: string): string {
-  return filename.replace(/\.[^.]+$/, "");
-}
-
-// Retail only — food listings carry no category (see Basics).
-function matchCategoryId(
-  value: string,
-  retailCategories: Category[],
-): string | null {
-  if (!value) return null;
-  const v = value.trim().toLowerCase();
-  const found = retailCategories.find((c) => c.name.toLowerCase() === v);
-  return found?.id ?? null;
-}
-
-/** Best-effort filename match: exact first, then extension-insensitive. */
-function findImageFile(
-  imageFilenameRaw: string,
-  imageFiles: Map<string, File>,
-): File | null {
-  if (!imageFilenameRaw) return null;
-  const key = imageFilenameRaw.trim().toLowerCase();
-  const exact = imageFiles.get(key);
-  if (exact) return exact;
-  const keyNoExt = stripExt(key);
-  for (const [fname, file] of imageFiles) {
-    if (stripExt(fname) === keyNoExt) return file;
-  }
-  return null;
-}
-
-interface RowResult {
-  index: number;
-  name: string;
-  payload: CreateProductPayload | null;
-  error: string | null;
-  imageFilenameRaw: string;
-  imageFile: File | null;
-}
-
-function buildRowResult(
-  row: ImportedRow,
-  index: number,
-  isFood: boolean,
-  retailCategories: Category[],
-  imageFiles: Map<string, File>,
-  sectorValue: string,
-): RowResult {
-  const name = getCell(row, "Name");
-  const imageFilenameRaw = getCell(row, "Image Filename");
-  const imageFile = findImageFile(imageFilenameRaw, imageFiles);
-
-  const fail = (error: string): RowResult => ({
-    index,
-    name: name || `Row ${index + 2}`,
-    payload: null,
-    error,
-    imageFilenameRaw,
-    imageFile: null,
-  });
-
-  if (!name) return fail("Name is required");
-
-  const priceRaw = getCell(row, "Price");
-  const price = parseFloat(priceRaw);
-  if (!priceRaw || isNaN(price) || price <= 0)
-    return fail("Price must be greater than zero");
-
-  const description = getCell(row, "Description");
-  const base = {
-    name,
-    description: description || null,
-    sector_value: sectorValue,
-    price: Math.round(price * 100),
-    price_max: null,
-    currency: "NGN" as const,
-    is_featured: false,
-    main_image_url: null,
-    thumbnail_urls: [] as string[],
-    video_url: null,
-  };
-
-  if (isFood) {
-    const tags: string[] = [];
-    if (getCell(row, "Vegetarian").toLowerCase() === "yes")
-      tags.push("vegetarian");
-    if (getCell(row, "Spicy").toLowerCase() === "yes") tags.push("spicy");
-    if (getCell(row, "Halal").toLowerCase() === "yes") tags.push("halal");
-    const payload: FoodProductPayload = {
-      ...base,
-      category_id: null,
-      tags,
-      is_currently_available: true,
-      modifiers: [],
-    };
-    return { index, name, payload, error: null, imageFilenameRaw, imageFile };
-  }
-
-  const categoryRaw = getCell(row, "Category");
-  if (!categoryRaw) return fail("Category is required");
-  const categoryId = matchCategoryId(categoryRaw, retailCategories);
-  if (!categoryId) return fail(`Unknown category "${categoryRaw}"`);
-
-  const tagsRaw = getCell(row, "Tags");
-  const tags = tagsRaw
-    ? tagsRaw
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean)
-    : [];
-  const sku = getCell(row, "SKU");
-  const payload: RetailProductPayload = {
-    ...base,
-    category_id: categoryId,
-    tags,
-    kind: "product",
-    quote_on_request: false,
-    manufacturing_date: getCell(row, "Manufacturing Date") || null,
-    expiration_date: getCell(row, "Expiration Date") || null,
-    attributes: sku ? [{ name: "SKU", value: sku }] : [],
-  };
-  return { index, name, payload, error: null, imageFilenameRaw, imageFile };
 }
 
 // ── Nigerian food add-on templates ───────────────────────────────────────────
@@ -571,741 +295,6 @@ function CheckboxField({
         {label}
       </span>
     </button>
-  );
-}
-
-// ── Bring-in-your-catalogue modal ────────────────────────────────────────────
-// Two ways in: upload a spreadsheet (CSV), or connect the vendor's own website
-// so Velte sync-mirrors their catalog (spec §16.1).
-
-type CatalogMethod = "spreadsheet" | "website";
-
-const PLATFORM_LABEL: Record<CatalogPlatform, string> = {
-  woocommerce: "WooCommerce",
-  shopify: "Shopify",
-  feed: "Custom feed",
-  unknown: "Website",
-};
-
-function ImportCatalogModal({
-  isOpen,
-  onClose,
-  isFood,
-  sectorValue,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  isFood: boolean;
-  sectorValue: string;
-}) {
-  const [method, setMethod] = useState<CatalogMethod>("spreadsheet");
-  const queryClient = useQueryClient();
-
-  // Spreadsheet method
-  const [dragOver, setDragOver] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [allRows, setAllRows] = useState<ImportedRow[]>([]);
-  const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
-  const [parseError, setParseError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const previewRows = allRows.slice(0, 5);
-
-  // Photo matching (Step 3)
-  const [imageFiles, setImageFiles] = useState<Map<string, File>>(new Map());
-  const imageInputRef = useRef<HTMLInputElement>(null);
-
-  // Import execution
-  const [importing, setImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState({ done: 0, total: 0 });
-  const [importSummary, setImportSummary] = useState<{
-    success: number;
-    failed: { name: string; error: string }[];
-  } | null>(null);
-
-  const { data: retailCategories = [] } = useQuery({
-    queryKey: queryKeys.products.categories,
-    queryFn: categoriesApi.getCategories,
-    enabled: isOpen && !isFood,
-  });
-
-  const rowResults = allRows.map((row, i) =>
-    buildRowResult(row, i, isFood, retailCategories, imageFiles, sectorValue),
-  );
-  const validRows = rowResults.filter((r) => !r.error && r.payload);
-  const errorRows = rowResults.filter((r) => r.error);
-  const rowsWithImageRequested = rowResults.filter((r) => r.imageFilenameRaw);
-  const rowsWithImageMatched = rowResults.filter((r) => r.imageFile);
-
-  // Website method
-  const [websiteUrl, setWebsiteUrl] = useState("");
-  const [connecting, setConnecting] = useState(false);
-  const [connectResult, setConnectResult] = useState<ConnectedCatalog | null>(
-    null,
-  );
-  const [connectError, setConnectError] = useState<string | null>(null);
-
-  const resetFile = () => {
-    setFileName(null);
-    setAllRows([]);
-    setPreviewHeaders([]);
-    setParseError(null);
-    setImageFiles(new Map());
-    setImportSummary(null);
-    setImportProgress({ done: 0, total: 0 });
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    if (imageInputRef.current) imageInputRef.current.value = "";
-  };
-
-  const resetWebsite = () => {
-    setWebsiteUrl("");
-    setConnecting(false);
-    setConnectResult(null);
-    setConnectError(null);
-  };
-
-  const closeAll = () => {
-    onClose();
-    resetFile();
-    resetWebsite();
-    setMethod("spreadsheet");
-  };
-
-  const handleConnect = async () => {
-    const url = websiteUrl.trim();
-    if (!url) {
-      setConnectError("Enter your website address.");
-      return;
-    }
-    setConnecting(true);
-    setConnectError(null);
-    try {
-      const catalog = await storeApi.connectCatalog(url);
-      setConnectResult(catalog);
-      if (catalog.status === "connected") {
-        toast.success(
-          `Connected — ${catalog.productCount} ${
-            catalog.productCount === 1 ? "product" : "products"
-          } found.`,
-        );
-      } else {
-        toast("We couldn't find a Shopify or WooCommerce store there.");
-      }
-    } catch (err) {
-      setConnectError(getErrorMessage(err));
-    } finally {
-      setConnecting(false);
-    }
-  };
-
-  const handleFile = (file: File) => {
-    setParseError(null);
-    if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
-      setParseError(
-        "Excel files (.xlsx/.xls) are not directly supported. Please save the file as CSV from Excel (File → Save As → CSV) and re-upload.",
-      );
-      return;
-    }
-    if (!file.name.endsWith(".csv")) {
-      setParseError("Please upload a CSV file (.csv).");
-      return;
-    }
-    setFileName(file.name);
-    setImageFiles(new Map());
-    setImportSummary(null);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const rows = parseCSV(text);
-      if (rows.length === 0) {
-        setParseError(
-          "No valid data found. Make sure the file matches the template format.",
-        );
-        return;
-      }
-      setPreviewHeaders(Object.keys(rows[0]));
-      setAllRows(rows);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  };
-
-  const handleImageFiles = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const next = new Map(imageFiles);
-    Array.from(files).forEach((f) => next.set(f.name.trim().toLowerCase(), f));
-    setImageFiles(next);
-  };
-
-  const handleImport = async () => {
-    if (validRows.length === 0) {
-      toast.error("No valid rows to import — fix the errors below first.");
-      return;
-    }
-
-    setImporting(true);
-    setImportSummary(null);
-    setImportProgress({ done: 0, total: validRows.length });
-
-    const failed: { name: string; error: string }[] = [];
-    let success = 0;
-
-    for (const row of validRows) {
-      try {
-        let payload = row.payload!;
-        if (row.imageFile) {
-          const url = await uploadProductMedia(row.imageFile);
-          payload = { ...payload, main_image_url: url };
-        }
-        await categoriesApi.createProduct(payload);
-        success++;
-      } catch (err) {
-        failed.push({
-          name: row.name,
-          error: getErrorMessage(err, "Failed to create"),
-        });
-      }
-      setImportProgress((prev) => ({ ...prev, done: prev.done + 1 }));
-    }
-
-    setImporting(false);
-    setImportSummary({ success, failed });
-    queryClient.invalidateQueries({
-      queryKey: ["products", "list"],
-      refetchType: "none",
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["products", "stats"],
-      refetchType: "none",
-    });
-
-    if (failed.length === 0) {
-      toast.success(`Imported ${success} products.`);
-      closeAll();
-    } else if (success === 0) {
-      toast.error(`All ${failed.length} rows failed to import.`);
-    } else {
-      toast.error(
-        `Imported ${success}, but ${failed.length} row${failed.length === 1 ? "" : "s"} failed — see details below.`,
-      );
-    }
-  };
-
-  if (!isOpen) return null;
-
-  // Portaled to document.body — rendered inline this backdrop only ever
-  // covered its scrollable ancestor's box, not the real viewport (same
-  // clipping bug already fixed for dropdowns via AnchoredPopover).
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start h-full justify-center bg-black/50 backdrop-blur-sm px-4 pt-12 pb-6 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-orange-500 flex items-center justify-center flex-shrink-0">
-              <Upload size={18} className="text-white" />
-            </div>
-            <div>
-              <h3 className="text-dash-heading font-bold text-[#023337]">
-                Bring in your catalogue
-              </h3>
-              <p className="text-dash-caption text-gray-400">
-                Upload a spreadsheet or connect Shopify / WooCommerce
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={closeAll}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 cursor-pointer"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Method switcher */}
-        <div className="px-6 pt-4">
-          <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-md">
-            {(
-              [
-                ["spreadsheet", "Spreadsheet", FileSpreadsheet],
-                ["website", "Website", Globe],
-              ] as const
-            ).map(([value, label, Icon]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMethod(value)}
-                className={cn(
-                  "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-dash-body font-semibold transition-colors cursor-pointer",
-                  method === value
-                    ? "bg-white text-[#023337] shadow-sm"
-                    : "text-gray-500 hover:text-gray-700",
-                )}
-              >
-                <Icon size={14} />
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {method === "spreadsheet" && (
-          <div className="px-6 py-5 space-y-4">
-            {/* Step 1 — template */}
-            <div className="flex items-center justify-between p-3.5 bg-blue-50 border border-blue-100 rounded-md">
-              <div className="flex items-center gap-2.5">
-                <FileSpreadsheet
-                  size={16}
-                  className="text-blue-500 flex-shrink-0"
-                />
-                <div>
-                  <p className="text-dash-body font-semibold text-blue-700">
-                    Step 1 — Download our template
-                  </p>
-                  <p className="text-dash-caption text-blue-500">
-                    {isFood
-                      ? "Fill in your items — we included 5 examples to guide you"
-                      : "Fill in the CSV template, then upload it below"}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => downloadTemplate(isFood)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0"
-              >
-                <Download size={13} />
-                Template
-              </button>
-            </div>
-
-            {/* Step 2 — drop zone */}
-            {!previewRows.length && !parseError && (
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={cn(
-                  "border-2 border-dashed rounded-2xl h-40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors",
-                  dragOver
-                    ? "border-orange-400 bg-orange-50"
-                    : "border-gray-200 bg-gray-50 hover:border-orange-300 hover:bg-orange-50/50",
-                )}
-              >
-                <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200 flex items-center justify-center shadow-sm">
-                  <Upload size={20} className="text-gray-400" />
-                </div>
-                <p className="text-dash-body font-semibold text-gray-600">
-                  Drop your CSV here, or{" "}
-                  <span className="text-orange-500">browse</span>
-                </p>
-                <p className="text-dash-caption text-gray-400">
-                  {isFood
-                    ? "Step 2 — upload your filled template"
-                    : "Supports .csv files · Excel → save as CSV"}
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleFile(f);
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Error */}
-            {parseError && (
-              <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-md">
-                <AlertCircle
-                  size={15}
-                  className="text-red-500 mt-0.5 flex-shrink-0"
-                />
-                <div>
-                  <p className="text-dash-body font-semibold text-red-700">
-                    Import failed
-                  </p>
-                  <p className="text-dash-caption text-red-600 mt-0.5">
-                    {parseError}
-                  </p>
-                  <button
-                    onClick={resetFile}
-                    className="text-dash-caption text-red-500 underline mt-1 cursor-pointer"
-                  >
-                    Try again
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Preview */}
-            {allRows.length > 0 && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={15} className="text-green-500" />
-                    <p className="text-dash-body font-semibold text-gray-700">
-                      {fileName} — {validRows.length} of {allRows.length}{" "}
-                      products ready to import
-                    </p>
-                  </div>
-                  <button
-                    onClick={resetFile}
-                    disabled={importing}
-                    className="text-dash-caption text-gray-400 hover:text-red-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Change file
-                  </button>
-                </div>
-                <div className="border border-gray-200 rounded-md overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-dash-caption">
-                      <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200">
-                          {previewHeaders.map((h) => (
-                            <th
-                              key={h}
-                              className="text-left px-3 py-2.5 font-semibold text-gray-500 whitespace-nowrap"
-                            >
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {previewRows.map((row, i) => (
-                          <tr
-                            key={i}
-                            className="hover:bg-gray-50 transition-colors"
-                          >
-                            {previewHeaders.map((h) => (
-                              <td
-                                key={h}
-                                className="px-3 py-2.5 text-gray-700 max-w-[140px] truncate"
-                              >
-                                {row[h] || "—"}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-dash-caption text-gray-400 px-3 py-2 border-t border-gray-100">
-                    Showing first {previewRows.length} of {allRows.length} rows
-                    · check they look right before importing
-                  </p>
-                </div>
-
-                {errorRows.length > 0 && (
-                  <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-md">
-                    <AlertCircle
-                      size={15}
-                      className="text-red-500 mt-0.5 flex-shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-dash-body font-semibold text-red-700">
-                        {errorRows.length} row
-                        {errorRows.length === 1 ? "" : "s"} will be skipped
-                      </p>
-                      <ul className="text-dash-caption text-red-600 mt-1 space-y-0.5">
-                        {errorRows.slice(0, 4).map((r) => (
-                          <li key={r.index}>
-                            Row {r.index + 2} ({r.name}): {r.error}
-                          </li>
-                        ))}
-                        {errorRows.length > 4 && (
-                          <li>and {errorRows.length - 4} more…</li>
-                        )}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 3 — photos */}
-                <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-md space-y-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ImageIcon
-                        size={16}
-                        className="text-gray-400 flex-shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-dash-body font-semibold text-gray-700">
-                          Step 3 — Add product photos
-                        </p>
-                        <p className="text-dash-caption text-gray-400">
-                          Optional. Select the photos named in the &quot;Image
-                          Filename&quot; column.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => imageInputRef.current?.click()}
-                      disabled={importing}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 hover:border-orange-300 text-gray-700 text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ImageIcon size={13} />
-                      {imageFiles.size > 0
-                        ? "Add more photos"
-                        : "Select photos"}
-                    </button>
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => handleImageFiles(e.target.files)}
-                    />
-                  </div>
-                  {(imageFiles.size > 0 ||
-                    rowsWithImageRequested.length > 0) && (
-                    <p className="text-dash-caption text-gray-500">
-                      {imageFiles.size} photo
-                      {imageFiles.size === 1 ? "" : "s"} selected ·{" "}
-                      {rowsWithImageMatched.length} of{" "}
-                      {rowsWithImageRequested.length} referenced filenames
-                      matched
-                    </p>
-                  )}
-                </div>
-
-                {importing && (
-                  <div className="p-3.5 bg-orange-50 border border-orange-100 rounded-md space-y-2">
-                    <div className="flex items-center justify-between text-dash-caption text-orange-700 font-semibold">
-                      <span>
-                        Importing {importProgress.done} of{" "}
-                        {importProgress.total}…
-                      </span>
-                      <Loader2 size={14} className="animate-spin" />
-                    </div>
-                    <div className="h-1.5 bg-orange-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-orange-500 transition-all"
-                        style={{
-                          width: `${
-                            importProgress.total
-                              ? (importProgress.done / importProgress.total) *
-                                100
-                              : 0
-                          }%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {importSummary && importSummary.failed.length > 0 && (
-                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-md space-y-1.5">
-                    <p className="text-dash-body font-semibold text-amber-700">
-                      Imported {importSummary.success} ·{" "}
-                      {importSummary.failed.length} failed
-                    </p>
-                    <ul className="text-dash-caption text-amber-700 space-y-0.5">
-                      {importSummary.failed.slice(0, 4).map((f, i) => (
-                        <li key={i}>
-                          {f.name}: {f.error}
-                        </li>
-                      ))}
-                      {importSummary.failed.length > 4 && (
-                        <li>and {importSummary.failed.length - 4} more…</li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Website — connect the vendor's own store (spec §16.1) */}
-        {method === "website" && (
-          <div className="px-6 py-5 space-y-4">
-            {!connectResult ? (
-              <>
-                <div className="flex items-start gap-2.5 p-3.5 bg-orange-50/70 border border-orange-100 rounded-md">
-                  <Globe
-                    size={16}
-                    className="text-orange-500 mt-0.5 flex-shrink-0"
-                  />
-                  <div>
-                    <p className="text-dash-body font-semibold text-[#023337]">
-                      Already sell on Shopify or WooCommerce?
-                    </p>
-                    <p className="text-dash-caption text-gray-500 mt-0.5 leading-relaxed">
-                      Connect your store and we&apos;ll keep your Velte listings
-                      in sync — your store stays the source of truth. We support
-                      Shopify and WooCommerce for now; other website builders
-                      are coming.
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <FieldLabel required>Website address</FieldLabel>
-                  <div className="flex h-11 items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 focus-within:ring-2 focus-within:ring-orange-500/30">
-                    <Globe size={15} className="text-gray-400 flex-shrink-0" />
-                    <input
-                      type="url"
-                      inputMode="url"
-                      value={websiteUrl}
-                      onChange={(e) => {
-                        setWebsiteUrl(e.target.value);
-                        setConnectError(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !connecting) handleConnect();
-                      }}
-                      placeholder="yourstore.com"
-                      className="flex-1 min-w-0 bg-transparent text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none"
-                    />
-                  </div>
-                  {connectError && (
-                    <p className="text-dash-caption text-red-500 mt-1.5 flex items-center gap-1">
-                      <AlertCircle size={12} className="flex-shrink-0" />
-                      {connectError}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {["Shopify", "WooCommerce"].map((p) => (
-                    <span
-                      key={p}
-                      className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-dash-caption font-medium"
-                    >
-                      {p}
-                    </span>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="space-y-4">
-                {connectResult.status === "connected" ? (
-                  <div className="flex items-start gap-2.5 p-4 bg-green-50 border border-green-200 rounded-md">
-                    <CheckCircle2
-                      size={16}
-                      className="text-green-500 mt-0.5 flex-shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-dash-body font-semibold text-green-700">
-                        Connected to {PLATFORM_LABEL[connectResult.platform]} —{" "}
-                        {connectResult.productCount}{" "}
-                        {connectResult.productCount === 1
-                          ? "product"
-                          : "products"}{" "}
-                        found
-                      </p>
-                      <p className="text-dash-caption text-green-600 mt-0.5 leading-relaxed break-all">
-                        {connectResult.sourceUrl}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-2.5 p-4 bg-amber-50 border border-amber-200 rounded-md">
-                    <AlertCircle
-                      size={16}
-                      className="text-amber-500 mt-0.5 flex-shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-dash-body font-semibold text-amber-700">
-                        We couldn&apos;t find a Shopify or WooCommerce store
-                        there
-                      </p>
-                      <p className="text-dash-caption text-amber-600 mt-0.5 leading-relaxed break-all">
-                        Right now we can only connect stores built on Shopify or
-                        WooCommerce. Double-check you entered your store&apos;s
-                        web address ({connectResult.sourceUrl}) — or add your
-                        products with a spreadsheet instead.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {connectResult.status === "connected" && (
-                  <div className="flex items-start gap-2.5 p-3.5 bg-gray-50 border border-gray-100 rounded-md">
-                    <RefreshCcw
-                      size={15}
-                      className="text-gray-400 mt-0.5 flex-shrink-0"
-                    />
-                    <p className="text-dash-caption text-gray-500 leading-relaxed">
-                      Your store stays the source of truth. Connected products
-                      are read-only in Velte and re-sync automatically — update
-                      a price or stock on your store and it follows here.
-                    </p>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={resetWebsite}
-                  className="text-dash-caption text-orange-500 font-semibold underline cursor-pointer"
-                >
-                  Connect a different site
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
-          <button
-            onClick={closeAll}
-            disabled={importing}
-            className="flex-1 px-4 py-2.5 text-dash-body font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {connectResult || importSummary ? "Close" : "Cancel"}
-          </button>
-          {method === "spreadsheet" && allRows.length > 0 && !importSummary && (
-            <button
-              onClick={handleImport}
-              disabled={importing || validRows.length === 0}
-              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {importing ? (
-                <>
-                  <Loader2 size={15} className="animate-spin" />
-                  Importing…
-                </>
-              ) : (
-                `Import ${validRows.length} Products`
-              )}
-            </button>
-          )}
-          {method === "website" && !connectResult && (
-            <button
-              onClick={handleConnect}
-              disabled={connecting || !websiteUrl.trim()}
-              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-dash-body font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {connecting ? (
-                <>
-                  <Loader2 size={15} className="animate-spin" />
-                  Checking your site…
-                </>
-              ) : (
-                "Connect website"
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body,
   );
 }
 
@@ -1710,7 +699,6 @@ export default function AddProductPage({
 
   // UI state
   const [currencyPopoverOpen, setCurrencyPopoverOpen] = useState(false);
-  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const currencyButtonRef = useRef<HTMLButtonElement>(null);
   const currencyDropdownRef = useRef<HTMLDivElement>(null);
@@ -2070,9 +1058,10 @@ export default function AddProductPage({
     sectorValue !== "" &&
     productName.trim().length > 0 &&
     (isService || isFood || selectedCategory !== "") && // services & food carry no category
-    // Services have no category — the description is what search matches on,
-    // so it's required there (and only there).
-    (!isService || description.trim().length > 0) &&
+    // Required for every kind — services have no category at all, so it's
+    // their only real search-matching signal, but a plain product/dish
+    // benefits just as much from a real description instead of an empty one.
+    description.trim().length > 0 &&
     (isQuote || parseFloat(price) > 0) && // quote services need no price
     (isQuote || !isRange || parseFloat(priceMax) > parseFloat(price)) &&
     // A photo OR a video satisfies this — see the media phase's own `valid`
@@ -2184,7 +1173,11 @@ export default function AddProductPage({
     }
     if (!productName.trim()) {
       toast.error(
-        isService ? "Service name is required" : "Product name is required",
+        isService
+          ? "Service name is required"
+          : isFood
+            ? "Menu item name is required"
+            : "Product name is required",
       );
       return;
     }
@@ -2192,8 +1185,14 @@ export default function AddProductPage({
       toast.error("Please select a category");
       return;
     }
-    if (isService && !description.trim()) {
-      toast.error("Describe your service — it's how buyers find you");
+    if (!description.trim()) {
+      toast.error(
+        isService
+          ? "Describe your service — it's how buyers find you"
+          : isFood
+            ? "Describe this menu item — it's how buyers find you"
+            : "Describe this product — it's how buyers find you",
+      );
       return;
     }
     if (!isQuote && (!price || parseFloat(price) <= 0)) {
@@ -2450,8 +1449,7 @@ export default function AddProductPage({
       valid:
         productName.trim().length > 0 &&
         (isService || isFood || selectedCategory !== "") &&
-        // Services have no category — description is the matching signal.
-        (!isService || description.trim().length > 0),
+        description.trim().length > 0,
     },
     {
       id: "pricing",
@@ -2534,11 +1532,6 @@ export default function AddProductPage({
     setModifiers([]);
   };
 
-  const startBulkImport = () => {
-    resetListingFields();
-    setImportModalOpen(true);
-  };
-
   const publishButton = (
     <button
       onClick={handleSubmit}
@@ -2568,13 +1561,6 @@ export default function AddProductPage({
 
   return (
     <>
-      <ImportCatalogModal
-        isOpen={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
-        isFood={isFood}
-        sectorValue={sectorValue}
-      />
-
       <VideoTrimModal
         open={trimCandidate !== null}
         file={trimCandidate}
@@ -2613,8 +1599,12 @@ export default function AddProductPage({
                   : classification === "service"
                     ? "List a service you offer"
                     : showKindToggle
-                      ? "List a product or service in your store"
-                      : "List a product in your store"}
+                      ? foodAccount
+                        ? "List a menu item or service in your store"
+                        : "List a product or service in your store"
+                      : foodAccount
+                        ? "List a menu item in your store"
+                        : "List a product in your store"}
               </p>
             </div>
           </div>
@@ -2681,7 +1671,9 @@ export default function AddProductPage({
                   <div className="grid grid-cols-2 gap-2">
                     {(
                       [
-                        ["product", "Product", "A physical item you stock"],
+                        foodAccount
+                          ? ["product", "Menu Item", "A menu item you prepare"]
+                          : ["product", "Product", "A physical item you stock"],
                         [
                           "service",
                           "Service",
@@ -2730,30 +1722,13 @@ export default function AddProductPage({
               title="Basic Details"
               icon={isFood ? ChefHat : Package}
             >
-              {/* Bulk-import escape hatch — folded in here instead of its own
-                  phase so add-one-by-one (the common case) reaches the name
-                  field immediately. Add mode, product/dish kind only — a CSV
-                  row is a stocked good or menu item, not a service. */}
-              {wizard && kind === "product" && (
-                <button
-                  type="button"
-                  onClick={startBulkImport}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-md border border-dashed border-orange-200 bg-orange-50/50 hover:bg-orange-100/60 transition-colors cursor-pointer"
-                >
-                  <Upload size={14} className="text-orange-500 flex-shrink-0" />
-                  <span className="text-left">
-                    <span className="block text-dash-body font-semibold text-orange-600">
-                      Bring in your catalogue instead
-                    </span>
-                    <span className="block text-dash-caption text-orange-400">
-                      Upload a spreadsheet or connect Shopify / WooCommerce
-                    </span>
-                  </span>
-                </button>
-              )}
               <div>
                 <FieldLabel required>
-                  {isService ? "Service Name" : "Product Name"}
+                  {isService
+                    ? "Service Name"
+                    : isFood
+                      ? "Menu Item Name"
+                      : "Product Name"}
                 </FieldLabel>
                 <Input
                   value={productName}
@@ -2782,11 +1757,7 @@ export default function AddProductPage({
               </div>
 
               <div>
-                {/* Required for services: no category there, so the
-                    description is what buyer search matches against. */}
-                <FieldLabel required={isService} optional={!isService}>
-                  Description
-                </FieldLabel>
+                <FieldLabel required>Description</FieldLabel>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -2800,7 +1771,7 @@ export default function AddProductPage({
                           "Describe the product features and benefits…")
                   }
                   rows={4}
-                  className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
+                  className="w-full px-3 py-3 min-h-[140px] sm:min-h-[120px] bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
                 />
                 <div className="flex items-center justify-between mt-1.5">
                   {isService ? (
@@ -2897,7 +1868,11 @@ export default function AddProductPage({
               {!isQuote && (
                 <div>
                   <FieldLabel required>
-                    {isService ? "Service Price" : "Product Price"}
+                    {isService
+                      ? "Service Price"
+                      : isFood
+                        ? "Menu Item Price"
+                        : "Product Price"}
                   </FieldLabel>
                   <div className="flex h-11 bg-gray-50 border border-gray-200 rounded-md overflow-hidden">
                     <Input

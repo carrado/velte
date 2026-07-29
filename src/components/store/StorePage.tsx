@@ -14,6 +14,8 @@ import {
   Tags,
   MessageCircle,
   Camera,
+  Sparkles,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { storeApi } from "@/services/store";
@@ -23,6 +25,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { cn } from "@/lib/utils";
 import { ShareButton } from "@/components/ShareButton";
+import { DescriptionQualityMeter } from "@/components/DescriptionQualityMeter";
 import SectorMultiSelect from "@/components/sectors/SectorMultiSelect";
 import type { Store } from "@/types/store";
 
@@ -114,6 +117,35 @@ export default function StorePage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // Same endpoint signup's Step2SectorDescription already uses — reused
+  // as-is here, just fed this page's current draft sectors instead of the
+  // signup form's, so regenerating always reflects whatever's picked right
+  // now (including sectors not yet saved).
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/ai/business-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName: form!.name.trim(),
+          sectorValues,
+        }),
+      });
+      const data = (await res.json()) as {
+        description?: string;
+        error?: string;
+      };
+      if (!res.ok)
+        throw new Error(data.error ?? "Couldn't generate a description.");
+      return data.description!;
+    },
+    onSuccess: (description) => {
+      set("description", description.slice(0, MAX_DESCRIPTION));
+      toast.success("Draft ready — edit it to sound like you");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   if (isLoading || !form) {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
@@ -137,9 +169,12 @@ export default function StorePage() {
   );
   const nameValid = form.name.trim().length > 0 && form.name.length <= 80;
   const isValid = handleValid && nameValid;
+  // Not just "unsaved" — a nudge that the *description* specifically may no
+  // longer reflect the sectors as currently drafted, since nothing here
+  // regenerates it automatically when sectors change.
+  const sectorsChanged = store ? !sameSectors(sectorValues, sectors) : false;
   const dirty = store
-    ? JSON.stringify(form) !== JSON.stringify(store) ||
-      !sameSectors(sectorValues, sectors)
+    ? JSON.stringify(form) !== JSON.stringify(store) || sectorsChanged
     : false;
 
   // Completeness — description drives AI matching, photos and a chat number
@@ -154,6 +189,18 @@ export default function StorePage() {
   const doneCount = checklist.filter((c) => c.done).length;
   const percent = Math.round((doneCount / checklist.length) * 100);
   const missing = checklist.filter((c) => !c.done).map((c) => c.label);
+
+  const handleGenerate = () => {
+    if (!form.name.trim()) {
+      toast.error("Add your store name first");
+      return;
+    }
+    if (!sectorValues.length) {
+      toast.error("Pick at least one sector first");
+      return;
+    }
+    generateMutation.mutate();
+  };
 
   const addPhotos = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -327,26 +374,6 @@ export default function StorePage() {
         </div>
       </SectionCard>
 
-      {/* ── About ──────────────────────────────────────────────────────── */}
-      <SectionCard
-        icon={FileText}
-        title="What do you do?"
-        hint="Our AI uses this to match buyers to you — even before you list anything."
-      >
-        <textarea
-          value={form.description}
-          onChange={(e) =>
-            set("description", e.target.value.slice(0, MAX_DESCRIPTION))
-          }
-          rows={4}
-          placeholder="e.g. We sell original phone accessories — chargers, earphones, screen guards — in Computer Village, Ikeja. We also do same-day phone repairs."
-          className={cn(inputClass, "h-auto py-2.5 resize-none")}
-        />
-        <p className="text-dash-caption text-gray-400 text-right mt-1">
-          {form.description.length}/{MAX_DESCRIPTION}
-        </p>
-      </SectionCard>
-
       {/* ── Sectors ────────────────────────────────────────────────────── */}
       <SectionCard
         icon={Tags}
@@ -358,6 +385,57 @@ export default function StorePage() {
             selected={sectorValues}
             onChange={setSectorValues}
           />
+        </div>
+      </SectionCard>
+
+      {/* ── About ──────────────────────────────────────────────────────── */}
+      <SectionCard
+        icon={FileText}
+        title="What do you do?"
+        hint="Our AI uses this to match buyers to you — even before you list anything."
+      >
+        {sectorsChanged && (
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-3">
+            <Info size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+            <p className="text-dash-caption text-amber-700">
+              You changed your sectors — this description may not match anymore.
+              Update it, or regenerate it with AI below.
+            </p>
+          </div>
+        )}
+        <textarea
+          value={form.description}
+          onChange={(e) =>
+            set("description", e.target.value.slice(0, MAX_DESCRIPTION))
+          }
+          rows={4}
+          placeholder="e.g. We sell original phone accessories — chargers, earphones, screen guards — in Computer Village, Ikeja. We also do same-day phone repairs."
+          className={cn(
+            inputClass,
+            "h-auto py-2.5 min-h-[140px] sm:min-h-[120px] resize-none",
+          )}
+        />
+        <DescriptionQualityMeter
+          description={form.description}
+          sectorValues={sectorValues}
+        />
+        <div className="flex items-center justify-between mt-1.5">
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={generateMutation.isPending}
+            className="flex items-center gap-1 text-dash-caption font-medium text-orange-500 hover:text-orange-600 disabled:opacity-60 cursor-pointer"
+          >
+            {generateMutation.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Sparkles size={12} />
+            )}
+            {generateMutation.isPending ? "Generating…" : "Ask AI to generate"}
+          </button>
+          <p className="text-dash-caption text-gray-400">
+            {form.description.length}/{MAX_DESCRIPTION}
+          </p>
         </div>
       </SectionCard>
 

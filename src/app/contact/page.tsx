@@ -65,7 +65,7 @@ export default function Contact() {
                   </label>
                   <textarea
                     rows={4}
-                    className="w-full bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    className="w-full min-h-[140px] sm:min-h-[120px] bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
                   ></textarea>
                 </div>
                 <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white">

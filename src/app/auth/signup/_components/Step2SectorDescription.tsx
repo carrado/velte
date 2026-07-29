@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Briefcase, FileText, Sparkles, Loader2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DescriptionQualityMeter } from "@/components/DescriptionQualityMeter";
 import { SIGNUP_FIELD_SCHEMAS } from "../schema";
 import type { SignupFormApi } from "../schema";
 import { FieldError } from "./shared";
@@ -122,7 +123,11 @@ export default function Step2SectorDescription({
               onBlur={field.handleBlur}
               rows={5}
               placeholder="e.g. We sell original phone accessories — chargers, earphones, screen guards — in Computer Village, Ikeja. We also do same-day phone repairs."
-              className="w-full px-3.5 py-2.5 bg-transparent border border-black/[0.3] rounded-md text-black text-sm placeholder:text-black/25 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 resize-none"
+              className="w-full px-3.5 py-2.5 min-h-[160px] sm:min-h-[130px] bg-transparent border border-black/[0.3] rounded-md text-black text-sm placeholder:text-black/25 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 resize-none"
+            />
+            <DescriptionQualityMeter
+              description={field.state.value}
+              sectorValues={form.store.state.values.sectors}
             />
             <div className="flex justify-end mt-1.5">
               <button

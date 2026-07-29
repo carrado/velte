@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import type { DeleteProductModalProps } from "@/types/product";
-import { Loader2, X } from "lucide-react";
+import { AlertTriangle, Loader2, X } from "lucide-react";
 
 export default function DeleteProductModal({
   open,
@@ -25,11 +25,16 @@ export default function DeleteProductModal({
         className="absolute inset-0 bg-black/40"
         onClick={isDeleting ? undefined : onClose}
       />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-dash-heading font-semibold text-red-600">
-            Delete Listing
-          </h2>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle size={16} className="text-red-600" />
+            </div>
+            <h2 className="text-dash-heading font-semibold text-[#023337]">
+              Delete Listing
+            </h2>
+          </div>
           <button
             onClick={onClose}
             disabled={isDeleting}

@@ -199,6 +199,11 @@ export interface ProductActionsPopoverProps {
   /** Fixed-price service → back to "Contact for quote". Services only. */
   onSwitchToQuote: () => void;
   onDelete: () => void;
+  /** Opens the video modal — omit to hide the "View Video" menu item
+   * entirely (the caller only passes this when the listing actually has a
+   * video, e.g. mobile's ProductRow, where the thumbnail itself isn't as
+   * obvious a tap target as it is on the desktop card grid). */
+  onViewVideo?: () => void;
 }
 
 export interface ProductsTableProps {
@@ -207,6 +212,10 @@ export interface ProductsTableProps {
   onSwitchToQuote: (product: CategoryProduct) => void;
   onDelete: (product: CategoryProduct) => void;
   isFood?: boolean;
+  /** True when the empty grid is the result of a search query rather than
+   * the vendor having zero listings — changes the empty-state copy/CTA. */
+  hasActiveSearch?: boolean;
+  onAddListing?: () => void;
 }
 
 export interface VideoPosterImageProps {

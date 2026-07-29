@@ -1770,6 +1770,33 @@ export const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> =
         },
       ],
     },
+    "real-estate": {
+      group: "Real Estate & Property",
+      items: [
+        {
+          name: "Property Type",
+          example: "duplex, flat, land, office space",
+          important: true,
+        },
+        {
+          name: "Transaction Type",
+          example: "for sale, for rent, or lease",
+          important: true,
+        },
+        { name: "Bedrooms", example: "e.g. 4" },
+        { name: "Bathrooms", example: "e.g. 3" },
+        { name: "Land Size", example: "e.g. 650 sqm" },
+        {
+          name: "Documentation",
+          example: "C of O, governor's consent available",
+          important: true,
+        },
+        {
+          name: "Furnishing",
+          example: "furnished, semi-furnished, unfurnished",
+        },
+      ],
+    },
     "auto-parts": {
       group: "Auto Parts & Tyres",
       items: [
