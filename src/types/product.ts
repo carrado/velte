@@ -224,44 +224,28 @@ export interface VideoPosterImageProps {
   className?: string;
 }
 
-// A picked video that's over MAX_VIDEO_DURATION_S always gets the same
-// fixed-window treatment now (first `maxDurationS` seconds, cut server-side)
-// — no scrubber, no manual start/end entry. `durationS` is null when even
-// bunnyStream's container-level fallback parse couldn't read it (still safe
-// to proceed: ffmpeg trims to a window longer than the real file by just
-// stopping at the real end, no error), in which case the copy below reads
-// conditionally rather than claiming a duration it doesn't have.
-export interface TrimConfirmModalProps {
-  open: boolean;
-  durationS: number | null;
-  maxDurationS: number;
-  onCancel: () => void;
-  onConfirm: () => void;
-}
-
-export type VideoJobPhase = "uploading" | "trimming";
+// A picked video that's over MAX_VIDEO_DURATION_S is rejected outright (see
+// bunnyStream.ts's checkVideoDuration) — no in-app trim anymore, so there's
+// no separate job phase for it either.
+export type VideoJobPhase = "uploading";
 
 export interface VideoUploadProgressBarProps {
-  /** "trimming" only ever applies to the over-length path (server-side cut
-   * after the original's uploaded) — a plain short video only ever shows
-   * "uploading". */
-  phase: VideoJobPhase;
   /** 0–100 */
   progress: number;
   onCancel: () => void;
 }
 
-// AddProductPage's single source of truth for an in-flight video
-// upload/trim — read live by both VideoUploadProgressBar and (if Publish is
-// clicked mid-flight) PublishProgressModal.
+// AddProductPage's single source of truth for an in-flight video upload —
+// read live by both VideoUploadProgressBar and (if Publish is clicked
+// mid-flight) PublishProgressModal.
 export interface VideoJob {
   active: boolean;
   phase: VideoJobPhase;
   /** 0–100 */
   progress: number;
-  /** Resolves to the real, playable video URL once upload (+ trim, if
-   * applicable) finishes — awaited directly by handleSubmit if Publish is
-   * clicked before it settles, instead of starting a duplicate upload. */
+  /** Resolves to the real, playable video URL once upload finishes —
+   * awaited directly by handleSubmit if Publish is clicked before it
+   * settles, instead of starting a duplicate upload. */
   promise: Promise<string>;
   controller: AbortController;
 }

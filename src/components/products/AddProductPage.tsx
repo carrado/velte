@@ -16,7 +16,6 @@ import {
   MAX_VIDEO_MB,
   MAX_VIDEO_DURATION_S,
 } from "@/lib/bunnyStream";
-import { trimVideoServerSide } from "@/lib/videoTrim";
 import { getErrorMessage } from "@/lib/error-message";
 import {
   getServiceDetailPresets,
@@ -28,7 +27,6 @@ import type { SectorClassification } from "@/types/sectors";
 import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import AttributePickerModal from "./AttributePickerModal";
-import TrimConfirmModal from "./TrimConfirmModal";
 import VideoUploadProgressBar from "./VideoUploadProgressBar";
 import VideoPosterImage from "./VideoPosterImage";
 import {
@@ -599,17 +597,9 @@ export default function AddProductPage({
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [isValidatingVideo, setIsValidatingVideo] = useState(false);
-  // Set instead of rejecting outright when a picked video runs over
-  // MAX_VIDEO_DURATION_S — holding the file (+ its known duration, if any)
-  // here opens TrimConfirmModal so the vendor gets a heads-up before the
-  // fixed first-N-seconds trim runs, instead of having to leave the app.
-  const [trimPending, setTrimPending] = useState<{
-    file: File;
-    durationS: number | null;
-  } | null>(null);
-  // Upload/trim now starts the moment a video's picked (or a trim window's
-  // confirmed), not deferred to publish time — this is the single source of
-  // truth both the floating VideoUploadProgressBar and PublishProgressModal
+  // Upload now starts the moment a video's picked, not deferred to publish
+  // time — this is the single source of truth both the floating
+  // VideoUploadProgressBar and PublishProgressModal
   // (if Publish is clicked mid-flight) read live progress from. null once
   // nothing's in flight; videoFile is gone entirely since a video is always
   // either still uploading (this) or already resolved into a real URL
@@ -877,17 +867,22 @@ export default function AddProductPage({
     const check = await checkVideoDuration(file);
     setIsValidatingVideo(false);
 
-    if (check.kind === "needs-trim") {
-      setTrimPending({ file, durationS: check.durationS });
+    if (check.kind === "over-limit") {
+      const lengthNote =
+        check.durationS != null
+          ? `Your video is ${Math.round(check.durationS)}s long`
+          : "This video is longer than the limit";
+      toast.error(
+        `${lengthNote} — trim it to under ${MAX_VIDEO_DURATION_S} seconds first (your phone's gallery app can usually do this), then upload the shorter file.`,
+      );
       return;
     }
 
     startDirectUpload(file);
   };
 
-  // Kicks off the actual upload the instant a file's accepted (either a
-  // plain ≤90s pick, or right after "Trim & Continue" is clicked below) —
-  // no longer deferred to publish time. The floating VideoUploadProgressBar
+  // Kicks off the actual upload the instant a file's accepted — no longer
+  // deferred to publish time. The floating VideoUploadProgressBar
   // shows live progress while the vendor keeps editing the rest of the
   // form; handleSubmit awaits `videoJob.promise` directly instead of
   // starting a second upload if Publish is clicked before this resolves.
@@ -925,67 +920,19 @@ export default function AddProductPage({
     });
   };
 
-  const startTrimUpload = (file: File, startS: number, endS: number) => {
-    const controller = new AbortController();
-    const promise = trimVideoServerSide(
-      file,
-      startS,
-      endS,
-      (phase, pct) => {
-        const progress = Math.round(pct * 100);
-        setVideoJob((prev) =>
-          prev
-            ? {
-                ...prev,
-                phase: phase === "processing" ? "trimming" : "uploading",
-                progress,
-              }
-            : prev,
-        );
-      },
-      controller.signal,
-    ).then(
-      (url) => {
-        setVideoPreview(url);
-        setVideoJob(null);
-        return url;
-      },
-      (err: unknown) => {
-        setVideoJob(null);
-        if (!(err instanceof DOMException && err.name === "AbortError")) {
-          toast.error(getErrorMessage(err, "Couldn't process this video"));
-        }
-        throw err;
-      },
-    );
-    setVideoJob({
-      active: true,
-      phase: "uploading",
-      progress: 0,
-      promise,
-      controller,
-    });
-  };
-
   const clearVideo = () => {
     setVideoPreview(null);
     if (videoRef.current) videoRef.current.value = "";
   };
   // Floating bar's Cancel button — the sole way to cancel a background
-  // upload/trim. Aborting doesn't just stop polling client-side: the
-  // signal listeners inside uploadVideoToBunny/trimVideoServerSide also
-  // delete whatever was already pushed to Bunny/R2 (best-effort), so
-  // nothing orphaned lingers server-side.
+  // upload. Aborting doesn't just stop polling client-side: the signal
+  // listener inside uploadVideoToBunny also deletes whatever was already
+  // pushed to Bunny (best-effort), so nothing orphaned lingers server-side.
   const cancelVideoJob = () => {
     videoJob?.controller.abort();
     setVideoJob(null);
     setVideoPreview(null);
     if (videoRef.current) videoRef.current.value = "";
-  };
-  const handleConfirmTrim = () => {
-    const pending = trimPending;
-    setTrimPending(null);
-    if (pending) startTrimUpload(pending.file, 0, MAX_VIDEO_DURATION_S);
   };
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1266,8 +1213,8 @@ export default function AddProductPage({
       const remoteThumbUrls = thumbnails.filter((u) => !u.startsWith("blob:"));
       thumbnailUrls = [...remoteThumbUrls, ...thumbnailUrls].slice(0, 5);
 
-      // Video — if it's still uploading/trimming in the background (the
-      // floating bar case), don't start a second upload: await the SAME
+      // Video — if it's still uploading in the background (the floating bar
+      // case), don't start a second upload: await the SAME
       // promise, with PublishProgressModal deriving its displayed
       // progress/step live off `videoJob` for as long as this is pending
       // (see the <PublishProgressModal> render below) via these two refs.
@@ -1280,8 +1227,8 @@ export default function AddProductPage({
         try {
           videoUrl = await videoJob.promise;
         } catch {
-          // Already toasted by startDirectUpload/startTrimUpload's own
-          // handler — just stop the publish flow here, don't toast again.
+          // Already toasted by startDirectUpload's own handler — just stop
+          // the publish flow here, don't toast again.
           setPublishModal((prev) => ({ ...prev, open: false }));
           return;
         }
@@ -1565,17 +1512,8 @@ export default function AddProductPage({
 
   return (
     <>
-      <TrimConfirmModal
-        open={trimPending !== null}
-        durationS={trimPending?.durationS ?? null}
-        maxDurationS={MAX_VIDEO_DURATION_S}
-        onCancel={() => setTrimPending(null)}
-        onConfirm={handleConfirmTrim}
-      />
-
       {videoJob?.active && !publishModal.open && (
         <VideoUploadProgressBar
-          phase={videoJob.phase}
           progress={videoJob.progress}
           onCancel={cancelVideoJob}
         />
@@ -2862,9 +2800,7 @@ export default function AddProductPage({
         }
         step={
           publishModal.open && videoJob?.active
-            ? videoJob.phase === "trimming"
-              ? "Trimming video…"
-              : "Uploading video…"
+            ? "Uploading video…"
             : publishModal.step
         }
         done={publishModal.done}

@@ -14,23 +14,18 @@ const TUS_ENDPOINT = "https://video.bunnycdn.com/tusupload";
 const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 const ALLOWED_VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov"];
 // A sanity ceiling, not a technical requirement — Bunny will happily accept
-// a larger file, and the trim-service's original-upload leg doesn't get
-// meaningfully more expensive as the original grows (parallel multipart
-// straight to R2, and ffmpeg only ever reads the trim window back out, not
-// the whole file — see velte-video-trim-service's processJob.js). This just
-// guards against something pathological (a vendor picking the wrong file
-// entirely) rather than rejecting real footage.
-//
-// Sized for someone recording MORE than the 90s they'll keep and trimming
-// down, not just uploading something already ~90s long: 4K60 HEVC on an
-// iPhone runs ~450-560MB per 90s, so a 600MB cap left almost no room to
-// record extra and cut it down — a vendor with 4K60 enabled (not the
-// out-of-the-box default, but a real setting some vendors use) could get
-// hard-rejected before the trim modal ever opened, no in-app way out. 2GB
-// covers a ~5 minute 4K60 original with real margin to actually use the
-// trim feature as intended.
-const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
-const MAX_VIDEO_DURATION_S = 90;
+// a larger file. There's no more "record extra, trim it down" flow (see
+// checkVideoDuration below — over the cap is now a hard rejection, not an
+// in-app trim), so this only ever needs to cover a genuine, real recording
+// AT the length cap, not a longer original a vendor intended to cut down.
+// Sized off real numbers, not the old ~450-560MB/90s estimate: Apple's own
+// published figure for standard 4K60 HEVC is ~400MB/min (~1.2GB for a full
+// MAX_VIDEO_DURATION_S), but newer Pro models (iPhone 15 Pro+) default to a
+// noticeably higher bitrate (~100Mbps, ~750MB/min) — ~2.25GB for a full 3
+// minutes. A 1.5GB cap would already hard-reject a genuine, ordinary
+// recording from those phones; 2.5GB leaves real margin above that instead.
+const MAX_VIDEO_BYTES = 2.5 * 1024 * 1024 * 1024; // 2.5 GB
+const MAX_VIDEO_DURATION_S = 180;
 
 export const MAX_VIDEO_MB = MAX_VIDEO_BYTES / (1024 * 1024);
 export { MAX_VIDEO_DURATION_S };
@@ -116,16 +111,21 @@ function readVideoElementDurationS(file: File): Promise<number | null> {
 }
 
 export type VideoDurationCheck =
-  /** Under the cap — upload as-is, no trim needed at all. */
+  /** Under the cap — upload as-is. */
   | { kind: "ok" }
-  /** Over the cap — trimming to a fixed first-N-seconds window is always
-   * the outcome now (no interactive scrubber/manual entry), so the only
-   * thing that varies is whether we actually know how long the source is.
+  /** Over the cap — rejected outright, no in-app trim. Auto-trimming used to
+   * happen server-side (a separate ffmpeg VM + Cloudflare R2 detour — see
+   * git history), but that whole pipeline was the source of every upload
+   * reliability issue found live on real vendor phones (weak/mobile
+   * connections failing the custom multipart upload it depended on). Since
+   * the outcome was always "keep the first N seconds" anyway, dropping the
+   * auto-trim entirely and just asking the vendor to trim it themselves
+   * (their phone's gallery app, or wherever they got the clip) removes that
+   * whole failure-prone pipeline rather than continuing to harden it.
    * `durationS` is null when even the container-level fallback below
-   * couldn't read it — trimming still proceeds (ffmpeg trims to a window
-   * longer than the real file by just stopping at the real end), the caller
-   * just can't show the vendor an exact "this video is X long" figure. */
-  | { kind: "needs-trim"; durationS: number | null };
+   * couldn't read it — still rejected, the caller just can't show the
+   * vendor an exact "this video is X long" figure in the error. */
+  | { kind: "over-limit"; durationS: number | null };
 
 // Classifies a picked video for AddProductPage's handleVideoUpload. Tries
 // the real <video> element first. If the browser can't read it at all —
@@ -139,7 +139,7 @@ export async function checkVideoDuration(
   const previewDurationS = await readVideoElementDurationS(file);
   if (previewDurationS != null) {
     return previewDurationS > MAX_VIDEO_DURATION_S
-      ? { kind: "needs-trim", durationS: previewDurationS }
+      ? { kind: "over-limit", durationS: previewDurationS }
       : { kind: "ok" };
   }
 
@@ -149,10 +149,10 @@ export async function checkVideoDuration(
   const parsedDurationS = await parseMp4Duration(file);
   if (parsedDurationS != null) {
     return parsedDurationS > MAX_VIDEO_DURATION_S
-      ? { kind: "needs-trim", durationS: parsedDurationS }
+      ? { kind: "over-limit", durationS: parsedDurationS }
       : { kind: "ok" };
   }
-  return { kind: "needs-trim", durationS: null };
+  return { kind: "over-limit", durationS: null };
 }
 
 interface BunnyUploadAuth {
