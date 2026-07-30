@@ -39,17 +39,40 @@ const TRIM_STATUS_POLL_MS = 2000;
 // polling forever.
 const TRIM_STATUS_MAX_WAIT_MS = 10 * 60 * 1000;
 
-// How many parts upload at once. Higher uses more of a real connection's
-// available bandwidth than one sequential stream (the whole point of this
-// rewrite) — but too high just adds contention on a weak mobile uplink
-// instead of helping. 5 is a starting point, not a measured optimum; see
-// the trim-service README's "Sizing the worker pool" for how to actually
-// find one.
-const PART_UPLOAD_CONCURRENCY = 5;
+// How many parts upload at once — adapts between these bounds instead of
+// staying fixed (see runAdaptivePool below). Starts conservative, ramps up
+// on a run of clean batches (a strong desktop/WiFi connection earns back
+// real parallelism), and drops back down hard the moment a part needs a
+// retry. Found live: a 400MB+ video upload over a phone's WiFi routinely
+// failed parts at a fixed concurrency of 5 (weaker phone WiFi radio, or
+// budget-device memory pressure, hammered simultaneously by 5 large
+// transfers) even though the same file uploaded fine from a desktop on the
+// same network. A fixed concurrency has to pick one of "fast on a strong
+// connection" or "reliable on a weak one" — adapting gets both. None of
+// these three numbers are a measured optimum; see the trim-service README's
+// "Sizing the worker pool" for how to actually find one.
+const PART_UPLOAD_MIN_CONCURRENCY = 1;
+const PART_UPLOAD_START_CONCURRENCY = 3;
+const PART_UPLOAD_MAX_CONCURRENCY = 5;
+// How many consecutive retry-free batches earn back one more slot of
+// parallelism — high enough that a single lucky batch right after a drop
+// doesn't immediately ramp back up to the concurrency that just failed.
+const RAMP_UP_CLEAN_BATCHES = 2;
+
 // A part failing outright (not just slow — a dropped connection, a 5xx) is
 // worth a few quick retries before giving up the whole upload over what's
 // often a transient blip, especially on mobile.
 const PART_UPLOAD_MAX_ATTEMPTS = 3;
+// Paused between retry attempts (not before the first try) — retrying a
+// network failure instantly, while the other parts in the same batch are
+// still actively hammering the same constrained connection/device, doesn't
+// give a transient blip (a brief signal drop, a momentary memory squeeze)
+// any real chance to clear before trying again.
+const PART_RETRY_BACKOFF_MS = 800;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface TrimAuthResponse {
   jobId: string;
@@ -136,17 +159,22 @@ function putPart(
   });
 }
 
+// `neededRetry` tells the caller (runAdaptivePool) whether this part came
+// back clean on the first try or needed intervention — that's the signal
+// concurrency adapts on, not just pass/fail.
 async function putPartWithRetry(
   url: string,
   blob: Blob,
   onBytes: (loaded: number) => void,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{ etag: string; neededRetry: boolean }> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= PART_UPLOAD_MAX_ATTEMPTS; attempt++) {
     if (signal?.aborted) throw abortError();
+    if (attempt > 1) await sleep(PART_RETRY_BACKOFF_MS * (attempt - 1));
     try {
-      return await putPart(url, blob, onBytes, signal);
+      const etag = await putPart(url, blob, onBytes, signal);
+      return { etag, neededRetry: attempt > 1 };
     } catch (err) {
       if (signal?.aborted) throw abortError();
       lastErr = err;
@@ -156,25 +184,47 @@ async function putPartWithRetry(
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
-// Runs `worker` over `items` with at most `concurrency` in flight at once —
-// a small fixed-size pool rather than chunking into batches, so a fast part
-// finishing early immediately picks up the next one instead of waiting on
-// the slowest part in its batch.
-async function runPool<T>(
+// Runs `worker` over `items` in batches whose size adapts between
+// PART_UPLOAD_MIN_CONCURRENCY and PART_UPLOAD_MAX_CONCURRENCY (see those
+// constants' own comment) — halves the moment any part in a batch needed a
+// retry, grows by one slot after RAMP_UP_CLEAN_BATCHES clean batches in a
+// row. Simpler than a continuously-resizing worker pool (a batch waits on
+// its slowest part before the next one starts, rather than a fast part
+// immediately picking up the next item) — costs a little throughput for
+// code that's easy to reason about, worth it here since a real upload is
+// only ever tens of parts, not thousands.
+async function runAdaptivePool<T>(
   items: T[],
-  concurrency: number,
-  worker: (item: T) => Promise<void>,
+  worker: (item: T) => Promise<{ neededRetry: boolean }>,
 ): Promise<void> {
-  let nextIndex = 0;
-  async function runNext(): Promise<void> {
-    const i = nextIndex++;
-    if (i >= items.length) return;
-    await worker(items[i]);
-    return runNext();
+  let concurrency = PART_UPLOAD_START_CONCURRENCY;
+  let cleanStreak = 0;
+  let index = 0;
+
+  while (index < items.length) {
+    const batch = items.slice(index, index + concurrency);
+    index += batch.length;
+
+    const results = await Promise.all(batch.map((item) => worker(item)));
+    const anyRetried = results.some((r) => r.neededRetry);
+
+    if (anyRetried) {
+      concurrency = Math.max(
+        PART_UPLOAD_MIN_CONCURRENCY,
+        Math.floor(concurrency / 2),
+      );
+      cleanStreak = 0;
+    } else {
+      cleanStreak++;
+      if (
+        cleanStreak >= RAMP_UP_CLEAN_BATCHES &&
+        concurrency < PART_UPLOAD_MAX_CONCURRENCY
+      ) {
+        concurrency++;
+        cleanStreak = 0;
+      }
+    }
   }
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, runNext),
-  );
 }
 
 // `signal` lets a caller cancel mid-flight (AddProductPage's floating
@@ -238,25 +288,22 @@ export async function trimVideoServerSide(
     const uploadedParts: { partNumber: number; etag: string }[] = new Array(
       parts.length,
     );
-    await runPool(
-      parts,
-      PART_UPLOAD_CONCURRENCY,
-      async ({ partNumber, url }) => {
-        const start = (partNumber - 1) * partSize;
-        const blob = file.slice(start, Math.min(start + partSize, file.size));
-        const index = partNumber - 1;
-        const etag = await putPartWithRetry(
-          url,
-          blob,
-          (loaded) => {
-            partBytes[index] = loaded;
-            reportUploadProgress();
-          },
-          signal,
-        );
-        uploadedParts[index] = { partNumber, etag };
-      },
-    );
+    await runAdaptivePool(parts, async ({ partNumber, url }) => {
+      const start = (partNumber - 1) * partSize;
+      const blob = file.slice(start, Math.min(start + partSize, file.size));
+      const index = partNumber - 1;
+      const { etag, neededRetry } = await putPartWithRetry(
+        url,
+        blob,
+        (loaded) => {
+          partBytes[index] = loaded;
+          reportUploadProgress();
+        },
+        signal,
+      );
+      uploadedParts[index] = { partNumber, etag };
+      return { neededRetry };
+    });
 
     const completeRes = await fetch(completeUrl, {
       method: "POST",
