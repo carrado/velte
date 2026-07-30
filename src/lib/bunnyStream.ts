@@ -77,6 +77,24 @@ const DURATION_CHECK_MAX_TIMEOUT_MS = 30_000;
 // matters most for.
 const DURATION_CHECK_MS_PER_BYTE = 1000 / (10 * 1024 * 1024);
 
+// Shared with VideoTrimModal, which re-probes metadata on a fresh <video>
+// element for the same file (its own scrubber preview needs a live element,
+// not just the duration number this resolves). That re-probe used to run on
+// a fixed, shorter timeout, so a large file whose metadata took, say, 20s to
+// load here — correctly routed to the scrubber modal — could still time out
+// a second time in the modal itself and get demoted to the no-preview
+// fallback UI, even though previewability was already proven. Exporting the
+// same size-scaled schedule keeps both reads on identical footing.
+export function videoMetadataTimeoutMs(fileSizeBytes: number): number {
+  return Math.min(
+    DURATION_CHECK_MAX_TIMEOUT_MS,
+    Math.max(
+      DURATION_CHECK_BASE_TIMEOUT_MS,
+      fileSizeBytes * DURATION_CHECK_MS_PER_BYTE,
+    ),
+  );
+}
+
 // Resolves the REAL <video> element's duration, or null if the browser
 // can't read it within the (size-scaled) timeout, or fires onerror trying.
 // A success here means more than just "we know the duration" — it means
@@ -96,14 +114,10 @@ function readVideoElementDurationS(file: File): Promise<number | null> {
       URL.revokeObjectURL(objectUrl);
       resolve(result);
     };
-    const timeoutMs = Math.min(
-      DURATION_CHECK_MAX_TIMEOUT_MS,
-      Math.max(
-        DURATION_CHECK_BASE_TIMEOUT_MS,
-        file.size * DURATION_CHECK_MS_PER_BYTE,
-      ),
+    const timeoutId = setTimeout(
+      () => finish(null),
+      videoMetadataTimeoutMs(file.size),
     );
-    const timeoutId = setTimeout(() => finish(null), timeoutMs);
 
     video.preload = "metadata";
     video.onloadedmetadata = () => finish(video.duration || null);

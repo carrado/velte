@@ -19,6 +19,7 @@ import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { getInitial } from "@/lib/initials";
+import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import type {
   BuyerLocation,
   Clarification,
@@ -866,15 +867,8 @@ export function SearchHome() {
   }
 
   // Auto-grows with content, capped at max-h (CSS below) — same feel as
-  // ChatGPT's composer. Re-measured whenever `query` changes, including the
-  // reset to "" after a send, so the box collapses back down too.
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [query]);
+  // ChatGPT's composer.
+  const autoResize = useAutoResizeTextarea(query);
 
   function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -936,7 +930,7 @@ export function SearchHome() {
 
       <div className="flex flex-col bg-white rounded-[28px] border border-gray-200 shadow-sm focus-within:border-gray-300 focus-within:shadow-md transition-shadow">
         <textarea
-          ref={textareaRef}
+          {...autoResize}
           rows={1}
           value={query}
           onChange={(e) => setQuery(e.target.value)}

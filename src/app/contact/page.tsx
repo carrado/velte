@@ -5,8 +5,10 @@ import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { Mail, Phone, MapPin } from "lucide-react";
+import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 
 export default function Contact() {
+  const messageAutoResize = useAutoResizeTextarea();
   return (
     <>
       <Navbar />
@@ -64,8 +66,9 @@ export default function Contact() {
                     Message
                   </label>
                   <textarea
+                    {...messageAutoResize}
                     rows={4}
-                    className="w-full min-h-[140px] sm:min-h-[120px] bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    className="w-full min-h-[140px] sm:min-h-[120px] resize-none overflow-hidden bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
                   ></textarea>
                 </div>
                 <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white">

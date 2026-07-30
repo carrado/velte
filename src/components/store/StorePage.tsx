@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { ShareButton } from "@/components/ShareButton";
 import { DescriptionQualityMeter } from "@/components/DescriptionQualityMeter";
 import SectorMultiSelect from "@/components/sectors/SectorMultiSelect";
+import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import type { Store } from "@/types/store";
 
 const MAX_DESCRIPTION = 600;
@@ -83,6 +84,7 @@ export default function StorePage() {
   const [sectorValues, setSectorValues] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const descriptionAutoResize = useAutoResizeTextarea(form?.description);
 
   // Seed the form once the store arrives (render-phase adjust, no effect).
   const [seeded, setSeeded] = useState(false);
@@ -404,6 +406,7 @@ export default function StorePage() {
           </div>
         )}
         <textarea
+          {...descriptionAutoResize}
           value={form.description}
           onChange={(e) =>
             set("description", e.target.value.slice(0, MAX_DESCRIPTION))
@@ -412,7 +415,7 @@ export default function StorePage() {
           placeholder="e.g. We sell original phone accessories — chargers, earphones, screen guards — in Computer Village, Ikeja. We also do same-day phone repairs."
           className={cn(
             inputClass,
-            "h-auto py-2.5 min-h-[140px] sm:min-h-[120px] resize-none",
+            "h-auto py-2.5 min-h-[140px] sm:min-h-[120px] resize-none overflow-hidden",
           )}
         />
         <DescriptionQualityMeter

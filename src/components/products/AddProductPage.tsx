@@ -26,6 +26,7 @@ import {
 import { SECTOR_BY_VALUE } from "@/lib/sectors";
 import type { SectorClassification } from "@/types/sectors";
 import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
+import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import AttributePickerModal from "./AttributePickerModal";
 import TrimFallbackModal from "./TrimFallbackModal";
 import VideoTrimModal from "./VideoTrimModal";
@@ -578,6 +579,7 @@ export default function AddProductPage({
   // Basic
   const [productName, setProductName] = useState("");
   const [description, setDescription] = useState("");
+  const descriptionAutoResize = useAutoResizeTextarea(description);
   const [selectedCategory, setSelectedCategory] = useState("");
 
   // Pricing — a single price, or a min–max range when the vendor opts in.
@@ -1785,6 +1787,7 @@ export default function AddProductPage({
               <div>
                 <FieldLabel required>Description</FieldLabel>
                 <textarea
+                  {...descriptionAutoResize}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={
@@ -1797,7 +1800,7 @@ export default function AddProductPage({
                           "Describe the product features and benefits…")
                   }
                   rows={4}
-                  className="w-full px-3 py-3 min-h-[140px] sm:min-h-[120px] bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
+                  className="w-full px-3 py-3 min-h-[140px] sm:min-h-[120px] bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none overflow-hidden"
                 />
                 <div className="flex items-center justify-between mt-1.5">
                   {isService ? (

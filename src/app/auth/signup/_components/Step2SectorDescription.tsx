@@ -11,11 +11,79 @@ import { SIGNUP_FIELD_SCHEMAS } from "../schema";
 import type { SignupFormApi } from "../schema";
 import { FieldError } from "./shared";
 import SectorPicker from "./SectorPicker";
+import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 
 const MAX_DESCRIPTION = 600;
 
 interface GenerateResult {
   description: string;
+}
+
+// A hook can't be called inside form.Field's render-prop callback (not a
+// component as far as react-hooks/rules-of-hooks can tell) — pulled out
+// into its own component so useAutoResizeTextarea is legal.
+function DescriptionField({
+  field,
+  sectorValues,
+  onGenerate,
+  isGenerating,
+}: {
+  field: {
+    state: { value: string; meta: { errors: unknown[] } };
+    handleChange: (value: string) => void;
+    handleBlur: () => void;
+  };
+  sectorValues: string[];
+  onGenerate: () => void;
+  isGenerating: boolean;
+}) {
+  const autoResize = useAutoResizeTextarea(field.state.value);
+  return (
+    <div>
+      <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+        <FileText className="w-3.5 h-3.5 text-orange-400" />
+        Describe your business
+      </Label>
+      <textarea
+        {...autoResize}
+        value={field.state.value}
+        onChange={(e) =>
+          field.handleChange(e.target.value.slice(0, MAX_DESCRIPTION))
+        }
+        onBlur={field.handleBlur}
+        rows={5}
+        placeholder="e.g. We sell original phone accessories — chargers, earphones, screen guards — in Computer Village, Ikeja. We also do same-day phone repairs."
+        className="w-full px-3.5 py-2.5 min-h-[160px] sm:min-h-[130px] bg-transparent border border-black/[0.3] rounded-md text-black text-sm placeholder:text-black/25 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 resize-none overflow-hidden"
+      />
+      <DescriptionQualityMeter
+        description={field.state.value}
+        sectorValues={sectorValues}
+      />
+      <div className="flex justify-end mt-1.5">
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={isGenerating}
+          className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-600 disabled:opacity-60 cursor-pointer"
+        >
+          {isGenerating ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Sparkles className="w-3 h-3" />
+          )}
+          {isGenerating ? "Generating…" : "Ask AI to generate"}
+        </button>
+      </div>
+      <div className="flex items-center justify-between mt-1">
+        <FieldError
+          message={field.state.meta.errors[0] as string | undefined}
+        />
+        <p className="text-black/40 text-xs ml-auto">
+          {field.state.value.length}/{MAX_DESCRIPTION}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export default function Step2SectorDescription({
@@ -110,49 +178,12 @@ export default function Step2SectorDescription({
         }}
       >
         {(field) => (
-          <div>
-            <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-              <FileText className="w-3.5 h-3.5 text-orange-400" />
-              Describe your business
-            </Label>
-            <textarea
-              value={field.state.value}
-              onChange={(e) =>
-                field.handleChange(e.target.value.slice(0, MAX_DESCRIPTION))
-              }
-              onBlur={field.handleBlur}
-              rows={5}
-              placeholder="e.g. We sell original phone accessories — chargers, earphones, screen guards — in Computer Village, Ikeja. We also do same-day phone repairs."
-              className="w-full px-3.5 py-2.5 min-h-[160px] sm:min-h-[130px] bg-transparent border border-black/[0.3] rounded-md text-black text-sm placeholder:text-black/25 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 resize-none"
-            />
-            <DescriptionQualityMeter
-              description={field.state.value}
-              sectorValues={form.store.state.values.sectors}
-            />
-            <div className="flex justify-end mt-1.5">
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={generateMutation.isPending}
-                className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-600 disabled:opacity-60 cursor-pointer"
-              >
-                {generateMutation.isPending ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3 h-3" />
-                )}
-                {generateMutation.isPending
-                  ? "Generating…"
-                  : "Ask AI to generate"}
-              </button>
-            </div>
-            <div className="flex items-center justify-between mt-1">
-              <FieldError message={field.state.meta.errors[0]} />
-              <p className="text-black/40 text-xs ml-auto">
-                {field.state.value.length}/{MAX_DESCRIPTION}
-              </p>
-            </div>
-          </div>
+          <DescriptionField
+            field={field}
+            sectorValues={form.store.state.values.sectors}
+            onGenerate={handleGenerate}
+            isGenerating={generateMutation.isPending}
+          />
         )}
       </form.Field>
 

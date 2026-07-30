@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, Loader2, Pause, Play, Scissors, X } from "lucide-react";
 import type { VideoTrimModalProps } from "@/types/product";
+import { videoMetadataTimeoutMs } from "@/lib/bunnyStream";
 
 // Same reasoning as checkVideoDuration in bunnyStream.ts: a desktop/mobile
 // browser's <video> metadata read can hang indefinitely on a large file
@@ -15,8 +16,11 @@ import type { VideoTrimModalProps } from "@/types/product";
 // this file (see checkVideoDuration's "trim-with-preview" case), so this
 // fallback is now a rare defensive backstop rather than the common path —
 // letting the vendor type a start/end instead of dragging a scrubber they
-// can't see a preview for.
-const METADATA_TIMEOUT_MS = 8000;
+// can't see a preview for. Uses the SAME size-scaled schedule as that
+// pre-check (see videoMetadataTimeoutMs) — this modal re-probes metadata on
+// a fresh <video> element for the same file, and a shorter fixed timeout
+// here previously meant a large file that had already proven previewable
+// could still time out on the re-probe and get demoted to this fallback.
 
 function formatTime(s: number): string {
   const mins = Math.floor(s / 60);
@@ -146,7 +150,7 @@ export default function VideoTrimModal({
     if (!open || !file || duration !== null || metadataError) return;
     const timeoutId = setTimeout(
       () => setMetadataError(true),
-      METADATA_TIMEOUT_MS,
+      videoMetadataTimeoutMs(file.size),
     );
     return () => clearTimeout(timeoutId);
   }, [open, file, duration, metadataError]);
