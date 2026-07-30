@@ -1,5 +1,5 @@
-import WalletPage from "@/components/wallet/WalletPage";
+import WalletPageRich from "@/components/wallet/redesign/WalletPageRich";
 
 export default function Page() {
-  return <WalletPage />;
+  return <WalletPageRich />;
 }

@@ -2,8 +2,9 @@ import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
 import { requireAuth, jsonError } from "@/lib/server/guards";
 
-// POST /api/videos/trim-auth   (authenticated — VideoTrimModal, right before
-// it starts uploading an over-length original). The video-trim VM has no
+// POST /api/videos/trim-auth   (authenticated — AddProductPage's
+// startTrimUpload, right before it starts uploading an over-length
+// original). The video-trim VM has no
 // session cookie to check, so instead of cookie auth it gets a short-lived,
 // single-job JWT signed here with a secret only this app and that VM share
 // (TRIM_SERVICE_JWT_SECRET — deliberately NOT the same secret as

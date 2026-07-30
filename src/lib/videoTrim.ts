@@ -15,7 +15,7 @@
 // vendors actually record on: a 300-400MB clip routinely exceeded a
 // low/mid-RAM Android's browser tab memory ceiling loading the whole file
 // into wasm, on top of HEVC/moov-atom-position issues even just reading
-// metadata (see VideoTrimModal's own metadata-timeout fallback).
+// metadata (see bunnyStream.ts's checkVideoDuration).
 //
 // The upload itself went through one more revision after that: originally
 // a single resumable tus stream relayed through the trim-service VM (which

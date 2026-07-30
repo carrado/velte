@@ -77,15 +77,7 @@ const DURATION_CHECK_MAX_TIMEOUT_MS = 30_000;
 // matters most for.
 const DURATION_CHECK_MS_PER_BYTE = 1000 / (10 * 1024 * 1024);
 
-// Shared with VideoTrimModal, which re-probes metadata on a fresh <video>
-// element for the same file (its own scrubber preview needs a live element,
-// not just the duration number this resolves). That re-probe used to run on
-// a fixed, shorter timeout, so a large file whose metadata took, say, 20s to
-// load here — correctly routed to the scrubber modal — could still time out
-// a second time in the modal itself and get demoted to the no-preview
-// fallback UI, even though previewability was already proven. Exporting the
-// same size-scaled schedule keeps both reads on identical footing.
-export function videoMetadataTimeoutMs(fileSizeBytes: number): number {
+function videoMetadataTimeoutMs(fileSizeBytes: number): number {
   return Math.min(
     DURATION_CHECK_MAX_TIMEOUT_MS,
     Math.max(
@@ -96,12 +88,9 @@ export function videoMetadataTimeoutMs(fileSizeBytes: number): number {
 }
 
 // Resolves the REAL <video> element's duration, or null if the browser
-// can't read it within the (size-scaled) timeout, or fires onerror trying.
-// A success here means more than just "we know the duration" — it means
-// the vendor will actually be able to see/drag a scrubber preview too
-// (VideoTrimModal depends on this exact same browser capability), which is
-// why checkVideoDuration below treats "worked" vs "didn't" as the deciding
-// factor for which trim UI to show, not just the number itself.
+// can't read it within the (size-scaled) timeout, or fires onerror trying —
+// in which case checkVideoDuration below falls back to container-level
+// parsing instead.
 function readVideoElementDurationS(file: File): Promise<number | null> {
   return new Promise((resolve) => {
     const video = document.createElement("video");
@@ -129,41 +118,41 @@ function readVideoElementDurationS(file: File): Promise<number | null> {
 export type VideoDurationCheck =
   /** Under the cap — upload as-is, no trim needed at all. */
   | { kind: "ok" }
-  /** Over the cap, and the browser CAN preview it — show the real,
-   * scrubber-based VideoTrimModal so the vendor picks their own window. */
-  | { kind: "trim-with-preview" }
-  /** Either confirmed over the cap with no usable preview, or the duration
-   * genuinely couldn't be determined at all — the vendor can't see/drag a
-   * scrubber either way, so offer a fixed first-N-seconds trim instead of
-   * an interactive one they can't actually preview. */
-  | { kind: "trim-fallback" };
+  /** Over the cap — trimming to a fixed first-N-seconds window is always
+   * the outcome now (no interactive scrubber/manual entry), so the only
+   * thing that varies is whether we actually know how long the source is.
+   * `durationS` is null when even the container-level fallback below
+   * couldn't read it — trimming still proceeds (ffmpeg trims to a window
+   * longer than the real file by just stopping at the real end), the caller
+   * just can't show the vendor an exact "this video is X long" figure. */
+  | { kind: "needs-trim"; durationS: number | null };
 
 // Classifies a picked video for AddProductPage's handleVideoUpload. Tries
-// the real <video> element first (authoritative when it works, and the
-// same check the scrubber preview itself depends on). If the browser can't
-// read it at all — found live: HEVC decode gaps on Android Chrome/WebView,
-// or a moov atom positioned at the end of a large file taking too long —
-// falls back to parseMp4Duration (container-level, works regardless of
-// codec support) before concluding the vendor genuinely can't get a
-// preview here.
+// the real <video> element first. If the browser can't read it at all —
+// found live: HEVC decode gaps on Android Chrome/WebView, or a moov atom
+// positioned at the end of a large file taking too long — falls back to
+// parseMp4Duration (container-level, works regardless of codec support)
+// before concluding the duration genuinely can't be determined here.
 export async function checkVideoDuration(
   file: File,
 ): Promise<VideoDurationCheck> {
   const previewDurationS = await readVideoElementDurationS(file);
   if (previewDurationS != null) {
     return previewDurationS > MAX_VIDEO_DURATION_S
-      ? { kind: "trim-with-preview" }
+      ? { kind: "needs-trim", durationS: previewDurationS }
       : { kind: "ok" };
   }
 
   console.warn(
-    "[bunnyStream] Browser couldn't preview this video — falling back to container-level duration parsing",
+    "[bunnyStream] Browser couldn't read this video's metadata — falling back to container-level duration parsing",
   );
   const parsedDurationS = await parseMp4Duration(file);
-  if (parsedDurationS != null && parsedDurationS <= MAX_VIDEO_DURATION_S) {
-    return { kind: "ok" };
+  if (parsedDurationS != null) {
+    return parsedDurationS > MAX_VIDEO_DURATION_S
+      ? { kind: "needs-trim", durationS: parsedDurationS }
+      : { kind: "ok" };
   }
-  return { kind: "trim-fallback" };
+  return { kind: "needs-trim", durationS: null };
 }
 
 interface BunnyUploadAuth {

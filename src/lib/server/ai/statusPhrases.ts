@@ -35,6 +35,46 @@ function snippet(text: string, maxLen = 48): string {
   return `${trimmed.slice(0, maxLen - 1).trimEnd()}…`;
 }
 
+// A bare confirmation/acknowledgement reply — "yes", "sure", "ok" — reads as
+// nonsense once dropped into one of the query-quoting templates below
+// ("Digging into 'yes'…", found live on a buyer's follow-up turn). This is
+// deliberately an exact-match list, not a "short text" heuristic — a real
+// short query ("red heels", "iphone charger") is just as short as these but
+// reads perfectly fine quoted, so length/word-count alone would misfire on
+// completely normal queries.
+const ACKNOWLEDGEMENT_REPLIES = new Set([
+  "yes",
+  "yeah",
+  "yep",
+  "yup",
+  "sure",
+  "ok",
+  "okay",
+  "no",
+  "nope",
+  "nah",
+  "please",
+  "please do",
+  "thanks",
+  "thank you",
+  "alright",
+  "fine",
+  "cool",
+  "go ahead",
+  "sounds good",
+  "that works",
+  "perfect",
+  "great",
+]);
+
+function isAcknowledgementReply(text: string): boolean {
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/, "");
+  return ACKNOWLEDGEMENT_REPLIES.has(normalized);
+}
+
 // `text` is the buyer's own raw message (undefined for a bare photo with no
 // caption) — quoting it back is what keeps this line from reading as the
 // same canned "Understanding your request…" on every single search.
@@ -80,6 +120,18 @@ export function understandingRequestPhrase(
       "Sizing up what you sent…",
       "Having a good look at this…",
       "One sec, studying the photo…",
+    ];
+  }
+  if (q && isAcknowledgementReply(q)) {
+    return [
+      "Got it — following up on that…",
+      "Continuing from there…",
+      "Alright, picking up where we left off…",
+      "On it — working from your last answer…",
+      "Got it, taking that into account…",
+      "Noted — refining the search now…",
+      "Alright, adjusting based on that…",
+      "Got it — let's continue…",
     ];
   }
   if (q) {
@@ -300,13 +352,18 @@ export function noVendorMatchPhrase(hasExternal: boolean): string[] {
         "Nothing yet on Velte — seeing what's around instead…",
       ]
     : [
-        "No vendors matched yet.",
-        "Nothing matched this search yet.",
-        "Couldn't find a vendor match yet.",
-        "No vendors turned up yet.",
-        "Nothing found for this yet.",
-        "Still no vendor match for this one.",
-        "No vendors turned up for this yet.",
+        // hasExternal is false here specifically because the nearby-business
+        // fallback ALSO came back empty (see searchStoresTool.ts's call
+        // site) — spelling that out (not just "no vendors matched") is what
+        // makes this read as a complete, honest answer instead of a vague
+        // half-finished one.
+        "No Velte vendor for this yet, and nothing else nearby either.",
+        "Nothing on Velte for this, and no nearby alternatives came up.",
+        "Couldn't find a Velte vendor or anything nearby for this.",
+        "No match on Velte, and no other options turned up nearby.",
+        "Nothing found on Velte, and no nearby businesses came up either.",
+        "No Velte vendor yet — and no nearby alternative either.",
+        "Nothing matched on Velte or nearby for this search.",
       ];
 }
 

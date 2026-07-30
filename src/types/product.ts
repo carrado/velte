@@ -224,25 +224,16 @@ export interface VideoPosterImageProps {
   className?: string;
 }
 
-export interface VideoTrimModalProps {
+// A picked video that's over MAX_VIDEO_DURATION_S always gets the same
+// fixed-window treatment now (first `maxDurationS` seconds, cut server-side)
+// — no scrubber, no manual start/end entry. `durationS` is null when even
+// bunnyStream's container-level fallback parse couldn't read it (still safe
+// to proceed: ffmpeg trims to a window longer than the real file by just
+// stopping at the real end, no error), in which case the copy below reads
+// conditionally rather than claiming a duration it doesn't have.
+export interface TrimConfirmModalProps {
   open: boolean;
-  /** The over-length file the vendor picked — trimming works off this
-   * directly, never re-reads from the file input. */
-  file: File | null;
-  maxDurationS: number;
-  onCancel: () => void;
-  /** Fires the moment the vendor picks a window and confirms — the modal
-   * closes immediately; the parent owns starting the actual upload/trim
-   * (AddProductPage's floating progress bar), not this modal. */
-  onConfirm: (startS: number, endS: number) => void;
-}
-
-// Shown instead of VideoTrimModal when the browser can't preview the picked
-// video at all (see bunnyStream.ts's checkVideoDuration "trim-fallback"
-// case) — no scrubber to drag, so this just proposes a fixed first-N-second
-// window rather than asking the vendor to type start/end numbers blind.
-export interface TrimFallbackModalProps {
-  open: boolean;
+  durationS: number | null;
   maxDurationS: number;
   onCancel: () => void;
   onConfirm: () => void;

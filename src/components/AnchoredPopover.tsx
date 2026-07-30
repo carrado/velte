@@ -48,7 +48,8 @@ export default function AnchoredPopover({
 }: AnchoredPopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{
-    top: number;
+    top?: number;
+    bottom?: number;
     left?: number;
     right?: number;
   } | null>(null);
@@ -103,6 +104,35 @@ export default function AnchoredPopover({
     }
   }, [open, align, pos, anchorRef, anchorEl]);
 
+  // Vertical counterpart of the flip above, applied unconditionally (not
+  // gated behind a prop) — every popover/dropdown in the app renders
+  // through this one component, so fixing the flip here covers all of them
+  // instead of requiring each call site to opt in. Opens below the anchor
+  // by default (the common case, set in the position effect above); flips
+  // to open ABOVE it instead only when the panel would overflow the
+  // viewport's bottom edge AND there's actually room above to fit it —
+  // otherwise a flip could land it somewhere worse than just letting it run
+  // off the bottom. `pos.top === undefined` (already flipped up) short-
+  // circuits re-checking, the same guard the horizontal flip above uses.
+  useLayoutEffect(() => {
+    if (!open || !pos || pos.top === undefined) return;
+    const anchor = anchorEl ?? anchorRef?.current ?? null;
+    const panel = panelRef.current;
+    if (!anchor || !panel) return;
+    const panelHeight = panel.getBoundingClientRect().height;
+    const a = anchor.getBoundingClientRect();
+    const overflowsBottom = pos.top + panelHeight > window.innerHeight - 8;
+    const fitsAbove = a.top - panelHeight - gap >= 8;
+    if (overflowsBottom && fitsAbove) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPos({
+        ...pos,
+        top: undefined,
+        bottom: window.innerHeight - a.top + gap,
+      });
+    }
+  }, [open, pos, gap, anchorRef, anchorEl]);
+
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: MouseEvent) => {
@@ -150,6 +180,7 @@ export default function AnchoredPopover({
       style={{
         position: "fixed",
         top: pos.top,
+        bottom: pos.bottom,
         left: pos.left,
         right: pos.right,
       }}

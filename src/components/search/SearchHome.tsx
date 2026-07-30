@@ -37,6 +37,10 @@ import type {
 // (retrieval is embeddings-based across all listings regardless of kind), so
 // this can't just be a static "product vs service" flag passed in from the
 // call site.
+// Mirrors route.ts's own RECENT_STATUS_MEMORY cap — see shownStatusesRef's
+// comment below for why the client tracks this at all.
+const RECENT_STATUS_MEMORY = 8;
+
 function productsNoun(products: VendorMatch[]): string {
   const hasProduct = products.some((p) => p.kind !== "service");
   const hasService = products.some((p) => p.kind === "service");
@@ -567,6 +571,14 @@ export function SearchHome() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Every /api/search call is otherwise stateless, so without this the
+  // server's own within-turn status-repeat avoidance (see statusPhrases.ts's
+  // pickAvoiding) resets blank on every new search — the same status line
+  // could resurface search after search in one session. A plain ref, not
+  // state: it's sent along on the NEXT call, never rendered itself. Mirrors
+  // route.ts's own RECENT_STATUS_MEMORY cap.
+  const shownStatusesRef = useRef<string[]>([]);
+
   // Scrolls the new message into view only when a turn is actually ADDED
   // (submit), not on every subsequent status/final update within that same
   // turn — found live that re-scrolling on every streamed update yanked the
@@ -784,9 +796,15 @@ export function SearchHome() {
         imageUrl: currentImageUrl ?? undefined,
         buyerLocation: location ?? undefined,
         history,
+        recentStatuses: shownStatusesRef.current,
       },
       {
-        onStatus: (text) => updateTurn(turnId, { status: text }),
+        onStatus: (text) => {
+          updateTurn(turnId, { status: text });
+          shownStatusesRef.current = [...shownStatusesRef.current, text].slice(
+            -RECENT_STATUS_MEMORY,
+          );
+        },
         onFinal: (event) => {
           // A dual-intent query (e.g. "a phone repair shop that also sells
           // chargers") can call both tools and return the same vendor in

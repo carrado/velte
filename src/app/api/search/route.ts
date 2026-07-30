@@ -502,14 +502,23 @@ export async function POST(req: Request) {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      // Tracks the last few status lines actually shown THIS turn (capped,
-      // most-recent-last) so `push` can steer away from repeating one back-
-      // to-back across the understanding → searching → found sequence (and
-      // any zero-result cascade into a second tool call) — see
-      // pickAvoiding's own comment for why the avoidance has to live here
-      // rather than inside each phrase pool.
-      const recentStatuses: string[] = [];
-      const RECENT_STATUS_MEMORY = 4;
+      // Tracks the last few status lines shown (capped, most-recent-last) so
+      // `push` can steer away from repeating one — both back-to-back within
+      // THIS turn's own understanding → searching → found sequence (and any
+      // zero-result cascade into a second tool call), AND across earlier
+      // turns in the same session: this route is otherwise stateless (a
+      // fresh request every turn), so seeding from the client-sent
+      // `recentStatuses` (see SearchHome.tsx's shownStatusesRef) is what
+      // stops the exact same line from resurfacing search after search, not
+      // just push after push. Sliced to the cap up front so the existing
+      // push-then-shift-by-one logic below stays correct — it assumes the
+      // array starts at-or-under RECENT_STATUS_MEMORY, not arbitrarily long.
+      // See pickAvoiding's own comment for why the avoidance has to live
+      // here rather than inside each phrase pool.
+      const RECENT_STATUS_MEMORY = 8;
+      const recentStatuses: string[] = (body?.recentStatuses ?? []).slice(
+        -RECENT_STATUS_MEMORY,
+      );
       const push = (candidates: string[]) => {
         const text = pickAvoiding(candidates, recentStatuses);
         recentStatuses.push(text);

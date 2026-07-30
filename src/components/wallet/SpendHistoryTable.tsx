@@ -1,32 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Calendar } from "lucide-react";
 import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira, cn } from "@/lib/utils";
 import DataTable from "@/components/DataTable";
-import FilterPopover from "@/components/FilterPopover";
+import AnchoredPopover from "@/components/AnchoredPopover";
 import { Pagination } from "@/components/Pagination";
 import MobileCard from "@/components/MobileCard";
-import type { ColumnDef, FilterField } from "@/types/common";
+import type { ColumnDef } from "@/types/common";
 import type { WalletTransactionItem } from "@/types/wallet";
 
-const DEFAULT_FILTERS = { type: "all", startDate: "", endDate: "" };
+type SpendFilters = { startDate: string; endDate: string };
 
-const TYPE_FILTER_FIELDS: FilterField[] = [
-  {
-    type: "select",
-    key: "type",
-    label: "Type",
-    options: [
-      { value: "all", label: "All" },
-      { value: "topup", label: "Top-ups" },
-      { value: "debit", label: "Lead charges" },
-    ],
-  },
-];
+const DEFAULT_FILTERS: SpendFilters = {
+  startDate: "",
+  endDate: "",
+};
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-NG", {
@@ -34,6 +26,117 @@ function fmtDate(iso: string) {
     month: "short",
     year: "numeric",
   });
+}
+
+// Short form for the trigger button's own label — "9 Jan" rather than the
+// table's "9 Jan 2026", since the year is rarely needed to tell two ends of
+// a filter range apart at a glance.
+function fmtFilterDate(isoDateOnly: string) {
+  return new Date(isoDateOnly).toLocaleDateString("en-NG", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+// Replaces the generic funnel-icon FilterPopover — a bare "Filter" icon gave
+// no hint that date filtering was even available underneath it. This is a
+// purpose-built date-range control (calendar icon + the selected range
+// spelled out, e.g. "9 Jan – 15 Jan", or "All time" when unset) so the
+// affordance actually reads as what it is.
+function DateRangeFilter({
+  value,
+  onApply,
+  onReset,
+}: {
+  value: SpendFilters;
+  onApply: (next: SpendFilters) => void;
+  onReset: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [local, setLocal] = useState<SpendFilters>(value);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const label =
+    value.startDate && value.endDate
+      ? `${fmtFilterDate(value.startDate)} – ${fmtFilterDate(value.endDate)}`
+      : value.startDate
+        ? `From ${fmtFilterDate(value.startDate)}`
+        : value.endDate
+          ? `Until ${fmtFilterDate(value.endDate)}`
+          : "All time";
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        onClick={() => {
+          setOpen((prev) => {
+            const next = !prev;
+            if (next) setLocal(value);
+            return next;
+          });
+        }}
+        className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer text-dash-caption font-medium text-gray-600"
+      >
+        <Calendar size={14} className="text-gray-400" />
+        {label}
+      </button>
+      <AnchoredPopover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={triggerRef}
+        align="right"
+        className="sm:w-72 w-[300px] bg-white rounded-lg shadow-lg border border-gray-200 p-4 text-dash-body"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-dash-secondary font-semibold text-[#023337] mb-1">
+              Date Range
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={local.startDate}
+                onChange={(e) =>
+                  setLocal({ ...local, startDate: e.target.value })
+                }
+                className="flex-1 px-2 py-1.5 border border-gray-200 rounded text-dash-body"
+              />
+              <input
+                type="date"
+                value={local.endDate}
+                onChange={(e) =>
+                  setLocal({ ...local, endDate: e.target.value })
+                }
+                className="flex-1 px-2 py-1.5 border border-gray-200 rounded text-dash-body"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => {
+                setLocal(DEFAULT_FILTERS);
+                onReset();
+                setOpen(false);
+              }}
+              className="flex-1 px-3 py-1.5 text-dash-body border border-gray-300 rounded hover:bg-gray-50"
+            >
+              Reset
+            </button>
+            <button
+              onClick={() => {
+                onApply(local);
+                setOpen(false);
+              }}
+              className="flex-1 px-3 py-1.5 text-dash-body bg-orange-500 text-white rounded hover:bg-orange-600"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      </AnchoredPopover>
+    </>
+  );
 }
 
 function AmountCell({ item }: { item: WalletTransactionItem }) {
@@ -63,7 +166,6 @@ export default function SpendHistoryTable() {
   const params = {
     page,
     limit: 15,
-    type: filters.type as "all" | "topup" | "debit",
     startDate: filters.startDate || undefined,
     endDate: filters.endDate || undefined,
   };
@@ -124,16 +226,10 @@ export default function SpendHistoryTable() {
         <h2 className="text-dash-heading font-semibold text-gray-900">
           Spend History
         </h2>
-        <FilterPopover
-          values={filters}
-          defaultValues={DEFAULT_FILTERS}
-          fields={TYPE_FILTER_FIELDS}
-          onApply={(f) => {
-            setFilters({
-              type: f.type ?? "all",
-              startDate: f.startDate ?? "",
-              endDate: f.endDate ?? "",
-            });
+        <DateRangeFilter
+          value={filters}
+          onApply={(next) => {
+            setFilters(next);
             setPage(1);
           }}
           onReset={() => {

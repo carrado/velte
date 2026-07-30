@@ -43,6 +43,14 @@ export interface SearchRequestBody {
   // Prior turns in this browser session, oldest first. Omitted/empty on the
   // first message of a conversation.
   history?: SearchHistoryTurn[];
+  // Status-line strings already shown to the buyer in EARLIER turns this
+  // session (see SearchHome.tsx's shownStatusesRef) — each /api/search call
+  // is otherwise stateless, so without this the server's own within-turn
+  // repeat-avoidance (see statusPhrases.ts's pickAvoiding) resets to blank
+  // on every new search, and the exact same status line can resurface
+  // search after search. Most-recent-last, capped client-side; the server
+  // caps it again on its own end regardless.
+  recentStatuses?: string[];
 }
 
 // Mirrors the shape searchProducts() returns in velte-backend's
