@@ -89,6 +89,89 @@ interface InitUploadResponse {
   parts: { partNumber: number; url: string }[];
 }
 
+// Persisted so an upload can pick back up after the browser tab itself gets
+// killed mid-transfer (not just a single dropped connection, which the
+// per-part retry above already covers) — found live: a phone's aggressive
+// battery/network management can kill the whole tab during a multi-minute
+// upload, and without this the vendor has to restart a 400MB+ upload from
+// zero every time that happens. This does NOT help a connection that's
+// blocked outright before any bytes ever move (nothing to resume from in
+// that case) — only genuine mid-transfer interruptions.
+interface ResumeState {
+  savedAt: number;
+  startS: number;
+  endS: number;
+  token: string;
+  jobId: string;
+  initUrl: string;
+  completeUrl: string;
+  statusUrl: string;
+  cancelUrl: string;
+  r2Key: string;
+  partSize: number;
+  parts: { partNumber: number; url: string }[];
+  completedParts: { partNumber: number; etag: string }[];
+}
+
+const RESUME_STORAGE_PREFIX = "velte:videoTrimResume:";
+// Kept a little under the presigned part URLs' own 4h validity (see
+// multipartRouter.js's PART_URL_EXPIRY_S) — resuming with URLs that are
+// about to expire mid-attempt is worse than just starting fresh.
+const RESUME_MAX_AGE_MS = 3.5 * 60 * 60 * 1000;
+
+// name+size+lastModified — what the File API actually exposes, and enough
+// to tell "the vendor re-picked the same clip after a failure" from "this is
+// a different file" without hashing the real bytes.
+function fileFingerprint(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function resumeStorageKey(file: File): string {
+  return `${RESUME_STORAGE_PREFIX}${fileFingerprint(file)}`;
+}
+
+function loadResumeState(file: File): ResumeState | null {
+  try {
+    const raw = localStorage.getItem(resumeStorageKey(file));
+    if (!raw) return null;
+    const state = JSON.parse(raw) as ResumeState;
+    if (Date.now() - state.savedAt > RESUME_MAX_AGE_MS) {
+      localStorage.removeItem(resumeStorageKey(file));
+      return null;
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function saveResumeState(file: File, state: ResumeState): void {
+  try {
+    localStorage.setItem(resumeStorageKey(file), JSON.stringify(state));
+  } catch {
+    // Storage full/unavailable (private browsing, quota) — resumability is
+    // a nice-to-have on top of a working upload, never something the
+    // upload itself should fail over.
+  }
+}
+
+function clearResumeState(file: File): void {
+  try {
+    localStorage.removeItem(resumeStorageKey(file));
+  } catch {
+    // ignore
+  }
+}
+
+function partByteSize(
+  partNumber: number,
+  partSize: number,
+  fileSize: number,
+): number {
+  const start = (partNumber - 1) * partSize;
+  return Math.min(start + partSize, fileSize) - start;
+}
+
 interface TrimJobStatus {
   status:
     | "uploading"
@@ -234,6 +317,12 @@ async function runAdaptivePool<T>(
 // finished), via a best-effort POST to `cancelUrl` once one was actually
 // minted (nothing to clean up if the signal fired before /api/videos/trim-
 // auth even returned).
+//
+// Resumable across interruptions: if a matching ResumeState exists for this
+// exact file + trim window (see loadResumeState above), this reuses the
+// existing job/upload instead of minting a new one and re-uploading parts
+// already confirmed done — the vendor just has to pick the same file again
+// after a failure, not sit through a fresh upload of the whole original.
 export async function trimVideoServerSide(
   file: File,
   startS: number,
@@ -243,29 +332,72 @@ export async function trimVideoServerSide(
 ): Promise<string> {
   if (signal?.aborted) throw abortError();
 
-  const authRes = await fetch("/api/videos/trim-auth", {
-    method: "POST",
-    signal,
-  });
-  if (!authRes.ok) {
-    throw new Error("Couldn't start server-side trimming");
-  }
-  const { token, initUrl, completeUrl, statusUrl, cancelUrl } =
-    (await authRes.json()) as TrimAuthResponse;
+  const resumed = loadResumeState(file);
+  const canResume = resumed?.startS === startS && resumed?.endS === endS;
 
-  const authHeaders = {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
+  let token: string;
+  let jobId: string;
+  let initUrl: string;
+  let completeUrl: string;
+  let statusUrl: string;
+  let cancelUrl: string;
+  let r2Key: string;
+  let partSize: number;
+  let parts: { partNumber: number; url: string }[];
+  const completedParts = new Map<number, string>(
+    canResume ? resumed!.completedParts.map((p) => [p.partNumber, p.etag]) : [],
+  );
+
+  const persistProgress = () => {
+    saveResumeState(file, {
+      savedAt: Date.now(),
+      startS,
+      endS,
+      token,
+      jobId,
+      initUrl,
+      completeUrl,
+      statusUrl,
+      cancelUrl,
+      r2Key,
+      partSize,
+      parts,
+      completedParts: Array.from(completedParts, ([partNumber, etag]) => ({
+        partNumber,
+        etag,
+      })),
+    });
   };
 
-  const notifyCancelled = () => {
-    fetch(cancelUrl, { method: "POST", headers: authHeaders }).catch(() => {});
-  };
+  if (canResume) {
+    ({
+      token,
+      jobId,
+      initUrl,
+      completeUrl,
+      statusUrl,
+      cancelUrl,
+      r2Key,
+      partSize,
+      parts,
+    } = resumed!);
+  } else {
+    const authRes = await fetch("/api/videos/trim-auth", {
+      method: "POST",
+      signal,
+    });
+    if (!authRes.ok) {
+      throw new Error("Couldn't start server-side trimming");
+    }
+    ({ token, jobId, initUrl, completeUrl, statusUrl, cancelUrl } =
+      (await authRes.json()) as TrimAuthResponse);
 
-  try {
     const initRes = await fetch(initUrl, {
       method: "POST",
-      headers: authHeaders,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         contentType: file.type || "video/mp4",
         fileSize: file.size,
@@ -277,18 +409,42 @@ export async function trimVideoServerSide(
     if (!initRes.ok) {
       throw new Error("Couldn't start the upload");
     }
-    const { partSize, parts } = (await initRes.json()) as InitUploadResponse;
+    ({ r2Key, partSize, parts } = (await initRes.json()) as InitUploadResponse);
+    // Saved immediately, before any part has uploaded — so even a failure on
+    // the very first part still leaves a resumable job instead of forcing a
+    // brand new trim-auth + init round-trip on the next attempt.
+    persistProgress();
+  }
 
+  const authHeaders = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+
+  const notifyCancelled = () => {
+    fetch(cancelUrl, { method: "POST", headers: authHeaders }).catch(() => {});
+  };
+
+  try {
     const partBytes = new Array<number>(parts.length).fill(0);
+    // Parts a resumed session already confirmed done count as fully
+    // transferred from the first progress report — otherwise the bar would
+    // visibly jump backwards to 0 the instant a resumed upload starts.
+    parts.forEach(({ partNumber }, i) => {
+      if (completedParts.has(partNumber)) {
+        partBytes[i] = partByteSize(partNumber, partSize, file.size);
+      }
+    });
     const reportUploadProgress = () => {
       const loaded = partBytes.reduce((sum, n) => sum + n, 0);
       onProgress?.("uploading", file.size > 0 ? loaded / file.size : 0);
     };
+    reportUploadProgress();
 
-    const uploadedParts: { partNumber: number; etag: string }[] = new Array(
-      parts.length,
+    const remainingParts = parts.filter(
+      ({ partNumber }) => !completedParts.has(partNumber),
     );
-    await runAdaptivePool(parts, async ({ partNumber, url }) => {
+    await runAdaptivePool(remainingParts, async ({ partNumber, url }) => {
       const start = (partNumber - 1) * partSize;
       const blob = file.slice(start, Math.min(start + partSize, file.size));
       const index = partNumber - 1;
@@ -301,10 +457,15 @@ export async function trimVideoServerSide(
         },
         signal,
       );
-      uploadedParts[index] = { partNumber, etag };
+      completedParts.set(partNumber, etag);
+      persistProgress();
       return { neededRetry };
     });
 
+    const uploadedParts = Array.from(completedParts, ([partNumber, etag]) => ({
+      partNumber,
+      etag,
+    }));
     const completeRes = await fetch(completeUrl, {
       method: "POST",
       headers: authHeaders,
@@ -321,7 +482,10 @@ export async function trimVideoServerSide(
       const res = await fetch(statusUrl, { signal });
       if (res.ok) {
         const job = (await res.json()) as TrimJobStatus;
-        if (job.status === "done" && job.videoUrl) return job.videoUrl;
+        if (job.status === "done" && job.videoUrl) {
+          clearResumeState(file);
+          return job.videoUrl;
+        }
         if (job.status === "error") {
           throw new Error(
             job.error || "Couldn't process this video on the server",
@@ -338,9 +502,14 @@ export async function trimVideoServerSide(
       signal?.aborted ||
       (err instanceof DOMException && err.name === "AbortError")
     ) {
+      clearResumeState(file);
       notifyCancelled();
       throw abortError();
     }
+    // Deliberately NOT cleared here — a genuine failure (network error,
+    // server 5xx) is exactly the case this is for. Whatever parts completed
+    // stay saved so the next attempt on the same file picks up from here
+    // instead of re-uploading them.
     throw err;
   }
 }
