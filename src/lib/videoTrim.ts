@@ -183,10 +183,20 @@ interface NetworkInformationLike {
 
 function getConnectionInfo(): NetworkInformationLike | null {
   if (typeof navigator === "undefined") return null;
-  return (
-    (navigator as Navigator & { connection?: NetworkInformationLike })
-      .connection ?? null
-  );
+  const conn = (
+    navigator as Navigator & { connection?: NetworkInformationLike }
+  ).connection;
+  if (!conn) return null;
+  // NetworkInformation exposes its fields via prototype getters, not own
+  // enumerable properties — JSON.stringify (what reportUploadError does to
+  // this whole payload) silently serializes the live object as `{}` if it's
+  // passed through directly, found live in the very first real error
+  // report this ever logged. Read the fields out explicitly instead.
+  return {
+    effectiveType: conn.effectiveType,
+    downlink: conn.downlink,
+    saveData: conn.saveData,
+  };
 }
 
 // Fire-and-forget — this is diagnostic logging riding along on top of a
