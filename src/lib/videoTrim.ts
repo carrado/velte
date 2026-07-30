@@ -172,6 +172,51 @@ function partByteSize(
   return Math.min(start + partSize, fileSize) - start;
 }
 
+// Not in TS's DOM lib — the Network Information API is real and supported
+// on Chrome/Android (which is exactly what's relevant here), just not
+// standardized enough yet for lib.dom.d.ts to declare it.
+interface NetworkInformationLike {
+  effectiveType?: string;
+  downlink?: number;
+  saveData?: boolean;
+}
+
+function getConnectionInfo(): NetworkInformationLike | null {
+  if (typeof navigator === "undefined") return null;
+  return (
+    (navigator as Navigator & { connection?: NetworkInformationLike })
+      .connection ?? null
+  );
+}
+
+// Fire-and-forget — this is diagnostic logging riding along on top of a
+// failure that's already being surfaced to the vendor via the normal error
+// toast; it should never itself throw, block, or change what the caller
+// sees. See /api/videos/log-error's own comment for why this exists at all
+// (a browser can't write to Vercel's server logs directly).
+function reportUploadError(
+  file: File,
+  jobId: string | undefined,
+  err: unknown,
+  meta: { totalParts: number; retriedParts: number },
+) {
+  fetch("/api/videos/log-error", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: err instanceof Error ? err.message : String(err),
+      jobId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      totalParts: meta.totalParts,
+      retriedParts: meta.retriedParts,
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      connection: getConnectionInfo(),
+    }),
+  }).catch(() => {});
+}
+
 interface TrimJobStatus {
   status:
     | "uploading"
@@ -425,6 +470,13 @@ export async function trimVideoServerSide(
     fetch(cancelUrl, { method: "POST", headers: authHeaders }).catch(() => {});
   };
 
+  // Only feeds the diagnostic report in the catch block below — how many
+  // parts needed at least one retry is useful context for telling "a
+  // generally flaky connection" apart from "one specific part kept failing"
+  // when reading this back out of Vercel's logs later. Declared outside the
+  // try block so the catch block (a different scope) can still read it.
+  let retriedPartsCount = 0;
+
   try {
     const partBytes = new Array<number>(parts.length).fill(0);
     // Parts a resumed session already confirmed done count as fully
@@ -457,6 +509,7 @@ export async function trimVideoServerSide(
         },
         signal,
       );
+      if (neededRetry) retriedPartsCount++;
       completedParts.set(partNumber, etag);
       persistProgress();
       return { neededRetry };
@@ -510,6 +563,10 @@ export async function trimVideoServerSide(
     // server 5xx) is exactly the case this is for. Whatever parts completed
     // stay saved so the next attempt on the same file picks up from here
     // instead of re-uploading them.
+    reportUploadError(file, jobId, err, {
+      totalParts: parts.length,
+      retriedParts: retriedPartsCount,
+    });
     throw err;
   }
 }
