@@ -403,7 +403,19 @@ export async function checkVideoDuration(
       ? { kind: "over-limit", durationS: previewDurationS }
       : { kind: "ok" };
   }
-  return { kind: "over-limit", durationS: null };
+
+  // Neither method could read a duration at all — not "read one and it was
+  // over the cap," genuinely couldn't determine one (e.g. a Blob read that
+  // hung past both timeouts on an Android cloud-sync stub file — see
+  // withTimeout's comment above). There's no actual evidence this video is
+  // over the limit, only that the check itself didn't finish — found live
+  // rejecting a real sub-2-minute video with a generic "longer than the
+  // limit" toast that couldn't even show a length, because there wasn't
+  // one to show. Bunny has no hard duration limit of its own (see
+  // MAX_VIDEO_BYTES's comment) and this is a soft UX cap, not a security
+  // one, so let it through on uncertainty — the same call already made for
+  // the cross-check case above.
+  return { kind: "ok" };
 }
 
 interface BunnyUploadAuth {
