@@ -70,9 +70,6 @@ export interface VendorMatch {
   // gallery instead of pinning the buyer to whichever single photo the
   // vendor set as "main".
   thumbnailUrls: string[];
-  // A video-only listing (no photos at all) still needs something to show
-  // in the card's media slot — see VendorResultCard's own fallback order.
-  videoUrl: string | null;
   // Null when the vendor has no Store record at all (shouldn't normally
   // happen — every vendor gets one at signup — but a matched product should
   // never be unrenderable over a missing storefront link).

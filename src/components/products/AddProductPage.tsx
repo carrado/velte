@@ -9,13 +9,6 @@ import { useNavigation } from "@/components/NavigationProgressContext";
 import { queryKeys } from "@/lib/query-keys";
 import { categoriesApi } from "@/services/products";
 import { uploadProductMedia } from "@/lib/cloudinary";
-import {
-  uploadVideoToBunny,
-  validateVideoFile,
-  checkVideoDuration,
-  MAX_VIDEO_MB,
-  MAX_VIDEO_DURATION_S,
-} from "@/lib/bunnyStream";
 import { getErrorMessage } from "@/lib/error-message";
 import {
   getServiceDetailPresets,
@@ -27,8 +20,6 @@ import type { SectorClassification } from "@/types/sectors";
 import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import AttributePickerModal from "./AttributePickerModal";
-import VideoUploadProgressBar from "./VideoUploadProgressBar";
-import VideoPosterImage from "./VideoPosterImage";
 import {
   Save,
   ChevronDown,
@@ -52,8 +43,6 @@ import {
   Loader2,
   Sparkle,
   Info,
-  Video as VideoIcon,
-  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -61,7 +50,6 @@ import type {
   ModifierOption,
   RetailProductPayload,
   FoodProductPayload,
-  VideoJob,
 } from "@/types/product";
 import {
   isFoodBusiness,
@@ -595,28 +583,6 @@ export default function AddProductPage({
   const [mainImageFile, setMainImageFile] = useState<File | null>(null);
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
-  const [videoPreview, setVideoPreview] = useState<string | null>(null);
-  const [isValidatingVideo, setIsValidatingVideo] = useState(false);
-  // Upload now starts the moment a video's picked, not deferred to publish
-  // time — this is the single source of truth both the floating
-  // VideoUploadProgressBar and PublishProgressModal
-  // (if Publish is clicked mid-flight) read live progress from. null once
-  // nothing's in flight; videoFile is gone entirely since a video is always
-  // either still uploading (this) or already resolved into a real URL
-  // (videoPreview).
-  const [videoJob, setVideoJob] = useState<VideoJob | null>(null);
-  // uploadShare/videoBaseProgress for the video's slice of the publish
-  // bar (see handleSubmit) need to reach the JSX below where
-  // PublishProgressModal is rendered — refs, not state, since they're set
-  // once per submit and read on every videoJob progress tick without
-  // needing their own re-render.
-  const videoUploadBaseRef = useRef(0);
-  const videoUploadShareRef = useRef(0);
-  // Cover media is one slot, either a photo or a video — this only picks
-  // which upload control shows, it doesn't clear whichever one isn't active
-  // (e.g. an existing listing edited from "video" back to "photo" keeps its
-  // video until the vendor explicitly clears it).
-  const [coverTab, setCoverTab] = useState<"photo" | "video">("photo");
 
   // Tags + attributes
   const [tagInput, setTagInput] = useState("");
@@ -702,7 +668,6 @@ export default function AddProductPage({
   const expirationDateRef = useRef<HTMLInputElement>(null);
   const mainImageRef = useRef<HTMLInputElement>(null);
   const thumbRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -787,13 +752,6 @@ export default function AddProductPage({
       setMainImage(existingProduct.mainImageUrl);
     if (existingProduct.thumbnailUrls?.length)
       setThumbnails(existingProduct.thumbnailUrls);
-    if (existingProduct.videoUrl) {
-      setVideoPreview(existingProduct.videoUrl);
-      // A listing edited before it had a cover photo — open straight on the
-      // video tab so the vendor sees their existing media, not an empty
-      // "Photo" tab with their real cover one click away.
-      if (!existingProduct.mainImageUrl) setCoverTab("video");
-    }
     if (existingProduct.isCurrentlyAvailable !== undefined)
       setIsCurrentlyAvailable(existingProduct.isCurrentlyAvailable);
   }, [existingProduct]);
@@ -853,93 +811,6 @@ export default function AddProductPage({
     setThumbnails((prev) => [...prev, ...urls].slice(0, 4));
     setThumbnailFiles((prev) => [...prev, ...files].slice(0, 4));
   };
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file after a rejection
-    if (!file) return;
-
-    const syncError = validateVideoFile(file);
-    if (syncError) {
-      toast.error(syncError);
-      return;
-    }
-    setIsValidatingVideo(true);
-    const check = await checkVideoDuration(file);
-    setIsValidatingVideo(false);
-
-    if (check.kind === "over-limit") {
-      const lengthNote =
-        check.durationS != null
-          ? `Your video is ${Math.round(check.durationS)}s long`
-          : "This video is longer than the limit";
-      toast.error(
-        `${lengthNote} — trim it to under ${MAX_VIDEO_DURATION_S} seconds first (your phone's gallery app can usually do this), then upload the shorter file.`,
-      );
-      return;
-    }
-
-    startDirectUpload(file);
-  };
-
-  // Kicks off the actual upload the instant a file's accepted — no longer
-  // deferred to publish time. The floating VideoUploadProgressBar
-  // shows live progress while the vendor keeps editing the rest of the
-  // form; handleSubmit awaits `videoJob.promise` directly instead of
-  // starting a second upload if Publish is clicked before this resolves.
-  const startDirectUpload = (file: File) => {
-    setVideoPreview(URL.createObjectURL(file));
-    const controller = new AbortController();
-    const promise = uploadVideoToBunny(
-      file,
-      productName.trim() || "Product video",
-      (pct) => {
-        const progress = Math.round(pct * 100);
-        setVideoJob((prev) => (prev ? { ...prev, progress } : prev));
-      },
-      controller.signal,
-      (paused) => {
-        setVideoJob((prev) =>
-          prev ? { ...prev, phase: paused ? "paused" : "uploading" } : prev,
-        );
-      },
-    ).then(
-      (url) => {
-        setVideoPreview(url);
-        setVideoJob(null);
-        return url;
-      },
-      (err: unknown) => {
-        setVideoJob(null);
-        if (!(err instanceof DOMException && err.name === "AbortError")) {
-          toast.error(getErrorMessage(err, "Couldn't upload this video"));
-        }
-        throw err;
-      },
-    );
-    setVideoJob({
-      active: true,
-      phase: "uploading",
-      progress: 0,
-      promise,
-      controller,
-    });
-  };
-
-  const clearVideo = () => {
-    setVideoPreview(null);
-    if (videoRef.current) videoRef.current.value = "";
-  };
-  // Floating bar's Cancel button — the sole way to cancel a background
-  // upload. Aborting doesn't just stop polling client-side: the signal
-  // listener inside uploadVideoToBunny also deletes whatever was already
-  // pushed to Bunny (best-effort), so nothing orphaned lingers server-side.
-  const cancelVideoJob = () => {
-    videoJob?.controller.abort();
-    setVideoJob(null);
-    setVideoPreview(null);
-    if (videoRef.current) videoRef.current.value = "";
-  };
-
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.key === "Enter" || e.key === " ") && tagInput.trim()) {
       e.preventDefault();
@@ -1020,9 +891,7 @@ export default function AddProductPage({
     description.trim().length > 0 &&
     (isQuote || parseFloat(price) > 0) && // quote services need no price
     (isQuote || !isRange || parseFloat(priceMax) > parseFloat(price)) &&
-    // A photo OR a video satisfies this — see the media phase's own `valid`
-    // flag above, same reasoning.
-    (mainImage !== null || videoPreview !== null) &&
+    mainImage !== null &&
     // Stock quantity/threshold are no longer collected on this form (see the
     // "Additional Details" block's own comment) — only the conditional
     // expiration/guarantee date still applies, matching that phase's own
@@ -1171,10 +1040,7 @@ export default function AddProductPage({
 
     try {
       // Calculate how many uploads we'll do so each gets an equal share of 0–75%
-      const uploadCount =
-        (mainImageFile ? 1 : 0) +
-        thumbnailFiles.length +
-        (videoJob?.active ? 1 : 0);
+      const uploadCount = (mainImageFile ? 1 : 0) + thumbnailFiles.length;
       const uploadShare = uploadCount > 0 ? Math.floor(75 / uploadCount) : 0;
       let uploadsCompleted = 0;
 
@@ -1218,30 +1084,6 @@ export default function AddProductPage({
       const remoteThumbUrls = thumbnails.filter((u) => !u.startsWith("blob:"));
       thumbnailUrls = [...remoteThumbUrls, ...thumbnailUrls].slice(0, 5);
 
-      // Video — if it's still uploading in the background (the floating bar
-      // case), don't start a second upload: await the SAME
-      // promise, with PublishProgressModal deriving its displayed
-      // progress/step live off `videoJob` for as long as this is pending
-      // (see the <PublishProgressModal> render below) via these two refs.
-      // If it already finished before Publish was clicked (the common
-      // case), videoJob is null here and this is a no-op, same as today.
-      let videoUrl: string | null = null;
-      if (videoJob?.active) {
-        videoUploadBaseRef.current = uploadsCompleted * uploadShare;
-        videoUploadShareRef.current = uploadShare;
-        try {
-          videoUrl = await videoJob.promise;
-        } catch {
-          // Already toasted by startDirectUpload's own handler — just stop
-          // the publish flow here, don't toast again.
-          setPublishModal((prev) => ({ ...prev, open: false }));
-          return;
-        }
-        advanceUpload("Video ready");
-      } else if (videoPreview && !videoPreview.startsWith("blob:")) {
-        videoUrl = videoPreview;
-      }
-
       // Save to backend — a plain API call has no real progress signal of
       // its own, so this creeps the bar up gradually while waiting instead
       // of leaving it frozen at 82% for however long the request takes.
@@ -1276,7 +1118,6 @@ export default function AddProductPage({
         tags,
         main_image_url: mainImageUrl,
         thumbnail_urls: thumbnailUrls,
-        video_url: videoUrl,
       };
 
       let payload: RetailProductPayload | FoodProductPayload;
@@ -1424,9 +1265,7 @@ export default function AddProductPage({
     {
       id: "media",
       label: "Media",
-      // A photo OR a video satisfies the cover-media requirement — see the
-      // Photo/Video tab switcher above, either is a valid choice now.
-      valid: mainImage !== null || videoPreview !== null,
+      valid: mainImage !== null,
     },
     !isFood && {
       id: "tags",
@@ -1474,13 +1313,6 @@ export default function AddProductPage({
     setMainImageFile(null);
     setThumbnails([]);
     setThumbnailFiles([]);
-    // Abort rather than just clearing the preview — switching shape mid-
-    // upload shouldn't leave an orphaned video pushed to Bunny/R2 for a
-    // listing that no longer references it.
-    videoJob?.controller.abort();
-    setVideoJob(null);
-    setVideoPreview(null);
-    setCoverTab("photo");
     setTags([]);
     setTagInput("");
     setAttributes([]);
@@ -1517,14 +1349,6 @@ export default function AddProductPage({
 
   return (
     <>
-      {videoJob?.active && !publishModal.open && (
-        <VideoUploadProgressBar
-          progress={videoJob.progress}
-          paused={videoJob.phase === "paused"}
-          onCancel={cancelVideoJob}
-        />
-      )}
-
       <div
         className={cn(
           "space-y-5 sm:pb-10 pb-10",
@@ -2039,218 +1863,99 @@ export default function AddProductPage({
                   are what convince buyers to reach out.
                 </p>
               )}
-              {/* Cover media — one slot, switch between a photo or a video */}
+              {/* Cover photo */}
               <div>
-                <div className="inline-flex p-0.5 bg-gray-100 rounded-lg mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setCoverTab("photo")}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3.5 h-8 rounded-md text-dash-caption font-medium transition-colors cursor-pointer",
-                      coverTab === "photo"
-                        ? "bg-white text-[#023337] shadow-sm"
-                        : "text-gray-500 hover:text-gray-700",
-                    )}
-                  >
-                    <ImageIcon size={13} /> Photo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCoverTab("video")}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3.5 h-8 rounded-md text-dash-caption font-medium transition-colors cursor-pointer",
-                      coverTab === "video"
-                        ? "bg-white text-[#023337] shadow-sm"
-                        : "text-gray-500 hover:text-gray-700",
-                    )}
-                  >
-                    <VideoIcon size={13} /> Video
-                  </button>
-                </div>
-
-                {coverTab === "photo" ? (
-                  <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
-                    {mainImage ? (
-                      <img
-                        src={mainImage}
-                        alt="Product"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                          <ImageIcon size={20} className="text-gray-300" />
-                        </div>
-                        <span className="text-dash-body text-gray-400">
-                          No image selected
-                        </span>
-                      </div>
-                    )}
-                    <button
-                      onClick={() => mainImageRef.current?.click()}
-                      className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
-                    >
-                      <ImageIcon size={13} /> Browse
-                    </button>
-                    {mainImage && (
-                      <>
-                        <button
-                          onClick={() => mainImageRef.current?.click()}
-                          className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-                        >
-                          <RefreshCcw size={12} /> Replace
-                        </button>
-                        <button
-                          onClick={clearMainImage}
-                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={12} /> Clear
-                        </button>
-                      </>
-                    )}
-                    <input
-                      ref={mainImageRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleMainImage}
+                <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
+                  {mainImage ? (
+                    <img
+                      src={mainImage}
+                      alt="Product"
+                      className="w-full h-full object-cover"
                     />
-                  </div>
-                ) : (
-                  <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
-                    {videoPreview ? (
-                      <>
-                        {/* A freshly-picked file is a local blob: URL — a
-                            real media file, plays natively. An existing
-                            listing's videoPreview (edit mode) is a Bunny
-                            embed URL instead — an HTML page, not something
-                            a <video> tag can play — so that case shows the
-                            same poster image the listings views use. */}
-                        {videoPreview.startsWith("blob:") ? (
-                          <video
-                            src={videoPreview}
-                            className="w-full h-full object-cover"
-                            muted
-                            playsInline
-                          />
-                        ) : (
-                          <VideoPosterImage
-                            videoUrl={videoPreview}
-                            alt="Video preview"
-                            className="w-full h-full object-cover"
-                          />
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-11 h-11 rounded-full bg-black/50 flex items-center justify-center">
-                            <Play
-                              size={16}
-                              fill="white"
-                              className="text-white ml-0.5"
-                            />
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                          <VideoIcon size={20} className="text-gray-300" />
-                        </div>
-                        <span className="text-dash-body text-gray-400">
-                          No video selected
-                        </span>
-                        <span className="text-dash-caption text-gray-400">
-                          Up to {MAX_VIDEO_MB}MB, {MAX_VIDEO_DURATION_S} seconds
-                        </span>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                        <ImageIcon size={20} className="text-gray-300" />
                       </div>
-                    )}
-                    <button
-                      onClick={() => videoRef.current?.click()}
-                      disabled={isValidatingVideo || videoJob?.active}
-                      className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      <VideoIcon size={13} />
-                      {isValidatingVideo ? "Checking…" : "Browse"}
-                    </button>
-                    {videoPreview && (
-                      <>
-                        <button
-                          onClick={() => videoRef.current?.click()}
-                          disabled={isValidatingVideo || videoJob?.active}
-                          className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <RefreshCcw size={12} /> Replace
-                        </button>
-                        <button
-                          onClick={clearVideo}
-                          disabled={videoJob?.active}
-                          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Trash2 size={12} /> Clear
-                        </button>
-                      </>
-                    )}
-                    <input
-                      ref={videoRef}
-                      type="file"
-                      // Broad accept, not the narrow explicit MIME list —
-                      // iOS Safari's native picker can behave inconsistently
-                      // (sometimes hiding the "Videos" option entirely) with
-                      // a multi-type comma-separated accept. This is only a
-                      // UI filter hint either way; validateVideoFile() below
-                      // is the real gatekeeper on what's actually accepted.
-                      accept="video/*"
-                      className="hidden"
-                      onChange={handleVideoUpload}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Thumbnails — extra photos alongside the cover photo; not
-                  applicable when the cover slot is a video. */}
-              {coverTab === "photo" && (
-                <div className="flex gap-2.5 flex-wrap">
-                  {thumbnails.map((url, i) => (
-                    <div
-                      key={i}
-                      className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
-                    >
-                      <img
-                        src={url}
-                        alt={`Thumb ${i + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        onClick={() =>
-                          setThumbnails((p) => p.filter((_, j) => j !== i))
-                        }
-                        className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                  ))}
-                  {thumbnails.length < 4 && (
-                    <button
-                      onClick={() => thumbRef.current?.click()}
-                      className="w-20 h-20 border border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
-                    >
-                      <PlusCircle size={18} className="text-orange-400" />
-                      <span className="text-dash-caption text-orange-400">
-                        Add
+                      <span className="text-dash-body text-gray-400">
+                        No image selected
                       </span>
-                    </button>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => mainImageRef.current?.click()}
+                    className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    <ImageIcon size={13} /> Browse
+                  </button>
+                  {mainImage && (
+                    <>
+                      <button
+                        onClick={() => mainImageRef.current?.click()}
+                        className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                      >
+                        <RefreshCcw size={12} /> Replace
+                      </button>
+                      <button
+                        onClick={clearMainImage}
+                        className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                      >
+                        <Trash2 size={12} /> Clear
+                      </button>
+                    </>
                   )}
                   <input
-                    ref={thumbRef}
+                    ref={mainImageRef}
                     type="file"
                     accept="image/*"
-                    multiple
                     className="hidden"
-                    onChange={handleThumbUpload}
+                    onChange={handleMainImage}
                   />
                 </div>
-              )}
+              </div>
+
+              {/* Thumbnails — extra photos alongside the cover photo */}
+              <div className="flex gap-2.5 flex-wrap">
+                {thumbnails.map((url, i) => (
+                  <div
+                    key={i}
+                    className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
+                  >
+                    <img
+                      src={url}
+                      alt={`Thumb ${i + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      onClick={() =>
+                        setThumbnails((p) => p.filter((_, j) => j !== i))
+                      }
+                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+                {thumbnails.length < 4 && (
+                  <button
+                    onClick={() => thumbRef.current?.click()}
+                    className="w-20 h-20 border border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle size={18} className="text-orange-400" />
+                    <span className="text-dash-caption text-orange-400">
+                      Add
+                    </span>
+                  </button>
+                )}
+                <input
+                  ref={thumbRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleThumbUpload}
+                />
+              </div>
             </FormSection>
           </PhaseBlock>
 
@@ -2793,22 +2498,8 @@ export default function AddProductPage({
 
       <PublishProgressModal
         open={publishModal.open}
-        progress={
-          publishModal.open && videoJob?.active
-            ? Math.min(
-                75,
-                Math.round(
-                  videoUploadBaseRef.current +
-                    (videoJob.progress / 100) * videoUploadShareRef.current,
-                ),
-              )
-            : publishModal.progress
-        }
-        step={
-          publishModal.open && videoJob?.active
-            ? "Uploading video…"
-            : publishModal.step
-        }
+        progress={publishModal.progress}
+        step={publishModal.step}
         done={publishModal.done}
         isFood={isFood}
         isEditMode={isEditMode}

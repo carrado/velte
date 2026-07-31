@@ -7,7 +7,6 @@ import {
   Store as StoreIcon,
   ChevronLeft,
   ChevronRight,
-  Play,
 } from "lucide-react";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
@@ -18,8 +17,6 @@ import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
 import type { VendorMatch } from "@/types/search";
-import VideoPosterImage from "@/components/products/VideoPosterImage";
-import FullscreenVideoModal from "@/components/FullscreenVideoModal";
 
 export function VendorResultCard({
   match,
@@ -55,7 +52,6 @@ export function VendorResultCard({
     (url): url is string => Boolean(url),
   );
   const [imgIndex, setImgIndex] = useState(0);
-  const [videoModalOpen, setVideoModalOpen] = useState(false);
   const hasGallery = images.length > 1;
   const showPrev = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -69,33 +65,7 @@ export function VendorResultCard({
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
-        {match.videoUrl ? (
-          // Video wins over photos when both exist — same priority
-          // ProductsTable.tsx already uses on the dashboard (a listing's
-          // cover-media tabs don't clear the other slot when switched, so
-          // both can legitimately be set; the video is the more deliberate,
-          // more engaging choice when a vendor bothered to upload one).
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setVideoModalOpen(true);
-            }}
-            aria-label="Play video"
-            className="group relative block h-full w-full"
-          >
-            <VideoPosterImage
-              videoUrl={match.videoUrl}
-              alt={match.name}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/10 transition-colors group-hover:bg-black/20">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
-                <Play size={18} fill="white" className="ml-0.5" />
-              </span>
-            </div>
-          </button>
-        ) : images.length > 0 ? (
+        {images.length > 0 ? (
           <img
             src={optimizedImageUrl(images[imgIndex])}
             alt={match.name}
@@ -104,7 +74,7 @@ export function VendorResultCard({
         ) : (
           <StoreIcon size={28} className="text-gray-300" />
         )}
-        {!match.videoUrl && hasGallery && (
+        {hasGallery && (
           <>
             <button
               type="button"
@@ -220,18 +190,6 @@ export function VendorResultCard({
           </div>
         )}
       </div>
-      {match.videoUrl && (
-        <FullscreenVideoModal
-          videoUrl={match.videoUrl}
-          open={videoModalOpen}
-          onClose={() => setVideoModalOpen(false)}
-          whatsapp={
-            !isOwn && chatHref
-              ? { href: chatHref, label: "Chat with vendor" }
-              : null
-          }
-        />
-      )}
     </div>
   );
 }

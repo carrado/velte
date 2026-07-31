@@ -6,7 +6,6 @@ import { createPortal } from "react-dom";
 import {
   MessageCircle,
   Package,
-  Play,
   Store as StoreIcon,
   Wrench,
   X,
@@ -16,8 +15,6 @@ import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { reportLead } from "@/lib/reportLead";
-import VideoPosterImage from "@/components/products/VideoPosterImage";
-import FullscreenVideoModal from "@/components/FullscreenVideoModal";
 import type {
   PublicStoreProduct,
   PublicStoreProductProps,
@@ -99,17 +96,14 @@ function enquireHrefFor(
   )}`;
 }
 
-/** Image or video "post" — shared between the card and its detail modal so
- * the two never drift (video-wins-over-photo priority, poster + play
- * button) — same treatment ProductsTable.tsx/VendorResultCard.tsx use. */
+/** Image "post" — shared between the card and its detail modal so the two
+ * never drift. */
 function OfferingMedia({
   product,
   aspectClassName,
-  onPlayVideo,
 }: {
   product: PublicStoreProduct;
   aspectClassName: string;
-  onPlayVideo: () => void;
 }) {
   return (
     <div
@@ -118,28 +112,7 @@ function OfferingMedia({
         aspectClassName,
       )}
     >
-      {product.videoUrl ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPlayVideo();
-          }}
-          aria-label="Play video"
-          className="group relative block h-full w-full"
-        >
-          <VideoPosterImage
-            videoUrl={product.videoUrl}
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/10 transition-colors group-hover:bg-black/20">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
-              <Play size={18} fill="white" className="ml-0.5" />
-            </span>
-          </div>
-        </button>
-      ) : product.mainImageUrl ? (
+      {product.mainImageUrl ? (
         <img
           src={optimizedImageUrl(product.mainImageUrl)}
           alt={product.name}
@@ -173,7 +146,6 @@ function OfferingDetailModal({
 }) {
   const isService = product.kind === "service";
   const KindIcon = isService ? Wrench : Package;
-  const [videoModalOpen, setVideoModalOpen] = useState(false);
   const enquireHref = enquireHrefFor(product, storeName, whatsapp);
 
   useEffect(() => {
@@ -202,11 +174,7 @@ function OfferingDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">
-          <OfferingMedia
-            product={product}
-            aspectClassName="aspect-[4/3]"
-            onPlayVideo={() => setVideoModalOpen(true)}
-          />
+          <OfferingMedia product={product} aspectClassName="aspect-[4/3]" />
           <button
             type="button"
             onClick={onClose}
@@ -256,22 +224,6 @@ function OfferingDetailModal({
           )}
         </div>
       </div>
-
-      {product.videoUrl && (
-        <FullscreenVideoModal
-          videoUrl={product.videoUrl}
-          open={videoModalOpen}
-          onClose={() => setVideoModalOpen(false)}
-          whatsapp={
-            enquireHref
-              ? {
-                  href: enquireHref,
-                  label: isService ? "Enquire about this service" : "Enquire",
-                }
-              : null
-          }
-        />
-      )}
     </div>,
     document.body,
   );
@@ -293,7 +245,6 @@ export function OfferingCard({
 }: PublicStoreProductProps) {
   const isService = product.kind === "service";
   const KindIcon = isService ? Wrench : Package;
-  const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
@@ -316,11 +267,7 @@ export function OfferingCard({
   return (
     <div className="bg-white border rounded-2xl border-gray-100 shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md flex flex-col h-full">
       <div className="relative">
-        <OfferingMedia
-          product={product}
-          aspectClassName="aspect-[4/3]"
-          onPlayVideo={() => setVideoModalOpen(true)}
-        />
+        <OfferingMedia product={product} aspectClassName="aspect-[4/3]" />
         <span className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm text-white text-[11px] font-semibold rounded-full">
           <KindIcon size={11} />
           {isService ? "Service" : "Product"}
@@ -367,22 +314,6 @@ export function OfferingCard({
           )}
         </div>
       </div>
-
-      {product.videoUrl && (
-        <FullscreenVideoModal
-          videoUrl={product.videoUrl}
-          open={videoModalOpen}
-          onClose={() => setVideoModalOpen(false)}
-          whatsapp={
-            enquireHref
-              ? {
-                  href: enquireHref,
-                  label: isService ? "Enquire about this service" : "Enquire",
-                }
-              : null
-          }
-        />
-      )}
 
       <OfferingDetailModal
         product={product}

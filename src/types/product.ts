@@ -33,7 +33,6 @@ export interface CategoryProduct {
   colorClass: string;
   mainImageUrl?: string | null;
   thumbnailUrls?: string[];
-  videoUrl?: string | null;
   manufacturingDate?: string | null;
   expirationDate?: string | null;
   attributes?: ProductAttribute[];
@@ -141,7 +140,6 @@ export interface CreateProductBasePayload {
   tags?: string[];
   main_image_url?: string | null;
   thumbnail_urls?: string[];
-  video_url?: string | null;
 }
 
 export interface RetailProductPayload extends CreateProductBasePayload {
@@ -199,11 +197,6 @@ export interface ProductActionsPopoverProps {
   /** Fixed-price service → back to "Contact for quote". Services only. */
   onSwitchToQuote: () => void;
   onDelete: () => void;
-  /** Opens the video modal — omit to hide the "View Video" menu item
-   * entirely (the caller only passes this when the listing actually has a
-   * video, e.g. mobile's ProductRow, where the thumbnail itself isn't as
-   * obvious a tap target as it is on the desktop card grid). */
-  onViewVideo?: () => void;
 }
 
 export interface ProductsTableProps {
@@ -216,42 +209,6 @@ export interface ProductsTableProps {
    * the vendor having zero listings — changes the empty-state copy/CTA. */
   hasActiveSearch?: boolean;
   onAddListing?: () => void;
-}
-
-export interface VideoPosterImageProps {
-  videoUrl: string;
-  alt: string;
-  className?: string;
-}
-
-// A picked video that's over MAX_VIDEO_DURATION_S is rejected outright (see
-// bunnyStream.ts's checkVideoDuration) — no in-app trim anymore, so there's
-// no separate job phase for it either.
-// "paused" is the backgrounding pause/resume cycle in
-// bunnyStream.ts's uploadVideoToBunny — the tab hid mid-upload (screen lock,
-// app-switch), not a failure.
-export type VideoJobPhase = "uploading" | "paused";
-
-export interface VideoUploadProgressBarProps {
-  /** 0–100 */
-  progress: number;
-  paused: boolean;
-  onCancel: () => void;
-}
-
-// AddProductPage's single source of truth for an in-flight video upload —
-// read live by both VideoUploadProgressBar and (if Publish is clicked
-// mid-flight) PublishProgressModal.
-export interface VideoJob {
-  active: boolean;
-  phase: VideoJobPhase;
-  /** 0–100 */
-  progress: number;
-  /** Resolves to the real, playable video URL once upload finishes —
-   * awaited directly by handleSubmit if Publish is clicked before it
-   * settles, instead of starting a duplicate upload. */
-  promise: Promise<string>;
-  controller: AbortController;
 }
 
 export type AddProductTaxOption = "yes" | "no";

@@ -300,7 +300,6 @@ async function getMatchingServicesForStores(
               // reuses — a known tradeoff of the cheap-match approach over a
               // real per-listing fetch. See this function's own doc comment.
               thumbnailUrls: [],
-              videoUrl: null,
               storeHandle: store.handle,
               description: item.description,
               attributes: [],

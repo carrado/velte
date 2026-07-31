@@ -1,10 +1,8 @@
 const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
-// Images only — video moved to Bunny Stream (see bunnyStream.ts) after
-// Cloudinary's plan-tier 100MB video ceiling turned out to reject a large
-// share of real iPhone footage, with no server-side recovery once a file
-// was already too big.
+// Images only — video upload was removed (2026-07-31); revisit on the
+// mobile app phase.
 
 // Resize to maxPx on the longest side and encode as WebP at the given quality.
 // Falls back to the original file if the browser doesn't support Canvas or toBlob.

@@ -1,14 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { computePrice, fmt } from "@/lib/product-price";
 import type { ProductsTableProps } from "@/types/product";
 import type { CategoryProduct } from "@/types/product";
 import ProductActionsPopover from "./ProductActionsPopover";
-import FullscreenVideoModal from "@/components/FullscreenVideoModal";
-import VideoPosterImage from "./VideoPosterImage";
-import { Star, Package, Play, Plus, SearchX } from "lucide-react";
+import { Star, Package, Plus, SearchX } from "lucide-react";
 
 // Small, local, and deliberately coarse — a card caption, not a precise
 // audit timestamp, so a handful of thresholds is enough (same spirit as
@@ -45,22 +42,11 @@ function ProductCard({
 }) {
   const pricing = computePrice(product);
   const posted = timeAgo(product.createdDate);
-  const [videoModalOpen, setVideoModalOpen] = useState(false);
 
   return (
     <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
-      {/* Product image — a video, when present, takes the thumbnail slot
-          over a plain photo: its poster frame plays the same "this is the
-          cover" role a photo would, and the centered play button is what
-          actually signals there's something to watch. */}
       <div className="relative w-full aspect-square overflow-hidden bg-gray-50">
-        {product.videoUrl ? (
-          <VideoPosterImage
-            videoUrl={product.videoUrl}
-            alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-          />
-        ) : product.mainImageUrl ? (
+        {product.mainImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={product.mainImageUrl}
@@ -79,21 +65,6 @@ function ProductCard({
             </span>
             <Package size={14} className="text-white/70" />
           </div>
-        )}
-
-        {product.videoUrl && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setVideoModalOpen(true);
-            }}
-            aria-label="Play video"
-            className="absolute inset-0 z-10 flex items-center justify-center bg-black/10 transition-colors hover:bg-black/20"
-          >
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
-              <Play size={18} fill="white" className="ml-0.5" />
-            </span>
-          </button>
         )}
 
         {/* Bottom scrim so the status badges stay legible over any photo */}
@@ -165,14 +136,6 @@ function ProductCard({
           <p className="text-dash-caption text-gray-400 mt-1">{posted}</p>
         )}
       </div>
-
-      {product.videoUrl && (
-        <FullscreenVideoModal
-          videoUrl={product.videoUrl}
-          open={videoModalOpen}
-          onClose={() => setVideoModalOpen(false)}
-        />
-      )}
     </div>
   );
 }
@@ -199,22 +162,11 @@ function ProductRow({
   onDelete: () => void;
 }) {
   const pricing = computePrice(product);
-  const [videoModalOpen, setVideoModalOpen] = useState(false);
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 active:bg-gray-50 transition-colors">
-      <button
-        onClick={() => product.videoUrl && setVideoModalOpen(true)}
-        aria-label={product.videoUrl ? "Play video" : undefined}
-        className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0"
-      >
-        {product.videoUrl ? (
-          <VideoPosterImage
-            videoUrl={product.videoUrl}
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
-        ) : product.mainImageUrl ? (
+      <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0">
+        {product.mainImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={product.mainImageUrl}
@@ -231,14 +183,7 @@ function ProductRow({
             {product.name.charAt(0)}
           </div>
         )}
-        {product.videoUrl && (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/10">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white">
-              <Play size={10} fill="white" className="ml-0.5" />
-            </span>
-          </span>
-        )}
-      </button>
+      </div>
 
       <div className="flex-1 min-w-0">
         <p className="text-dash-body font-semibold text-[#023337] truncate">
@@ -297,18 +242,7 @@ function ProductRow({
         onChangePrice={onChangePrice}
         onSwitchToQuote={onSwitchToQuote}
         onDelete={onDelete}
-        onViewVideo={
-          product.videoUrl ? () => setVideoModalOpen(true) : undefined
-        }
       />
-
-      {product.videoUrl && (
-        <FullscreenVideoModal
-          videoUrl={product.videoUrl}
-          open={videoModalOpen}
-          onClose={() => setVideoModalOpen(false)}
-        />
-      )}
     </div>
   );
 }

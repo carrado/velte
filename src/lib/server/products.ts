@@ -48,7 +48,6 @@ interface ApiProduct {
   tags: string[];
   main_image_url: string | null;
   thumbnail_urls: string[];
-  video_url: string | null;
   color_class: string | null;
   created_at: string;
   updated_at: string;
@@ -129,7 +128,6 @@ function mapProduct(p: ApiProduct): CategoryProduct {
     tags: p.tags,
     mainImageUrl: p.main_image_url,
     thumbnailUrls: p.thumbnail_urls,
-    videoUrl: p.video_url,
     colorClass: p.color_class ?? "bg-gray-200",
     createdDate: p.created_at,
     manufacturingDate: p.manufacturing_date,
