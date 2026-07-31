@@ -106,7 +106,8 @@ export default function Signup() {
   // so a referral link pointed straight at /auth/signup could otherwise lose
   // the race and land here before the code is persisted.
   useEffect(() => {
-    const urlRef = new URLSearchParams(window.location.search).get("ref");
+    const params = new URLSearchParams(window.location.search);
+    const urlRef = params.get("ref");
     if (urlRef) storeReferralCode(urlRef);
     const stored = urlRef
       ? urlRef.trim().toUpperCase()
@@ -114,6 +115,30 @@ export default function Signup() {
     if (stored && !form.store.state.values.referralCode) {
       form.setFieldValue("referralCode", stored);
       setReferralLocked(true);
+    }
+
+    // Waitlist signup links (scripts/generate-signup-links.js) carry the
+    // vendor's own details as query params so they land on a form that's
+    // already filled in with what they told us on the waitlist, instead of
+    // retyping it. Written as individual field checks rather than a loop
+    // over a field-name map — see SIGNUP_FIELD_SCHEMAS's own comment on
+    // TanStack Form's invariant generics; a generic `setFieldValue(name,
+    // value)` call fights the types far more than this does. Only ever
+    // fills an EMPTY field, never overwrites something already typed.
+    if (params.get("name") && !form.store.state.values.name) {
+      form.setFieldValue("name", params.get("name")!);
+    }
+    if (params.get("businessName") && !form.store.state.values.businessName) {
+      form.setFieldValue("businessName", params.get("businessName")!);
+    }
+    if (params.get("phone") && !form.store.state.values.phone) {
+      form.setFieldValue("phone", params.get("phone")!);
+    }
+    if (params.get("state") && !form.store.state.values.state) {
+      form.setFieldValue("state", params.get("state")!);
+    }
+    if (params.get("address") && !form.store.state.values.address) {
+      form.setFieldValue("address", params.get("address")!);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
