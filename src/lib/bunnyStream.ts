@@ -1,6 +1,54 @@
 import { Upload } from "tus-js-client";
 import { parseMp4Duration } from "./mp4Duration";
 
+// navigator.connection (Network Information API) is Chrome/Android-only and
+// not yet in lib.dom.d.ts, but that's exactly the platform this matters for
+// — declared by hand rather than pulling in a types package for 3 fields.
+interface NetworkInformationLike {
+  effectiveType?: string;
+  downlink?: number;
+  saveData?: boolean;
+}
+
+function getConnectionInfo(): NetworkInformationLike | null {
+  if (typeof navigator === "undefined") return null;
+  const conn = (
+    navigator as Navigator & { connection?: NetworkInformationLike }
+  ).connection;
+  if (!conn) return null;
+  // NetworkInformation exposes its fields via prototype getters, not own
+  // enumerable properties — JSON.stringify silently serializes the live
+  // object as `{}` if it's passed through directly. Read the fields out
+  // explicitly instead.
+  return {
+    effectiveType: conn.effectiveType,
+    downlink: conn.downlink,
+    saveData: conn.saveData,
+  };
+}
+
+// Fire-and-forget — this is diagnostic logging riding along on top of a
+// failure that's already being surfaced to the vendor via the normal error
+// toast; it should never itself throw, block, or change what the caller
+// sees. See /api/videos/log-error's own comment for why this exists at all
+// (a browser can't write to Vercel's server logs directly, and a
+// mobile-only upload failure is otherwise invisible without physical
+// device access to that one vendor's phone).
+function reportUploadError(file: File, err: unknown): void {
+  fetch("/api/videos/log-error", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: err instanceof Error ? err.message : String(err),
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      connection: getConnectionInfo(),
+    }),
+  }).catch(() => {});
+}
+
 // Bunny Stream — video upload/playback only. Images stay on Cloudinary (see
 // cloudinary.ts); video moved here entirely after Cloudinary's plan-tier
 // 100MB file-size ceiling turned out to reject a large share of real iPhone
@@ -139,6 +187,31 @@ export type VideoDurationCheck =
    * vendor an exact "this video is X long" figure in the error. */
   | { kind: "over-limit"; durationS: number | null };
 
+// Fire-and-forget, same reasoning as reportUploadError above — lets a
+// disagreement between the two duration readings show up in Vercel's Logs
+// tab instead of only ever being visible as "sometimes works, sometimes
+// doesn't" from one vendor's phone.
+function reportDurationMismatch(
+  file: File,
+  parsedDurationS: number | null,
+  previewDurationS: number | null,
+): void {
+  fetch("/api/videos/log-error", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      kind: "duration-mismatch",
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      parsedDurationS,
+      previewDurationS,
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      connection: getConnectionInfo(),
+    }),
+  }).catch(() => {});
+}
+
 // Classifies a picked video for AddProductPage's handleVideoUpload. Tries
 // parseMp4Duration FIRST — it reads the real duration straight out of the
 // file's own moov/mvhd box, so it's ground truth rather than a heuristic,
@@ -149,23 +222,52 @@ export type VideoDurationCheck =
 // or (found live) an unresolved/placeholder mvhd duration that some phone
 // camera apps and WhatsApp's re-mux leave behind, which Chrome then surfaces
 // as `Infinity` and wrongly flags a genuinely short video as over the cap.
-// So the <video> element is only the FALLBACK now, for files
-// parseMp4Duration can't resolve at all — non-ISO-BMFF containers (WebM) or
-// a truly fragmented/streamed MP4 with no single mvhd duration.
+//
+// A clean "ok" from the container parse short-circuits immediately (the
+// common, fast path). But before ever REJECTING a video, this cross-checks
+// against the <video>-element reading rather than trusting a single source
+// — found live: the exact same file, picked twice in a row, read as over
+// the cap once and correctly under it the next attempt. Almost certainly a
+// transient read race on cloud-synced gallery videos (Android's on-demand
+// download for Google Photos-backed files can still be mid-sync when the
+// file picker hands the file over), not a real parsing bug — but there's no
+// way to tell that apart from a genuinely too-long video using only one
+// reading. So a rejection only stands when BOTH methods agree; either
+// method alone is enough to let the video through, since blocking a
+// vendor's listing on a flaky reading is far more costly than occasionally
+// letting a slightly-too-long video slip past a soft, non-security cap.
 export async function checkVideoDuration(
   file: File,
 ): Promise<VideoDurationCheck> {
   const parsedDurationS = await parseMp4Duration(file);
-  if (parsedDurationS != null) {
-    return parsedDurationS > MAX_VIDEO_DURATION_S
-      ? { kind: "over-limit", durationS: parsedDurationS }
-      : { kind: "ok" };
+  if (parsedDurationS != null && parsedDurationS <= MAX_VIDEO_DURATION_S) {
+    return { kind: "ok" };
   }
 
-  console.warn(
-    "[bunnyStream] Container-level duration parsing came up empty — falling back to the browser's <video> element",
-  );
+  if (parsedDurationS == null) {
+    console.warn(
+      "[bunnyStream] Container-level duration parsing came up empty — falling back to the browser's <video> element",
+    );
+  }
   const previewDurationS = await readVideoElementDurationS(file);
+
+  if (parsedDurationS != null) {
+    // parsedDurationS was over the cap to get here — only reject if the
+    // <video> element agrees (or itself can't read the file at all).
+    if (previewDurationS == null || previewDurationS > MAX_VIDEO_DURATION_S) {
+      if (previewDurationS != null) {
+        reportDurationMismatch(file, parsedDurationS, previewDurationS);
+      }
+      return {
+        kind: "over-limit",
+        durationS: previewDurationS ?? parsedDurationS,
+      };
+    }
+    reportDurationMismatch(file, parsedDurationS, previewDurationS);
+    return { kind: "ok" };
+  }
+
+  // Container parse came up empty — fall back fully to the <video> element.
   if (previewDurationS != null) {
     return previewDurationS > MAX_VIDEO_DURATION_S
       ? { kind: "over-limit", durationS: previewDurationS }
@@ -252,6 +354,7 @@ export function uploadVideoToBunny(
           },
           onError: (err) => {
             signal?.removeEventListener("abort", onAbort);
+            reportUploadError(file, err);
             reject(err instanceof Error ? err : new Error(String(err)));
           },
           onProgress: (bytesSent, bytesTotal) => {
