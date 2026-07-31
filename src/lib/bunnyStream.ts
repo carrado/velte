@@ -1,4 +1,4 @@
-import { Upload } from "tus-js-client";
+import { Upload, type HttpRequest, type HttpResponse } from "tus-js-client";
 import { parseMp4Duration } from "./mp4Duration";
 
 // navigator.connection (Network Information API) is Chrome/Android-only and
@@ -51,6 +51,45 @@ function chunkSizeForConnection(): number {
   );
 }
 
+interface RequestLogEntry {
+  method: string;
+  url: string;
+  status?: number;
+}
+
+const REQUEST_LOG_LIMIT = 8;
+
+// tus-js-client's onBeforeRequest/onAfterResponse hooks fire for every
+// individual HTTP request the upload makes (the initial POST that creates
+// the upload, then one PATCH per chunk) — without this there's no way to
+// tell, for a failure reported from a vendor's phone we can't get DevTools
+// access to, whether the POST ever succeeded at all (Bunny accepted the
+// upload) or it died on some later PATCH, and at what HTTP status. Capped
+// at REQUEST_LOG_LIMIT entries — a slow-link upload with a small adaptive
+// chunk size can rack up hundreds of PATCH requests, and only the shape of
+// the failure (did it ever get past the first chunk? did status change
+// partway through?) matters, not the full history. The very first entry
+// (the POST) is always kept since that's what answers "did creation
+// succeed" — only PATCH entries roll off.
+function createRequestLogger() {
+  const log: RequestLogEntry[] = [];
+  return {
+    onBeforeRequest: (req: HttpRequest) => {
+      log.push({ method: req.getMethod(), url: req.getURL() });
+      if (log.length > REQUEST_LOG_LIMIT) {
+        log.splice(1, 1);
+      }
+    },
+    onAfterResponse: (_req: HttpRequest, res: HttpResponse) => {
+      const entry = log[log.length - 1];
+      if (entry) entry.status = res.getStatus();
+    },
+    get entries() {
+      return log;
+    },
+  };
+}
+
 // Fire-and-forget — this is diagnostic logging riding along on top of a
 // failure that's already being surfaced to the vendor via the normal error
 // toast; it should never itself throw, block, or change what the caller
@@ -58,7 +97,11 @@ function chunkSizeForConnection(): number {
 // (a browser can't write to Vercel's server logs directly, and a
 // mobile-only upload failure is otherwise invisible without physical
 // device access to that one vendor's phone).
-function reportUploadError(file: File, err: unknown): void {
+function reportUploadError(
+  file: File,
+  err: unknown,
+  requestLog?: RequestLogEntry[],
+): void {
   fetch("/api/videos/log-error", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -69,6 +112,7 @@ function reportUploadError(file: File, err: unknown): void {
       fileType: file.type,
       userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       connection: getConnectionInfo(),
+      requestLog,
     }),
   }).catch(() => {});
 }
@@ -390,8 +434,19 @@ export function uploadVideoToBunny(
           reject(new DOMException("Aborted", "AbortError"));
           return;
         }
+        const requestLogger = createRequestLogger();
         const upload = new Upload(file, {
           endpoint: TUS_ENDPOINT,
+          // Diagnostic experiment (not a confirmed fix) for the
+          // "PATCH offset 0" failures found live on weak mobile links: some
+          // carriers/proxies handle POST more reliably than PATCH.
+          // overridePatchMethod swaps every PATCH for a POST carrying
+          // `X-HTTP-Method-Override: PATCH` instead, which Bunny's TUS
+          // endpoint accepts identically. Safe to leave on — it's a
+          // same-semantics wire-format change, not a behavior change.
+          overridePatchMethod: true,
+          onBeforeRequest: requestLogger.onBeforeRequest,
+          onAfterResponse: requestLogger.onAfterResponse,
           // tus-js-client defaults chunkSize to Infinity — the WHOLE file
           // as one PATCH request body — which found live: a 331MB upload
           // over a weak 4G connection failing with "chunk at offset 0,
@@ -421,7 +476,7 @@ export function uploadVideoToBunny(
           },
           onError: (err) => {
             signal?.removeEventListener("abort", onAbort);
-            reportUploadError(file, err);
+            reportUploadError(file, err, requestLogger.entries);
             reject(err instanceof Error ? err : new Error(String(err)));
           },
           onProgress: (bytesSent, bytesTotal) => {
