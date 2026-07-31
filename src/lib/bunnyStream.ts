@@ -228,6 +228,17 @@ export function uploadVideoToBunny(
         }
         const upload = new Upload(file, {
           endpoint: TUS_ENDPOINT,
+          // tus-js-client defaults chunkSize to Infinity — the WHOLE file
+          // as one PATCH request body — which found live: a 331MB upload
+          // over a weak 4G connection failing with "chunk at offset 0,
+          // caused by [object ProgressEvent]" (a raw network-level error,
+          // no HTTP response at all). Because nothing was acked yet, every
+          // retry restarted the entire multi-minute transfer from scratch
+          // instead of resuming past the last good byte. Splitting into
+          // 6MB chunks means a mid-transfer drop only loses ~6MB of
+          // progress, and each individual PATCH is short enough to
+          // complete before a typical mobile-network blip hits it.
+          chunkSize: 6 * 1024 * 1024,
           retryDelays: [0, 3000, 5000, 10000, 20000],
           headers: {
             AuthorizationSignature: signature,
