@@ -486,8 +486,14 @@ export function uploadVideoToBunny(
           // endpoint accepts identically. Safe to leave on — it's a
           // same-semantics wire-format change, not a behavior change.
           overridePatchMethod: true,
-          onBeforeRequest: requestLogger.onBeforeRequest,
-          onAfterResponse: requestLogger.onAfterResponse,
+          onBeforeRequest: (req) => {
+            armStallWatchdog();
+            requestLogger.onBeforeRequest(req);
+          },
+          onAfterResponse: (req, res) => {
+            armStallWatchdog();
+            requestLogger.onAfterResponse(req, res);
+          },
           // tus-js-client defaults chunkSize to Infinity — the WHOLE file
           // as one PATCH request body — which found live: a 331MB upload
           // over a weak 4G connection failing with "chunk at offset 0,
@@ -536,6 +542,7 @@ export function uploadVideoToBunny(
             );
           },
           onProgress: (bytesSent, bytesTotal) => {
+            armStallWatchdog();
             onProgress?.(bytesTotal > 0 ? bytesSent / bytesTotal : 0);
           },
           onSuccess: () => {
@@ -592,6 +599,59 @@ export function uploadVideoToBunny(
         // visible again.
         let finished = false;
         let backgroundPaused = false;
+
+        // tus-js-client never sets a timeout on its underlying XHR (see
+        // tus-js-client's httpStack.js) — it relies entirely on the browser
+        // eventually firing an error or load event for a request. Found
+        // live: a real mobile connection drop can leave a request neither
+        // erroring nor completing at all, so onProgress/onError/onSuccess
+        // all stay silent forever — the upload just sits at whatever % it
+        // was at (often 0%, if it dies before the first chunk), with
+        // nothing to retry and nothing to tell the vendor. This is the
+        // watchdog the browser doesn't provide: reset on any real activity
+        // (a new request starting, a response arriving, bytes progressing —
+        // see the onBeforeRequest/onAfterResponse/onProgress wiring above);
+        // if none of that happens within STALL_TIMEOUT_MS, force a fresh
+        // attempt from the current offset rather than trusting a hung
+        // request to ever resolve on its own. Capped at MAX_STALL_RESTARTS —
+        // a connection still completely silent after several forced
+        // restarts is given up on like any other failure, instead of
+        // looping forever with no feedback.
+        const STALL_TIMEOUT_MS = 20_000;
+        const MAX_STALL_RESTARTS = 6;
+        let stallTimer: ReturnType<typeof setTimeout> | null = null;
+        let stallRestarts = 0;
+        function clearStallWatchdog() {
+          if (stallTimer != null) {
+            clearTimeout(stallTimer);
+            stallTimer = null;
+          }
+        }
+        function armStallWatchdog() {
+          clearStallWatchdog();
+          if (finished || backgroundPaused) return;
+          stallTimer = setTimeout(() => {
+            if (finished || backgroundPaused) return;
+            stallRestarts += 1;
+            if (stallRestarts > MAX_STALL_RESTARTS) {
+              const stallError = new Error(
+                `stalled — no request activity for ${STALL_TIMEOUT_MS}ms across ${stallRestarts} forced restarts`,
+              );
+              cleanup();
+              reportUploadError(file, stallError, requestLogger.entries);
+              upload.abort();
+              reject(
+                new Error(
+                  "Your connection dropped partway through the upload. Try again on wifi or where your signal is stronger.",
+                ),
+              );
+              return;
+            }
+            upload.abort().catch(() => {});
+            upload.start();
+          }, STALL_TIMEOUT_MS);
+        }
+
         const handleVisibilityChange = () => {
           if (finished) return;
           if (document.hidden) {
@@ -599,6 +659,7 @@ export function uploadVideoToBunny(
             backgroundPaused = true;
             onPauseChange?.(true);
             releaseWakeLock();
+            clearStallWatchdog();
             upload.abort().catch(() => {});
           } else {
             if (!backgroundPaused) return;
@@ -606,6 +667,7 @@ export function uploadVideoToBunny(
             onPauseChange?.(false);
             acquireWakeLock();
             upload.start();
+            armStallWatchdog();
           }
         };
         if (typeof document !== "undefined") {
@@ -614,6 +676,7 @@ export function uploadVideoToBunny(
 
         function cleanup() {
           finished = true;
+          clearStallWatchdog();
           signal?.removeEventListener("abort", onAbort);
           if (typeof document !== "undefined") {
             document.removeEventListener(
@@ -632,6 +695,7 @@ export function uploadVideoToBunny(
         signal?.addEventListener("abort", onAbort);
         acquireWakeLock();
         upload.start();
+        armStallWatchdog();
       })
       .catch(reject);
   });
