@@ -27,6 +27,30 @@ function getConnectionInfo(): NetworkInformationLike | null {
   };
 }
 
+const MIN_CHUNK_BYTES = 512 * 1024; // 512KB — small enough to survive a genuinely poor link
+const MAX_CHUNK_BYTES = 6 * 1024 * 1024; // 6MB — the old flat default, used as the ceiling
+const TARGET_CHUNK_UPLOAD_SECONDS = 6;
+
+// `downlink` (Mbit/s) is a DOWNLOAD estimate — real upload speed on an
+// asymmetric mobile link is often meaningfully worse, so this treats it as
+// only half-reliable for sizing an UPLOAD chunk. Aims each chunk at ~6
+// seconds of transfer time at that estimated speed: long enough to not
+// spam tiny requests on a decent connection, short enough that a weak link
+// (found live: downlink≈1.55Mbps still failing on a flat 6MB chunk) gets a
+// real chance to complete one before the connection drops. No
+// navigator.connection support (desktop, iOS Safari) or no reading yet
+// falls back to the old flat 6MB — this can only make the chunk smaller
+// than that known-working default, never larger.
+function chunkSizeForConnection(): number {
+  const downlinkMbps = getConnectionInfo()?.downlink;
+  if (!downlinkMbps || downlinkMbps <= 0) return MAX_CHUNK_BYTES;
+  const estimatedUploadBytesPerSecond = ((downlinkMbps * 1_000_000) / 8) * 0.5;
+  const target = estimatedUploadBytesPerSecond * TARGET_CHUNK_UPLOAD_SECONDS;
+  return Math.round(
+    Math.min(MAX_CHUNK_BYTES, Math.max(MIN_CHUNK_BYTES, target)),
+  );
+}
+
 // Fire-and-forget — this is diagnostic logging riding along on top of a
 // failure that's already being surfaced to the vendor via the normal error
 // toast; it should never itself throw, block, or change what the caller
@@ -128,6 +152,40 @@ function videoMetadataTimeoutMs(fileSizeBytes: number): number {
       fileSizeBytes * DURATION_CHECK_MS_PER_BYTE,
     ),
   );
+}
+
+// parseMp4Duration's own comments describe it as cheap regardless of file
+// size — true for a file that's actually sitting on local storage, but
+// found live: a video picked from an Android gallery can still be a
+// cloud-sync stub (Google Photos on-demand backup) that isn't fully local
+// yet, and Blob.slice().arrayBuffer() on it can silently block for MINUTES
+// while the content provider fetches the bytes, rather than returning
+// quickly or throwing. That's long enough to sit past a screen timeout or
+// have Android throttle the backgrounded tab, so by the time this finally
+// resolves the connection is already dead — which showed up as the actual
+// upload's very first PATCH failing outright, for both a 330MB and a 76MB
+// file, only after a long silent wait. There's no way to cancel an
+// in-flight Blob read, but racing it against the same size-scaled timeout
+// used for the <video>-element check at least stops it from blocking this
+// function (and therefore the real upload attempt) indefinitely.
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T,
+): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      },
+    );
+  });
 }
 
 // Resolves the browser's own <video> element duration, or null if it can't
@@ -239,7 +297,11 @@ function reportDurationMismatch(
 export async function checkVideoDuration(
   file: File,
 ): Promise<VideoDurationCheck> {
-  const parsedDurationS = await parseMp4Duration(file);
+  const parsedDurationS = await withTimeout(
+    parseMp4Duration(file),
+    videoMetadataTimeoutMs(file.size),
+    null,
+  );
   if (parsedDurationS != null && parsedDurationS <= MAX_VIDEO_DURATION_S) {
     return { kind: "ok" };
   }
@@ -336,11 +398,16 @@ export function uploadVideoToBunny(
           // caused by [object ProgressEvent]" (a raw network-level error,
           // no HTTP response at all). Because nothing was acked yet, every
           // retry restarted the entire multi-minute transfer from scratch
-          // instead of resuming past the last good byte. Splitting into
-          // 6MB chunks means a mid-transfer drop only loses ~6MB of
-          // progress, and each individual PATCH is short enough to
-          // complete before a typical mobile-network blip hits it.
-          chunkSize: 6 * 1024 * 1024,
+          // instead of resuming past the last good byte. A flat 6MB chunk
+          // helped but still wasn't small enough — found live via the new
+          // /api/videos/log-error reports: a real failure at
+          // downlink≈1.55Mbps still died on the first 6MB chunk, which at
+          // that speed needs 30+ seconds to complete. Sizing the chunk to
+          // the reported connection speed instead means a slow link gets a
+          // small enough window to actually finish a PATCH before whatever
+          // is killing the connection (carrier instability, OS network
+          // throttling on a backgrounded tab) gets the chance to.
+          chunkSize: chunkSizeForConnection(),
           retryDelays: [0, 3000, 5000, 10000, 20000],
           headers: {
             AuthorizationSignature: signature,
