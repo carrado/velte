@@ -1,4 +1,9 @@
-import { Upload, type HttpRequest, type HttpResponse } from "tus-js-client";
+import {
+  Upload,
+  DetailedError,
+  type HttpRequest,
+  type HttpResponse,
+} from "tus-js-client";
 import { parseMp4Duration } from "./mp4Duration";
 
 // navigator.connection (Network Information API) is Chrome/Android-only and
@@ -115,6 +120,25 @@ function reportUploadError(
       requestLog,
     }),
   }).catch(() => {});
+}
+
+// tus-js-client's DetailedError.originalResponse is null specifically when a
+// request never got an HTTP response at all — a dropped connection, not a
+// rejected one (see the retryDelays comment in uploadVideoToBunny below for
+// how this was found live). That's a completely different vendor-facing
+// story than "the server rejected this" or "something in the app broke": no
+// amount of retrying in-app fixes a currently-dead radio link, so the toast
+// should say so plainly instead of surfacing tus-js-client's raw internal
+// message (e.g. "tus: failed to upload chunk at offset 0, caused by [object
+// ProgressEvent], originated from request...") — accurate for a Vercel log,
+// meaningless and alarming for a vendor on a shop floor.
+function friendlyUploadError(err: unknown): unknown {
+  if (err instanceof DetailedError && err.originalResponse === null) {
+    return new Error(
+      "Your connection dropped partway through the upload. Try again on wifi or where your signal is stronger.",
+    );
+  }
+  return err;
 }
 
 // Bunny Stream — video upload/playback only. Images stay on Cloudinary (see
@@ -463,7 +487,17 @@ export function uploadVideoToBunny(
           // is killing the connection (carrier instability, OS network
           // throttling on a backgrounded tab) gets the chance to.
           chunkSize: chunkSizeForConnection(),
-          retryDelays: [0, 3000, 5000, 10000, 20000],
+          // Found live via the request-log diagnostics below: on a real 3G
+          // Android device (downlink≈1.45Mbps) a chunk request can fail with
+          // NO http response at all (a raw ProgressEvent, not a rejected
+          // request) — a dropped radio link, not a slow one, since the
+          // request never even completes enough to get a status. That kind
+          // of drop often clears up within 30-60s (tower handoff, brief dead
+          // zone), which the previous 5-attempt/~38s-total backoff didn't
+          // give it — extended the tail rather than adding more short
+          // retries, since a network that's dead right now won't be fixed by
+          // retrying sooner.
+          retryDelays: [0, 3000, 5000, 10000, 20000, 30000, 45000],
           headers: {
             AuthorizationSignature: signature,
             AuthorizationExpire: String(expire),
@@ -477,7 +511,12 @@ export function uploadVideoToBunny(
           onError: (err) => {
             signal?.removeEventListener("abort", onAbort);
             reportUploadError(file, err, requestLogger.entries);
-            reject(err instanceof Error ? err : new Error(String(err)));
+            const friendly = friendlyUploadError(err);
+            reject(
+              friendly instanceof Error
+                ? friendly
+                : new Error(String(friendly)),
+            );
           },
           onProgress: (bytesSent, bytesTotal) => {
             onProgress?.(bytesTotal > 0 ? bytesSent / bytesTotal : 0);
