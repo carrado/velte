@@ -21,10 +21,33 @@ interface BackendOptions {
   cookie?: string;
 }
 
+// Pulls a human-readable string out of an upstream error field — the field
+// is typed as `string` above for convenience, but that's just a cast, not a
+// runtime guarantee. Some upstream error shapes (e.g. a raw Mongoose
+// ValidationError, or an { error: { message, code } } envelope) put an
+// OBJECT there instead — found live via the price-change endpoint, where
+// that object was passed straight into `new BackendError(status, obj)`,
+// and Error's constructor silently stringifies a non-string argument via
+// `String(obj)`, which for a plain object is literally the string
+// "[object Object]". That then flows untouched through fail()/jsonError()
+// all the way to the vendor's toast. This unwraps one level of nesting
+// (`{ error: { message: "..." } }`) before giving up, so a real backend
+// message still surfaces when available, and only falls back to the
+// generic upstream-failed text when it genuinely can't find a string.
+function extractMessage(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value;
+  if (value && typeof value === "object") {
+    const nested = (value as { message?: unknown }).message;
+    if (typeof nested === "string" && nested.trim()) return nested;
+  }
+  return null;
+}
+
 function messageFrom(data: unknown, status: number): string {
+  const body = data as { message?: unknown; error?: unknown } | null;
   return (
-    (data as { message?: string; error?: string } | null)?.message ??
-    (data as { error?: string } | null)?.error ??
+    extractMessage(body?.message) ??
+    extractMessage(body?.error) ??
     `Upstream request failed (${status}).`
   );
 }

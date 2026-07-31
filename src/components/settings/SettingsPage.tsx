@@ -16,6 +16,8 @@ import {
   MapPin,
   LocateFixed,
   LogOut,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -801,6 +803,113 @@ function AccountSettingsPanel() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// FEEDBACK — posts straight to Web3Forms, same third-party form service the
+// public vendor waitlist already uses (see scripts/send-vendor-prelaunch.js's
+// own comment). No backend route or DB table needed: Web3Forms emails the
+// submission and keeps it exportable as a CSV, the same operational shape
+// already in use for the waitlist. NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY is a
+// Web3Forms *public* access key by their own design (meant to sit in
+// client-side form code, not a secret) — see web3forms.com to create one.
+// ══════════════════════════════════════════════════════════════════════════════
+
+function FeedbackSection() {
+  const user = useUserStore((s) => s.user);
+  // company?.name is the reliable source (see AccountSettingsPanel's own
+  // profile sync above) — user.businessName is a legacy field that isn't
+  // consistently populated.
+  const businessName = user?.company?.name || user?.businessName;
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!message.trim()) {
+      toast.error("Write a little something first");
+      return;
+    }
+    const accessKey = process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY;
+    if (!accessKey) {
+      toast.error("Feedback isn't set up yet — try again later");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          access_key: accessKey,
+          subject: "Velte vendor feedback",
+          from_name: businessName || user?.name || "Velte vendor",
+          name: user?.name,
+          email: user?.email,
+          phone: user?.phone,
+          business_name: businessName,
+          message: message.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        success?: boolean;
+      } | null;
+      if (!res.ok || !data?.success) throw new Error("Submission failed");
+      setSubmitted(true);
+      setMessage("");
+    } catch {
+      toast.error("Couldn't send that — check your connection and try again");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <SectionCard
+      icon={MessageSquare}
+      title="Send Feedback"
+      description="Bugs, ideas, or anything not working the way you'd expect"
+    >
+      {submitted ? (
+        <div className="flex items-center gap-2 text-dash-body text-green-700 bg-green-50 rounded-xl px-4 py-3">
+          <CheckCircle2 size={16} />
+          Thanks — got it. We read every one of these.
+        </div>
+      ) : (
+        <>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Tell us what's going on…"
+            rows={4}
+            className="w-full text-dash-body text-gray-700 border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow resize-none"
+          />
+          <div className="flex justify-end mt-3">
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex items-center gap-2 py-2.5 px-5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
+            >
+              {submitting ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <Send size={13} />
+                  Send Feedback
+                </>
+              )}
+            </button>
+          </div>
+        </>
+      )}
+    </SectionCard>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // LOGOUT — the mobile home for logout now that the nav drawer is gone
 // (desktop also has it in the Header avatar popover).
 // ══════════════════════════════════════════════════════════════════════════════
@@ -863,6 +972,7 @@ export default function SettingsPage() {
         Manage your profile and account security
       </p>
       <AccountSettingsPanel />
+      <FeedbackSection />
       <LogoutSection />
     </div>
   );

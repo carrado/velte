@@ -24,7 +24,6 @@ import {
   Save,
   ChevronDown,
   Calendar,
-  PlusCircle,
   RefreshCcw,
   ImageIcon,
   X,
@@ -71,6 +70,14 @@ interface ProductAttribute {
   id: string;
   name: string;
   value: string;
+}
+
+interface ThumbnailItem {
+  /** Preview — a blob: URL for a freshly picked file, a real URL for an
+   * already-remote thumbnail (edit mode). */
+  url: string;
+  /** Null for an already-remote thumbnail — nothing left to upload for it. */
+  file: File | null;
 }
 
 // ── Nigerian food add-on templates ───────────────────────────────────────────
@@ -578,11 +585,13 @@ export default function AddProductPage({
   const [expirationDate, setExpirationDate] = useState("");
   const [isFeatured, setIsFeatured] = useState(false);
 
-  // Media — preview URLs (blob) + backing File objects for upload
+  // Media — preview URL (blob) + backing File for the cover; thumbnails are
+  // paired {url, file} so removing one by index always removes the right
+  // File too — `file` is null for an already-remote thumbnail (edit mode),
+  // set for a freshly picked one still needing upload at publish time.
   const [mainImage, setMainImage] = useState<string | null>(null);
   const [mainImageFile, setMainImageFile] = useState<File | null>(null);
-  const [thumbnails, setThumbnails] = useState<string[]>([]);
-  const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
+  const [thumbnails, setThumbnails] = useState<ThumbnailItem[]>([]);
 
   // Tags + attributes
   const [tagInput, setTagInput] = useState("");
@@ -667,7 +676,6 @@ export default function AddProductPage({
   const manufacturingDateRef = useRef<HTMLInputElement>(null);
   const expirationDateRef = useRef<HTMLInputElement>(null);
   const mainImageRef = useRef<HTMLInputElement>(null);
-  const thumbRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -751,7 +759,9 @@ export default function AddProductPage({
     if (existingProduct.mainImageUrl)
       setMainImage(existingProduct.mainImageUrl);
     if (existingProduct.thumbnailUrls?.length)
-      setThumbnails(existingProduct.thumbnailUrls);
+      setThumbnails(
+        existingProduct.thumbnailUrls.map((url) => ({ url, file: null })),
+      );
     if (existingProduct.isCurrentlyAvailable !== undefined)
       setIsCurrentlyAvailable(existingProduct.isCurrentlyAvailable);
   }, [existingProduct]);
@@ -793,23 +803,56 @@ export default function AddProductPage({
     else ref.current.click();
   };
 
-  const handleMainImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setMainImage(URL.createObjectURL(file));
-      setMainImageFile(file);
+  // One control for the whole cover-media slot now — the first file (of
+  // however many came in from a single browse or drop) becomes the cover
+  // photo, any rest are appended as extra thumbnails (capped at 4, same
+  // cap as before). Picking/dropping again always replaces the cover with
+  // the new first file, matching "Replace" semantics rather than only ever
+  // adding — a vendor fixing their cover shouldn't need to Clear first.
+  const addMediaFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    const [cover, ...extra] = files;
+    setMainImage(URL.createObjectURL(cover));
+    setMainImageFile(cover);
+    if (extra.length) {
+      const items: ThumbnailItem[] = extra.map((file) => ({
+        url: URL.createObjectURL(file),
+        file,
+      }));
+      setThumbnails((prev) => [...prev, ...items].slice(0, 4));
     }
   };
+  const handleMainImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addMediaFiles(Array.from(e.target.files ?? []));
+    e.target.value = ""; // allow re-picking the exact same file(s) later
+  };
+  // Clears the whole cover-media slot, not just the cover — the thumbnails
+  // only ever got there via this same widget in the first place, so
+  // clearing "the photo" should reasonably mean starting the slot over
+  // entirely rather than leaving orphaned extras behind with no cover.
   const clearMainImage = () => {
     setMainImage(null);
     setMainImageFile(null);
+    setThumbnails([]);
     if (mainImageRef.current) mainImageRef.current.value = "";
   };
-  const handleThumbUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    const urls = files.map((f) => URL.createObjectURL(f));
-    setThumbnails((prev) => [...prev, ...urls].slice(0, 4));
-    setThumbnailFiles((prev) => [...prev, ...files].slice(0, 4));
+  const [isDraggingOverMedia, setIsDraggingOverMedia] = useState(false);
+  const handleMediaDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingOverMedia(true);
+  };
+  const handleMediaDragLeave = () => setIsDraggingOverMedia(false);
+  const handleMediaDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingOverMedia(false);
+    addMediaFiles(
+      Array.from(e.dataTransfer.files ?? []).filter((f) =>
+        f.type.startsWith("image/"),
+      ),
+    );
+  };
+  const removeThumbnail = (index: number) => {
+    setThumbnails((prev) => prev.filter((_, i) => i !== index));
   };
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.key === "Enter" || e.key === " ") && tagInput.trim()) {
@@ -1039,8 +1082,12 @@ export default function AddProductPage({
     });
 
     try {
+      // Only thumbnails that still carry a File need uploading — an
+      // already-remote one (edit mode, untouched) has file: null.
+      const newThumbs = thumbnails.filter((t) => t.file);
+
       // Calculate how many uploads we'll do so each gets an equal share of 0–75%
-      const uploadCount = (mainImageFile ? 1 : 0) + thumbnailFiles.length;
+      const uploadCount = (mainImageFile ? 1 : 0) + newThumbs.length;
       const uploadShare = uploadCount > 0 ? Math.floor(75 / uploadCount) : 0;
       let uploadsCompleted = 0;
 
@@ -1065,23 +1112,25 @@ export default function AddProductPage({
 
       // Upload thumbnails
       let thumbnailUrls: string[] = [];
-      for (let i = 0; i < thumbnailFiles.length; i++) {
+      for (let i = 0; i < newThumbs.length; i++) {
         setPublishModal((prev) => ({
           ...prev,
           step:
-            thumbnailFiles.length > 1
-              ? `Uploading photo ${i + 1} of ${thumbnailFiles.length}…`
+            newThumbs.length > 1
+              ? `Uploading photo ${i + 1} of ${newThumbs.length}…`
               : "Uploading extra photo…",
         }));
-        const url = await uploadProductMedia(thumbnailFiles[i]);
+        const url = await uploadProductMedia(newThumbs[i].file!);
         thumbnailUrls.push(url);
         advanceUpload(
-          thumbnailFiles.length > 1
+          newThumbs.length > 1
             ? `Photo ${i + 1} uploaded`
             : "Extra photo ready",
         );
       }
-      const remoteThumbUrls = thumbnails.filter((u) => !u.startsWith("blob:"));
+      const remoteThumbUrls = thumbnails
+        .filter((t) => !t.file)
+        .map((t) => t.url);
       thumbnailUrls = [...remoteThumbUrls, ...thumbnailUrls].slice(0, 5);
 
       // Save to backend — a plain API call has no real progress signal of
@@ -1312,7 +1361,6 @@ export default function AddProductPage({
     setMainImage(null);
     setMainImageFile(null);
     setThumbnails([]);
-    setThumbnailFiles([]);
     setTags([]);
     setTagInput("");
     setAttributes([]);
@@ -1863,9 +1911,22 @@ export default function AddProductPage({
                   are what convince buyers to reach out.
                 </p>
               )}
-              {/* Cover photo */}
+              {/* Cover photo — single control for the whole slot: browse
+                  (multi-select) or drag-and-drop, first file becomes the
+                  cover, any rest fall into the thumbnails below. */}
               <div>
-                <div className="relative border border-gray-200 rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center">
+                <div
+                  onClick={() => mainImageRef.current?.click()}
+                  onDragOver={handleMediaDragOver}
+                  onDragLeave={handleMediaDragLeave}
+                  onDrop={handleMediaDrop}
+                  className={cn(
+                    "relative border rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center transition-colors cursor-pointer",
+                    isDraggingOverMedia
+                      ? "border-orange-400 bg-orange-50/50"
+                      : "border-gray-200",
+                  )}
+                >
                   {mainImage ? (
                     <img
                       src={mainImage}
@@ -1873,17 +1934,23 @@ export default function AddProductPage({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="flex flex-col items-center gap-2">
+                    <div className="flex flex-col items-center gap-2 pointer-events-none">
                       <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
                         <ImageIcon size={20} className="text-gray-300" />
                       </div>
                       <span className="text-dash-body text-gray-400">
                         No image selected
                       </span>
+                      <span className="text-dash-caption text-gray-400">
+                        Drag photos here, or browse — pick several at once
+                      </span>
                     </div>
                   )}
                   <button
-                    onClick={() => mainImageRef.current?.click()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      mainImageRef.current?.click();
+                    }}
                     className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
                   >
                     <ImageIcon size={13} /> Browse
@@ -1891,13 +1958,19 @@ export default function AddProductPage({
                   {mainImage && (
                     <>
                       <button
-                        onClick={() => mainImageRef.current?.click()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          mainImageRef.current?.click();
+                        }}
                         className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                       >
                         <RefreshCcw size={12} /> Replace
                       </button>
                       <button
-                        onClick={clearMainImage}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          clearMainImage();
+                        }}
                         className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                       >
                         <Trash2 size={12} /> Clear
@@ -1908,54 +1981,38 @@ export default function AddProductPage({
                     ref={mainImageRef}
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
                     onChange={handleMainImage}
                   />
                 </div>
               </div>
 
-              {/* Thumbnails — extra photos alongside the cover photo */}
-              <div className="flex gap-2.5 flex-wrap">
-                {thumbnails.map((url, i) => (
-                  <div
-                    key={i}
-                    className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
-                  >
-                    <img
-                      src={url}
-                      alt={`Thumb ${i + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      onClick={() =>
-                        setThumbnails((p) => p.filter((_, j) => j !== i))
-                      }
-                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              {/* Thumbnails — whatever landed here from the drop/browse
+                  above, beyond the first file. Purely a display + remove
+                  list now; all uploading happens through the cover control. */}
+              {thumbnails.length > 0 && (
+                <div className="flex gap-2.5 flex-wrap">
+                  {thumbnails.map((thumb, i) => (
+                    <div
+                      key={thumb.url}
+                      className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
                     >
-                      <X size={11} />
-                    </button>
-                  </div>
-                ))}
-                {thumbnails.length < 4 && (
-                  <button
-                    onClick={() => thumbRef.current?.click()}
-                    className="w-20 h-20 border border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50/50 transition-colors cursor-pointer"
-                  >
-                    <PlusCircle size={18} className="text-orange-400" />
-                    <span className="text-dash-caption text-orange-400">
-                      Add
-                    </span>
-                  </button>
-                )}
-                <input
-                  ref={thumbRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleThumbUpload}
-                />
-              </div>
+                      <img
+                        src={thumb.url}
+                        alt={`Thumb ${i + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => removeThumbnail(i)}
+                        className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </FormSection>
           </PhaseBlock>
 

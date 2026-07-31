@@ -64,7 +64,14 @@ async function request<T = unknown>(
       res.status >= 500
         ? "We're having trouble reaching the server. Please try again in a moment."
         : "Something went wrong. Please try again.";
-    const message = (data as { error?: string } | null)?.error ?? fallback;
+    // `error` is typed as string for convenience, but that's just a cast —
+    // an unexpected non-string value here would otherwise get silently
+    // stringified into the literal text "[object Object]" by Error's own
+    // constructor (found live via a similar bug in lib/server/backend.ts's
+    // messageFrom). Guard the same way rather than trusting the cast.
+    const rawError = (data as { error?: unknown } | null)?.error;
+    const message =
+      typeof rawError === "string" && rawError.trim() ? rawError : fallback;
     throw new ApiError(res.status, message, data);
   }
 

@@ -53,6 +53,10 @@ export default function AnchoredPopover({
     left?: number;
     right?: number;
   } | null>(null);
+  // Guards the correction effect below to run once per fresh guess rather
+  // than on every render — reset alongside every setPos call in `update()`,
+  // below, so a scroll/resize that moves the anchor gets re-corrected too.
+  const correctedRef = useRef(false);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -61,12 +65,22 @@ export default function AnchoredPopover({
       const a = anchor?.getBoundingClientRect();
       if (!a) return;
       const top = a.bottom + gap;
+      correctedRef.current = false;
       // "auto" starts left-aligned (opening rightward, the common case) —
       // the effect below corrects it to right-aligned once the panel is
       // actually mounted and its real width is known.
+      //
+      // `right` is clamped to a minimum of 8px — a trigger sitting flush
+      // against (or, via sub-pixel rounding, fractionally past) the
+      // viewport's right edge makes `window.innerWidth - a.right` zero or
+      // NEGATIVE. A negative CSS `right` pushes the panel even further off
+      // the right edge instead of clamping it on-screen — found live: a
+      // "..." menu whose trigger sits right at a mobile row's edge rendered
+      // fully off-screen because of this. Same fix applied below where this
+      // formula is used again for the auto-flip correction.
       setPos(
         align === "right"
-          ? { top, right: window.innerWidth - a.right }
+          ? { top, right: Math.max(8, window.innerWidth - a.right) }
           : { top, left: a.left },
       );
     };
@@ -80,58 +94,65 @@ export default function AnchoredPopover({
     };
   }, [open, align, gap, anchorRef, anchorEl]);
 
-  // "auto" only: once the panel is in the DOM (pos set → rendered below),
-  // measure its real width and flip to right-aligned if opening rightward
-  // would overflow the viewport — runs in a layout effect (before paint),
-  // so there's no visible flicker. Only ever flips left-aligned → right;
-  // `pos.left === undefined` (already flipped) short-circuits re-checking,
-  // which is what keeps this from looping.
+  // Once the panel is in the DOM (pos set → rendered below) and its real
+  // size is known, corrects BOTH axes together in a single pass and a
+  // single setPos call — horizontal (align="auto" only: flip right-aligned
+  // if opening rightward would overflow the viewport) and vertical (all
+  // alignments: flip to open ABOVE the anchor if opening below would
+  // overflow the bottom AND there's actually room above — otherwise a flip
+  // could land it somewhere worse than just letting it run off the bottom).
+  //
+  // Deliberately ONE effect, not two independent ones: this component used
+  // to run the horizontal and vertical corrections as separate effects,
+  // each reading and spreading the same `pos` state. When a trigger needed
+  // BOTH corrections at once (found live: a "..." menu near the
+  // bottom-right of a mobile screen — the last row in a list, `align="auto"`)
+  // both effects fired in the same commit off the same stale `pos` snapshot,
+  // and whichever ran second overwrote the first's correction — the panel
+  // ended up positioned using the ORIGINAL unflipped horizontal position
+  // (already overflowing) combined with the new vertical one, pushed
+  // effectively off-screen. Computing both corrections from freshly-measured
+  // rects in one pass and applying them in one setPos call removes the race
+  // entirely. `correctedRef` (reset in `update()` above) makes this run once
+  // per fresh position guess rather than looping.
   useLayoutEffect(() => {
-    if (!open || align !== "auto" || !pos || pos.left === undefined) return;
+    if (!open || !pos || correctedRef.current) return;
     const anchor = anchorEl ?? anchorRef?.current ?? null;
     const panel = panelRef.current;
     if (!anchor || !panel) return;
-    const panelWidth = panel.getBoundingClientRect().width;
     const a = anchor.getBoundingClientRect();
-    const overflowsRight = pos.left + panelWidth > window.innerWidth - 8;
-    if (overflowsRight) {
-      // Deliberate measure-then-correct: this can only run once the panel's
-      // real (just-committed) width is known, so it can't be folded into
-      // the initial position effect above — same one-time layout-correction
-      // pattern Radix/Floating UI use internally, just without the library.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPos({ top: pos.top, right: window.innerWidth - a.right });
-    }
-  }, [open, align, pos, anchorRef, anchorEl]);
+    const panelRect = panel.getBoundingClientRect();
 
-  // Vertical counterpart of the flip above, applied unconditionally (not
-  // gated behind a prop) — every popover/dropdown in the app renders
-  // through this one component, so fixing the flip here covers all of them
-  // instead of requiring each call site to opt in. Opens below the anchor
-  // by default (the common case, set in the position effect above); flips
-  // to open ABOVE it instead only when the panel would overflow the
-  // viewport's bottom edge AND there's actually room above to fit it —
-  // otherwise a flip could land it somewhere worse than just letting it run
-  // off the bottom. `pos.top === undefined` (already flipped up) short-
-  // circuits re-checking, the same guard the horizontal flip above uses.
-  useLayoutEffect(() => {
-    if (!open || !pos || pos.top === undefined) return;
-    const anchor = anchorEl ?? anchorRef?.current ?? null;
-    const panel = panelRef.current;
-    if (!anchor || !panel) return;
-    const panelHeight = panel.getBoundingClientRect().height;
-    const a = anchor.getBoundingClientRect();
-    const overflowsBottom = pos.top + panelHeight > window.innerHeight - 8;
-    const fitsAbove = a.top - panelHeight - gap >= 8;
-    if (overflowsBottom && fitsAbove) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPos({
-        ...pos,
-        top: undefined,
-        bottom: window.innerHeight - a.top + gap,
-      });
+    const next: typeof pos = { ...pos };
+    let changed = false;
+
+    if (align === "auto" && next.left !== undefined) {
+      const overflowsRight =
+        next.left + panelRect.width > window.innerWidth - 8;
+      if (overflowsRight) {
+        delete next.left;
+        next.right = Math.max(8, window.innerWidth - a.right);
+        changed = true;
+      }
     }
-  }, [open, pos, gap, anchorRef, anchorEl]);
+
+    if (next.top !== undefined) {
+      const overflowsBottom =
+        next.top + panelRect.height > window.innerHeight - 8;
+      const fitsAbove = a.top - panelRect.height - gap >= 8;
+      if (overflowsBottom && fitsAbove) {
+        delete next.top;
+        next.bottom = window.innerHeight - a.top + gap;
+        changed = true;
+      }
+    }
+
+    correctedRef.current = true;
+    if (changed) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPos(next);
+    }
+  }, [open, align, pos, gap, anchorRef, anchorEl]);
 
   useEffect(() => {
     if (!open) return;

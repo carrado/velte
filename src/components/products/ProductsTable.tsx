@@ -1,11 +1,22 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { computePrice, fmt } from "@/lib/product-price";
 import type { ProductsTableProps } from "@/types/product";
 import type { CategoryProduct } from "@/types/product";
 import ProductActionsPopover from "./ProductActionsPopover";
-import { Star, Package, Plus, SearchX } from "lucide-react";
+import { useNavigation } from "../NavigationProgressContext";
+import {
+  Star,
+  Package,
+  Plus,
+  SearchX,
+  Edit2,
+  DollarSign,
+  MessageCircle,
+  Trash2,
+} from "lucide-react";
 
 // Small, local, and deliberately coarse — a card caption, not a precise
 // audit timestamp, so a handful of thresholds is enough (same spirit as
@@ -148,6 +159,13 @@ function ProductCard({
 // else right — the same shape WhatsApp Business/Shopify's own mobile
 // catalog lists use. Desktop/tablet keep the richer photo-forward grid
 // below (see the `hidden sm:grid` / `sm:hidden` split in ProductsTable).
+//
+// Actions are an always-visible button bar under the row, not a "..."
+// popover — the same feed-post shape as Facebook's Like/Comment/Share row:
+// tapping the post itself (here, the row's image+name+price) opens it,
+// and the actions that matter are right there, one tap away, instead of
+// hidden behind a menu. Desktop/tablet's ProductCard keeps the popover —
+// less need to save space in a grid of cards with room to spare.
 function ProductRow({
   product,
   isFood,
@@ -162,87 +180,123 @@ function ProductRow({
   onDelete: () => void;
 }) {
   const pricing = computePrice(product);
+  const pathname = usePathname();
+  const userId = pathname.split("/").filter(Boolean)[0];
+  const { navigate } = useNavigation();
+  const noun = product.kind === "service" ? "Service" : "Product";
+  const showQuoteAction = product.kind === "service" && !product.quoteOnRequest;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 active:bg-gray-50 transition-colors">
-      <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0">
-        {product.mainImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={product.mainImageUrl}
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div
-            className={cn(
-              "w-full h-full flex items-center justify-center text-white font-black text-lg",
-              product.colorClass,
-            )}
+    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden active:bg-gray-50 transition-colors">
+      <button
+        onClick={() => navigate(`/${userId}/products/${product.id}`)}
+        className="w-full flex items-center gap-3 px-4 pt-3 text-left cursor-pointer"
+      >
+        <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0">
+          {product.mainImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={product.mainImageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div
+              className={cn(
+                "w-full h-full flex items-center justify-center text-white font-black text-lg",
+                product.colorClass,
+              )}
+            >
+              {product.name.charAt(0)}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-dash-body font-semibold text-[#023337] truncate">
+            {product.name}
+          </p>
+
+          {pricing.quoteOnRequest ? (
+            <p className="text-dash-body font-bold text-orange-500 mt-0.5">
+              Contact for quote
+            </p>
+          ) : pricing.isRange ? (
+            <p className="text-dash-body font-bold text-orange-500 mt-0.5">
+              {fmt(pricing.price, pricing.currencySymbol)}{" "}
+              <span className="text-gray-400 font-medium">–</span>{" "}
+              {fmt(pricing.priceMax!, pricing.currencySymbol)}
+            </p>
+          ) : (
+            <p className="text-dash-body font-bold text-orange-500 mt-0.5">
+              {fmt(pricing.price, pricing.currencySymbol)}
+            </p>
+          )}
+
+          {(product.kind === "service" || isFood || product.featured) && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              {product.kind === "service" ? (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-teal-50 text-teal-700">
+                  Service
+                </span>
+              ) : isFood ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center px-1.5 py-0.5 rounded text-dash-caption font-semibold",
+                    product.isCurrentlyAvailable === false
+                      ? "bg-red-50 text-red-700"
+                      : "bg-green-50 text-green-700",
+                  )}
+                >
+                  {product.isCurrentlyAvailable === false
+                    ? "Not Available"
+                    : "Available"}
+                </span>
+              ) : null}
+              {product.featured && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-amber-50 text-amber-700">
+                  <Star size={9} className="fill-amber-500 text-amber-500" />
+                  Featured
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </button>
+
+      <div className="flex items-stretch mt-2.5 mx-4 pb-1 border-t border-gray-100">
+        <button
+          onClick={() => navigate(`/${userId}/products/${product.id}/edit`)}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-caption font-medium text-gray-600 active:bg-gray-50 transition-colors cursor-pointer"
+        >
+          <Edit2 size={14} className="text-blue-500" />
+          Edit
+        </button>
+        <button
+          onClick={onChangePrice}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-caption font-medium text-gray-600 active:bg-gray-50 transition-colors cursor-pointer"
+        >
+          <DollarSign size={14} className="text-gray-500" />
+          {pricing.quoteOnRequest ? "Set Price" : "Price"}
+        </button>
+        {showQuoteAction && (
+          <button
+            onClick={onSwitchToQuote}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-caption font-medium text-gray-600 active:bg-gray-50 transition-colors cursor-pointer"
           >
-            {product.name.charAt(0)}
-          </div>
+            <MessageCircle size={14} className="text-teal-500" />
+            Quote
+          </button>
         )}
+        <button
+          onClick={onDelete}
+          aria-label={`Delete ${noun}`}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-caption font-medium text-red-500 active:bg-red-50 transition-colors cursor-pointer"
+        >
+          <Trash2 size={14} className="text-red-400" />
+          Delete
+        </button>
       </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="text-dash-body font-semibold text-[#023337] truncate">
-          {product.name}
-        </p>
-
-        {pricing.quoteOnRequest ? (
-          <p className="text-dash-body font-bold text-orange-500 mt-0.5">
-            Contact for quote
-          </p>
-        ) : pricing.isRange ? (
-          <p className="text-dash-body font-bold text-orange-500 mt-0.5">
-            {fmt(pricing.price, pricing.currencySymbol)}{" "}
-            <span className="text-gray-400 font-medium">–</span>{" "}
-            {fmt(pricing.priceMax!, pricing.currencySymbol)}
-          </p>
-        ) : (
-          <p className="text-dash-body font-bold text-orange-500 mt-0.5">
-            {fmt(pricing.price, pricing.currencySymbol)}
-          </p>
-        )}
-
-        {(product.kind === "service" || isFood || product.featured) && (
-          <div className="flex items-center gap-1.5 flex-wrap mt-1">
-            {product.kind === "service" ? (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-teal-50 text-teal-700">
-                Service
-              </span>
-            ) : isFood ? (
-              <span
-                className={cn(
-                  "inline-flex items-center px-1.5 py-0.5 rounded text-dash-caption font-semibold",
-                  product.isCurrentlyAvailable === false
-                    ? "bg-red-50 text-red-700"
-                    : "bg-green-50 text-green-700",
-                )}
-              >
-                {product.isCurrentlyAvailable === false
-                  ? "Not Available"
-                  : "Available"}
-              </span>
-            ) : null}
-            {product.featured && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-amber-50 text-amber-700">
-                <Star size={9} className="fill-amber-500 text-amber-500" />
-                Featured
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      <ProductActionsPopover
-        product={product}
-        isFood={isFood}
-        onChangePrice={onChangePrice}
-        onSwitchToQuote={onSwitchToQuote}
-        onDelete={onDelete}
-      />
     </div>
   );
 }
@@ -308,8 +362,11 @@ export default function ProductsTable({
   return (
     <>
       {/* Mobile: one listing per row — see ProductRow's own comment for why
-          a narrow grid card doesn't work here. */}
-      <div className="sm:hidden divide-y divide-gray-100">
+          a narrow grid card doesn't work here. Each row is its own bordered
+          card with a real gap between them (not just a divider line), same
+          spirit as a feed of separate posts rather than one continuous
+          list. */}
+      <div className="sm:hidden space-y-2.5 p-3">
         {products.map((product) => (
           <ProductRow
             key={product.id}
@@ -323,7 +380,7 @@ export default function ProductsTable({
       </div>
 
       {/* Tablet/desktop: the photo-forward card grid. */}
-      <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-5">
+      <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 gap-4 p-5">
         {products.map((product) => (
           <ProductCard
             key={product.id}

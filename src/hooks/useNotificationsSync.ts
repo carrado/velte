@@ -7,10 +7,16 @@ import { fetchNotifications } from "@/services/notifications";
 import { useNotificationsStore } from "@/store/notificationsStore";
 
 /**
- * Keeps the notification store in sync with the backend feed. Polls every 45s (and
- * on window focus) so new events surface on the bell while the dashboard is open;
- * web-push covers the app-closed case. `upsertNotifications` only ADDS unseen ids,
- * so a poll never clobbers an optimistic local read.
+ * Keeps the notification store in sync with the backend feed. Mounted app-wide
+ * (see app/[id]/layout.tsx), so this runs continuously for every open dashboard
+ * session — real delivery is push (see the service-worker message listener
+ * below, which invalidates immediately on a live push) and web-push covers the
+ * app-closed case; this poll only exists as a backstop for a missed/delayed
+ * push. Widened from 45s to 120s (2026-07-31) to cut Vercel function
+ * invocations — worth keeping in mind if it's ever tightened back down that
+ * every session running this continuously, all day, is the cost. Also
+ * refetches on window focus. `upsertNotifications` only ADDS unseen ids, so a
+ * poll never clobbers an optimistic local read.
  */
 export function useNotificationsSync(userId: string | undefined) {
   const upsertNotifications = useNotificationsStore(
@@ -50,7 +56,7 @@ export function useNotificationsSync(userId: string | undefined) {
     queryKey: queryKeys.notifications.list,
     queryFn: fetchNotifications,
     enabled: !!userId,
-    refetchInterval: 45_000,
+    refetchInterval: 120_000,
     refetchOnWindowFocus: true,
     staleTime: 30_000,
   });
