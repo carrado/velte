@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import Providers from "./providers";
 import { Toaster } from "sonner";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ReferralCapture from "@/components/ReferralCapture";
+import MetaPixel from "@/components/MetaPixel";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -198,6 +200,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("font-sans antialiased", inter.variable)}>
       <body>
+        <MetaPixel />
+        {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
+          <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
+        )}
         <Providers>
           <ServiceWorkerRegistrar />
           <ReferralCapture />
