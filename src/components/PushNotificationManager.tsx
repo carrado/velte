@@ -3,7 +3,14 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Bell, BellOff, BatteryWarning, Download, X } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  BatteryWarning,
+  Download,
+  X,
+  CheckCircle2,
+} from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { cn } from "@/lib/utils";
@@ -79,6 +86,19 @@ export default function PushNotificationManager() {
     localStorage.setItem(BATTERY_TIP_DISMISSED_KEY, "1");
     setStandaloneDismissed(true);
   };
+  // Shown once, right when a vendor declines to install (Skip, X, or the
+  // manual-steps "Got it") — a lot of what installing actually buys them
+  // (real-time push, not just a home-screen shortcut) isn't obvious from a
+  // one-line banner they may have skimmed past. This doesn't gate anything;
+  // it's purely informational, and closing it is what actually starts the
+  // 36h cooldown (see close() below) — declining install still only ever
+  // costs one extra tap on the way out, never blocks it.
+  const [showInstallInfo, setShowInstallInfo] = useState(false);
+  // Same idea, one step later: shown when a vendor who's ALREADY installed
+  // declines to enable alerts (permission still "default"). Tailored to
+  // what they'd specifically miss by staying push-off inside the PWA,
+  // rather than repeating the install pitch they've already acted on.
+  const [showAlertsInfo, setShowAlertsInfo] = useState(false);
 
   useEffect(() => {
     const sync = () => setIsMobile(window.innerWidth < 768);
@@ -87,7 +107,20 @@ export default function PushNotificationManager() {
   }, []);
 
   const close = () => {
+    // showInstallBanner and showAlertsBanner are mutually exclusive (see
+    // usePushNotifications) — a decline during either step gets its own
+    // one-time info card before the real dismiss actually fires.
+    if (showInstallBanner && !showInstallInfo) {
+      setShowInstallInfo(true);
+      return;
+    }
+    if (showAlertsBanner && !showAlertsInfo) {
+      setShowAlertsInfo(true);
+      return;
+    }
     setStep("main");
+    setShowInstallInfo(false);
+    setShowAlertsInfo(false);
     dismiss();
   };
 
@@ -205,6 +238,10 @@ export default function PushNotificationManager() {
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 shadow-sm shadow-orange-200">
                     {showingBatteryContent ? (
                       <BatteryWarning className="h-5 w-5 text-white" />
+                    ) : showInstallInfo ? (
+                      <Download className="h-5 w-5 text-white" />
+                    ) : showAlertsInfo ? (
+                      <BellOff className="h-5 w-5 text-white" />
                     ) : (
                       <Bell className="h-5 w-5 text-white" />
                     )}
@@ -214,42 +251,84 @@ export default function PushNotificationManager() {
                       Velte
                     </p>
                     <h3 className="text-[15px] font-semibold leading-tight text-slate-900">
-                      {showingBatteryContent
-                        ? "Keep alerts working on this phone"
-                        : showInstallBanner
-                          ? "Get the full experience"
-                          : "Turn on alerts"}
+                      {showInstallInfo
+                        ? "Here's what you'd get"
+                        : showAlertsInfo
+                          ? "Here's what you'd miss"
+                          : showingBatteryContent
+                            ? "Keep alerts working on this phone"
+                            : showInstallBanner
+                              ? "Get the full experience"
+                              : "Turn on alerts"}
                     </h3>
                   </div>
                 </div>
 
-                {/* Body */}
-                <p className="text-[13px] leading-relaxed text-slate-500">
-                  {showingBatteryContent
-                    ? "Your phone's battery saver can silently stop notifications once Velte is in the background. Open Settings → Apps → Chrome → Battery, choose “No restrictions” / “Allow background activity”, and avoid swiping Velte away from your recent apps."
-                    : showInstallBanner
-                      ? canInstall
-                        ? "Install Velte on your device for one-tap access — you'll be asked to enable alerts for new leads and low wallet balance right after."
-                        : isIOS
-                          ? "Add Velte to your home screen for one-tap access and reliable alerts: tap the Share icon in Safari, then choose “Add to Home Screen”."
-                          : "Add Velte to your home screen for one-tap access and reliable alerts: open your browser menu (⋮) and choose “Install app” / “Add to Home screen”."
-                      : "Turn on alerts to get notified the moment a buyer reaches out or your wallet balance runs low."}
-                </p>
-
-                {/* Feature pills — skip on any battery-tip content, it's
-                    settings guidance, not a feature callout */}
-                {!showingBatteryContent && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
-                      <Download className="h-3 w-3" />
-                      Install app
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
-                      <Bell className="h-3 w-3" />
-                      Push notifications
-                    </span>
-                  </div>
+                {/* Body — both info-modal steps get a real bullet list
+                    instead of the one-line banner copy, since the whole
+                    point of either is spelling out what skipping actually
+                    costs. Install is framed as what they'd GAIN
+                    (CheckCircle2, orange); alerts — they're already
+                    installed, this is the last step — is framed as what
+                    they'd specifically MISS by staying push-off (BellOff,
+                    muted), not a repeat of the install pitch. */}
+                {showInstallInfo || showAlertsInfo ? (
+                  <ul className="space-y-2">
+                    {(showInstallInfo
+                      ? [
+                          "Instant alerts the moment a buyer messages you or places an order",
+                          "A heads-up the second your wallet balance runs low",
+                          "One-tap access from your home screen — no browser, no hunting for the tab",
+                        ]
+                      : [
+                          "You won't be notified when a buyer messages you or places an order",
+                          "You won't get a heads-up if your wallet balance runs low",
+                          "You'll have to keep checking the app yourself to catch anything new",
+                        ]
+                    ).map((benefit) => (
+                      <li
+                        key={benefit}
+                        className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-600"
+                      >
+                        {showInstallInfo ? (
+                          <CheckCircle2 className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+                        ) : (
+                          <BellOff className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                        )}
+                        {benefit}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-[13px] leading-relaxed text-slate-500">
+                    {showingBatteryContent
+                      ? "Your phone's battery saver can silently stop notifications once Velte is in the background. Open Settings → Apps → Chrome → Battery, choose “No restrictions” / “Allow background activity”, and avoid swiping Velte away from your recent apps."
+                      : showInstallBanner
+                        ? canInstall
+                          ? "Install Velte on your device for one-tap access — you'll be asked to enable alerts for new leads and low wallet balance right after."
+                          : isIOS
+                            ? "Add Velte to your home screen for one-tap access and reliable alerts: tap the Share icon in Safari, then choose “Add to Home Screen”."
+                            : "Add Velte to your home screen for one-tap access and reliable alerts: open your browser menu (⋮) and choose “Install app” / “Add to Home screen”."
+                        : "Turn on alerts to get notified the moment a buyer reaches out or your wallet balance runs low."}
+                  </p>
                 )}
+
+                {/* Feature pills — skip on battery-tip or either info-modal
+                    step, all already make the point some other way. */}
+                {!showingBatteryContent &&
+                  !showInstallInfo &&
+                  !showAlertsInfo && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
+                        <Download className="h-3 w-3" />
+                        Install app
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
+                        <Bell className="h-3 w-3" />
+                        Push notifications
+                      </span>
+                    </div>
+                  )}
 
                 {/* Actions */}
                 <div className="mt-5 flex items-center gap-3">
@@ -303,7 +382,11 @@ export default function PushNotificationManager() {
                       onClick={onBatteryStep ? dismissBatteryStep : close}
                       className="shrink-0 text-[13px] font-medium text-slate-400 transition-colors hover:text-slate-600"
                     >
-                      {onBatteryStep || showInstallBanner ? "Skip" : "Not now"}
+                      {showInstallInfo || showAlertsInfo
+                        ? "Maybe later"
+                        : onBatteryStep || showInstallBanner
+                          ? "Skip"
+                          : "Not now"}
                     </button>
                   )}
                 </div>

@@ -76,7 +76,7 @@ export default function Header({ title }: HeaderProps) {
           className="flex items-center gap-1.5 px-2.5 sm:px-3.5 h-8 sm:h-9 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors text-dash-caption sm:text-dash-body font-semibold shrink-0"
         >
           <Search size={15} className="shrink-0" />
-          <span className="leading-none">AI Search</span>
+          <span className="leading-none">Find on Velte</span>
         </Link>
 
         {/* Mobile: navigate to notifications page */}

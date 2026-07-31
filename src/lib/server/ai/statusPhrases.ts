@@ -169,6 +169,11 @@ export function understandingRequestPhrase(
     "Give me a second with this…",
     "Piecing this together…",
     "On it…",
+    "Checking whether you're looking for a product or a business…",
+    "Checking if your image or message contains what I need…",
+    "Preparing the right search…",
+    "Identifying what you need…",
+    "Looking through what you sent…",
   ];
 }
 
@@ -192,6 +197,9 @@ export function searchingPhrase(what: string, location?: string): string[] {
       `Widening the search for "${what}"…`,
       `Going through the listings for "${what}"…`,
       `Combing the network for "${what}"…`,
+      `Searching for "${what}" across Nigeria…`,
+      `Searching for businesses that have "${what}"…`,
+      `Finding "${what}" that matches…`,
     ];
   }
   return [
@@ -211,6 +219,8 @@ export function searchingPhrase(what: string, location?: string): string[] {
     `Seeing who's selling "${what}" near ${location}…`,
     `Checking the area around ${location} for "${what}"…`,
     `On the lookout near ${location} for "${what}"…`,
+    `Checking local listings near ${location} for "${what}"…`,
+    `Finding "${what}" that matches near ${location}…`,
   ];
 }
 
@@ -235,6 +245,8 @@ export function foundCountPhrase(
       `Found ${count} ${plural} further out — ranking now…`,
       `${count} ${plural} turned up outside your area — ranking…`,
       `Not close by, but ${count} ${plural} found across Nigeria…`,
+      `Expanded the search — found ${count} ${plural}…`,
+      `Searched nationwide — found ${count} ${plural}…`,
     ];
   }
   if (matchTier === "state") {
@@ -249,6 +261,7 @@ export function foundCountPhrase(
       `Found ${count} ${plural} across the state — sorting now…`,
       `${count} ${plural} turned up state-wide — ranking…`,
       `${count} ${plural} found a bit further within the state…`,
+      `Found ${count} ${plural} within the state…`,
     ];
   }
   if (matchTier === "nearby") {
@@ -278,6 +291,8 @@ export function foundCountPhrase(
     `${count} ${plural} found right around you — ranking…`,
     `Nice — ${count} ${plural} turned up nearby…`,
     `${count} ${plural} found close to you — sorting…`,
+    `Found ${count} ${plural}.`,
+    `Here are the ${count} closest ${plural} found.`,
   ];
 }
 
@@ -296,6 +311,7 @@ export function directMatchPhrase(count: number): string[] {
     `Here it is — an exact ${plural}!`,
     `Great news — exact ${plural} found for your photo!`,
     `Spot on — an exact ${plural} turned up!`,
+    `Found an exact ${plural}!`,
   ];
 }
 
@@ -312,6 +328,7 @@ export function similarMatchPhrase(count: number): string[] {
     `No perfect match, but ${count} similar ${plural} nearby…`,
     `That exact one's not around, but ${count} similar ${plural} are…`,
     `Not quite identical, but ${count} similar ${plural} turned up…`,
+    `Found something very similar — ${count} ${plural} to check out…`,
   ];
 }
 
@@ -334,6 +351,8 @@ export function noProductMatchPhrase(): string[] {
     "No listing for that yet — checking other vendors nearby…",
     "Not listed yet, but checking other Velte vendors…",
     "No match on that listing — checking other vendors on Velte…",
+    "No exact product found — looking for stores instead…",
+    "Couldn't find a listing — searching for vendors instead…",
   ];
 }
 
@@ -364,6 +383,12 @@ export function noVendorMatchPhrase(hasExternal: boolean): string[] {
         "Nothing found on Velte, and no nearby businesses came up either.",
         "No Velte vendor yet — and no nearby alternative either.",
         "Nothing matched on Velte or nearby for this search.",
+        // Adapted from a vaguer submitted phrase ("No results came up this
+        // time.") to keep this bucket's own established convention — see
+        // this branch's comment above on why spelling out BOTH "no Velte"
+        // and "no nearby" matters here specifically.
+        "No results this time — nothing on Velte, and nothing nearby either.",
+        "Not available right now — no Velte match, and nothing nearby either.",
       ];
 }
 
@@ -382,5 +407,10 @@ export function fetchingCatalogPhrase(): string[] {
     "Getting their listings…",
     "One moment, checking their shop…",
     "Looking through what they offer…",
+    "Fetching their latest listings…",
+    "Loading their catalog…",
+    "Retrieving their catalog…",
+    "Checking their inventory…",
+    "Checking what this vendor offers…",
   ];
 }

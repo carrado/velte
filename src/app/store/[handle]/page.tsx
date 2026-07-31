@@ -15,7 +15,8 @@ import StoreTabs from "./_components/StoreTabs";
 import { StoreWhatsAppButton } from "./_components/shared";
 
 // Public storefront — server-rendered for SEO and link previews. This is the
-// page the AI hands buyers off to. A real site shell (Navbar with AI Search +
+// page the AI hands buyers off to. A real site shell (Navbar with a "Find on
+// Velte" link +
 // sign-in/vendor-aware account slot, a rich hero carrying the store's own
 // photos or a sector-themed generated background, the catalog body, and a
 // vendor-profile footer) rather than a bare listing page. Styling follows the

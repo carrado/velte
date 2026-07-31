@@ -52,7 +52,7 @@ export default function Navbar() {
             <Link href="/search">
               <Button className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 text-xs sm:text-sm px-3 sm:px-5 gap-1.5">
                 <SearchIcon className="w-3.5 h-3.5" />
-                AI Search
+                Find on Velte
               </Button>
             </Link>
           </div>

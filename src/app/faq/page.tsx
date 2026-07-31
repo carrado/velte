@@ -3,11 +3,7 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
-import {
-  ArrowRight,
-  MessageCircleQuestion,
-  Search as SearchIcon,
-} from "lucide-react";
+import { ArrowRight, Search as SearchIcon } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -76,16 +72,6 @@ export default function FaqPage() {
 
           <div className="relative max-w-6xl mx-auto px-5 sm:px-8 pb-10 grid lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center">
             <div className="text-center lg:text-left">
-              <motion.span
-                initial={{ opacity: 0, y: -10, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.5 }}
-                className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-600 text-xs font-semibold px-3.5 py-1.5 rounded-full mb-6 tracking-wide"
-              >
-                <MessageCircleQuestion className="w-3.5 h-3.5" />
-                Support center
-              </motion.span>
-
               <motion.h1
                 initial="hidden"
                 animate="show"
@@ -202,7 +188,7 @@ export default function FaqPage() {
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   >
                     <SearchIcon className="w-4 h-4" />
-                    AI Search
+                    Find on Velte
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>

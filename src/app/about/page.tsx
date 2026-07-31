@@ -405,7 +405,7 @@ export default function About() {
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   >
                     <Search className="w-4 h-4" />
-                    AI Search
+                    Find on Velte
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>
