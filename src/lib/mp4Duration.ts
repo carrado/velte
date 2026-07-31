@@ -98,6 +98,13 @@ async function readMvhdDurationS(
     await file.slice(mvhdOffset, mvhdOffset + 1).arrayBuffer(),
   ).getUint8(0);
 
+  // Both widths use an all-1-bits value as the spec's sentinel for "duration
+  // unknown/unresolved" (same placeholder Chrome's own duration reading
+  // chokes on — see readVideoElementDurationS's Infinity guard above). Read
+  // literally, dividing that raw bit pattern by the timescale produces a
+  // huge but well-formed-looking number of seconds, which would wrongly
+  // clear a video as "over limit" instead of "couldn't determine" — found
+  // live alongside the same root cause as the <video>-element Infinity bug.
   if (versionByte === 1) {
     // version(1) + flags(3) + creation(8) + modification(8) = 20 bytes in,
     // then timescale(4) + duration(8).
@@ -108,6 +115,7 @@ async function readMvhdDurationS(
     const view = new DataView(buf);
     const timescale = view.getUint32(0);
     const duration = view.getBigUint64(4);
+    if (duration === BigInt("0xffffffffffffffff")) return null;
     return timescale > 0 ? Number(duration) / timescale : null;
   }
 
@@ -118,6 +126,7 @@ async function readMvhdDurationS(
   const view = new DataView(buf);
   const timescale = view.getUint32(0);
   const duration = view.getUint32(4);
+  if (duration === 0xffffffff) return null;
   return timescale > 0 ? duration / timescale : null;
 }
 

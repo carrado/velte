@@ -82,10 +82,11 @@ function videoMetadataTimeoutMs(fileSizeBytes: number): number {
   );
 }
 
-// Resolves the REAL <video> element's duration, or null if the browser
-// can't read it within the (size-scaled) timeout, or fires onerror trying —
-// in which case checkVideoDuration below falls back to container-level
-// parsing instead.
+// Resolves the browser's own <video> element duration, or null if it can't
+// read it within the (size-scaled) timeout, or fires onerror trying. This is
+// the FALLBACK path — see checkVideoDuration below, which tries the
+// container-level parser (ground truth) first and only reaches this for
+// files that parser can't resolve.
 function readVideoElementDurationS(file: File): Promise<number | null> {
   return new Promise((resolve) => {
     const video = document.createElement("video");
@@ -104,7 +105,18 @@ function readVideoElementDurationS(file: File): Promise<number | null> {
     );
 
     video.preload = "metadata";
-    video.onloadedmetadata = () => finish(video.duration || null);
+    video.onloadedmetadata = () => {
+      // Some phone/app-forwarded MP4s (WhatsApp re-mux, certain camera apps)
+      // leave the moov/mvhd duration unresolved — Chrome then reports
+      // `Infinity` (or occasionally `NaN`) here rather than throwing, which
+      // is > MAX_VIDEO_DURATION_S and wrongly rejects a genuinely short,
+      // valid video — found live: a real 131s/331MB clip flagged as over
+      // 180s. Treat a non-finite/zero reading as "couldn't determine" so
+      // the caller falls back to the container-level parser instead of
+      // trusting the browser's bogus number.
+      const d = video.duration;
+      finish(Number.isFinite(d) && d > 0 ? d : null);
+    };
     video.onerror = () => finish(null);
     video.src = objectUrl;
   });
@@ -122,34 +134,41 @@ export type VideoDurationCheck =
    * auto-trim entirely and just asking the vendor to trim it themselves
    * (their phone's gallery app, or wherever they got the clip) removes that
    * whole failure-prone pipeline rather than continuing to harden it.
-   * `durationS` is null when even the container-level fallback below
+   * `durationS` is null when even the <video>-element fallback below
    * couldn't read it — still rejected, the caller just can't show the
    * vendor an exact "this video is X long" figure in the error. */
   | { kind: "over-limit"; durationS: number | null };
 
 // Classifies a picked video for AddProductPage's handleVideoUpload. Tries
-// the real <video> element first. If the browser can't read it at all —
-// found live: HEVC decode gaps on Android Chrome/WebView, or a moov atom
-// positioned at the end of a large file taking too long — falls back to
-// parseMp4Duration (container-level, works regardless of codec support)
-// before concluding the duration genuinely can't be determined here.
+// parseMp4Duration FIRST — it reads the real duration straight out of the
+// file's own moov/mvhd box, so it's ground truth rather than a heuristic,
+// and (per its own comments) cheap regardless of file size. The <video>
+// element is decode-based instead: it has to get the browser's actual
+// codec pipeline far enough to report metadata, which is exactly what goes
+// wrong on real vendor phones — HEVC decode gaps on Android Chrome/WebView,
+// or (found live) an unresolved/placeholder mvhd duration that some phone
+// camera apps and WhatsApp's re-mux leave behind, which Chrome then surfaces
+// as `Infinity` and wrongly flags a genuinely short video as over the cap.
+// So the <video> element is only the FALLBACK now, for files
+// parseMp4Duration can't resolve at all — non-ISO-BMFF containers (WebM) or
+// a truly fragmented/streamed MP4 with no single mvhd duration.
 export async function checkVideoDuration(
   file: File,
 ): Promise<VideoDurationCheck> {
-  const previewDurationS = await readVideoElementDurationS(file);
-  if (previewDurationS != null) {
-    return previewDurationS > MAX_VIDEO_DURATION_S
-      ? { kind: "over-limit", durationS: previewDurationS }
-      : { kind: "ok" };
-  }
-
-  console.warn(
-    "[bunnyStream] Browser couldn't read this video's metadata — falling back to container-level duration parsing",
-  );
   const parsedDurationS = await parseMp4Duration(file);
   if (parsedDurationS != null) {
     return parsedDurationS > MAX_VIDEO_DURATION_S
       ? { kind: "over-limit", durationS: parsedDurationS }
+      : { kind: "ok" };
+  }
+
+  console.warn(
+    "[bunnyStream] Container-level duration parsing came up empty — falling back to the browser's <video> element",
+  );
+  const previewDurationS = await readVideoElementDurationS(file);
+  if (previewDurationS != null) {
+    return previewDurationS > MAX_VIDEO_DURATION_S
+      ? { kind: "over-limit", durationS: previewDurationS }
       : { kind: "ok" };
   }
   return { kind: "over-limit", durationS: null };
