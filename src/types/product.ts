@@ -227,11 +227,15 @@ export interface VideoPosterImageProps {
 // A picked video that's over MAX_VIDEO_DURATION_S is rejected outright (see
 // bunnyStream.ts's checkVideoDuration) — no in-app trim anymore, so there's
 // no separate job phase for it either.
-export type VideoJobPhase = "uploading";
+// "paused" is the backgrounding pause/resume cycle in
+// bunnyStream.ts's uploadVideoToBunny — the tab hid mid-upload (screen lock,
+// app-switch), not a failure.
+export type VideoJobPhase = "uploading" | "paused";
 
 export interface VideoUploadProgressBarProps {
   /** 0–100 */
   progress: number;
+  paused: boolean;
   onCancel: () => void;
 }
 

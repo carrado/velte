@@ -14,19 +14,25 @@ import type { VideoUploadProgressBarProps } from "@/types/product";
 // button too.
 export default function VideoUploadProgressBar({
   progress,
+  paused,
   onCancel,
 }: VideoUploadProgressBarProps) {
   return createPortal(
     <div className="fixed top-0 inset-x-0 z-[200] bg-white border-b border-gray-100 shadow-sm">
       <div className="max-w-5xl mx-auto px-4 py-2.5 flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-          <Upload size={14} className="text-orange-500 animate-bounce" />
+          <Upload
+            size={14}
+            className={`text-orange-500 ${paused ? "" : "animate-bounce"}`}
+          />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <p className="text-dash-caption font-semibold text-[#023337] truncate">
-              Uploading video…
+              {paused
+                ? "Paused — reopen this tab to continue"
+                : "Uploading video… keep this tab open"}
             </p>
             <p className="text-dash-caption font-bold text-[#023337] shrink-0">
               {progress}%

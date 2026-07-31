@@ -897,6 +897,11 @@ export default function AddProductPage({
         setVideoJob((prev) => (prev ? { ...prev, progress } : prev));
       },
       controller.signal,
+      (paused) => {
+        setVideoJob((prev) =>
+          prev ? { ...prev, phase: paused ? "paused" : "uploading" } : prev,
+        );
+      },
     ).then(
       (url) => {
         setVideoPreview(url);
@@ -1515,6 +1520,7 @@ export default function AddProductPage({
       {videoJob?.active && !publishModal.open && (
         <VideoUploadProgressBar
           progress={videoJob.progress}
+          paused={videoJob.phase === "paused"}
           onCancel={cancelVideoJob}
         />
       )}

@@ -452,11 +452,16 @@ async function getUploadAuth(title: string): Promise<BunnyUploadAuth> {
 // client-side, it also deletes the video container Bunny already created
 // at auth time (see deleteBunnyVideo), so a cancelled upload doesn't leave
 // an orphaned, partially-uploaded video sitting in the library forever.
+//
+// `onPauseChange` reports the backgrounding-driven pause/resume cycle below
+// — distinct from cancellation, this is the upload voluntarily standing
+// down while the tab is hidden rather than a failure.
 export function uploadVideoToBunny(
   file: File,
   title: string,
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
+  onPauseChange?: (paused: boolean) => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -521,7 +526,7 @@ export function uploadVideoToBunny(
             title,
           },
           onError: (err) => {
-            signal?.removeEventListener("abort", onAbort);
+            cleanup();
             reportUploadError(file, err, requestLogger.entries);
             const friendly = friendlyUploadError(err);
             reject(
@@ -534,18 +539,98 @@ export function uploadVideoToBunny(
             onProgress?.(bytesTotal > 0 ? bytesSent / bytesTotal : 0);
           },
           onSuccess: () => {
-            signal?.removeEventListener("abort", onAbort);
+            cleanup();
             resolve(
               `https://player.mediadelivery.net/embed/${libraryId}/${videoId}`,
             );
           },
         });
+
+        // Screen Wake Lock — best-effort only. Doesn't prevent the OS from
+        // backgrounding the TAB (switching apps still does that; that's what
+        // the visibilitychange handling below is for), but it does stop the
+        // single most avoidable trigger for it: the screen itself timing out
+        // and locking mid-upload while the vendor is just watching the
+        // progress bar. Unsupported on plenty of real vendor browsers (iOS
+        // Safari <16.4 among them) — feature-detected and swallowed rather
+        // than relied on.
+        let wakeLock: WakeLockSentinel | null = null;
+        const releaseWakeLock = () => {
+          const lock = wakeLock;
+          wakeLock = null;
+          lock?.release().catch(() => {});
+        };
+        const acquireWakeLock = () => {
+          if (typeof navigator === "undefined" || !("wakeLock" in navigator))
+            return;
+          navigator.wakeLock
+            .request("screen")
+            .then((lock) => {
+              wakeLock = lock;
+              // The browser can release a wake lock on its own (e.g. the OS
+              // pulled the screen off some other way) — drop the stale
+              // reference so a later releaseWakeLock() call doesn't try to
+              // release an already-dead sentinel.
+              lock.addEventListener("release", () => {
+                if (wakeLock === lock) wakeLock = null;
+              });
+            })
+            .catch(() => {});
+        };
+
+        // Found live (see the retryDelays comment above): a chunk request
+        // can die with NO http response at all, repeatedly, even at the
+        // smallest chunk size tried — a pattern more consistent with the
+        // browser/OS killing an in-flight request outright than with
+        // genuinely bad signal. On Android Chrome the standard trigger for
+        // that is the tab backgrounding (screen lock, app-switch) while a
+        // multi-minute upload is still running. Rather than let the OS kill
+        // the request uncontrolled and surface as a confusing failure, pause
+        // the upload cleanly the moment the tab hides (tus-js-client's
+        // abort() keeps the server-side offset — this is a pause, not a
+        // cancel) and resume from exactly where it left off once the tab is
+        // visible again.
+        let finished = false;
+        let backgroundPaused = false;
+        const handleVisibilityChange = () => {
+          if (finished) return;
+          if (document.hidden) {
+            if (backgroundPaused) return;
+            backgroundPaused = true;
+            onPauseChange?.(true);
+            releaseWakeLock();
+            upload.abort().catch(() => {});
+          } else {
+            if (!backgroundPaused) return;
+            backgroundPaused = false;
+            onPauseChange?.(false);
+            acquireWakeLock();
+            upload.start();
+          }
+        };
+        if (typeof document !== "undefined") {
+          document.addEventListener("visibilitychange", handleVisibilityChange);
+        }
+
+        function cleanup() {
+          finished = true;
+          signal?.removeEventListener("abort", onAbort);
+          if (typeof document !== "undefined") {
+            document.removeEventListener(
+              "visibilitychange",
+              handleVisibilityChange,
+            );
+          }
+          releaseWakeLock();
+        }
         const onAbort = () => {
+          cleanup();
           upload.abort();
           fetch(`/api/videos/${videoId}`, { method: "DELETE" }).catch(() => {});
           reject(new DOMException("Aborted", "AbortError"));
         };
         signal?.addEventListener("abort", onAbort);
+        acquireWakeLock();
         upload.start();
       })
       .catch(reject);

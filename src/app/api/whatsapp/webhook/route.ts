@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { appendFileSync, existsSync, writeFileSync } from "fs";
+import path from "path";
 
 // Receives Meta's delivery-status callbacks (sent/delivered/read/failed) for
 // messages sent via scripts/send-whatsapp.js — that script only gets a WAMID
@@ -24,6 +26,59 @@ import crypto from "crypto";
 
 const VERIFY_TOKEN = process.env.META_WEBHOOK_VERIFY_TOKEN;
 const APP_SECRET = process.env.META_APP_SECRET;
+
+// Delivery failures land here (distinct from send-vendor-prelaunch.js's own
+// results log, which only records whether Meta ACCEPTED the send — a
+// message can be accepted and still fail delivery minutes/days later, which
+// is what this callback reports). send-vendor-prelaunch.js's --retry-failed
+// reads this file back; nothing else in the app touches it. Dev-only in
+// practice (this route has no durable disk on Vercel), which matches how
+// these scripts are actually run — see this route's own setup comment above.
+const FAILURES_PATH = path.join(
+  process.cwd(),
+  "scripts",
+  "data",
+  "whatsapp-delivery-failures.csv",
+);
+
+function csvField(v: unknown) {
+  return `"${String(v ?? "").replace(/"/g, '""')}"`;
+}
+
+function appendDeliveryFailure(row: {
+  phone: string;
+  wamid: string;
+  errorCode: string;
+  errorMessage: string;
+}) {
+  try {
+    if (!existsSync(FAILURES_PATH)) {
+      writeFileSync(
+        FAILURES_PATH,
+        "phone,wamid,errorCode,errorMessage,timestamp\n",
+      );
+    }
+    appendFileSync(
+      FAILURES_PATH,
+      [
+        row.phone,
+        row.wamid,
+        row.errorCode,
+        row.errorMessage,
+        new Date().toISOString(),
+      ]
+        .map(csvField)
+        .join(",") + "\n",
+    );
+  } catch (err) {
+    // Never let logging the failure itself break the webhook response —
+    // Meta expects a prompt 200 regardless.
+    console.warn(
+      "[WhatsApp webhook] couldn't write delivery-failure log:",
+      err,
+    );
+  }
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -88,6 +143,12 @@ export async function POST(req: NextRequest) {
       console.error(
         `[WhatsApp webhook] FAILED → ${status.recipient_id} (msg ${status.id}): ${details || "no error details"}`,
       );
+      appendDeliveryFailure({
+        phone: status.recipient_id,
+        wamid: status.id,
+        errorCode: String(status.errors?.[0]?.code ?? ""),
+        errorMessage: details || "no error details",
+      });
     } else {
       // sent | delivered | read
       console.log(
