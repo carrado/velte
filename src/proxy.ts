@@ -10,6 +10,7 @@ const alwaysPublicRoutes = [
   "/favicon.ico",
   "/site.webmanifest",
   "/payment/callback",
+  "/s", // branded short-link redirector (see src/app/s/[code]/route.ts)
 ];
 
 // Genuinely public PAGES that stay viewable even by a logged-in user — each
