@@ -617,7 +617,7 @@ export async function POST(req: Request) {
         // left with no way to repeat the mistake and must pick a real search
         // tool instead.
         const LOCATION_CLARIFY_PATTERN =
-          /\b(city|area|location|neighbo(?:u)?rhood|which (?:state|town))\b/i;
+          /\b(city|area|location|located|situated|whereabouts|neighbo(?:u)?rhood|which (?:state|town)|where (?:are|do) you|part of town)\b/i;
         const looksLikeLocationClarify =
           Boolean(body?.buyerLocation) &&
           Boolean(outcome.clarifyCandidate) &&
@@ -627,14 +627,35 @@ export async function POST(req: Request) {
             )) ||
             LOCATION_CLARIFY_PATTERN.test(outcome.clarifyCandidate!.question));
 
-        if (looksLikeLocationClarify && !outcome.hasUsefulResults) {
+        // Same reliability gap, different shape: the model sometimes asks
+        // about location in its own PLAIN TEXT reply without calling
+        // askClarifyingQuestion (or any search tool) at all — invisible to
+        // looksLikeLocationClarify above since that only inspects an actual
+        // tool call. Left unchecked, this renders as a dead-end "suggestion"
+        // card (see SearchHome's !turn.toolCalled branch) showing the
+        // buyer their own location asked right back at them. Only fires
+        // when NO search tool ran either — a real search result's closing
+        // note is free to mention location without tripping this.
+        const looksLikeBareLocationAsk =
+          Boolean(body?.buyerLocation) &&
+          !outcome.clarifyCandidate &&
+          !outcome.productCall &&
+          !outcome.storeCall &&
+          LOCATION_CLARIFY_PATTERN.test(result.text ?? "");
+
+        if (
+          (looksLikeLocationClarify || looksLikeBareLocationAsk) &&
+          !outcome.hasUsefulResults
+        ) {
           // Marks which path produced a given turn's result — the model
           // asking correctly the first time vs. this retry silently catching
           // a spurious ask are indistinguishable to the buyer, but not
           // distinguishing them here would make gpt-4o-mini's location-
           // asking reliability impossible to track over time.
           console.warn(
-            "[search] discarded a spurious location clarify (buyer location already known) — retrying without askClarifyingQuestion",
+            looksLikeLocationClarify
+              ? "[search] discarded a spurious location clarify (buyer location already known) — retrying without askClarifyingQuestion"
+              : "[search] discarded a bare-text location ask with no tool call (buyer location already known) — retrying without askClarifyingQuestion",
           );
           result = await callLLM(
             { system, messages, tools: searchTools, stopWhen: stepCountIs(4) },
