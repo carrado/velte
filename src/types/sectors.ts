@@ -45,6 +45,15 @@ export interface SectorListingConfig {
    * productCategoryId when omitted.
    */
   attributeCategoryId?: string;
+  /**
+   * This sector's "product" kind lists a unique, non-stocked asset (e.g. a
+   * specific house/plot) rather than merchandise — no retail category
+   * (Electronics/Fashion/Home & Kitchen/...) ever fits, so the Category
+   * field is skipped entirely for it, the same as services/dishes. Distinct
+   * from `attributeCategoryId` being unset, which just means no default
+   * category to *prefill*; the field is still applicable there.
+   */
+  skipProductCategory?: boolean;
   /** Sector-flavored placeholder copy for the Basics block, per listing kind. */
   productNamePlaceholder?: string;
   productDescriptionPlaceholder?: string;
