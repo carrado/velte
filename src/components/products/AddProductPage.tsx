@@ -558,6 +558,11 @@ export default function AddProductPage({
   const isService = kind === "service";
   const isFood = foodAccount && !isService;
   const isQuote = isService && quoteOnRequest;
+  // Services/dishes carry no category by nature; a handful of sectors
+  // (currently just real estate) skip it too because their "product" kind
+  // lists a unique asset no retail category actually fits.
+  const noCategory =
+    isService || isFood || Boolean(sectorConfig?.skipProductCategory);
 
   // Keep fixed-kind listings aligned to whichever sector is currently picked.
   // "both"/"food_both" sectors are left alone — the vendor drives the toggle.
@@ -927,7 +932,7 @@ export default function AddProductPage({
   const canSubmit =
     sectorValue !== "" &&
     productName.trim().length > 0 &&
-    (isService || isFood || selectedCategory !== "") && // services & food carry no category
+    (noCategory || selectedCategory !== "") &&
     // Required for every kind — services have no category at all, so it's
     // their only real search-matching signal, but a plain product/dish
     // benefits just as much from a real description instead of an empty one.
@@ -1049,7 +1054,7 @@ export default function AddProductPage({
       );
       return;
     }
-    if (!isService && !isFood && !selectedCategory) {
+    if (!noCategory && !selectedCategory) {
       toast.error("Please select a category");
       return;
     }
@@ -1158,8 +1163,8 @@ export default function AddProductPage({
         name: productName.trim(),
         description: description.trim() || null,
         sector_value: sectorValue,
-        // Null for services and dishes — neither carries a category.
-        category_id: isService || isFood ? null : selectedCategory,
+        // Null for services, dishes, and sectors that skip category entirely.
+        category_id: noCategory ? null : selectedCategory,
         price: priceKobo,
         price_max: priceMaxKobo,
         currency,
@@ -1189,7 +1194,7 @@ export default function AddProductPage({
         payload = {
           ...base,
           kind,
-          category_id: isService ? null : selectedCategory,
+          category_id: noCategory ? null : selectedCategory,
           quote_on_request: isQuote,
           manufacturing_date:
             !isService && isHealth ? manufacturingDate || null : null,
@@ -1295,7 +1300,7 @@ export default function AddProductPage({
       label: "Basics",
       valid:
         productName.trim().length > 0 &&
-        (isService || isFood || selectedCategory !== "") &&
+        (noCategory || selectedCategory !== "") &&
         description.trim().length > 0,
     },
     {
@@ -1624,8 +1629,10 @@ export default function AddProductPage({
 
               {/* Category — retail products only. Services are discovered by
                   meaning (their description + sector); food dishes carry no
-                  category — matched purely on name/description/sector too. */}
-              {!isService && !isFood && (
+                  category — matched purely on name/description/sector too.
+                  A handful of sectors (e.g. real estate) skip it as well —
+                  see SectorListingConfig.skipProductCategory. */}
+              {!noCategory && (
                 <div>
                   <FieldLabel required>Category</FieldLabel>
                   <Select
