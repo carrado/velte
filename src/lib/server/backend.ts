@@ -1,15 +1,24 @@
 /* The BFF data layer. Velte's API routes are the backend-for-frontend: they own
    auth, validation and response shape, and get their data from the upstream
    velte/staffly backend through these helpers, forwarding the caller's session
-   cookie. Throws BackendError(status, message) on a non-2xx upstream response. */
+   cookie. Throws BackendError(status, message, fields) on a non-2xx upstream
+   response — `fields` carries the backend's per-field validation reasons
+   (errRes's `{ error: { code, message, fields } }`) through to the route
+   handler so it isn't lost before reaching the vendor. */
 
 const API_BASE = process.env.BACKEND_API_URL || "http://localhost:5000/api";
 
 export class BackendError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  fields?: Record<string, string>;
+  constructor(
+    status: number,
+    message: string,
+    fields?: Record<string, string>,
+  ) {
     super(message);
     this.status = status;
+    this.fields = fields;
     this.name = "BackendError";
   }
 }
@@ -52,6 +61,17 @@ function messageFrom(data: unknown, status: number): string {
   );
 }
 
+// Pulls the per-field validation reasons out of errRes's `{ error: { fields } }`
+// shape, when present — same defensive stance as extractMessage above, since
+// this is trusting an upstream shape rather than a runtime guarantee.
+function fieldsFrom(data: unknown): Record<string, string> | undefined {
+  const body = data as { error?: { fields?: unknown } } | null;
+  const fields = body?.error?.fields;
+  return fields && typeof fields === "object"
+    ? (fields as Record<string, string>)
+    : undefined;
+}
+
 async function doFetch(
   path: string,
   { method = "GET", body, cookie }: BackendOptions,
@@ -82,7 +102,11 @@ export async function backendFetch<T = unknown>(
 ): Promise<T> {
   const { res, data } = await doFetch(path, opts);
   if (!res.ok)
-    throw new BackendError(res.status, messageFrom(data, res.status));
+    throw new BackendError(
+      res.status,
+      messageFrom(data, res.status),
+      fieldsFrom(data),
+    );
   return data as T;
 }
 
@@ -102,7 +126,11 @@ export async function backendFetchWithCookies<T = unknown>(
 ): Promise<{ data: T; setCookie: string[] }> {
   const { res, data } = await doFetch(path, opts);
   if (!res.ok)
-    throw new BackendError(res.status, messageFrom(data, res.status));
+    throw new BackendError(
+      res.status,
+      messageFrom(data, res.status),
+      fieldsFrom(data),
+    );
   const setCookie =
     typeof res.headers.getSetCookie === "function"
       ? res.headers.getSetCookie()

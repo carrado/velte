@@ -1233,18 +1233,19 @@ export default function AddProductPage({
     } catch (err: unknown) {
       setPublishModal((prev) => ({ ...prev, open: false }));
       const apiErr = err as {
-        data?: {
-          error?: { fields?: Record<string, string>; message?: string };
-        };
+        data?: { error?: string; fields?: Record<string, string> };
         status?: number;
       };
-      if (apiErr.status === 400 && apiErr.data?.error?.fields) {
-        setFieldErrors(apiErr.data.error.fields);
-        toast.error("Please fix the highlighted fields");
+      const fields = apiErr.data?.fields;
+      if (apiErr.status === 400 && fields && Object.keys(fields).length > 0) {
+        setFieldErrors(fields);
+        // Not every field with a backend rule has inline highlighting yet
+        // (e.g. tags, category_id) — surface the specific reason in the
+        // toast itself so it's never silently invisible.
+        toast.error(Object.values(fields)[0]);
       } else {
         toast.error(
-          apiErr.data?.error?.message ??
-            getErrorMessage(err, "Something went wrong"),
+          apiErr.data?.error ?? getErrorMessage(err, "Something went wrong"),
         );
       }
     } finally {
