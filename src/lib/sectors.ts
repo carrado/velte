@@ -137,6 +137,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         // "both": stationery/bookshops commonly also offer printing,
         // photocopying, and binding as a service side.
         listingConfig: {
+          productCategoryId: "books",
           attributeCategoryId: "stationery",
           presetGroups: ["Printing & Publishing"],
         },
@@ -246,13 +247,19 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "computers_laptops",
         label: "Computers & Laptops",
         classification: "both",
-        listingConfig: { presetGroups: ["Computer & IT Repairs"] },
+        listingConfig: {
+          productCategoryId: "electronics",
+          presetGroups: ["Computer & IT Repairs"],
+        },
       },
       {
         value: "home_electronics_appliances",
         label: "Home Electronics & Appliances",
         classification: "both",
-        listingConfig: { presetGroups: ["Appliance & Generator Repair"] },
+        listingConfig: {
+          productCategoryId: "electronics",
+          presetGroups: ["Appliance & Generator Repair"],
+        },
       },
       {
         value: "gaming_consoles",
@@ -335,7 +342,10 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "furniture",
         label: "Furniture",
         classification: "both",
-        listingConfig: { attributeCategoryId: "furniture-decor" },
+        listingConfig: {
+          productCategoryId: "home-kitchen",
+          attributeCategoryId: "furniture-decor",
+        },
       },
       {
         value: "home_decor_furnishings",
@@ -431,6 +441,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Auto Parts & Accessories",
         classification: "both",
         listingConfig: {
+          productCategoryId: "automotive",
           presetGroups: ["Auto Parts Sales & Fitting"],
           attributeCategoryId: "auto-parts",
         },
@@ -458,6 +469,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Tyre Sales & Vulcanizing",
         classification: "both",
         listingConfig: {
+          productCategoryId: "automotive",
           presetGroups: ["Tyre Services"],
           attributeCategoryId: "auto-parts",
         },
@@ -479,6 +491,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Generator Sales & Repair",
         classification: "both",
         listingConfig: {
+          productCategoryId: "power-energy",
           presetGroups: ["Appliance & Generator Repair"],
           attributeCategoryId: "power-energy",
         },
@@ -488,6 +501,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Solar Panel Installation & Repair",
         classification: "both",
         listingConfig: {
+          productCategoryId: "power-energy",
           presetGroups: ["Solar Installation"],
           attributeCategoryId: "power-energy",
         },

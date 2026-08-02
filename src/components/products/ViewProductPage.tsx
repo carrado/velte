@@ -6,6 +6,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { categoriesApi } from "@/services/products";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useState, useEffect, useCallback } from "react";
+import MuxPlayer from "@mux/mux-player-react";
 import {
   ArrowLeft,
   Package,
@@ -25,6 +26,7 @@ import {
   Flame,
   ChefHat,
   Wrench,
+  PlayCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { computePrice, fmt } from "@/lib/product-price";
@@ -642,6 +644,19 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     </span>
                   </div>
                 ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {product.videoUrl && (
+            <SectionCard title="Video" icon={PlayCircle}>
+              <div className="rounded-xl overflow-hidden border border-gray-100 bg-black">
+                <MuxPlayer
+                  src={product.videoUrl}
+                  streamType="on-demand"
+                  accentColor="#f97316"
+                  style={{ width: "100%", aspectRatio: "16 / 9" }}
+                />
               </div>
             </SectionCard>
           )}

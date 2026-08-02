@@ -1,8 +1,10 @@
 ﻿"use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { createUpload } from "@mux/upchunk";
+import MuxPlayer from "@mux/mux-player-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
@@ -42,6 +44,7 @@ import {
   Loader2,
   Sparkle,
   Info,
+  Video as VideoIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -65,6 +68,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS } from "@/lib/video-limits";
+
+/** Best-effort read of a video file's duration via a throwaway <video>
+ * element — never blocks the upload on it. Some real devices/codecs (the
+ * same class of phone that made the old Bunny-based upload flow unreliable)
+ * never fire `loadedmetadata` at all, so this fails OPEN: null after a short
+ * timeout means "couldn't tell, let it through" rather than hanging the
+ * picker forever. The real enforcement is server-side, once Mux reports the
+ * actual duration after processing (see the mux-upload status route). */
+function getVideoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    const url = URL.createObjectURL(file);
+    const finish = (result: number | null) => {
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish(null), 4000);
+    video.onloadedmetadata = () => finish(video.duration);
+    video.onerror = () => finish(null);
+    video.src = url;
+  });
+}
 
 interface ProductAttribute {
   id: string;
@@ -590,13 +618,45 @@ export default function AddProductPage({
   const [expirationDate, setExpirationDate] = useState("");
   const [isFeatured, setIsFeatured] = useState(false);
 
-  // Media — preview URL (blob) + backing File for the cover; thumbnails are
+  // Media — photo and video are mutually exclusive (one cover slot, not
+  // both) so vendors pick a tab rather than filling in either independently.
+  const [mediaTab, setMediaTab] = useState<"photo" | "video">("photo");
+
+  // Photo — preview URL (blob) + backing File for the cover; thumbnails are
   // paired {url, file} so removing one by index always removes the right
   // File too — `file` is null for an already-remote thumbnail (edit mode),
   // set for a freshly picked one still needing upload at publish time.
   const [mainImage, setMainImage] = useState<string | null>(null);
   const [mainImageFile, setMainImageFile] = useState<File | null>(null);
   const [thumbnails, setThumbnails] = useState<ThumbnailItem[]>([]);
+
+  // Video — uploads live to Mux as soon as it's picked, unlike images which
+  // upload at publish time. `videoUrl` is the final Mux HLS playback URL,
+  // set once processing finishes.
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoStatus, setVideoStatus] = useState<
+    "idle" | "uploading" | "processing" | "ready" | "error"
+  >("idle");
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const muxUploadIdRef = useRef<string | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingOverVideo, setIsDraggingOverVideo] = useState(false);
+
+  // Whichever tab is active gates the "Media" phase's required-ness — a
+  // vendor only ever has to satisfy the slot they're actually using.
+  const hasRequiredMedia =
+    mediaTab === "photo" ? mainImage !== null : videoStatus === "ready";
+
+  // Every video failure path routes through here so it always surfaces both
+  // ways — inline in the widget (for context) and as a toast (so it's not
+  // missed if the vendor's scrolled past the Media step by the time it
+  // fails, e.g. a processing error that lands after they've moved on).
+  const failVideo = (message: string) => {
+    setVideoStatus("error");
+    setVideoError(message);
+    toast.error(message);
+  };
 
   // Tags + attributes
   const [tagInput, setTagInput] = useState("");
@@ -767,6 +827,11 @@ export default function AddProductPage({
       setThumbnails(
         existingProduct.thumbnailUrls.map((url) => ({ url, file: null })),
       );
+    if (existingProduct.videoUrl) {
+      setVideoUrl(existingProduct.videoUrl);
+      setVideoStatus("ready");
+      if (!existingProduct.mainImageUrl) setMediaTab("video");
+    }
     if (existingProduct.isCurrentlyAvailable !== undefined)
       setIsCurrentlyAvailable(existingProduct.isCurrentlyAvailable);
   }, [existingProduct]);
@@ -785,6 +850,41 @@ export default function AddProductPage({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Mux only creates the asset once the direct upload finishes, and only
+  // finishes encoding a moment after that — poll until the playback URL
+  // is ready rather than trying to get it back from the upload itself.
+  useEffect(() => {
+    if (videoStatus !== "processing") return;
+    const uploadId = muxUploadIdRef.current;
+    if (!uploadId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/videos/mux-upload/${uploadId}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          failVideo(data.error ?? "Video processing failed.");
+          return;
+        }
+        if (data.status === "ready") {
+          setVideoUrl(data.videoUrl);
+          setVideoStatus("ready");
+          return;
+        }
+        setTimeout(poll, 2500);
+      } catch {
+        if (!cancelled) {
+          failVideo("Lost connection while processing the video.");
+        }
+      }
+    };
+    poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [videoStatus]);
 
   // ── handlers ──────────────────────────────────────────────────────────────
 
@@ -858,6 +958,84 @@ export default function AddProductPage({
   };
   const removeThumbnail = (index: number) => {
     setThumbnails((prev) => prev.filter((_, i) => i !== index));
+  };
+  // Mints a fresh Mux direct-upload URL — called by UpChunk itself right
+  // before it starts PUTting chunks, so a new one is issued per attempt.
+  const muxEndpoint = useCallback(async (): Promise<string> => {
+    const res = await fetch("/api/videos/mux-upload", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Failed to start video upload");
+    muxUploadIdRef.current = data.uploadId;
+    return data.uploadUrl;
+  }, []);
+  // Drives the upload ourselves (rather than the stock <mux-uploader>
+  // widget) so the picker/drop-zone/button can share the exact same visual
+  // language as the photo picker instead of a reskinned third-party widget.
+  const startVideoUpload = async (file: File) => {
+    if (file.size > MAX_VIDEO_BYTES) {
+      failVideo(
+        `Video is ${(file.size / (1024 * 1024)).toFixed(0)}MB — keep it under ${MAX_VIDEO_BYTES / (1024 * 1024)}MB.`,
+      );
+      return;
+    }
+
+    // null = couldn't read it in time (real devices vary a lot here) — let
+    // it through rather than blocking; the server enforces the real cap
+    // once Mux reports the actual duration after processing.
+    const duration = await getVideoDuration(file);
+    if (duration !== null && duration > MAX_VIDEO_SECONDS) {
+      failVideo(
+        `Video is ${Math.round(duration)}s — keep it under ${MAX_VIDEO_SECONDS} seconds.`,
+      );
+      return;
+    }
+
+    setVideoStatus("uploading");
+    setVideoUploadProgress(0);
+    setVideoError(null);
+    const upload = createUpload({
+      endpoint: muxEndpoint,
+      file,
+      // Adapts chunk size to the connection's actual measured throughput
+      // instead of a fixed 30MB chunk regardless of network quality — on a
+      // slow/unstable mobile link this means a bad chunk costs seconds to
+      // retry, not the better part of a 30MB re-send. Starting small (8MB)
+      // so the first chunk doesn't gamble on an untested connection before
+      // any adaptation has data to work with.
+      dynamicChunkSize: true,
+      chunkSize: 8 * 1024, // KB
+    });
+    upload.on("progress", (e) => setVideoUploadProgress(Math.round(e.detail)));
+    upload.on("success", () => setVideoStatus("processing"));
+    upload.on("error", (e) => {
+      failVideo(e.detail?.message ?? "Video upload failed.");
+    });
+  };
+  const handleVideoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the exact same file later
+    if (file) startVideoUpload(file);
+  };
+  const handleVideoDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingOverVideo(true);
+  };
+  const handleVideoDragLeave = () => setIsDraggingOverVideo(false);
+  const handleVideoDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingOverVideo(false);
+    const file = Array.from(e.dataTransfer.files ?? []).find((f) =>
+      f.type.startsWith("video/"),
+    );
+    if (file) startVideoUpload(file);
+  };
+  const clearVideo = () => {
+    setVideoUrl(null);
+    setVideoStatus("idle");
+    setVideoUploadProgress(0);
+    setVideoError(null);
+    muxUploadIdRef.current = null;
+    if (videoInputRef.current) videoInputRef.current.value = "";
   };
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.key === "Enter" || e.key === " ") && tagInput.trim()) {
@@ -939,7 +1117,7 @@ export default function AddProductPage({
     description.trim().length > 0 &&
     (isQuote || parseFloat(price) > 0) && // quote services need no price
     (isQuote || !isRange || parseFloat(priceMax) > parseFloat(price)) &&
-    mainImage !== null &&
+    hasRequiredMedia &&
     // Stock quantity/threshold are no longer collected on this form (see the
     // "Additional Details" block's own comment) — only the conditional
     // expiration/guarantee date still applies, matching that phase's own
@@ -1092,7 +1270,8 @@ export default function AddProductPage({
       const newThumbs = thumbnails.filter((t) => t.file);
 
       // Calculate how many uploads we'll do so each gets an equal share of 0–75%
-      const uploadCount = (mainImageFile ? 1 : 0) + newThumbs.length;
+      const uploadCount =
+        mediaTab === "photo" ? (mainImageFile ? 1 : 0) + newThumbs.length : 0;
       const uploadShare = uploadCount > 0 ? Math.floor(75 / uploadCount) : 0;
       let uploadsCompleted = 0;
 
@@ -1105,19 +1284,24 @@ export default function AddProductPage({
         }));
       };
 
-      // Upload main image
+      // Upload main image — skipped entirely on the video tab, even if
+      // stale photo state is still sitting around from before a tab switch.
       let mainImageUrl: string | null = null;
-      if (mainImageFile) {
+      if (mediaTab === "photo" && mainImageFile) {
         setPublishModal((prev) => ({ ...prev, step: "Uploading main image…" }));
         mainImageUrl = await uploadProductMedia(mainImageFile);
         advanceUpload("Main image ready");
-      } else if (mainImage && !mainImage.startsWith("blob:")) {
+      } else if (
+        mediaTab === "photo" &&
+        mainImage &&
+        !mainImage.startsWith("blob:")
+      ) {
         mainImageUrl = mainImage;
       }
 
       // Upload thumbnails
       let thumbnailUrls: string[] = [];
-      for (let i = 0; i < newThumbs.length; i++) {
+      for (let i = 0; i < (mediaTab === "photo" ? newThumbs.length : 0); i++) {
         setPublishModal((prev) => ({
           ...prev,
           step:
@@ -1133,9 +1317,10 @@ export default function AddProductPage({
             : "Extra photo ready",
         );
       }
-      const remoteThumbUrls = thumbnails
-        .filter((t) => !t.file)
-        .map((t) => t.url);
+      const remoteThumbUrls =
+        mediaTab === "photo"
+          ? thumbnails.filter((t) => !t.file).map((t) => t.url)
+          : [];
       thumbnailUrls = [...remoteThumbUrls, ...thumbnailUrls].slice(0, 5);
 
       // Save to backend — a plain API call has no real progress signal of
@@ -1170,8 +1355,13 @@ export default function AddProductPage({
         currency,
         is_featured: isFeatured,
         tags,
-        main_image_url: mainImageUrl,
-        thumbnail_urls: thumbnailUrls,
+        // Photo and video are mutually exclusive — only the active tab's
+        // media is ever sent, even if the other still has leftover state
+        // (e.g. edit mode, switched tabs after the product already had one).
+        main_image_url: mediaTab === "photo" ? mainImageUrl : null,
+        thumbnail_urls: mediaTab === "photo" ? thumbnailUrls : [],
+        video_url:
+          mediaTab === "video" && videoStatus === "ready" ? videoUrl : null,
       };
 
       let payload: RetailProductPayload | FoodProductPayload;
@@ -1320,7 +1510,7 @@ export default function AddProductPage({
     {
       id: "media",
       label: "Media",
-      valid: mainImage !== null,
+      valid: hasRequiredMedia,
     },
     !isFood && {
       id: "tags",
@@ -1919,106 +2109,251 @@ export default function AddProductPage({
                   are what convince buyers to reach out.
                 </p>
               )}
-              {/* Cover photo — single control for the whole slot: browse
-                  (multi-select) or drag-and-drop, first file becomes the
-                  cover, any rest fall into the thumbnails below. */}
-              <div>
-                <div
-                  onClick={() => mainImageRef.current?.click()}
-                  onDragOver={handleMediaDragOver}
-                  onDragLeave={handleMediaDragLeave}
-                  onDrop={handleMediaDrop}
-                  className={cn(
-                    "relative border rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center transition-colors cursor-pointer",
-                    isDraggingOverMedia
-                      ? "border-orange-400 bg-orange-50/50"
-                      : "border-gray-200",
-                  )}
-                >
-                  {mainImage ? (
-                    <img
-                      src={mainImage}
-                      alt="Product"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center gap-2 pointer-events-none">
-                      <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                        <ImageIcon size={20} className="text-gray-300" />
-                      </div>
-                      <span className="text-dash-body text-gray-400">
-                        No image selected
-                      </span>
-                      <span className="text-dash-caption text-gray-400">
-                        Drag photos here, or browse — pick several at once
-                      </span>
-                    </div>
-                  )}
+
+              {/* Photo / video are one cover slot, not two — a tab, not a
+                  checklist, so only whichever's active is ever uploaded. */}
+              <div className="grid grid-cols-2 gap-2 sm:inline-grid sm:w-auto">
+                {(
+                  [
+                    ["photo", "Photo", ImageIcon],
+                    ["video", "Video", VideoIcon],
+                  ] as const
+                ).map(([value, label, Icon]) => (
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      mainImageRef.current?.click();
-                    }}
-                    className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                    key={value}
+                    type="button"
+                    onClick={() => setMediaTab(value)}
+                    className={cn(
+                      "flex items-center justify-center gap-2 h-10 px-5 rounded-lg border text-dash-body font-semibold transition-colors cursor-pointer",
+                      mediaTab === value
+                        ? "border-orange-500 bg-orange-50 text-orange-600"
+                        : "border-gray-200 bg-white text-gray-400 hover:border-orange-300 hover:text-gray-600",
+                    )}
                   >
-                    <ImageIcon size={13} /> Browse
+                    <Icon
+                      size={15}
+                      className={
+                        mediaTab === value ? "text-orange-500" : "text-gray-300"
+                      }
+                    />
+                    {label}
                   </button>
-                  {mainImage && (
-                    <>
+                ))}
+              </div>
+
+              {mediaTab === "photo" ? (
+                <>
+                  {/* Cover photo — single control for the whole slot: browse
+                      (multi-select) or drag-and-drop, first file becomes the
+                      cover, any rest fall into the thumbnails below. */}
+                  <div>
+                    <div
+                      onClick={() => mainImageRef.current?.click()}
+                      onDragOver={handleMediaDragOver}
+                      onDragLeave={handleMediaDragLeave}
+                      onDrop={handleMediaDrop}
+                      className={cn(
+                        "relative border rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center transition-colors cursor-pointer",
+                        isDraggingOverMedia
+                          ? "border-orange-400 bg-orange-50/50"
+                          : "border-gray-200",
+                      )}
+                    >
+                      {mainImage ? (
+                        <img
+                          src={mainImage}
+                          alt="Product"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 pointer-events-none">
+                          <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                            <ImageIcon size={20} className="text-gray-300" />
+                          </div>
+                          <span className="text-dash-body text-gray-400">
+                            No image selected
+                          </span>
+                          <span className="text-dash-caption text-gray-400">
+                            Drag photos here, or browse — pick several at once
+                          </span>
+                        </div>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           mainImageRef.current?.click();
                         }}
-                        className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                        className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
                       >
-                        <RefreshCcw size={12} /> Replace
+                        <ImageIcon size={13} /> Browse
                       </button>
+                      {mainImage && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              mainImageRef.current?.click();
+                            }}
+                            className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                          >
+                            <RefreshCcw size={12} /> Replace
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clearMainImage();
+                            }}
+                            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={12} /> Clear
+                          </button>
+                        </>
+                      )}
+                      <input
+                        ref={mainImageRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={handleMainImage}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Thumbnails — whatever landed here from the drop/browse
+                      above, beyond the first file. Purely a display + remove
+                      list now; all uploading happens through the cover control. */}
+                  {thumbnails.length > 0 && (
+                    <div className="flex gap-2.5 flex-wrap">
+                      {thumbnails.map((thumb, i) => (
+                        <div
+                          key={thumb.url}
+                          className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
+                        >
+                          <img
+                            src={thumb.url}
+                            alt={`Thumb ${i + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <button
+                            onClick={() => removeThumbnail(i)}
+                            className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          >
+                            <X size={11} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : videoStatus === "ready" && videoUrl ? (
+                <div className="relative rounded-md overflow-hidden border border-gray-200 h-56 bg-black">
+                  <MuxPlayer
+                    src={videoUrl}
+                    streamType="on-demand"
+                    accentColor="#f97316"
+                    style={{ height: "100%", width: "100%" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={clearVideo}
+                    className="absolute top-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                  >
+                    <Trash2 size={12} /> Remove
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div
+                    onClick={() => {
+                      if (videoStatus === "idle" || videoStatus === "error")
+                        videoInputRef.current?.click();
+                    }}
+                    onDragOver={handleVideoDragOver}
+                    onDragLeave={handleVideoDragLeave}
+                    onDrop={handleVideoDrop}
+                    className={cn(
+                      "relative border rounded-md overflow-hidden h-56 bg-gray-50 flex items-center justify-center transition-colors",
+                      isDraggingOverVideo
+                        ? "border-orange-400 bg-orange-50/50"
+                        : "border-gray-200",
+                      videoStatus === "idle" || videoStatus === "error"
+                        ? "cursor-pointer"
+                        : "cursor-default",
+                    )}
+                  >
+                    {videoStatus === "uploading" ||
+                    videoStatus === "processing" ? (
+                      <div className="flex flex-col items-center gap-3 w-full px-10">
+                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                          <Loader2
+                            size={20}
+                            className="text-orange-500 animate-spin"
+                          />
+                        </div>
+                        <span className="text-dash-body text-gray-500 font-medium">
+                          {videoStatus === "uploading"
+                            ? `Uploading… ${videoUploadProgress}%`
+                            : "Processing your video…"}
+                        </span>
+                        <div className="w-full max-w-[220px] h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-orange-500 rounded-full transition-all duration-300"
+                            style={{
+                              width:
+                                videoStatus === "uploading"
+                                  ? `${videoUploadProgress}%`
+                                  : "100%",
+                            }}
+                          />
+                        </div>
+                        {videoStatus === "processing" && (
+                          <span className="text-dash-caption text-gray-400">
+                            This can take a minute — hang tight
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 pointer-events-none">
+                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                          <VideoIcon size={20} className="text-gray-300" />
+                        </div>
+                        <span className="text-dash-body text-gray-400">
+                          No video selected
+                        </span>
+                        <span className="text-dash-caption text-gray-400">
+                          Drag a video here, or browse
+                        </span>
+                        <span className="text-dash-caption text-gray-300">
+                          Up to {MAX_VIDEO_SECONDS}s,{" "}
+                          {MAX_VIDEO_BYTES / (1024 * 1024)}MB
+                        </span>
+                      </div>
+                    )}
+                    {(videoStatus === "idle" || videoStatus === "error") && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          clearMainImage();
+                          videoInputRef.current?.click();
                         }}
-                        className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                        className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
                       >
-                        <Trash2 size={12} /> Clear
+                        <VideoIcon size={13} /> Browse
                       </button>
-                    </>
+                    )}
+                    <input
+                      ref={videoInputRef}
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      onChange={handleVideoInputChange}
+                    />
+                  </div>
+                  {videoStatus === "error" && videoError && (
+                    <p className="text-dash-caption text-red-500 mt-1.5">
+                      {videoError}
+                    </p>
                   )}
-                  <input
-                    ref={mainImageRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleMainImage}
-                  />
-                </div>
-              </div>
-
-              {/* Thumbnails — whatever landed here from the drop/browse
-                  above, beyond the first file. Purely a display + remove
-                  list now; all uploading happens through the cover control. */}
-              {thumbnails.length > 0 && (
-                <div className="flex gap-2.5 flex-wrap">
-                  {thumbnails.map((thumb, i) => (
-                    <div
-                      key={thumb.url}
-                      className="relative w-20 h-20 border border-gray-200 rounded-md overflow-hidden flex-shrink-0 group"
-                    >
-                      <img
-                        src={thumb.url}
-                        alt={`Thumb ${i + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        onClick={() => removeThumbnail(i)}
-                        className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                  ))}
                 </div>
               )}
             </FormSection>
