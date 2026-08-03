@@ -7,6 +7,7 @@ import { reportLead } from "@/lib/reportLead";
 import type { PublicStoreTab, StoreTabsProps } from "@/types/store";
 import { OfferingCard } from "./shared";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 
 // Compact segmented control (Products / Services) plus a two-column body
 // (persistent Intro sidebar + the active panel). Only ever two tabs now —
@@ -20,6 +21,7 @@ export default function StoreTabs({
   vendorId,
   defaultTab,
   sidebar,
+  isOwn,
 }: StoreTabsProps) {
   const [active, setActive] = useState<PublicStoreTab>(defaultTab);
   const isEmpty = goods.length === 0 && services.length === 0;
@@ -37,7 +39,9 @@ export default function StoreTabs({
           <div className="lg:sticky lg:top-24 space-y-4">{sidebar}</div>
         </aside>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10 text-center">
-          {whatsappHref ? (
+          {isOwn ? (
+            <OwnListingBadge label="This is your store" />
+          ) : whatsappHref ? (
             <>
               <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-50 flex items-center justify-center mb-4">
                 <MessageCircle size={22} className="text-orange-500" />
@@ -111,6 +115,7 @@ export default function StoreTabs({
                 storeName={storeName}
                 whatsapp={whatsapp}
                 vendorId={vendorId}
+                isOwn={isOwn}
               />
             ))}
           </div>
@@ -125,6 +130,7 @@ export default function StoreTabs({
                 storeName={storeName}
                 whatsapp={whatsapp}
                 vendorId={vendorId}
+                isOwn={isOwn}
               />
             ))}
           </div>
