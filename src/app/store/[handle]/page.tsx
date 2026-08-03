@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { MapPin, Package, Wrench } from "lucide-react";
 import { getPublicStore } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
+import { getOptionalUserId } from "@/lib/server/guards";
+import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import type {
   IntroCardProps,
   PublicStore,
@@ -58,6 +60,7 @@ function IntroCard({
   goodsCount,
   servicesCount,
   whatsappHref,
+  isOwn,
 }: IntroCardProps) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
@@ -102,13 +105,17 @@ function IntroCard({
           ))}
         </div>
       )}
-      {whatsappHref && (
-        <StoreWhatsAppButton
-          href={whatsappHref}
-          label="Chat on WhatsApp"
-          className="w-full"
-          vendorId={store.vendorId}
-        />
+      {isOwn ? (
+        <OwnListingBadge label="This is your store" />
+      ) : (
+        whatsappHref && (
+          <StoreWhatsAppButton
+            href={whatsappHref}
+            label="Chat on WhatsApp"
+            className="w-full"
+            vendorId={store.vendorId}
+          />
+        )
       )}
     </div>
   );
@@ -122,6 +129,9 @@ export default async function PublicStorePage({
   const { handle } = await params;
   const store = await fetchStore(handle);
   if (!store) notFound();
+
+  const currentUserId = await getOptionalUserId();
+  const isOwn = currentUserId != null && currentUserId === store.vendorId;
 
   const whatsappHref = store.whatsapp
     ? `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(
@@ -165,12 +175,14 @@ export default async function PublicStorePage({
           whatsapp={store.whatsapp}
           vendorId={store.vendorId}
           defaultTab={defaultTab}
+          isOwn={isOwn}
           sidebar={
             <IntroCard
               store={store}
               goodsCount={goods.length}
               servicesCount={services.length}
               whatsappHref={whatsappHref}
+              isOwn={isOwn}
             />
           }
         />
@@ -184,7 +196,7 @@ export default async function PublicStorePage({
       />
 
       {/* ── Mobile sticky chat bar ─────────────────────────────────────── */}
-      {whatsappHref && (
+      {!isOwn && whatsappHref && (
         <div className="fixed bottom-0 inset-x-0 sm:hidden z-30 bg-white/95 backdrop-blur border-t border-gray-200 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
           <StoreWhatsAppButton
             href={whatsappHref}

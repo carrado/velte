@@ -28,9 +28,17 @@ export function VendorResultCard({
   // weakProducts, or a product whose store lookup failed) that has no other
   // path to the storefront at all.
   showViewStore = true,
+  // False for a matching-service companion rendered under its own store's
+  // StoreResultCard — that card already owns the "chat with vendor" CTA for
+  // this turn, so a second WhatsApp button right here would just double up
+  // the same contact point (and risk a second lead report for one buyer
+  // intent). Defaults true for every other context, where this card is the
+  // only place a chat CTA exists at all.
+  showChatButton = true,
 }: {
   match: VendorMatch;
   showViewStore?: boolean;
+  showChatButton?: boolean;
 }) {
   const symbol = match.currency === "USD" ? "$" : "₦";
   const isRange = match.priceMax != null && match.priceMax > match.price;
@@ -167,9 +175,10 @@ export function VendorResultCard({
         </div>
         {isOwn ? (
           <OwnListingBadge label="This is your listing" />
-        ) : (
+        ) : (showChatButton && chatHref) ||
+          (showViewStore && match.storeHandle) ? (
           <div className="flex flex-col gap-2 mt-1">
-            {chatHref && (
+            {showChatButton && chatHref && (
               <WhatsAppButton
                 href={chatHref}
                 label="Chat with vendor"
@@ -188,7 +197,7 @@ export function VendorResultCard({
               </Link>
             )}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
