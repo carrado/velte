@@ -58,6 +58,8 @@ interface ApiProduct {
   daily_limit?: number | null;
   allow_pre_order?: boolean;
   modifiers?: ApiModifier[];
+  is_suspended?: boolean;
+  suspension_reason?: string | null;
 }
 
 interface ApiPagination {
@@ -137,6 +139,8 @@ function mapProduct(p: ApiProduct): CategoryProduct {
     dailyLimit: p.daily_limit,
     allowPreOrder: p.allow_pre_order,
     modifiers,
+    isSuspended: p.is_suspended ?? false,
+    suspensionReason: p.suspension_reason ?? null,
   };
 }
 

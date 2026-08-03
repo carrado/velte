@@ -41,6 +41,11 @@ export interface CategoryProduct {
   isCurrentlyAvailable?: boolean;
   dailyLimit?: number | null;
   allowPreOrder?: boolean;
+  /** Set from the super admin panel. Excluded from buyer-facing surfaces
+   * (public store page, AI search) but still shown here, greyed out, so the
+   * vendor knows why. */
+  isSuspended?: boolean;
+  suspensionReason?: string | null;
   // legacy fields kept for compat
   availability?: MenuAvailability;
   isVeg?: boolean;

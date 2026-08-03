@@ -8,6 +8,7 @@ import { Toaster } from "sonner";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ReferralCapture from "@/components/ReferralCapture";
 import MetaPixel from "@/components/MetaPixel";
+import BlockedAccountModal from "@/components/BlockedAccountModal";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -207,6 +208,7 @@ export default function RootLayout({
         <Providers>
           <ServiceWorkerRegistrar />
           <ReferralCapture />
+          <BlockedAccountModal />
           {children}
           <Toaster
             position="top-right"
