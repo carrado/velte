@@ -1,5 +1,19 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Facebook, Instagram } from "lucide-react";
+
+const socialLinks = [
+  {
+    label: "Facebook",
+    href: "https://web.facebook.com/velte.ng",
+    icon: Facebook,
+  },
+  {
+    label: "Instagram",
+    href: "https://www.instagram.com/veltetechnologies/",
+    icon: Instagram,
+  },
+];
 
 const footerLinks = [
   {
@@ -41,6 +55,20 @@ export default function Footer() {
               Describe what you need — we find the nearest real vendor who
               actually has it.
             </p>
+            <div className="flex items-center gap-3 mt-5">
+              {socialLinks.map(({ label, href, icon: Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-orange-50 hover:text-orange-500 transition-colors duration-150"
+                >
+                  <Icon size={16} />
+                </a>
+              ))}
+            </div>
           </div>
 
           {footerLinks.map((col) => (
