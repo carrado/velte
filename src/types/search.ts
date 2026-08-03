@@ -185,6 +185,16 @@ export type SearchStreamEvent =
       // indistinguishably from `products`.
       weakProducts: VendorMatch[];
       stores: StoreMatch[];
+      // A small bonus bucket of real vendors slightly further out than
+      // `stores` (never the same ones — deduped server-side, see
+      // retrieval.service.js's attachFurther) — 1 entry when `stores` has
+      // 1-2, 2 when it has more, never more than 2. Wallet-eligible and
+      // exposure-throttled same as any other match. Always empty when
+      // `stores` is empty, or when `stores` itself already came from the
+      // widest (nationwide) tier with nothing wider to draw a bonus from.
+      // Render as its own clearly-labeled "also available further out"
+      // section below `stores`, never blended in indistinguishably.
+      furtherStores: StoreMatch[];
       // The businessType the model actually searched stores for this turn
       // (e.g. "phone repair shop", "tailor") — null when searchStores wasn't
       // called. Lets a pure vendor/store card (no product attached) send a

@@ -132,6 +132,67 @@ function storesHeading(
     : "Vendors near you";
 }
 
+// A store card plus its own "Matching service" companion(s), if any — shared
+// between the "near you" and "also available further out" sections so a
+// service listing that backs up the buyer's search shows up under EITHER
+// bucket's store, not just the near-you one.
+function StoreWithServices({
+  store,
+  services,
+  searchQuery,
+}: {
+  store: StoreMatch;
+  services: VendorMatch[];
+  searchQuery: string | null;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StoreResultCard match={store} searchQuery={searchQuery} />
+      </div>
+      {services.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1 pl-9">
+            {services.length === 1 ? "Matching service" : "Matching services"}
+          </p>
+          {services.map((svc, i) => {
+            const isLast = i === services.length - 1;
+            return (
+              <div key={svc.productId} className="flex">
+                {/* Thread trunk column — stretches to the card's own height
+                    (flex row default align-items: stretch), so top-1/2 here
+                    always lands on that card's actual vertical center, no
+                    fixed pixel math. Line above the center connects up to
+                    the previous item (or the heading, for the first one);
+                    line below is omitted past the last item so the trunk
+                    visibly terminates instead of trailing off. The branch +
+                    node sit at that same center, reaching sideways into the
+                    card — the actual "this hangs off the thread" cue, not
+                    just a rail running past it. */}
+                <div className="w-8 shrink-0 relative">
+                  <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-1/2 w-px bg-orange-200" />
+                  {!isLast && (
+                    <div className="absolute left-1/2 -translate-x-1/2 top-1/2 bottom-0 w-px bg-orange-200" />
+                  )}
+                  <div className="absolute left-1/2 top-1/2 -translate-y-1/2 w-5 h-px bg-orange-200" />
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-orange-400 ring-4 ring-orange-50" />
+                </div>
+                <div className="flex-1 min-w-0 max-w-xs pb-3">
+                  <VendorResultCard
+                    match={svc}
+                    showViewStore={false}
+                    showChatButton={false}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Renders the AI's reply text as lightweight markdown — bold and lists only
 // (the system prompt keeps replies to a short note, occasionally a short
 // list, never headers/tables/links/code) — rather than a full markdown
@@ -245,6 +306,11 @@ interface ConversationTurn {
   // comment on SearchStreamEvent. Always empty when `products` is.
   weakProducts: VendorMatch[];
   stores: StoreMatch[];
+  // A small bonus bucket of real vendors slightly further out than `stores`
+  // (never the same ones) — see SearchStreamEvent's own furtherStores
+  // comment. Rendered as its own clearly-labeled section, never blended
+  // indistinguishably into `stores`.
+  furtherStores: StoreMatch[];
   // The businessType actually searched for this turn (e.g. "tailor") — null
   // when searchStores wasn't called. Passed to StoreResultCard only for a
   // pure vendor/store result (turn.products empty), so its WhatsApp message
@@ -446,47 +512,47 @@ function ConversationTurnView({
                         </h2>
                       )}
                       <div className="space-y-5">
-                        {turn.stores.map((store) => {
-                          const services = turn.storeServices.filter(
-                            (s) => s.vendorId === store.vendorId,
-                          );
-                          return (
-                            <div key={store.storeId} className="space-y-3">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <StoreResultCard
-                                  match={store}
-                                  // Only when this is a pure vendor/store
-                                  // result (no product attached) — a
-                                  // dual-intent turn already has a product
-                                  // for the buyer to reference instead.
-                                  searchQuery={
-                                    turn.products.length === 0
-                                      ? turn.storesQuery
-                                      : null
-                                  }
-                                />
-                              </div>
-                              {services.length > 0 && (
-                                <div className="pl-3 border-l-2 border-orange-100 space-y-2">
-                                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                    {services.length === 1
-                                      ? "Matching service"
-                                      : "Matching services"}
-                                  </p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {services.map((svc) => (
-                                      <VendorResultCard
-                                        key={svc.productId}
-                                        match={svc}
-                                        showViewStore={false}
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                        {turn.stores.map((store) => (
+                          <StoreWithServices
+                            key={store.storeId}
+                            store={store}
+                            services={turn.storeServices.filter(
+                              (s) => s.vendorId === store.vendorId,
+                            )}
+                            // Only when this is a pure vendor/store result
+                            // (no product attached) — a dual-intent turn
+                            // already has a product for the buyer to
+                            // reference instead.
+                            searchQuery={
+                              turn.products.length === 0
+                                ? turn.storesQuery
+                                : null
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {turn.furtherStores.length > 0 && (
+                    <div className="space-y-3">
+                      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        Also available further out
+                      </h2>
+                      <div className="space-y-5">
+                        {turn.furtherStores.map((store) => (
+                          <StoreWithServices
+                            key={store.storeId}
+                            store={store}
+                            services={turn.storeServices.filter(
+                              (s) => s.vendorId === store.vendorId,
+                            )}
+                            searchQuery={
+                              turn.products.length === 0
+                                ? turn.storesQuery
+                                : null
+                            }
+                          />
+                        ))}
                       </div>
                     </div>
                   )}
@@ -773,6 +839,7 @@ export function SearchHome() {
         products: [],
         weakProducts: [],
         stores: [],
+        furtherStores: [],
         storesQuery: null,
         productStores: [],
         storeServices: [],
@@ -817,6 +884,9 @@ export function SearchHome() {
           const dedupedStores = event.stores.filter(
             (s) => !productVendorIds.has(s.vendorId),
           );
+          const dedupedFurtherStores = event.furtherStores.filter(
+            (s) => !productVendorIds.has(s.vendorId),
+          );
           // A machine-only breadcrumb for a LATER turn's history — lets the
           // model resolve a future "what do they sell" back to this exact
           // store via getVendorProducts, without needing the buyer-facing
@@ -824,7 +894,11 @@ export function SearchHome() {
           // Includes productStores too (guaranteed disjoint from
           // dedupedStores by vendor) — a store surfaced only via its
           // matched product's own card should still resolve the same way.
-          const allStoresFound = [...dedupedStores, ...event.productStores];
+          const allStoresFound = [
+            ...dedupedStores,
+            ...dedupedFurtherStores,
+            ...event.productStores,
+          ];
           const contextNote = allStoresFound.length
             ? `[Stores found: ${allStoresFound
                 .map((s) => `"${s.name}" (handle: ${s.handle})`)
@@ -838,6 +912,7 @@ export function SearchHome() {
             products: event.products,
             weakProducts: event.weakProducts,
             stores: dedupedStores,
+            furtherStores: dedupedFurtherStores,
             storesQuery: event.storesQuery,
             productStores: event.productStores,
             storeServices: event.storeServices,

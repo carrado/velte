@@ -57,6 +57,10 @@ export interface PublicStoreProductProps {
   storeName: string;
   whatsapp: string | null;
   vendorId: string;
+  // True when the signed-in viewer IS this store's own vendor — every CTA
+  // in this file is suppressed then (no chatting yourself, no billing
+  // yourself a lead), see OwnListingBadge.
+  isOwn: boolean;
 }
 
 export interface StoreTabsProps {
@@ -67,6 +71,7 @@ export interface StoreTabsProps {
   vendorId: string;
   defaultTab: PublicStoreTab;
   sidebar: ReactNode;
+  isOwn: boolean;
 }
 
 export interface IntroCardProps {
@@ -74,4 +79,5 @@ export interface IntroCardProps {
   goodsCount: number;
   servicesCount: number;
   whatsappHref: string | null;
+  isOwn: boolean;
 }

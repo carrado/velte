@@ -41,3 +41,15 @@ export async function requireAuth(): Promise<
 
   return { userId: session.userId, cookie: `${AUTH_COOKIE}=${token}` };
 }
+
+/** Like requireAuth, but for pages that must render fine for a logged-out
+ * visitor and only need to know IF the viewer happens to be signed in —
+ * e.g. the public store page hiding a vendor's own "chat with yourself"
+ * CTA when they're viewing their own storefront. Never redirects/errors;
+ * null just means "no session, or an invalid one." */
+export async function getOptionalUserId(): Promise<string | null> {
+  const token = (await cookies()).get(AUTH_COOKIE)?.value;
+  if (!token) return null;
+  const session = await verifySession(token);
+  return session?.userId ?? null;
+}

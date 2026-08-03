@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { reportLead } from "@/lib/reportLead";
 import type {
   PublicStoreProduct,
@@ -134,6 +135,7 @@ function OfferingDetailModal({
   storeName,
   whatsapp,
   vendorId,
+  isOwn,
   open,
   onClose,
 }: {
@@ -141,6 +143,7 @@ function OfferingDetailModal({
   storeName: string;
   whatsapp: string | null;
   vendorId: string;
+  isOwn: boolean;
   open: boolean;
   onClose: () => void;
 }) {
@@ -214,13 +217,17 @@ function OfferingDetailModal({
           <div className="pt-2 border-t border-gray-100">
             <Price product={product} />
           </div>
-          {enquireHref && (
-            <WhatsAppButton
-              href={enquireHref}
-              label={isService ? "Enquire about this service" : "Enquire"}
-              className="w-full"
-              onClick={() => reportLead(vendorId, product.id)}
-            />
+          {isOwn ? (
+            <OwnListingBadge label="This is your listing" />
+          ) : (
+            enquireHref && (
+              <WhatsAppButton
+                href={enquireHref}
+                label={isService ? "Enquire about this service" : "Enquire"}
+                className="w-full"
+                onClick={() => reportLead(vendorId, product.id)}
+              />
+            )
           )}
         </div>
       </div>
@@ -242,6 +249,7 @@ export function OfferingCard({
   storeName,
   whatsapp,
   vendorId,
+  isOwn,
 }: PublicStoreProductProps) {
   const isService = product.kind === "service";
   const KindIcon = isService ? Wrench : Package;
@@ -300,7 +308,7 @@ export function OfferingCard({
         )}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2.5 mt-auto border-t border-gray-100">
           <Price product={product} />
-          {enquireHref && (
+          {!isOwn && enquireHref && (
             <a
               href={enquireHref}
               target="_blank"
@@ -320,6 +328,7 @@ export function OfferingCard({
         storeName={storeName}
         whatsapp={whatsapp}
         vendorId={vendorId}
+        isOwn={isOwn}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
       />
