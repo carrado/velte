@@ -51,7 +51,10 @@ export default function Login() {
         typeof (error as { status?: unknown }).status === "number"
           ? ((error as { status?: number }).status ?? 0)
           : 0;
-      toast.error(message);
+      // A blocked account (423) already shows BlockedAccountModal (mounted
+      // globally, triggered from api-client.ts) — a toast here would be
+      // redundant noise on top of it.
+      if (status !== 423) toast.error(message);
       if (status === 403) {
         router.push(`/auth/verify?email=${variables.email}`);
       }

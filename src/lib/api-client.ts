@@ -4,6 +4,7 @@
    path including `/api` (e.g. `api.get("/api/orders")`). */
 
 import { useUserStore } from "@/store/userStore";
+import { useBlockedStore } from "@/store/blockedStore";
 
 export class ApiError extends Error {
   status: number;
@@ -72,6 +73,11 @@ async function request<T = unknown>(
     const rawError = (data as { error?: unknown } | null)?.error;
     const message =
       typeof rawError === "string" && rawError.trim() ? rawError : fallback;
+    // 423 Locked = blocked account (super admin panel) — distinct from 401
+    // (no/expired session) and the unverified-email 403. Fires for BOTH a
+    // rejected login attempt and an already-logged-in vendor blocked
+    // mid-session, since every authenticated call funnels through here.
+    if (res.status === 423) useBlockedStore.getState().setBlocked(message);
     throw new ApiError(res.status, message, data);
   }
 
