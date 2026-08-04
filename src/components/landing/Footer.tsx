@@ -15,42 +15,17 @@ function FacebookLogo(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-function InstagramLogo(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" {...props}>
-      <defs>
-        <linearGradient id="ig-gradient" x1="0" y1="24" x2="24" y2="0">
-          <stop offset="0%" stopColor="#FFDD55" />
-          <stop offset="50%" stopColor="#FF543E" />
-          <stop offset="100%" stopColor="#C837AB" />
-        </linearGradient>
-      </defs>
-      <rect width="24" height="24" rx="6" fill="url(#ig-gradient)" />
-      <rect
-        x="6"
-        y="6"
-        width="12"
-        height="12"
-        rx="4"
-        stroke="#fff"
-        strokeWidth="1.6"
-      />
-      <circle cx="12" cy="12" r="3.2" stroke="#fff" strokeWidth="1.6" />
-      <circle cx="16.2" cy="7.8" r="0.9" fill="#fff" />
-    </svg>
-  );
-}
-
 const socialLinks = [
   {
     label: "Facebook",
     href: "https://web.facebook.com/velte.ng",
-    Logo: FacebookLogo,
   },
   {
     label: "Instagram",
     href: "https://www.instagram.com/veltetechnologies/",
-    Logo: InstagramLogo,
+    // Real asset already in public/ — use it as-is rather than
+    // hand-drawing an approximation.
+    iconSrc: "/instagram.svg",
   },
 ];
 
@@ -95,7 +70,7 @@ export default function Footer() {
               actually has it.
             </p>
             <div className="flex items-center gap-3 mt-5">
-              {socialLinks.map(({ label, href, Logo }) => (
+              {socialLinks.map(({ label, href, iconSrc }) => (
                 <a
                   key={label}
                   href={href}
@@ -104,7 +79,11 @@ export default function Footer() {
                   aria-label={label}
                   className="opacity-90 hover:opacity-100 transition-opacity duration-150"
                 >
-                  <Logo className="h-8 w-8" />
+                  {iconSrc ? (
+                    <Image src={iconSrc} alt={label} width={32} height={32} />
+                  ) : (
+                    <FacebookLogo className="h-8 w-8" />
+                  )}
                 </a>
               ))}
             </div>
