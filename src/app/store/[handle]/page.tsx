@@ -4,6 +4,7 @@ import { MapPin, Package, Wrench } from "lucide-react";
 import { getPublicStore } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
 import { getOptionalUserId } from "@/lib/server/guards";
+import { buildWhatsappLink } from "@/lib/whatsapp";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import type {
   IntroCardProps,
@@ -133,11 +134,10 @@ export default async function PublicStorePage({
   const currentUserId = await getOptionalUserId();
   const isOwn = currentUserId != null && currentUserId === store.vendorId;
 
-  const whatsappHref = store.whatsapp
-    ? `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(
-        `Hi ${store.name}! I found your store on Velte.`,
-      )}`
-    : null;
+  const whatsappHref = buildWhatsappLink(
+    store.whatsapp,
+    `Hi ${store.name}! I found your store on Velte.`,
+  );
 
   const goods = store.products.filter((p) => p.kind === "product");
   const services = store.products.filter((p) => p.kind === "service");

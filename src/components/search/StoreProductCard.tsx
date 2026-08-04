@@ -6,6 +6,7 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
+import { buildWhatsappLink } from "@/lib/whatsapp";
 import type { StoreProductItem } from "@/types/search";
 
 // One item from getVendorProductsTool — a SPECIFIC, already-identified
@@ -31,11 +32,10 @@ export function StoreProductCard({
   const currentUserId = useUserStore((s) => s.user?.id);
   const isOwn = currentUserId != null && currentUserId === vendorId;
 
-  const chatHref = storeWhatsapp
-    ? `https://wa.me/${storeWhatsapp}?text=${encodeURIComponent(
-        `Hi ${storeName}! I'm interested in your "${match.name}" — I found you on Velte.`,
-      )}`
-    : null;
+  const chatHref = buildWhatsappLink(
+    storeWhatsapp,
+    `Hi ${storeName}! I'm interested in your "${match.name}" — I found you on Velte.`,
+  );
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">

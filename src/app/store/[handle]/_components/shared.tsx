@@ -16,6 +16,7 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { reportLead } from "@/lib/reportLead";
+import { buildWhatsappLink } from "@/lib/whatsapp";
 import type {
   PublicStoreProduct,
   PublicStoreProductProps,
@@ -88,13 +89,13 @@ function enquireHrefFor(
   storeName: string,
   whatsapp: string | null,
 ): string | null {
-  if (!whatsapp) return null;
   const isService = product.kind === "service";
-  return `https://wa.me/${whatsapp}?text=${encodeURIComponent(
+  return buildWhatsappLink(
+    whatsapp,
     isService
       ? `Hi ${storeName}! I'm interested in your "${product.name}" service. I found you on Velte.`
       : `Hi ${storeName}! Is "${product.name}" still available? I found you on Velte.`,
-  )}`;
+  );
 }
 
 /** Image "post" — shared between the card and its detail modal so the two
