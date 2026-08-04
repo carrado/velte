@@ -16,6 +16,7 @@ import { ExpandableText } from "@/components/search/ExpandableText";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
+import { buildWhatsappLink } from "@/lib/whatsapp";
 import type { VendorMatch } from "@/types/search";
 
 export function VendorResultCard({
@@ -47,11 +48,10 @@ export function VendorResultCard({
   const currentUserId = useUserStore((s) => s.user?.id);
   const isOwn = currentUserId != null && currentUserId === match.vendorId;
 
-  const chatHref = match.whatsapp
-    ? `https://wa.me/${match.whatsapp}?text=${encodeURIComponent(
-        `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
-      )}`
-    : null;
+  const chatHref = buildWhatsappLink(
+    match.whatsapp,
+    `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
+  );
 
   // Main image first, then whatever else the vendor uploaded — a buyer
   // shouldn't be stuck with just whichever single photo was set as "main"

@@ -5,6 +5,7 @@ import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { ExpandableText } from "@/components/search/ExpandableText";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
+import { buildWhatsappLink } from "@/lib/whatsapp";
 import type { StoreMatch } from "@/types/search";
 
 // Prefix "phone repair shop" → "a phone repair shop", "electronics store" →
@@ -30,13 +31,12 @@ export function StoreResultCard({
   match: StoreMatch;
   searchQuery?: string | null;
 }) {
-  const chatHref = match.whatsapp
-    ? `https://wa.me/${match.whatsapp}?text=${encodeURIComponent(
-        searchQuery
-          ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(searchQuery)}, are you able to help?`
-          : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.`,
-      )}`
-    : null;
+  const chatHref = buildWhatsappLink(
+    match.whatsapp,
+    searchQuery
+      ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(searchQuery)}, are you able to help?`
+      : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.`,
+  );
   // A logged-in vendor can match their own storefront — no WhatsApp CTA to
   // themselves (which would also bill them a lead), just say so.
   const currentUserId = useUserStore((s) => s.user?.id);

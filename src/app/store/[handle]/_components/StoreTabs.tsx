@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { reportLead } from "@/lib/reportLead";
+import { buildWhatsappLink } from "@/lib/whatsapp";
 import type { PublicStoreTab, StoreTabsProps } from "@/types/store";
 import { OfferingCard } from "./shared";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -26,11 +27,10 @@ export default function StoreTabs({
   const [active, setActive] = useState<PublicStoreTab>(defaultTab);
   const isEmpty = goods.length === 0 && services.length === 0;
 
-  const whatsappHref = whatsapp
-    ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(
-        `Hi ${storeName}! I found your store on Velte.`,
-      )}`
-    : null;
+  const whatsappHref = buildWhatsappLink(
+    whatsapp,
+    `Hi ${storeName}! I found your store on Velte.`,
+  );
 
   if (isEmpty) {
     return (
