@@ -9,6 +9,8 @@ const alwaysPublicRoutes = [
   "/_next",
   "/favicon.ico",
   "/site.webmanifest",
+  "/robots.txt",
+  "/sitemap.xml",
   "/payment/callback",
   "/s", // branded short-link redirector (see src/app/s/[code]/route.ts)
 ];
