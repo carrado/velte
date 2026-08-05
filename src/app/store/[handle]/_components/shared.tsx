@@ -312,7 +312,6 @@ export function OfferingCard({
           {!isOwn && enquireHref && (
             <a
               href={enquireHref}
-              target="_blank"
               rel="noreferrer"
               onClick={() => reportLead(vendorId, product.id)}
               className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[12px] sm:text-[13px] font-semibold rounded-lg transition-colors w-full sm:w-auto shrink-0"

@@ -14,7 +14,6 @@ export function WhatsAppButton({
   return (
     <a
       href={href}
-      target="_blank"
       rel="noreferrer"
       onClick={onClick}
       className={cn(
