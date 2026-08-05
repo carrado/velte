@@ -22,3 +22,12 @@ export async function getPublicStore(handle: string): Promise<PublicStore> {
     `/store/by-handle/${encodeURIComponent(handle)}`,
   );
 }
+
+/** Public — no cookie; feeds sitemap.ts so every storefront is discoverable. */
+export async function listStoreHandlesForSitemap(): Promise<
+  { handle: string; updatedAt: string }[]
+> {
+  return backendData<{ handle: string; updatedAt: string }[]>(
+    "/store/sitemap-handles",
+  );
+}

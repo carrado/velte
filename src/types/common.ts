@@ -90,3 +90,8 @@ export interface FaqSectionImage {
   alt: string;
   credit: string;
 }
+
+export interface PricingFaqItem {
+  q: string;
+  a: string;
+}
