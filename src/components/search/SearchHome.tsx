@@ -7,6 +7,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Loader2, Camera, X, Compass, ArrowUp } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { runSearchStream } from "@/lib/searchStream";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { VendorResultCard } from "@/components/search/VendorResultCard";
@@ -135,7 +136,12 @@ function storesHeading(
 // A store card plus its own "Matching service" companion(s), if any — shared
 // between the "near you" and "also available further out" sections so a
 // service listing that backs up the buyer's search shows up under EITHER
-// bucket's store, not just the near-you one.
+// bucket's store, not just the near-you one. Rendered as a direct grid item
+// of its parent (see the `grid` container around each `.map()` call below),
+// not its own single-item grid — a store WITH attached services spans every
+// column (the thread of service cards underneath needs the full row's
+// width and doesn't tile into a fixed-width column), everything else sits
+// as one normal grid cell alongside its siblings.
 function StoreWithServices({
   store,
   services,
@@ -145,11 +151,12 @@ function StoreWithServices({
   services: VendorMatch[];
   searchQuery: string | null;
 }) {
+  const hasServices = services.length > 0;
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StoreResultCard match={store} searchQuery={searchQuery} />
-      </div>
+    <div
+      className={cn("space-y-3", hasServices && "sm:col-span-2 lg:col-span-3")}
+    >
+      <StoreResultCard match={store} searchQuery={searchQuery} />
       {services.length > 0 && (
         <div className="mt-3">
           <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1 pl-9">
@@ -511,7 +518,13 @@ function ConversationTurnView({
                           )}
                         </h2>
                       )}
-                      <div className="space-y-5">
+                      <div
+                        className={cn(
+                          turn.stores.length > 1
+                            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start"
+                            : "space-y-5",
+                        )}
+                      >
                         {turn.stores.map((store) => (
                           <StoreWithServices
                             key={store.storeId}
@@ -538,7 +551,13 @@ function ConversationTurnView({
                       <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                         Also available further out
                       </h2>
-                      <div className="space-y-5">
+                      <div
+                        className={cn(
+                          turn.furtherStores.length > 1
+                            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start"
+                            : "space-y-5",
+                        )}
+                      >
                         {turn.furtherStores.map((store) => (
                           <StoreWithServices
                             key={store.storeId}
