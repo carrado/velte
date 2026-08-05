@@ -4,7 +4,7 @@ import { MapPin, Package, Wrench } from "lucide-react";
 import { getPublicStore } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
 import { getOptionalUserId } from "@/lib/server/guards";
-import { buildWhatsappLink } from "@/lib/whatsapp";
+import { buildWhatsappLink, normalizeWhatsappNumber } from "@/lib/whatsapp";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import type {
   IntroCardProps,
@@ -43,16 +43,56 @@ export async function generateMetadata({
   const { handle } = await params;
   const store = await fetchStore(handle);
   if (!store) return { title: "Store not found · Velte" };
+  const description =
+    store.description ||
+    `${store.name} on Velte — chat with this vendor directly.`;
+  const image = store.gallery[0] ?? store.avatar ?? undefined;
   return {
     title: `${store.name} · Velte`,
-    description:
-      store.description ||
-      `${store.name} on Velte — chat with this vendor directly.`,
+    description,
+    alternates: {
+      canonical: `/store/${store.handle}`,
+    },
     openGraph: {
       title: store.name,
-      description: store.description || undefined,
-      images: store.gallery[0] ?? store.avatar ?? undefined,
+      description,
+      url: `/store/${store.handle}`,
+      images: image,
     },
+    twitter: {
+      card: "summary_large_image",
+      title: store.name,
+      description,
+      images: image ? [image] : undefined,
+    },
+  };
+}
+
+/** LocalBusiness structured data — every field comes straight off the same
+ * store record the page renders, never invented (no fabricated street
+ * address/geo — PublicStore only ever carries a free-text `area`). */
+function storeJsonLd(store: PublicStore) {
+  const telephone = store.whatsapp
+    ? `+${normalizeWhatsappNumber(store.whatsapp)}`
+    : undefined;
+  const image = store.gallery[0] ?? store.avatar ?? undefined;
+  return {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: store.name,
+    description: store.description || undefined,
+    url: `https://velte.ng/store/${store.handle}`,
+    ...(image ? { image } : {}),
+    ...(telephone ? { telephone } : {}),
+    ...(store.area
+      ? {
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: store.area,
+            addressCountry: "NG",
+          },
+        }
+      : {}),
   };
 }
 
@@ -153,6 +193,11 @@ export default async function PublicStorePage({
 
   return (
     <div className="min-h-screen bg-[#F1F5F9]">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(storeJsonLd(store)) }}
+      />
       <StoreNavbar />
 
       <StoreHero

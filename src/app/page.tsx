@@ -13,11 +13,45 @@ export const metadata: Metadata = {
   title: "Velte | Find anything nearby",
   description:
     "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
+  alternates: {
+    canonical: "/",
+  },
+};
+
+// Organization + WebSite structured data — helps Google associate the site
+// with the Velte brand (knowledge panel eligibility) and its real social
+// profiles. No SearchAction here: /search is a conversational AI flow with
+// no `?q=`-driven entry point, so a sitelinks-searchbox action would
+// describe behavior the site doesn't actually have.
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      name: "Velte",
+      url: "https://velte.ng",
+      logo: "https://velte.ng/velte_manifest.png",
+      sameAs: [
+        "https://web.facebook.com/velte.ng",
+        "https://www.instagram.com/veltetechnologies/",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      name: "Velte",
+      url: "https://velte.ng",
+    },
+  ],
 };
 
 export default function HomePage() {
   return (
     <div className="min-h-screen">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <StandaloneHomeRedirect />
       <Navbar />
       <Hero />

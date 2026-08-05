@@ -1,0 +1,12 @@
+
+> velte@0.1.0 dev
+> next dev -p 4001
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:4001
+- Network:       http://10.25.234.192:4001
+- Environments: .env
+
+✓ Starting...
+○ Compiling proxy ...
+✓ Ready in 254.4s
