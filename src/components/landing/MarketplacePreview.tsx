@@ -205,7 +205,7 @@ export function MarketplacePreview({
 
         {/* Plain div — see MarketplaceCard's own comment on why the
             scroll-triggered stagger reveal was dropped from this grid. */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5 mb-10">
           {items.map((item) => (
             <MarketplaceCard key={item.id} item={item} />
           ))}

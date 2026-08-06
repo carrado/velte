@@ -61,8 +61,13 @@ export default function Navbar() {
                 nothing on any page besides the homepage itself. onClick
                 handles the OTHER real bug: Link's hash-scroll doesn't fire
                 when already on "/" since the pathname isn't changing — see
-                scrollToMarketplace's own comment. */}
-            <Link href="/" onClick={scrollToMarketplace}>
+                scrollToMarketplace's own comment. Hidden on mobile — only
+                Sign In + Ask Velux show there. */}
+            <Link
+              href="/"
+              onClick={scrollToMarketplace}
+              className="hidden sm:block"
+            >
               <Button className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 text-xs sm:text-sm px-3 sm:px-5 gap-1.5">
                 <LayoutGrid className="w-3.5 h-3.5" />
                 Browse
