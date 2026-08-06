@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { motion } from "motion/react";
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox"; // shadcn checkbox
 import { Mail, Lock, LogIn } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import Image from "next/image";
 import { usersApi } from "@/services/users";
@@ -28,18 +29,32 @@ function FieldError({ message }: { message: string | undefined }) {
   return <p className="text-red-400 text-xs mt-1">{message}</p>;
 }
 
-export default function Login() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Set by proxy.ts when it bounces an unauthenticated visit to a protected
+  // route here (e.g. a vendor tapping a deep link — nudge-list.mjs's "add a
+  // listing" SMS — while logged out). Only trusted if it's a same-user,
+  // in-app path: must start with "/<their own id>/" — a bare "/" check
+  // would let redirect=https://evil.example through as an open redirect,
+  // and not scoping to their own id would let redirect=/<otherUserId>/...
+  // through too, even though proxy.ts's own routeId!==userId guard would
+  // just bounce that back to their products page anyway.
+  const redirectTo = searchParams.get("redirect");
 
   const loginMutation = useMutation({
     mutationFn: (data: { email: string; password: string }) =>
       usersApi.login(data),
     onSuccess: (response) => {
       toast.success("Welcome back!");
+      const dest =
+        redirectTo && redirectTo.startsWith(`/${response.user.id}/`)
+          ? redirectTo
+          : `/${response.user.id}/wallet`;
       // .replace(), not .push() — otherwise the login form stays one
       // back-press away from the dashboard, letting you "go back" into a
       // page whose only job was already done.
-      router.replace(`/${response.user.id}/wallet`);
+      router.replace(dest);
     },
     onError: (error: unknown, variables) => {
       const message =
@@ -253,5 +268,15 @@ export default function Login() {
         </div>
       </motion.div>
     </div>
+  );
+}
+
+// useSearchParams (for the redirect param above) needs a Suspense boundary
+// around it in the app router — same split as auth/verify/page.tsx.
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
