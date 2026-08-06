@@ -78,7 +78,7 @@ const sides = [
         detail: "Proximity and trust decide the ranking, not ad spend",
       },
     ],
-    cta: { label: "Browse the marketplace", href: "/" },
+    cta: { label: "Browse Products", href: "/" },
   },
   {
     audience: "For Sellers",
@@ -419,7 +419,7 @@ export default function AboutContent() {
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   >
                     <LayoutGrid className="w-4 h-4" />
-                    Browse the marketplace
+                    Browse Products
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>
