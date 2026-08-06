@@ -17,7 +17,6 @@ import {
   Store as StoreIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AskVeluxButton } from "@/components/AskVeluxButton";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
 import { fmt } from "@/lib/product-price";
@@ -278,7 +277,7 @@ export default function Hero({
                 className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-xl shadow-orange-500/20 text-[15px] px-8 gap-2 h-12 w-full sm:w-auto"
               >
                 <LayoutGrid className="w-4 h-4" />
-                Browse the marketplace
+                Browse Products
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -291,18 +290,6 @@ export default function Hero({
                 List your business
               </Button>
             </Link>
-          </motion.div>
-
-          {/* A real, photo-bearing chip — not a muted text link — but still
-              secondary in visual weight to the two solid buttons above it
-              (a pill vs. full-size buttons), matching Browse's role as the
-              primary action per the 2026-08-05 marketplace pivot without
-              making AI read as hidden or an afterthought. */}
-          <motion.div variants={fadeUp} className="flex justify-center">
-            <AskVeluxButton
-              label="Ask Velux"
-              subtext="Velte's AI shopping assistant"
-            />
           </motion.div>
         </motion.div>
 
