@@ -6,9 +6,10 @@ import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AskVeluxButtonProps {
-  /** "compact" — an inline pill (avatar + short label, label hides below
-   *  sm), for tight spaces like Navbar. "full" — a bigger two-line chip
-   *  (avatar + label + a descriptive subtext), for section-ending CTAs. */
+  /** "compact" — an inline pill (avatar + always-visible short label,
+   *  including on mobile — not hidden below sm like it used to be), for
+   *  tight spaces like Navbar. "full" — a bigger two-line chip (avatar +
+   *  label + a descriptive subtext), for section-ending CTAs. */
   variant?: "compact" | "full";
   label?: string;
   subtext?: string;
@@ -59,7 +60,7 @@ export function AskVeluxButton({
         )}
       >
         {avatar}
-        <span className="hidden sm:inline text-xs sm:text-sm font-semibold text-orange-700 whitespace-nowrap">
+        <span className="text-xs sm:text-sm font-semibold text-orange-700 whitespace-nowrap">
           {label}
         </span>
       </Link>
