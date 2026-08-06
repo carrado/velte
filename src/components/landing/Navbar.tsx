@@ -51,15 +51,17 @@ export default function Navbar() {
                 Sign In
               </Button>
             </Link>
+            {/* Ask Velux's label is always shown now (not just from sm: up)
+                — sits alongside Browse on every screen size, including
+                mobile. */}
             <AskVeluxButton variant="compact" label="Ask Velux" />
-            {/* href is a plain "/" — never "/#marketplace" — on purpose:
-                Navbar renders on every marketing page (About/FAQ/Terms/
-                Privacy), not just "/", and the address bar should never
-                show a marketplace hash regardless of which page this was
-                clicked from. scrollToMarketplace does the actual scrolling,
-                either immediately (already on "/") or via a one-shot flag
-                MarketplacePreview consumes on mount (coming from elsewhere)
-                — see that file's own comment. */}
+            {/* Full path + hash, not a bare "#marketplace" — Navbar is
+                shared across every marketing page (About/FAQ/Terms/
+                Privacy), not just "/", so a bare hash would silently do
+                nothing on any page besides the homepage itself. onClick
+                handles the OTHER real bug: Link's hash-scroll doesn't fire
+                when already on "/" since the pathname isn't changing — see
+                scrollToMarketplace's own comment. */}
             <Link href="/" onClick={scrollToMarketplace}>
               <Button className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 text-xs sm:text-sm px-3 sm:px-5 gap-1.5">
                 <LayoutGrid className="w-3.5 h-3.5" />
