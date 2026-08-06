@@ -180,7 +180,7 @@ export function MarketplacePreview({
       id="marketplace"
       className="relative bg-[#F1F5F9] border-t border-gray-200 py-20 scroll-mt-20"
     >
-      <div className="max-w-6xl mx-auto px-5 sm:px-8">
+      <div className="max-w-6xl mx-auto px-3 sm:px-8">
         <motion.div
           initial="hidden"
           whileInView="show"
@@ -205,7 +205,7 @@ export function MarketplacePreview({
 
         {/* Plain div — see MarketplaceCard's own comment on why the
             scroll-triggered stagger reveal was dropped from this grid. */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5 mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-2.5 gap-y-4 sm:gap-5 mb-10">
           {items.map((item) => (
             <MarketplaceCard key={item.id} item={item} />
           ))}
