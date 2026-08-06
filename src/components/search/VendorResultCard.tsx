@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
 import Link from "next/link";
 import {
@@ -9,6 +8,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { fmt } from "@/lib/product-price";
+import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
@@ -51,6 +51,7 @@ export function VendorResultCard({
   const chatHref = buildWhatsappLink(
     match.whatsapp,
     `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
+    match.mainImageUrl ? match.productId : undefined,
   );
 
   // Main image first, then whatever else the vendor uploaded — a buyer
@@ -74,7 +75,7 @@ export function VendorResultCard({
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
         {images.length > 0 ? (
-          <img
+          <ProtectedImage
             src={optimizedImageUrl(images[imgIndex])}
             alt={match.name}
             className="w-full h-full object-cover"
@@ -183,7 +184,9 @@ export function VendorResultCard({
                 href={chatHref}
                 label="Chat with vendor"
                 className="w-full"
-                onClick={() => reportLead(match.vendorId, match.productId)}
+                onClick={() =>
+                  reportLead(match.vendorId, match.productId, "search")
+                }
               />
             )}
             {showViewStore && match.storeHandle && (

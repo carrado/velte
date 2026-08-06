@@ -1,3 +1,5 @@
+import type { LeadSource } from "@/types/common";
+
 // Anonymous, per-browser buyer id — never tied to an account, just enough
 // for the backend to recognize "the same buyer clicked again" and apply the
 // 15-minute same-buyer/same-vendor cooldown (see velte-backend's chargeLead)
@@ -28,9 +30,24 @@ function getBuyerId(): string | null {
 // a normal fetch can get cancelled by that navigation before it leaves the
 // page. Never awaited and never surfaced to the buyer: this is a side
 // effect of the click, not something the WhatsApp handoff depends on.
-export function reportLead(vendorId: string, productId?: string) {
+//
+// `source` tags which surface produced the click (see LeadSource) — every
+// call site passes it explicitly now (2026-08-05) so the wallet ledger can
+// answer "is AI search actually converting, or is browse+chat carrying
+// everything" with real data instead of a guess, ahead of ever deciding to
+// swap fully onto AI search per CLAUDE.md's build order.
+export function reportLead(
+  vendorId: string,
+  productId: string | undefined,
+  source: LeadSource,
+) {
   const url = "/api/search/lead";
-  const body = JSON.stringify({ vendorId, productId, buyerId: getBuyerId() });
+  const body = JSON.stringify({
+    vendorId,
+    productId,
+    buyerId: getBuyerId(),
+    source,
+  });
 
   // sendBeacon's return value is whether the browser actually QUEUED the
   // request — found live that it silently returns false (no request ever

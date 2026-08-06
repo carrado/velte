@@ -34,7 +34,7 @@ interface Section {
   blocks: Block[];
 }
 
-const lastUpdated = "July 5, 2026";
+const lastUpdated = "August 5, 2026";
 
 // Pillars shown in the "Privacy at a glance" strip.
 const pillars: { icon: LucideIcon; title: string; text: string }[] = [
@@ -68,7 +68,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Velte Technologies (“Velte”, “we”, “us”) operates Velte — an AI-powered discovery engine that helps buyers describe what they need and find real, nearby vendors who actually have it, plus the dashboard vendors use to list and manage their business.",
+        text: "Velte Technologies (“Velte”, “we”, “us”) operates Velte — a marketplace that helps buyers find real, nearby vendors, either by browsing listings directly or by describing what they need to our AI — plus the dashboard vendors use to list and manage their business.",
       },
       {
         kind: "p",
@@ -106,7 +106,13 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "From buyers, only what's described above — no name, email, or account is required to search.",
+        text: "From buyers, only what's described above — no name, email, or account is required to browse or search.",
+      },
+      {
+        kind: "list",
+        items: [
+          "An anonymous device identifier, stored in your browser only, generated the first time you tap “Chat on WhatsApp” on any listing — used solely so we don't bill a vendor twice for the same visit within a short window. It is never linked to your name, phone number, or any account.",
+        ],
       },
       {
         kind: "p",
@@ -169,7 +175,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Search queries and locations are logged to improve matching quality and to understand buyer demand — including which real, nearby businesses buyers were shown that aren't yet on Velte — and this log isn't tied to a buyer identity, since none is collected. Vendor account, store, and product data is retained while the account is active. When a vendor deletes a product or store, or closes their account, we remove or anonymise the associated data within a reasonable period, except where we must retain limited records for legal, tax, or fraud-prevention obligations.",
+        text: "Search queries and locations are logged to improve matching quality and to understand buyer demand — including which real, nearby businesses buyers were shown that aren't yet on Velte — and this log isn't tied to a buyer identity, since none is collected. The anonymous WhatsApp-click identifier described above is checked only against a short (roughly 15-minute) window to avoid double-billing a vendor — it isn't used to build a longer-term profile of your activity. Vendor account, store, and product data is retained while the account is active. When a vendor deletes a product or store, or closes their account, we remove or anonymise the associated data within a reasonable period, except where we must retain limited records for legal, tax, or fraud-prevention obligations.",
       },
     ],
   },
@@ -191,7 +197,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Vendors may access, correct, delete, or export their account and store data at any time from the dashboard, or by contacting us. Because buyer search requires no account, the main choices available to buyers are whether to grant location permission or upload a photo — both are optional, and search still works with text alone.",
+        text: "Vendors may access, correct, delete, or export their account and store data at any time from the dashboard, or by contacting us. Because buyer search requires no account, the main choices available to buyers are whether to grant location permission or upload a photo — both are optional, and search still works with text alone. The anonymous WhatsApp-click identifier lives only in your browser's local storage and can be cleared at any time through your browser's own settings.",
       },
       {
         kind: "p",

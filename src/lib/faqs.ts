@@ -6,13 +6,19 @@ export const faqs: FaqItem[] = [
     featured: true,
     question: "How does Velte find what I'm looking for?",
     answer:
-      "Describe what you need in your own words, or upload a photo. Our AI reads the request the way a person would, then matches it against real vendor inventory nearby — ranked by meaning and distance.",
+      "You can browse real vendor listings directly on our homepage, or describe what you need in your own words, or upload a photo. Our AI reads the request the way a person would, then matches it against real vendor inventory nearby — ranked by meaning and distance.",
+  },
+  {
+    category: "buyer",
+    question: "Can I just browse instead of searching?",
+    answer:
+      "Yes — our homepage shows real listings from real vendors, ready to chat about right away. AI search is there whenever you want something more specific than what's shown.",
   },
   {
     category: "buyer",
     question: "Is it free to search?",
     answer:
-      "Yes. Searching and messaging vendors on Velte costs you nothing, whether you find a match or not.",
+      "Yes. Browsing, searching, and messaging vendors on Velte costs you nothing, whether you find a match or not.",
   },
   {
     category: "buyer",

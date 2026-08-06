@@ -15,12 +15,25 @@ export function normalizeWhatsappNumber(raw: string): string | null {
   return digits;
 }
 
+// wa.me's pre-fill can only carry text — there's no attachment param, so an
+// image can't be sent along with the message itself. `productId` (pass it
+// only when the listing actually has a mainImageUrl — see call sites) adds
+// a short, branded /s/p/<id> link instead of pasting a long raw Cloudinary
+// URL into the chat; WhatsApp auto-previews it as a thumbnail once the
+// message lands, which is as close to "sent with the photo" as a wa.me link
+// can get. See src/app/s/p/[id]/route.ts for the redirect itself.
+const SITE_URL = "https://velte.ng";
+
 export function buildWhatsappLink(
   whatsapp: string | null | undefined,
   message: string,
+  productId?: string,
 ): string | null {
   if (!whatsapp) return null;
   const normalized = normalizeWhatsappNumber(whatsapp);
   if (!normalized) return null;
-  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+  const fullMessage = productId
+    ? `${message}\n\nPhoto: ${SITE_URL}/s/p/${productId}`
+    : message;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(fullMessage)}`;
 }

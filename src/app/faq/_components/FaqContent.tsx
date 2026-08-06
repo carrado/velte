@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
-import { ArrowRight, Search as SearchIcon } from "lucide-react";
+import { ArrowRight, LayoutGrid } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
+import { AskVeluxButton } from "@/components/AskVeluxButton";
+import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
 import { faqs } from "@/lib/faqs";
 import FaqCard from "@/components/faq/FaqCard";
 import FaqTabs, { type FaqTabKey } from "@/components/faq/FaqTabs";
@@ -178,17 +180,17 @@ export default function FaqContent() {
                 Still have a question?
               </h3>
               <p className="text-gray-500 mb-6 max-w-xl mx-auto">
-                Try Velte as a buyer, list your business, or reach out directly
-                — we&apos;re happy to help.
+                Browse real listings as a buyer, list your business, or reach
+                out directly — we&apos;re happy to help.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link href="/search">
+                <Link href="/" onClick={scrollToMarketplace}>
                   <Button
                     size="lg"
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   >
-                    <SearchIcon className="w-4 h-4" />
-                    Find on Velte
+                    <LayoutGrid className="w-4 h-4" />
+                    Browse the marketplace
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>
@@ -201,6 +203,12 @@ export default function FaqContent() {
                     Contact us
                   </Button>
                 </Link>
+              </div>
+              <div className="flex justify-center mt-5">
+                <AskVeluxButton
+                  label="Ask Velux"
+                  subtext="Velte's AI shopping assistant"
+                />
               </div>
             </div>
           </motion.div>

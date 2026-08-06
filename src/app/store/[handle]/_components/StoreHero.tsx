@@ -1,10 +1,10 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStoreHeroTheme } from "@/lib/sectorHeroThemes";
+import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { ShareButton } from "@/components/ShareButton";
 
@@ -81,7 +81,7 @@ export default function StoreHero({
               className="h-full flex-shrink-0"
               style={{ width: `${100 / gallery.length}%` }}
             >
-              <img
+              <ProtectedImage
                 src={optimizedImageUrl(url)}
                 alt={`${name} — photo ${i + 1}`}
                 className="w-full h-full object-cover"
@@ -158,7 +158,7 @@ export default function StoreHero({
           <div className="flex items-end gap-3">
             <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-orange-500 ring-2 ring-white/20 shadow-lg flex items-center justify-center text-white text-lg sm:text-xl font-bold overflow-hidden shrink-0">
               {avatar ? (
-                <img
+                <ProtectedImage
                   src={optimizedImageUrl(avatar)}
                   alt={name}
                   className="w-full h-full object-cover"

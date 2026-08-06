@@ -21,6 +21,7 @@ import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { getInitial } from "@/lib/initials";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
+import { useTypewriter } from "@/hooks/useTypewriter";
 import type {
   BuyerLocation,
   Clarification,
@@ -288,6 +289,24 @@ function FormattedReply({ text }: { text: string }) {
   );
 }
 
+// Velux "typing" its reply — useTypewriter reveals `text` progressively
+// over the already-complete final string (see that hook's own comment on
+// why there's no real token stream to key off). A trailing cursor blinks
+// only while still revealing; once the full text is visible it disappears
+// rather than blinking forever next to a finished sentence.
+function TypewriterReply({ text }: { text: string }) {
+  const visible = useTypewriter(text);
+  const isTyping = visible.length < text.length;
+  return (
+    <div>
+      <FormattedReply text={visible} />
+      {isTyping && (
+        <span className="inline-block w-[2px] h-4 ml-0.5 bg-orange-400 animate-pulse" />
+      )}
+    </div>
+  );
+}
+
 // One exchange in the conversation: the buyer's message (+ optional photo
 // preview) and everything the search produced for it. Lives only in this
 // component's React state — never localStorage, never a database. A page
@@ -385,9 +404,12 @@ function ConversationTurnView({
       </div>
 
       <div className="flex items-start gap-3">
+        {/* Velux's own avatar — same image for the status/"thinking" phase
+            and the final reply/results, since both are this one persona
+            talking, just at different points in the same turn. */}
         <img
-          src="/velte_manifest.png"
-          alt="Velte"
+          src="/velte_ai_assistant.png"
+          alt="Velux"
           className="w-8 h-8 rounded-full object-cover shrink-0"
         />
         <div className="flex-1 min-w-0 pt-0.5">
@@ -408,7 +430,7 @@ function ConversationTurnView({
               turn.stores.length > 0 ||
               turn.vendorProducts.length > 0 ? (
                 <>
-                  <FormattedReply text={turn.reply} />
+                  <TypewriterReply text={turn.reply} />
                   {turn.vendorProducts.length > 0 &&
                     turn.vendorProductsStore && (
                       <div className="space-y-3">
@@ -581,7 +603,7 @@ function ConversationTurnView({
                 // Places (searchStores Tier 5), visibly distinct from an actual
                 // Velte listing (see ExternalBusinessCard).
                 <>
-                  <FormattedReply text={turn.reply} />
+                  <TypewriterReply text={turn.reply} />
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {turn.externalStoreSuggestions.map((match) => (
                       <ExternalBusinessCard
@@ -596,7 +618,7 @@ function ConversationTurnView({
                 // (see systemPrompt.ts) — a plain reply, same as the text above
                 // a result grid, never the "nothing found anywhere" card below:
                 // the conversation is still open, not a dead end.
-                <FormattedReply text={turn.reply} />
+                <TypewriterReply text={turn.reply} />
               ) : (
                 // A real search ran and came up completely empty — an AI
                 // suggestion card (spec §3.5), not a bare empty state.
@@ -605,7 +627,7 @@ function ConversationTurnView({
                     size={20}
                     className="text-orange-500 shrink-0 mt-0.5"
                   />
-                  <FormattedReply text={turn.reply} />
+                  <TypewriterReply text={turn.reply} />
                 </div>
               )}
               {/* Sits after, not inside, the chain above — so the rare turn
@@ -627,6 +649,26 @@ function ConversationTurnView({
     </div>
   );
 }
+
+// The idle screen's own greeting, typed out by Velux (see useTypewriter)
+// before the buyer has said anything — introduces the assistant by name so
+// "Velux" isn't only ever a silent avatar next to replies.
+const VELUX_GREETING = "Hi, I'm Velux — what are you looking for?";
+// The bubble's second line — types out too (not just fades in), starting
+// only once the greeting above finishes, so the whole bubble reads as one
+// continuous message rather than two independently-timed pieces of text.
+const VELUX_SUBTEXT =
+  "Describe it in your own words or a photo — I'll match it against real vendor inventory nearby, ranked by meaning, distance and trust. Never guessed, never invented.";
+// Slower than the reply typewriter's default (14ms) — this is a one-time
+// greeting meant to be read deliberately, not a results reply where a
+// buyer's already waited through the search itself and just wants the text
+// to catch up.
+const VELUX_GREETING_TYPING_SPEED_MS = 55;
+// A beat before Velux starts typing at all — the avatar and empty bubble
+// appear first, THEN typing begins, rather than text starting the instant
+// the page is ready. Reads as Velux actually pausing to "think" before
+// speaking, not a page element popping in mid-sentence.
+const VELUX_TYPING_START_DELAY_MS = 700;
 
 // Velte's buyer-facing search (build-order step d/e), at /search —
 // `/` is now the marketing homepage. Structured as a conversation: each
@@ -749,12 +791,26 @@ export function SearchHome() {
   // failure/lack of support falls back to showing the modal too, rather
   // than silently assuming permission either way.
   const [showLocationModal, setShowLocationModal] = useState(false);
+  // Flips true once we KNOW whether the modal is going to show at all —
+  // distinct from showLocationModal itself, which starts false and may only
+  // flip true a moment later once the (async) permissions check resolves.
+  // Velux's greeting is gated on this (see readyToGreet below) rather than
+  // on showLocationModal alone, so a granted-permission visitor doesn't
+  // start typing during that brief "we haven't checked yet" window only to
+  // have the modal pop up and interrupt it a beat later.
+  const [locationGateResolved, setLocationGateResolved] = useState(false);
   useEffect(() => {
     let cancelled = false;
     async function checkLocationPermission() {
-      if (!navigator.geolocation) return;
+      if (!navigator.geolocation) {
+        if (!cancelled) setLocationGateResolved(true);
+        return;
+      }
       if (!navigator.permissions?.query) {
-        if (!cancelled) setShowLocationModal(true);
+        if (!cancelled) {
+          setShowLocationModal(true);
+          setLocationGateResolved(true);
+        }
         return;
       }
       try {
@@ -764,8 +820,12 @@ export function SearchHome() {
         if (cancelled) return;
         if (status.state === "granted") getBuyerLocationOnce();
         else if (status.state === "prompt") setShowLocationModal(true);
+        setLocationGateResolved(true);
       } catch {
-        if (!cancelled) setShowLocationModal(true);
+        if (!cancelled) {
+          setShowLocationModal(true);
+          setLocationGateResolved(true);
+        }
       }
     }
     checkLocationPermission();
@@ -773,6 +833,36 @@ export function SearchHome() {
       cancelled = true;
     };
   }, []);
+  // Velux stays silent until we know the location modal won't interrupt it
+  // — resolved-but-no-modal (permission already granted/denied) means type
+  // right away; resolved-and-showing-modal means wait for handleAllowLocation
+  // /onDismiss to flip showLocationModal back to false first.
+  const readyToGreet = locationGateResolved && !showLocationModal;
+  // A further beat once readyToGreet flips true — the avatar/bubble render
+  // immediately, but typing itself only starts after
+  // VELUX_TYPING_START_DELAY_MS, not the instant the page is ready.
+  const [startGreetingTyping, setStartGreetingTyping] = useState(false);
+  useEffect(() => {
+    if (!readyToGreet) return;
+    const id = setTimeout(
+      () => setStartGreetingTyping(true),
+      VELUX_TYPING_START_DELAY_MS,
+    );
+    return () => clearTimeout(id);
+  }, [readyToGreet]);
+  const greeting = useTypewriter(
+    startGreetingTyping ? VELUX_GREETING : "",
+    VELUX_GREETING_TYPING_SPEED_MS,
+  );
+  const greetingDone = greeting.length === VELUX_GREETING.length;
+  // Held back to "" until the greeting above finishes — useTypewriter
+  // starts counting the moment it receives non-empty text, so gating the
+  // input itself (rather than just gating where the output is shown) is
+  // what actually delays this line's typing until the greeting is done.
+  const subtext = useTypewriter(
+    greetingDone ? VELUX_SUBTEXT : "",
+    VELUX_GREETING_TYPING_SPEED_MS,
+  );
 
   const handleAllowLocation = () => {
     setShowLocationModal(false);
@@ -1157,16 +1247,48 @@ export function SearchHome() {
 
       {!collapsed ? (
         <main className="flex-1 flex flex-col items-center justify-center px-5">
-          <div className="text-center mb-6 max-w-2xl">
-            <h1 className="text-[28px] sm:text-4xl font-semibold text-[#023337] mb-2 tracking-tight">
-              What are you looking for?
-            </h1>
-            <p className="text-gray-500 text-sm sm:text-base">
-              Describe it, tell us where you are, and we&apos;ll find the
-              nearest vendor who actually has it.
-            </p>
+          {/* The idle screen reads as Velux itself greeting the buyer — same
+              avatar-left, bubble-right chat layout as a real conversation
+              turn (see ConversationTurnView's own `items-start gap-3` row),
+              not a centered marketing headline. Everything Velux "says" —
+              the greeting AND the explanation — lives inside the one
+              bubble, same as a single real chat message would hold both. */}
+          <div className="flex items-start gap-3 sm:gap-4 mb-6 max-w-xl w-full text-left">
+            <img
+              src="/velte_ai_assistant.png"
+              alt="Velux"
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover shadow-md shadow-gray-300/40 shrink-0"
+            />
+            <div className="bg-white border border-gray-100 shadow-sm rounded-3xl rounded-tl-lg px-4 py-3 sm:px-5 sm:py-4 flex-1 min-w-0">
+              <h1 className="text-[16px] sm:text-lg font-semibold text-[#023337] leading-snug min-h-[1.4em]">
+                {greeting}
+                {!greetingDone && (
+                  <span className="inline-block w-[3px] h-[0.9em] ml-0.5 -mb-0.5 bg-orange-400 animate-pulse" />
+                )}
+              </h1>
+              {greetingDone && (
+                <p className="text-gray-500 text-sm sm:text-[15px] leading-relaxed mt-1.5">
+                  {subtext}
+                  {subtext.length < VELUX_SUBTEXT.length && (
+                    <span className="inline-block w-[3px] h-[0.85em] ml-0.5 -mb-0.5 bg-orange-400 animate-pulse" />
+                  )}
+                </p>
+              )}
+            </div>
           </div>
           <div className="w-full max-w-3xl">{inputForm}</div>
+          {/* Reciprocal to the "See more with AI search" / "Ask AI" CTAs on
+              the "/" homepage's browse sections — a buyer who lands here
+              directly (an ad, a bookmark, the Navbar CTA) without having
+              browsed first should have just as easy a way back the other
+              direction, not a dead end if AI search isn't what they wanted
+              after all. */}
+          <Link
+            href="/"
+            className="mt-5 text-xs sm:text-sm text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Prefer to browse? See what&apos;s on the marketplace →
+          </Link>
         </main>
       ) : (
         <>
