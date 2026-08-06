@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmt } from "@/lib/product-price";
+import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
@@ -50,7 +50,7 @@ export function StoreWhatsAppButton({
       href={href}
       label={label}
       className={className}
-      onClick={() => reportLead(vendorId, productId)}
+      onClick={() => reportLead(vendorId, productId, "browse")}
     />
   );
 }
@@ -95,6 +95,7 @@ function enquireHrefFor(
     isService
       ? `Hi ${storeName}! I'm interested in your "${product.name}" service. I found you on Velte.`
       : `Hi ${storeName}! Is "${product.name}" still available? I found you on Velte.`,
+    product.mainImageUrl ? product.id : undefined,
   );
 }
 
@@ -115,7 +116,7 @@ function OfferingMedia({
       )}
     >
       {product.mainImageUrl ? (
-        <img
+        <ProtectedImage
           src={optimizedImageUrl(product.mainImageUrl)}
           alt={product.name}
           className="w-full h-full object-cover"
@@ -226,7 +227,7 @@ function OfferingDetailModal({
                 href={enquireHref}
                 label={isService ? "Enquire about this service" : "Enquire"}
                 className="w-full"
-                onClick={() => reportLead(vendorId, product.id)}
+                onClick={() => reportLead(vendorId, product.id, "browse")}
               />
             )
           )}
@@ -313,7 +314,7 @@ export function OfferingCard({
             <a
               href={enquireHref}
               rel="noreferrer"
-              onClick={() => reportLead(vendorId, product.id)}
+              onClick={() => reportLead(vendorId, product.id, "browse")}
               className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[12px] sm:text-[13px] font-semibold rounded-lg transition-colors w-full sm:w-auto shrink-0"
             >
               <MessageCircle size={13} />

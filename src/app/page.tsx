@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
+import { MarketplacePreview } from "@/components/landing/MarketplacePreview";
+import { VendorsPreview } from "@/components/landing/VendorsPreview";
 import VendorPitch from "@/components/landing/VendorPitch";
 import FAQ from "@/components/landing/FAQ";
 import Footer from "@/components/landing/Footer";
 import StandaloneHomeRedirect from "@/components/StandaloneHomeRedirect";
+import { getMarketplacePreview, getVendorsPreview } from "@/lib/server/store";
 
 // Velte's homepage — redesigned for the pivot (replaces the old
 // pre-pivot "WhatsApp AI Sales Rep" marketing site that used to live at
@@ -44,7 +47,15 @@ const jsonLd = {
   ],
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Best-effort, fetched in parallel — a backend hiccup shouldn't take the
+  // whole marketing homepage down with it; both sections render nothing
+  // when their list is empty, so this degrades to the pre-2026-08-05 page.
+  const [marketplaceItems, vendorItems] = await Promise.all([
+    getMarketplacePreview().catch(() => []),
+    getVendorsPreview().catch(() => []),
+  ]);
+
   return (
     <div className="min-h-screen">
       <script
@@ -54,7 +65,9 @@ export default function HomePage() {
       />
       <StandaloneHomeRedirect />
       <Navbar />
-      <Hero />
+      <Hero marketplaceItems={marketplaceItems} />
+      <MarketplacePreview items={marketplaceItems} />
+      <VendorsPreview items={vendorItems} />
       <VendorPitch />
       <FAQ />
       <Footer />

@@ -11,10 +11,13 @@ import {
   ArrowRight,
   ShieldCheck,
   Sparkles,
+  LayoutGrid,
 } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
+import { AskVeluxButton } from "@/components/AskVeluxButton";
+import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
 import ShineSweep from "@/components/ShineSweep";
 
 // Photo credit: Ben Iwara / Unsplash (unsplash.com/photos/w1EaPjX71Sw) —
@@ -36,7 +39,7 @@ const values = [
     icon: Search,
     title: "Buyer‑First",
     description:
-      "Describe what you need in your own words or a photo — we do the matching, not you.",
+      "Browse real listings directly, or describe what you need in your own words or a photo — either way, we do the matching, not you.",
   },
   {
     icon: Store,
@@ -58,6 +61,11 @@ const sides = [
     icon: Search,
     points: [
       {
+        title: "Browse or describe — your call",
+        detail:
+          "Real listings right on the homepage, or search with AI for something specific",
+      },
+      {
         title: "Describe it your way",
         detail: "Text or a photo — matched by meaning, not keywords",
       },
@@ -70,7 +78,7 @@ const sides = [
         detail: "Proximity and trust decide the ranking, not ad spend",
       },
     ],
-    cta: { label: "Start searching", href: "/search" },
+    cta: { label: "Browse the marketplace", href: "/" },
   },
   {
     audience: "For Sellers",
@@ -188,12 +196,12 @@ export default function AboutContent() {
                 genuinely has the goods.
               </p>
               <p className="text-gray-500 leading-relaxed mb-4">
-                Velte closes that gap from both sides. A buyer describes what
-                they need — in plain language or a photo — and our AI matches it
-                against real seller inventory by meaning, proximity, and trust,
-                then hands the conversation straight to the vendor. No ads, no
-                bidding, no invented listings — the model translates, the data
-                decides, and the seller gets found.
+                Velte closes that gap from both sides. A buyer can browse real
+                seller listings directly, or describe what they need — in plain
+                language or a photo — for our AI to match it against that same
+                real inventory by meaning, proximity, and trust. Either way, the
+                conversation goes straight to the vendor. No ads, no bidding, no
+                invented listings — the data decides, and the seller gets found.
               </p>
               <p className="text-gray-500 leading-relaxed">
                 We&apos;re starting with one city, one category at a time —
@@ -319,6 +327,12 @@ export default function AboutContent() {
 
                 <Link
                   href={cta.href}
+                  // Only the "For Buyers" card's cta.href is the
+                  // marketplace link ("/") — "For Sellers" points at
+                  // /auth/signup, which must navigate normally, so this
+                  // can't be unconditional the way the other single-purpose
+                  // Links below are.
+                  onClick={cta.href === "/" ? scrollToMarketplace : undefined}
                   className="inline-flex items-center gap-1.5 text-orange-600 font-semibold text-sm hover:text-orange-700 transition-colors"
                 >
                   {cta.label}
@@ -395,17 +409,17 @@ export default function AboutContent() {
                 Looking for something, or have something to sell?
               </h3>
               <p className="text-gray-500 mb-6 max-w-xl mx-auto">
-                Try Velte as a buyer, or list your business so nearby buyers can
-                find you.
+                Browse real listings as a buyer, or list your business so nearby
+                buyers can find you.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link href="/search">
+                <Link href="/" onClick={scrollToMarketplace}>
                   <Button
                     size="lg"
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   >
-                    <Search className="w-4 h-4" />
-                    Find on Velte
+                    <LayoutGrid className="w-4 h-4" />
+                    Browse the marketplace
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>
@@ -418,6 +432,12 @@ export default function AboutContent() {
                     List your business
                   </Button>
                 </Link>
+              </div>
+              <div className="flex justify-center mt-5">
+                <AskVeluxButton
+                  label="Ask Velux"
+                  subtext="Velte's AI shopping assistant"
+                />
               </div>
             </div>
           </motion.div>

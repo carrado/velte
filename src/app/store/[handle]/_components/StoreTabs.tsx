@@ -56,7 +56,7 @@ export default function StoreTabs({
                 href={whatsappHref}
                 label="Ask on WhatsApp"
                 className="mt-5"
-                onClick={() => reportLead(vendorId)}
+                onClick={() => reportLead(vendorId, undefined, "browse")}
               />
             </>
           ) : (

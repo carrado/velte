@@ -36,14 +36,14 @@ interface Section {
   blocks: Block[];
 }
 
-const lastUpdated = "July 5, 2026";
+const lastUpdated = "August 5, 2026";
 
 // Pillars shown in the "Terms at a glance" strip.
 const pillars: { icon: LucideIcon; title: string; text: string }[] = [
   {
     icon: Search,
     title: "What Velte does",
-    text: "An AI discovery engine that matches what buyers describe to real, nearby vendor listings — then connects them directly.",
+    text: "A marketplace connecting buyers to real, nearby vendor listings — by browsing directly or by describing what you need to our AI.",
   },
   {
     icon: UserCheck,
@@ -70,7 +70,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "These Terms and Conditions (“Terms”) govern your access to and use of Velte — the buyer-facing AI search experience and the vendor dashboard (collectively, the “Service”) — provided by Velte Technologies (“Velte”, “we”, “us”). By searching, creating an account, or otherwise using the Service, you agree to be bound by these Terms.",
+        text: "These Terms and Conditions (“Terms”) govern your access to and use of Velte — the buyer-facing marketplace, including both direct browsing and AI-assisted search, and the vendor dashboard (collectively, the “Service”) — provided by Velte Technologies (“Velte”, “we”, “us”). By browsing, searching, creating an account, or otherwise using the Service, you agree to be bound by these Terms.",
       },
       {
         kind: "p",
@@ -85,7 +85,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Velte is an AI-powered discovery engine. A buyer describes what they need — in text, a photo, or both — and our AI matches it against real vendor and product records already in our database, ranked by meaning, proximity, and vendor trust, then connects the buyer directly to the vendor.",
+        text: "Velte is a marketplace that connects buyers directly to real, nearby vendor listings. A buyer may browse vendor and product listings directly, or describe what they need — in text, a photo, or both — for our AI to match it against those same real records, ranked by meaning, proximity, and vendor trust. Either way, Velte connects the buyer directly to the vendor.",
       },
       {
         kind: "p",
@@ -138,7 +138,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Searching Velte as a buyer is free, and listing a business as a vendor is free. Some optional features — such as paid placement or lead-based billing — may be introduced in the future and will always be disclosed clearly before they apply to you; nothing is charged for simply being discoverable to buyers.",
+        text: "Browsing or searching Velte as a buyer is free, and listing a business as a vendor is free — nothing is charged for simply being discoverable to buyers. Vendors are charged a fixed lead fee from their in-app wallet each time a buyer initiates a WhatsApp conversation about one of their listings, whether from a search result, a browse listing, or their store page; the current rate is always shown in your wallet dashboard before it applies. Other optional features, such as paid placement, may be introduced in the future and will always be disclosed clearly before they apply to you.",
       },
       {
         kind: "list",
@@ -344,8 +344,9 @@ export default function TermsContent() {
                   Terms &amp; Conditions
                 </h1>
                 <p className="text-lg text-gray-500 leading-relaxed max-w-lg mb-7">
-                  The terms that govern buyer search and vendor listings on
-                  Velte — written to be clear, fair, and easy to follow.
+                  The terms that govern buyer browsing, search, and vendor
+                  listings on Velte — written to be clear, fair, and easy to
+                  follow.
                 </p>
 
                 {/* Quick chips */}

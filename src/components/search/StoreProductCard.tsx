@@ -1,5 +1,5 @@
-/* eslint-disable @next/next/no-img-element */
 import { Store as StoreIcon } from "lucide-react";
+import { ProtectedImage } from "@/components/ProtectedImage";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -35,13 +35,14 @@ export function StoreProductCard({
   const chatHref = buildWhatsappLink(
     storeWhatsapp,
     `Hi ${storeName}! I'm interested in your "${match.name}" — I found you on Velte.`,
+    match.mainImageUrl ? match.productId : undefined,
   );
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
         {match.mainImageUrl ? (
-          <img
+          <ProtectedImage
             src={optimizedImageUrl(match.mainImageUrl)}
             alt={match.name}
             className="w-full h-full object-cover"
@@ -79,7 +80,7 @@ export function StoreProductCard({
               href={chatHref}
               label="Chat about this"
               className="w-full mt-1"
-              onClick={() => reportLead(vendorId, match.productId)}
+              onClick={() => reportLead(vendorId, match.productId, "search")}
             />
           )
         )}

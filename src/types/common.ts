@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
 
+/** Which buyer-facing surface produced a WhatsApp lead click — 'browse' (the
+ *  "/" homepage marketplace grid, or the public /store/[handle] page; a
+ *  direct chat click with no AI involved) or 'search' (/search's AI-matched
+ *  result cards). See reportLead() and velte-backend's WalletTransaction. */
+export type LeadSource = "browse" | "search";
+
 export interface PaginationProps {
   currentPage: number;
   totalPages: number;

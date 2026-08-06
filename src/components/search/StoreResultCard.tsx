@@ -92,7 +92,7 @@ export function StoreResultCard({
               href={chatHref}
               label="Chat on WhatsApp"
               className="w-full"
-              onClick={() => reportLead(match.vendorId)}
+              onClick={() => reportLead(match.vendorId, undefined, "search")}
             />
           )}
           <Link

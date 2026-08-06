@@ -81,3 +81,39 @@ export interface IntroCardProps {
   whatsappHref: string | null;
   isOwn: boolean;
 }
+
+/** One card in the "/" homepage's marketplace preview grid — a flat,
+ *  Instagram-shop-style listing (not grouped by store), with the vendor
+ *  shown as a rounded avatar + bold name + verified badge, not a text
+ *  byline. See velte-backend's getMarketplacePreview. */
+export interface MarketplacePreviewItem {
+  id: string;
+  name: string;
+  kind: "product" | "service";
+  quoteOnRequest: boolean;
+  /** Kobo — same raw-kobo convention as PublicStoreProduct; divide by 100
+   *  before formatting. */
+  price: number;
+  priceMax: number | null;
+  currency: string;
+  mainImageUrl: string | null;
+  vendorId: string;
+  storeName: string;
+  storeHandle: string;
+  storeAvatar: string | null;
+  whatsapp: string | null;
+}
+
+/** One card in the "/" homepage's Vendors section — a Twitter-profile-style
+ *  card: `gallery` renders as a sliding cover photo, `avatar` overlaps its
+ *  bottom edge. See velte-backend's getVendorsPreview. */
+export interface VendorPreviewItem {
+  vendorId: string;
+  name: string;
+  handle: string;
+  description: string | null;
+  sectors: string[];
+  whatsapp: string | null;
+  gallery: string[];
+  avatar: string | null;
+}
