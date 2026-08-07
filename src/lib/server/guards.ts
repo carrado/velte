@@ -12,15 +12,23 @@ import { BackendError } from "./backend";
  *   const { userId, cookie } = gate;   // cookie → forward to backendFetch
  */
 
-export function jsonError(status: number, message: string) {
-  return NextResponse.json({ error: message }, { status });
+export function jsonError(
+  status: number,
+  message: string,
+  fields?: Record<string, string>,
+) {
+  return NextResponse.json(
+    fields ? { error: message, fields } : { error: message },
+    { status },
+  );
 }
 
 export const unauthorized = () => jsonError(401, "Not authenticated.");
 
 /** Map a thrown error to a JSON error response — preserves the upstream status. */
 export function fail(err: unknown, fallback: string) {
-  if (err instanceof BackendError) return jsonError(err.status, err.message);
+  if (err instanceof BackendError)
+    return jsonError(err.status, err.message, err.fields);
   return jsonError(500, fallback);
 }
 
