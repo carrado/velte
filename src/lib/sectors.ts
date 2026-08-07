@@ -407,9 +407,9 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         listingConfig: {
           presetGroups: ["Real Estate & Property"],
           attributeCategoryId: "real-estate",
-          // The listing itself (the house/land) is a unique asset, not
-          // stocked merchandise — no retail category applies.
-          skipProductCategory: true,
+          // None of the seeded retail categories (Electronics, Fashion…) fit
+          // a property listing — skip the required dropdown like services do.
+          categoryOptional: true,
           productNamePlaceholder:
             "e.g., 3-bedroom duplex in Lekki, Plot of land in Epe…",
         },
