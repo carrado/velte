@@ -107,7 +107,7 @@ export default function StoreTabs({
         )}
 
         {active === "products" && goods.length > 0 && (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-2.5 gap-y-4 sm:gap-5">
             {goods.map((product) => (
               <OfferingCard
                 key={product.id}
@@ -122,7 +122,7 @@ export default function StoreTabs({
         )}
 
         {active === "services" && services.length > 0 && (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-2.5 gap-y-4 sm:gap-5">
             {services.map((product) => (
               <OfferingCard
                 key={product.id}

@@ -26,6 +26,10 @@ export interface PublicStoreProduct {
   priceMax?: number | null;
   currency: string;
   mainImageUrl: string | null;
+  /** Everything beyond the main image — the card always shows just
+   *  mainImageUrl; OfferingDetailModal renders the full [main, ...these] set
+   *  as a swipeable carousel when there's more than one. */
+  thumbnailUrls: string[];
   description: string | null;
   /** Vendor-entered "service details" — a service's own attributes, shown in
    *  full only in OfferingDetailModal (the card itself only has room for a
@@ -97,6 +101,15 @@ export interface MarketplacePreviewItem {
   priceMax: number | null;
   currency: string;
   mainImageUrl: string | null;
+  /** Everything beyond the main image — the card shows just mainImageUrl,
+   *  ListingDetailModal renders [main, ...these] as a swipeable carousel
+   *  when there's more than one. */
+  thumbnailUrls: string[];
+  description: string | null;
+  /** Vendor-entered "service details" — shown in full only in
+   *  ListingDetailModal (the card only has room for a truncated
+   *  description). */
+  attributes: { name: string; value: string }[];
   vendorId: string;
   storeName: string;
   storeHandle: string;
