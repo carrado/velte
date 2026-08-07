@@ -1,13 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { BadgeCheck, Store as StoreIcon, Wrench, Package } from "lucide-react";
+import {
+  BadgeCheck,
+  Images,
+  Store as StoreIcon,
+  Wrench,
+  Package,
+} from "lucide-react";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { AskVeluxButton } from "@/components/AskVeluxButton";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
+import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import { reportLead } from "@/lib/reportLead";
 import { MARKETPLACE_SCROLL_FLAG } from "@/lib/scrollToMarketplace";
@@ -52,6 +60,27 @@ function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
     item.mainImageUrl ? item.id : undefined,
   );
 
+  const images = resolveGalleryImages(item.mainImageUrl, item.thumbnailUrls);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [descOverflows, setDescOverflows] = useState(false);
+  const descRef = useRef<HTMLParagraphElement>(null);
+
+  // Same overflow-detection technique as the public store page's OfferingCard
+  // — only offer "See more" when the description actually got clipped by its
+  // own 2-line clamp, never as a pointless toggle on a short description.
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    setDescOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [item.description]);
+
+  // Service-detail attributes never render on the card itself, and extra
+  // photos beyond the main one aren't reachable from the card's own
+  // (single-image) media area — either alone is reason enough to offer "See
+  // more", even when the description itself is short/absent.
+  const hasMore =
+    descOverflows || item.attributes.length > 0 || images.length > 1;
+
   return (
     // A plain div, not motion.div — this used to carry a scroll-triggered
     // fadeUp reveal (opacity/y driven by the grid's own whileInView
@@ -75,11 +104,37 @@ function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
           <KindIcon size={10} />
           {isService ? "Service" : "Product"}
         </span>
+        {images.length > 1 && (
+          <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold rounded-full">
+            <Images size={10} />
+            {images.length}
+          </span>
+        )}
       </div>
       <div className="p-3.5 flex flex-col flex-1 gap-1">
         <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2 min-h-[2.5em]">
           {item.name}
         </p>
+        {item.description && (
+          <p
+            ref={descRef}
+            className="text-[12px] text-gray-500 leading-relaxed line-clamp-2"
+          >
+            {item.description}
+          </p>
+        )}
+        {hasMore && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailOpen(true);
+            }}
+            className="self-start text-[11px] font-semibold text-orange-600 hover:text-orange-700"
+          >
+            See more
+          </button>
+        )}
         {item.quoteOnRequest ? (
           <p className="text-[14px] font-extrabold text-[#023337]">
             Contact for quote
@@ -128,6 +183,29 @@ function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
           />
         )}
       </div>
+
+      <ListingDetailModal
+        item={{
+          name: item.name,
+          kind: item.kind,
+          quoteOnRequest: item.quoteOnRequest,
+          price: item.price,
+          priceMax: item.priceMax,
+          currency: item.currency,
+          images,
+          description: item.description,
+          attributes: item.attributes,
+        }}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        // A logged-in vendor never reaches "/" (see proxy.ts) — this card's
+        // own isOwn is always false, unlike the public store page's
+        // OfferingCard, which a vendor CAN land on (their own storefront).
+        isOwn={false}
+        chatHref={chatHref}
+        chatLabel="Chat"
+        onChatClick={() => reportLead(item.vendorId, item.id, "browse")}
+      />
     </div>
   );
 }

@@ -1,20 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
+  Images,
   MessageCircle,
   Package,
   Store as StoreIcon,
   Wrench,
-  X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { fmt } from "@/lib/product-price";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
+import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
-import { OwnListingBadge } from "@/components/search/OwnListingBadge";
+import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { reportLead } from "@/lib/reportLead";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import type {
@@ -99,8 +98,9 @@ function enquireHrefFor(
   );
 }
 
-/** Image "post" — shared between the card and its detail modal so the two
- * never drift. */
+/** Image "post" for the compact card — just the main image, no carousel
+ * controls (no room for them at this size). The full [main, ...thumbnails]
+ * set only ever renders as a swipeable gallery inside ListingDetailModal. */
 function OfferingMedia({
   product,
   aspectClassName,
@@ -108,16 +108,14 @@ function OfferingMedia({
   product: PublicStoreProduct;
   aspectClassName: string;
 }) {
+  const mainImage = product.mainImageUrl;
   return (
     <div
-      className={cn(
-        "relative w-full bg-gray-50 flex items-center justify-center overflow-hidden",
-        aspectClassName,
-      )}
+      className={`relative w-full bg-gray-50 flex items-center justify-center overflow-hidden ${aspectClassName}`}
     >
-      {product.mainImageUrl ? (
+      {mainImage ? (
         <ProtectedImage
-          src={optimizedImageUrl(product.mainImageUrl)}
+          src={optimizedImageUrl(mainImage)}
           alt={product.name}
           className="w-full h-full object-cover"
         />
@@ -125,116 +123,6 @@ function OfferingMedia({
         <StoreIcon size={30} className="text-gray-300" />
       )}
     </div>
-  );
-}
-
-/** The full-detail view a card's "See more" opens into — everything the
- * card itself doesn't have room for: the untruncated description AND the
- * vendor's own service-detail attributes (the card never shows these at
- * all, see OfferingCard's own comment). */
-function OfferingDetailModal({
-  product,
-  storeName,
-  whatsapp,
-  vendorId,
-  isOwn,
-  open,
-  onClose,
-}: {
-  product: PublicStoreProduct;
-  storeName: string;
-  whatsapp: string | null;
-  vendorId: string;
-  isOwn: boolean;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const isService = product.kind === "service";
-  const KindIcon = isService ? Wrench : Package;
-  const enquireHref = enquireHrefFor(product, storeName, whatsapp);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl max-h-[92vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="relative">
-          <OfferingMedia product={product} aspectClassName="aspect-[4/3]" />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute top-2.5 right-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/60"
-          >
-            <X size={16} />
-          </button>
-          <span className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm text-white text-[11px] font-semibold rounded-full">
-            <KindIcon size={11} />
-            {isService ? "Service" : "Product"}
-          </span>
-        </div>
-
-        <div className="p-4 sm:p-5 space-y-3">
-          <p className="text-base font-bold text-gray-800 leading-snug">
-            {product.name}
-          </p>
-          {product.description && (
-            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-              {product.description}
-            </p>
-          )}
-          {product.attributes.length > 0 && (
-            <dl className="space-y-1.5 pt-2 border-t border-gray-100">
-              {product.attributes.map((attr) => (
-                <div
-                  key={attr.name}
-                  className="flex items-baseline gap-1.5 text-sm"
-                >
-                  <dt className="text-gray-400 shrink-0">{attr.name}:</dt>
-                  <dd className="text-gray-700">{attr.value}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-          <div className="pt-2 border-t border-gray-100">
-            <Price product={product} />
-          </div>
-          {isOwn ? (
-            <OwnListingBadge label="This is your listing" />
-          ) : (
-            enquireHref && (
-              <WhatsAppButton
-                href={enquireHref}
-                label={isService ? "Enquire about this service" : "Enquire"}
-                className="w-full"
-                onClick={() => reportLead(vendorId, product.id, "browse")}
-              />
-            )
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body,
   );
 }
 
@@ -259,6 +147,10 @@ export function OfferingCard({
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
   const enquireHref = enquireHrefFor(product, storeName, whatsapp);
+  const images = resolveGalleryImages(
+    product.mainImageUrl,
+    product.thumbnailUrls,
+  );
 
   // Same overflow-detection technique as ExpandableText (search results) —
   // only offer "See more" when the description actually got clipped by its
@@ -270,9 +162,12 @@ export function OfferingCard({
   }, [product.description]);
 
   // Service-detail attributes never render on the card itself (no room
-  // alongside price/CTA) — their mere existence alone is reason enough to
-  // offer "See more", even when the description itself is short/absent.
-  const hasMore = descOverflows || product.attributes.length > 0;
+  // alongside price/CTA), and extra photos beyond the main one aren't
+  // reachable from the card's own (single-image) media area — either alone
+  // is reason enough to offer "See more", even when the description itself
+  // is short/absent.
+  const hasMore =
+    descOverflows || product.attributes.length > 0 || images.length > 1;
 
   return (
     <div className="bg-white border rounded-2xl border-gray-100 shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md flex flex-col h-full">
@@ -282,6 +177,12 @@ export function OfferingCard({
           <KindIcon size={11} />
           {isService ? "Service" : "Product"}
         </span>
+        {images.length > 1 && (
+          <span className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm text-white text-[11px] font-semibold rounded-full">
+            <Images size={11} />
+            {images.length}
+          </span>
+        )}
       </div>
 
       <div className="p-3 sm:p-4 flex flex-col flex-1 gap-2">
@@ -324,14 +225,24 @@ export function OfferingCard({
         </div>
       </div>
 
-      <OfferingDetailModal
-        product={product}
-        storeName={storeName}
-        whatsapp={whatsapp}
-        vendorId={vendorId}
-        isOwn={isOwn}
+      <ListingDetailModal
+        item={{
+          name: product.name,
+          kind: product.kind,
+          quoteOnRequest: product.quoteOnRequest ?? false,
+          price: product.price,
+          priceMax: product.priceMax ?? null,
+          currency: product.currency,
+          images,
+          description: product.description,
+          attributes: product.attributes,
+        }}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
+        isOwn={isOwn}
+        chatHref={enquireHref}
+        chatLabel={isService ? "Enquire about this service" : "Enquire"}
+        onChatClick={() => reportLead(vendorId, product.id, "browse")}
       />
     </div>
   );
