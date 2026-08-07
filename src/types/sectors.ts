@@ -9,11 +9,7 @@
  *                 menu, not a stocked shelf.
  */
 export type SectorClassification =
-  | "retail"
-  | "food"
-  | "service"
-  | "both"
-  | "food_both";
+  "retail" | "food" | "service" | "both" | "food_both";
 
 /**
  * Optional per-sector tailoring of the Add-Offering wizard. Tailors content
@@ -45,6 +41,16 @@ export interface SectorListingConfig {
    * productCategoryId when omitted.
    */
   attributeCategoryId?: string;
+  /**
+   * Skip the required product-category dropdown entirely for this sector's
+   * product/both listings, same as services and dishes already do. Set true
+   * only when nothing in the vendor's real category list ever fits the
+   * sector well enough to force a choice (e.g. real estate) — forcing an
+   * unrelated generic bucket (Electronics, Fashion…) onto the listing serves
+   * neither the vendor nor buyers browsing by category. Matching still works
+   * via attributeCategoryId, exactly like services.
+   */
+  categoryOptional?: boolean;
   /** Sector-flavored placeholder copy for the Basics block, per listing kind. */
   productNamePlaceholder?: string;
   productDescriptionPlaceholder?: string;
