@@ -1052,7 +1052,7 @@ export default function AddProductPage({
       );
       return;
     }
-    if (!noCategory && !selectedCategory) {
+    if (!isService && !isFood && !categoryOptional && !selectedCategory) {
       toast.error("Please select a category");
       return;
     }
