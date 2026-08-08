@@ -157,6 +157,8 @@ async function getVendorStoresForProducts(
           description: string;
           sectors: string[];
           whatsapp: string | null;
+          avatar: string | null;
+          gallery: string[];
         }>(`/store/by-vendor/${match.vendorId}`);
         const result: StoreMatch = {
           storeId: store.storeId,
@@ -170,6 +172,8 @@ async function getVendorStoresForProducts(
           state: match.state,
           distanceKm: match.distanceKm,
           score: match.score,
+          avatar: store.avatar,
+          gallery: store.gallery,
         };
         return result;
       } catch (err) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   MapPin,
@@ -12,7 +12,7 @@ import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
-import { ExpandableText } from "@/components/search/ExpandableText";
+import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
@@ -70,6 +70,22 @@ export function VendorResultCard({
     e.stopPropagation();
     setImgIndex((i) => (i + 1) % images.length);
   };
+
+  // "See more" opens the full ListingDetailModal (gallery + full
+  // description + attributes + vendor details) instead of expanding text
+  // in place — only offered when there's actually more than the compact
+  // card already shows (a clipped description, vendor-entered attributes,
+  // or extra photos beyond the one already visible above).
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [descOverflows, setDescOverflows] = useState(false);
+  const descRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    setDescOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [match.description]);
+  const hasMore =
+    descOverflows || match.attributes.length > 0 || images.length > 1;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
@@ -145,28 +161,25 @@ export function VendorResultCard({
             {match.distanceKm != null && ` · ${match.distanceKm}km away`}
           </span>
         </div>
-        {match.kind === "service" && (
-          <>
-            {match.description && (
-              <ExpandableText
-                text={match.description}
-                className="text-xs text-gray-500 leading-relaxed"
-              />
-            )}
-            {match.attributes.length > 0 && (
-              <dl className="space-y-1 pt-1 border-t border-gray-100">
-                {match.attributes.map((attr) => (
-                  <div
-                    key={attr.name}
-                    className="flex items-baseline gap-1.5 text-xs"
-                  >
-                    <dt className="text-gray-400 shrink-0">{attr.name}:</dt>
-                    <dd className="text-gray-600 truncate">{attr.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </>
+        {match.description && (
+          <p
+            ref={descRef}
+            className="text-xs text-gray-500 leading-relaxed line-clamp-2"
+          >
+            {match.description}
+          </p>
+        )}
+        {hasMore && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailOpen(true);
+            }}
+            className="text-[11px] font-semibold text-orange-600 hover:text-orange-700"
+          >
+            See more
+          </button>
         )}
         <div className="flex items-center justify-between gap-2 pt-1">
           <div className="flex items-center gap-1 text-xs text-gray-500 min-w-0">
@@ -202,6 +215,39 @@ export function VendorResultCard({
           </div>
         ) : null}
       </div>
+
+      <ListingDetailModal
+        item={{
+          name: match.name,
+          kind: match.kind,
+          quoteOnRequest: match.quoteOnRequest,
+          price: match.price,
+          priceMax: match.priceMax,
+          currency: match.currency,
+          images,
+          description: match.description,
+          attributes: match.attributes,
+        }}
+        // The AI search pipeline already normalizes price/priceMax to naira
+        // server-side (see MarketplaceCard's own comment on the raw-kobo
+        // convention it doesn't share) — ListingDetailModal must not divide
+        // this by 100 again.
+        priceInKobo={false}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        isOwn={isOwn}
+        vendor={{
+          name: match.vendorName,
+          handle: match.storeHandle,
+          area: match.area,
+          state: match.state,
+        }}
+        chatHref={chatHref}
+        chatLabel="Chat with vendor"
+        onChatClick={() =>
+          reportLead(match.vendorId, match.productId, "search")
+        }
+      />
     </div>
   );
 }

@@ -29,8 +29,17 @@ const SLIDE_INTERVAL_MS = 3200;
 // (translateX + a CSS transition, not a cross-fade) rather than a single
 // static banner, per the ask. Falls back to a plain gradient tile when the
 // vendor hasn't uploaded any gallery photos yet, and skips the auto-advance
-// timer entirely for 0-1 images — nothing to slide between.
-function SlidingCover({ images, name }: { images: string[]; name: string }) {
+// timer entirely for 0-1 images — nothing to slide between. Exported —
+// VendorDetailModal (a search result's "See more") reuses this directly for
+// the same reason MarketplaceCard/VendorCard themselves are exported: one
+// cover implementation, not a second copy that drifts.
+export function SlidingCover({
+  images,
+  name,
+}: {
+  images: string[];
+  name: string;
+}) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
