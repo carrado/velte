@@ -289,24 +289,6 @@ function FormattedReply({ text }: { text: string }) {
   );
 }
 
-// Velux "typing" its reply — useTypewriter reveals `text` progressively
-// over the already-complete final string (see that hook's own comment on
-// why there's no real token stream to key off). A trailing cursor blinks
-// only while still revealing; once the full text is visible it disappears
-// rather than blinking forever next to a finished sentence.
-function TypewriterReply({ text }: { text: string }) {
-  const visible = useTypewriter(text);
-  const isTyping = visible.length < text.length;
-  return (
-    <div>
-      <FormattedReply text={visible} />
-      {isTyping && (
-        <span className="inline-block w-[2px] h-4 ml-0.5 bg-orange-400 animate-pulse" />
-      )}
-    </div>
-  );
-}
-
 // One exchange in the conversation: the buyer's message (+ optional photo
 // preview) and everything the search produced for it. Lives only in this
 // component's React state — never localStorage, never a database. A page
@@ -430,7 +412,7 @@ function ConversationTurnView({
               turn.stores.length > 0 ||
               turn.vendorProducts.length > 0 ? (
                 <>
-                  <TypewriterReply text={turn.reply} />
+                  <FormattedReply text={turn.reply} />
                   {turn.vendorProducts.length > 0 &&
                     turn.vendorProductsStore && (
                       <div className="space-y-3">
@@ -603,7 +585,7 @@ function ConversationTurnView({
                 // Places (searchStores Tier 5), visibly distinct from an actual
                 // Velte listing (see ExternalBusinessCard).
                 <>
-                  <TypewriterReply text={turn.reply} />
+                  <FormattedReply text={turn.reply} />
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {turn.externalStoreSuggestions.map((match) => (
                       <ExternalBusinessCard
@@ -618,7 +600,7 @@ function ConversationTurnView({
                 // (see systemPrompt.ts) — a plain reply, same as the text above
                 // a result grid, never the "nothing found anywhere" card below:
                 // the conversation is still open, not a dead end.
-                <TypewriterReply text={turn.reply} />
+                <FormattedReply text={turn.reply} />
               ) : (
                 // A real search ran and came up completely empty — an AI
                 // suggestion card (spec §3.5), not a bare empty state.
@@ -627,7 +609,7 @@ function ConversationTurnView({
                     size={20}
                     className="text-orange-500 shrink-0 mt-0.5"
                   />
-                  <TypewriterReply text={turn.reply} />
+                  <FormattedReply text={turn.reply} />
                 </div>
               )}
               {/* Sits after, not inside, the chain above — so the rare turn
