@@ -1,6 +1,21 @@
 import type { MetadataRoute } from "next";
 import { listStoreHandlesForSitemap } from "@/lib/server/store";
 
+// Forces this route to render dynamically (per-request) instead of Next's
+// default attempt to statically generate it at build time. Without this,
+// listStoreHandlesForSitemap()'s backendData() call — which always fetches
+// with `cache: "no-store"` (see backend.ts's doFetch) — trips Next's
+// DYNAMIC_SERVER_USAGE bail-out mid static-generation. That's a special
+// framework control-flow error (digest: "DYNAMIC_SERVER_USAGE"), not an
+// ordinary one: the try/catch below around the store fetch was silently
+// swallowing it as if it were a real backend hiccup, letting the route
+// "successfully" statically freeze with ZERO store entries baked in —
+// every vendor storefront silently missing from what Google actually
+// crawls, indefinitely, until the next full deploy. `force-dynamic` makes
+// the always-fresh fetch and the route's own rendering mode agree, so
+// there's nothing left to bail out of.
+export const dynamic = "force-dynamic";
+
 const SITE_URL = "https://velte.ng";
 
 const STATIC_ROUTES: {
