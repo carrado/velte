@@ -116,19 +116,28 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "groceries_supermarket",
         label: "Groceries & Supermarket",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "groceries" },
+        listingConfig: {
+          productCategoryId: "groceries-food",
+          attributeCategoryId: "groceries",
+        },
       },
       {
         value: "provision_stores_kiosks",
         label: "Provision Stores & Kiosks",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "groceries" },
+        listingConfig: {
+          productCategoryId: "provision-kiosks",
+          attributeCategoryId: "groceries",
+        },
       },
       {
         value: "wholesale_distribution",
         label: "Wholesale & Distribution",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "groceries" },
+        listingConfig: {
+          productCategoryId: "wholesale-bulk",
+          attributeCategoryId: "groceries",
+        },
       },
       {
         value: "stationery_books",
@@ -137,6 +146,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         // "both": stationery/bookshops commonly also offer printing,
         // photocopying, and binding as a service side.
         listingConfig: {
+          productCategoryId: "books",
           attributeCategoryId: "stationery",
           presetGroups: ["Printing & Publishing"],
         },
@@ -145,16 +155,19 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "toys_kids_items",
         label: "Toys & Kids' Items",
         classification: "retail",
-        // No dedicated backend category to prefill (productCategoryId
-        // omitted) — but the existing "toys" preset content fits this
-        // sector directly, so wire it up for suggestions either way.
-        listingConfig: { attributeCategoryId: "toys" },
+        listingConfig: {
+          productCategoryId: "toys",
+          attributeCategoryId: "toys",
+        },
       },
       {
         value: "gift_items_souvenirs",
         label: "Gift Items & Souvenirs",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "gifts" },
+        listingConfig: {
+          productCategoryId: "gifts-souvenirs",
+          attributeCategoryId: "gifts",
+        },
       },
     ],
   },
@@ -175,13 +188,13 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "shoes_footwear",
         label: "Shoes & Footwear",
         classification: "retail",
-        // Shoes still file under the real "Fashion" category (no dedicated
-        // backend category exists) — attributeCategoryId only swaps out
-        // which SUGGESTED attributes are shown, which for shoes are very
-        // different from clothing's (size format, closure type, sole
-        // material vs. fabric/fit/length).
+        // Now has its own dedicated backend category (used to share the
+        // broad "Fashion" bucket with clothing) — attributeCategoryId still
+        // separately drives which SUGGESTED attributes show (size format,
+        // closure type, sole material vs. clothing's fabric/fit/length), so
+        // it stays even though productCategoryId is no longer "too broad".
         listingConfig: {
-          productCategoryId: "fashion",
+          productCategoryId: "shoes-footwear",
           attributeCategoryId: "footwear",
         },
       },
@@ -200,7 +213,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         classification: "both",
         listingConfig: {
           presetGroups: ["Fashion & Tailoring", "Watch & Jewelry Repair"],
-          productCategoryId: "accessories",
+          productCategoryId: "jewelry-watches",
           attributeCategoryId: "jewelry",
         },
       },
@@ -210,7 +223,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         classification: "both",
         listingConfig: {
           presetGroups: ["Fashion & Tailoring"],
-          productCategoryId: "fashion",
+          productCategoryId: "tailoring-fashion",
           serviceNamePlaceholder: "e.g., Custom agbada — sewn to measure",
           serviceDescriptionPlaceholder:
             "Describe what you sew, fittings included, and turnaround time…",
@@ -221,7 +234,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Textile & Fabric Sales",
         classification: "retail",
         listingConfig: {
-          productCategoryId: "fashion",
+          productCategoryId: "textile-fabric",
           attributeCategoryId: "textiles",
         },
       },
@@ -237,7 +250,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         classification: "both",
         listingConfig: {
           presetGroups: ["Phone & Gadget Repairs"],
-          productCategoryId: "electronics",
+          productCategoryId: "phones-accessories",
           productNamePlaceholder:
             "e.g., Samsung Galaxy A16, iPhone 13 charger…",
         },
@@ -246,19 +259,28 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "computers_laptops",
         label: "Computers & Laptops",
         classification: "both",
-        listingConfig: { presetGroups: ["Computer & IT Repairs"] },
+        listingConfig: {
+          presetGroups: ["Computer & IT Repairs"],
+          productCategoryId: "electronics",
+        },
       },
       {
         value: "home_electronics_appliances",
         label: "Home Electronics & Appliances",
         classification: "both",
-        listingConfig: { presetGroups: ["Appliance & Generator Repair"] },
+        listingConfig: {
+          presetGroups: ["Appliance & Generator Repair"],
+          productCategoryId: "home-electronics",
+        },
       },
       {
         value: "gaming_consoles",
         label: "Gaming & Consoles",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "gaming" },
+        listingConfig: {
+          productCategoryId: "gaming-consoles",
+          attributeCategoryId: "gaming",
+        },
       },
       {
         value: "software_development_it",
@@ -293,7 +315,10 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "cosmetics_skincare_retail",
         label: "Cosmetics & Skincare Retail",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "beauty-cosmetics" },
+        listingConfig: {
+          productCategoryId: "cosmetics-skincare",
+          attributeCategoryId: "beauty-cosmetics",
+        },
       },
       {
         value: "makeup_artistry",
@@ -323,7 +348,10 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "perfumes_fragrances",
         label: "Perfumes & Fragrances",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "beauty-cosmetics" },
+        listingConfig: {
+          productCategoryId: "beauty-fragrance",
+          attributeCategoryId: "beauty-cosmetics",
+        },
       },
     ],
   },
@@ -335,25 +363,37 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "furniture",
         label: "Furniture",
         classification: "both",
-        listingConfig: { attributeCategoryId: "furniture-decor" },
+        listingConfig: {
+          productCategoryId: "furniture",
+          attributeCategoryId: "furniture-decor",
+        },
       },
       {
         value: "home_decor_furnishings",
         label: "Home Decor & Furnishings",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "furniture-decor" },
+        listingConfig: {
+          productCategoryId: "home-decor",
+          attributeCategoryId: "furniture-decor",
+        },
       },
       {
         value: "kitchenware_appliances",
         label: "Kitchenware & Appliances",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "home-kitchen" },
+        listingConfig: {
+          productCategoryId: "home-kitchen",
+          attributeCategoryId: "home-kitchen",
+        },
       },
       {
         value: "bedding_linens",
         label: "Bedding & Linens",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "furniture-decor" },
+        listingConfig: {
+          productCategoryId: "bedding-linens",
+          attributeCategoryId: "furniture-decor",
+        },
       },
       {
         value: "interior_design_services",
@@ -432,6 +472,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         classification: "both",
         listingConfig: {
           presetGroups: ["Auto Parts Sales & Fitting"],
+          productCategoryId: "auto-parts",
           attributeCategoryId: "auto-parts",
         },
       },
@@ -439,7 +480,10 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "vehicle_sales",
         label: "Vehicle Sales",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "vehicles" },
+        listingConfig: {
+          productCategoryId: "automotive",
+          attributeCategoryId: "vehicles",
+        },
       },
       {
         value: "auto_repair_mechanic",
@@ -459,6 +503,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         classification: "both",
         listingConfig: {
           presetGroups: ["Tyre Services"],
+          productCategoryId: "tyres-vulcanizing",
           attributeCategoryId: "auto-parts",
         },
       },
@@ -466,7 +511,10 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         value: "motorcycle_keke_sales",
         label: "Motorcycle & Tricycle (Keke) Sales",
         classification: "retail",
-        listingConfig: { attributeCategoryId: "vehicles" },
+        listingConfig: {
+          productCategoryId: "motorcycle-keke",
+          attributeCategoryId: "vehicles",
+        },
       },
     ],
   },
@@ -480,6 +528,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         classification: "both",
         listingConfig: {
           presetGroups: ["Appliance & Generator Repair"],
+          productCategoryId: "power-energy",
           attributeCategoryId: "power-energy",
         },
       },
@@ -489,6 +538,7 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         classification: "both",
         listingConfig: {
           presetGroups: ["Solar Installation"],
+          productCategoryId: "solar-panels",
           attributeCategoryId: "power-energy",
         },
       },

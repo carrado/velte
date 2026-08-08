@@ -130,3 +130,22 @@ export interface VendorPreviewItem {
   gallery: string[];
   avatar: string | null;
 }
+
+/** One card in the /marketplace browse page — the full catalog, not a
+ *  capped teaser (see velte-backend's getMarketplaceBrowse). Same shape as
+ *  MarketplacePreviewItem plus categoryId, which the preview grid never
+ *  needed since it has no category filter rail. Many existing listings
+ *  predate the sector→category taxonomy and carry categoryId: null — those
+ *  still render, just outside any specific category filter. */
+export interface MarketplaceBrowseItem extends MarketplacePreviewItem {
+  categoryId: string | null;
+}
+
+/** One chip in the marketplace browse page's category rail. Deliberately
+ *  includes every seeded category, even ones with zero current listings —
+ *  see velte-backend's getPublicCategories. */
+export interface PublicCategory {
+  id: string;
+  name: string;
+  emoji: string | null;
+}

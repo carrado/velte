@@ -670,7 +670,7 @@ const VELUX_GREETING_TYPING_SPEED_MS = 55;
 // speaking, not a page element popping in mid-sentence.
 const VELUX_TYPING_START_DELAY_MS = 700;
 
-// Velte's buyer-facing search (build-order step d/e), at /search —
+// Velte's buyer-facing search (build-order step d/e), at /velux —
 // `/` is now the marketing homepage. Structured as a conversation: each
 // submission appends a turn (ConversationTurn) rather than replacing the
 // last one, and a short text-only history is sent back to the model so

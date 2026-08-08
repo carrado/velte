@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { motion } from "motion/react";
 import {
   BadgeCheck,
   Images,
+  LayoutGrid,
   Store as StoreIcon,
   Wrench,
   Package,
@@ -41,7 +43,11 @@ const fadeUp = {
 // text byline — every vendor on Velte is a real, onboarded business, same
 // blanket "verified" framing Hero.tsx's own mockup already uses; there's no
 // per-vendor verification flag behind it yet).
-function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
+// Exported — the /marketplace browse page reuses this as-is (its items are
+// a strict superset shape, MarketplaceBrowseItem extends
+// MarketplacePreviewItem) rather than maintaining a second near-identical
+// card that would inevitably drift from this one.
+export function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
   const symbol = item.currency === "USD" ? "$" : "₦";
   // Same raw-kobo convention as the public store page (shared.tsx's Price) —
   // this endpoint reads Product.price directly, unlike the AI search
@@ -212,11 +218,11 @@ function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
 
 // A flat, Instagram-shop-style preview of the real marketplace catalog —
 // deliberately browse-first, not AI search. Decided 2026-08-05: at 14
-// vendors / ~17 listings, /search alone (a blind text box, zero pre-search
+// vendors / ~17 listings, /velux alone (a blind text box, zero pre-search
 // content) wasn't converting existing vendors into sales — an open-ended
 // query over a thin catalog misses more often than it hits. This gives
 // buyers something real to look at and chat about immediately; "See more"
-// hands off to /search, which stays the deeper AI-assisted discovery layer
+// hands off to /velux, which stays the deeper AI-assisted discovery layer
 // for once the catalog is big enough to lean on fully.
 //
 // Renders nothing when the catalog is empty (rather than an empty section)
@@ -294,8 +300,18 @@ export function MarketplacePreview({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4 }}
-          className="text-center"
+          className="flex flex-col sm:flex-row items-center justify-center gap-3"
         >
+          {/* Primary — the full /marketplace browse page, not just this
+              12-item teaser. AskVeluxButton stays secondary here on purpose
+              (see its own comment on why it's never the primary CTA). */}
+          <Link
+            href="/marketplace"
+            className="inline-flex items-center gap-1.5 px-6 py-3 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow-lg shadow-orange-500/20 transition-colors"
+          >
+            <LayoutGrid size={16} />
+            Browse the full marketplace
+          </Link>
           <AskVeluxButton label="Ask Velux" subtext="See more with AI search" />
         </motion.div>
       </div>

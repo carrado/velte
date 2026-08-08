@@ -5,6 +5,8 @@ import type {
   PublicStore,
   MarketplacePreviewItem,
   VendorPreviewItem,
+  MarketplaceBrowseItem,
+  PublicCategory,
 } from "@/types/store";
 
 export async function getMyStore(cookie: string): Promise<Store> {
@@ -39,6 +41,24 @@ export async function getMarketplacePreview(): Promise<
 /** Public — no cookie; feeds the "/" homepage's Vendors section. */
 export async function getVendorsPreview(): Promise<VendorPreviewItem[]> {
   return backendData<VendorPreviewItem[]>("/store/vendors-preview");
+}
+
+/** Public — no cookie; feeds the /marketplace browse page's full grid. */
+export async function getMarketplaceBrowse(): Promise<MarketplaceBrowseItem[]> {
+  return backendData<MarketplaceBrowseItem[]>("/store/marketplace");
+}
+
+/** Public — no cookie; feeds the /marketplace browse page's Vendors
+ *  section — the full directory, not the "/" homepage's capped preview. */
+export async function getVendorsBrowse(): Promise<VendorPreviewItem[]> {
+  return backendData<VendorPreviewItem[]>("/store/vendors");
+}
+
+/** Public — no cookie; feeds the /marketplace browse page's category rail.
+ *  Not the same as categoriesApi.getCategories (vendor-authenticated, used
+ *  by the Add-Offering wizard) — this is the buyer-facing equivalent. */
+export async function getPublicCategories(): Promise<PublicCategory[]> {
+  return backendData<PublicCategory[]>("/store/categories");
 }
 
 /** Public — no cookie; feeds sitemap.ts so every storefront is discoverable. */

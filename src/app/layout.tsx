@@ -9,6 +9,7 @@ import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ReferralCapture from "@/components/ReferralCapture";
 import MetaPixel from "@/components/MetaPixel";
 import BlockedAccountModal from "@/components/BlockedAccountModal";
+import { ScrollToTopButton } from "@/components/ScrollToTopButton";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -217,6 +218,7 @@ export default function RootLayout({
           <ServiceWorkerRegistrar />
           <ReferralCapture />
           <BlockedAccountModal />
+          <ScrollToTopButton />
           {children}
           <Toaster
             position="top-right"

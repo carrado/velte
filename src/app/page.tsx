@@ -11,7 +11,7 @@ import { getMarketplacePreview, getVendorsPreview } from "@/lib/server/store";
 
 // Velte's homepage — redesigned for the pivot (replaces the old
 // pre-pivot "WhatsApp AI Sales Rep" marketing site that used to live at
-// /vendors). The buyer search experience itself lives at /search.
+// /vendors). The buyer search experience itself lives at /velux.
 export const metadata: Metadata = {
   title: "Velte | Find anything nearby",
   description:
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 
 // Organization + WebSite structured data — helps Google associate the site
 // with the Velte brand (knowledge panel eligibility) and its real social
-// profiles. No SearchAction here: /search is a conversational AI flow with
+// profiles. No SearchAction here: /velux is a conversational AI flow with
 // no `?q=`-driven entry point, so a sitelinks-searchbox action would
 // describe behavior the site doesn't actually have.
 const jsonLd = {

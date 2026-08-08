@@ -24,15 +24,18 @@ const alwaysPublicRoutes = [
 //    authenticated app itself (the wallet top-up / funding-method modals'
 //    "Privacy Policy" link, opened in a new tab) — blocking these would
 //    break that existing link.
-//  - /search is the deliberate "Buy on Velte" hand-off (see Header.tsx's
-//    own comment) letting a logged-in VENDOR use the buyer-facing search
-//    themselves — blocking it would remove a real, intentional feature.
+//  - /velux and /marketplace are the deliberate "Buy on Velte" hand-offs
+//    (see Header.tsx's own comment) letting a logged-in VENDOR use the
+//    buyer-facing search/browse themselves — blocking either would remove
+//    a real, intentional feature. /velux was /search until the route was
+//    renamed to match the AI's own name.
 const publicRegardlessOfAuth = [
   "/store",
   "/track",
   "/privacy",
   "/terms",
-  "/search",
+  "/velux",
+  "/marketplace",
 ];
 
 // Marketing/onboarding pages — meant for a prospective or logged-out
