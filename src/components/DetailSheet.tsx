@@ -69,9 +69,20 @@ export function DetailSheet({
     };
   }, [open, onClose]);
 
-  // Rendered unconditionally (not `if (!open) return null`) so AnimatePresence
-  // gets to play the exit transition before the panel actually unmounts —
-  // an early return here would make closing instant instead of animated.
+  // `document` doesn't exist during SSR (Node has no DOM at all, not just an
+  // empty one) — createPortal's second argument is a plain expression
+  // evaluated at call time, so `document.body` throws `ReferenceError:
+  // document is not defined` immediately server-side, before React even
+  // gets to see that `open` is false. Same guard AnchoredPopover.tsx already
+  // uses for the identical reason. Safe to bail before AnimatePresence too:
+  // every caller starts `open` false, so there's never a real exit
+  // animation in flight on the very first (server) render this skips.
+  if (typeof document === "undefined") return null;
+
+  // Rendered unconditionally past this point (not `if (!open) return null`)
+  // so AnimatePresence gets to play the exit transition before the panel
+  // actually unmounts — an early return here would make closing instant
+  // instead of animated.
   return createPortal(
     <AnimatePresence>
       {open && (
