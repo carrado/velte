@@ -109,6 +109,12 @@ export interface StoreMatch {
   // to measure a distance against.
   distanceKm: number | null;
   score: number;
+  // The vendor's own profile picture (User.avatar) and the store's uploaded
+  // gallery photos — same two fields the marketplace's VendorCard already
+  // reads (VendorPreviewItem), null/empty when the vendor hasn't set one.
+  // Powers StoreResultCard's avatar and VendorDetailModal's sliding cover.
+  avatar: string | null;
+  gallery: string[];
 }
 
 // A real nearby business from Google Places — Tier 3 of searchStores, only

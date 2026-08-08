@@ -1,8 +1,11 @@
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MapPin, Store as StoreIcon } from "lucide-react";
+import { ProtectedImage } from "@/components/ProtectedImage";
+import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
-import { ExpandableText } from "@/components/search/ExpandableText";
+import { VendorDetailModal } from "@/components/VendorDetailModal";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { buildWhatsappLink } from "@/lib/whatsapp";
@@ -42,11 +45,33 @@ export function StoreResultCard({
   const currentUserId = useUserStore((s) => s.user?.id);
   const isOwn = currentUserId != null && currentUserId === match.vendorId;
 
+  // "See more" opens VendorDetailModal (full description + every sector +
+  // location) instead of expanding text in place — only offered when
+  // there's actually more than the compact card already shows (a clipped
+  // description, or sectors beyond the 3 already visible below).
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [descOverflows, setDescOverflows] = useState(false);
+  const descRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    setDescOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [match.description]);
+  const hasMore = descOverflows || match.sectors.length > 3;
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-2.5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="flex items-center gap-2">
-        <div className="w-9 h-9 rounded-full bg-orange-50 flex items-center justify-center shrink-0">
-          <StoreIcon size={16} className="text-orange-500" />
+        <div className="w-9 h-9 rounded-full bg-orange-50 overflow-hidden flex items-center justify-center shrink-0">
+          {match.avatar ? (
+            <ProtectedImage
+              src={optimizedImageUrl(match.avatar)}
+              alt={match.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <StoreIcon size={16} className="text-orange-500" />
+          )}
         </div>
         <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-1 min-w-0">
           {match.name}
@@ -54,10 +79,24 @@ export function StoreResultCard({
       </div>
 
       {match.description && (
-        <ExpandableText
-          text={match.description}
-          className="text-[13px] text-gray-500 leading-relaxed"
-        />
+        <p
+          ref={descRef}
+          className="text-[13px] text-gray-500 leading-relaxed line-clamp-2"
+        >
+          {match.description}
+        </p>
+      )}
+      {hasMore && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDetailOpen(true);
+          }}
+          className="text-[12px] font-semibold text-orange-600 hover:text-orange-700"
+        >
+          See more
+        </button>
       )}
 
       {match.sectors.length > 0 && (
@@ -105,6 +144,25 @@ export function StoreResultCard({
           </Link>
         </div>
       )}
+
+      <VendorDetailModal
+        item={{
+          name: match.name,
+          handle: match.handle,
+          description: match.description,
+          sectors: match.sectors,
+          area: match.area,
+          state: match.state,
+          distanceKm: match.distanceKm,
+          avatar: match.avatar,
+          gallery: match.gallery,
+        }}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        isOwn={isOwn}
+        chatHref={chatHref}
+        onChatClick={() => reportLead(match.vendorId, undefined, "search")}
+      />
     </div>
   );
 }

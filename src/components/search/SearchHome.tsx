@@ -15,7 +15,6 @@ import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
 import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
-import { LocationPermissionModal } from "@/components/search/LocationPermissionModal";
 import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
@@ -23,7 +22,6 @@ import { getInitial } from "@/lib/initials";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import { useTypewriter } from "@/hooks/useTypewriter";
 import type {
-  BuyerLocation,
   Clarification,
   MatchQuality,
   MatchTier,
@@ -702,136 +700,26 @@ export function SearchHome() {
     prevTurnCountRef.current = turns.length;
   }, [turns.length]);
 
-  // A memoized promise, not a one-shot effect + ref: the buyer should
-  // always search around their real location unless they name a different
-  // one — a fast submit racing an unresolved getCurrentPosition() call used
-  // to silently drop it. Kicked off eagerly on mount (usually already
-  // settled by the time someone finishes typing) and awaited in
-  // handleSubmit as a safety net so it's never lost to the race, only
-  // capped by the same 8s timeout as before.
+  // Location functionality is stepped down for now (product decision — see
+  // git history for the previous browser-geolocation implementation:
+  // permission-gated LocationPermissionModal + getBuyerLocationOnce, both
+  // removed here). Buyers just search and get results; the backend already
+  // treats buyerLocation as optional and falls back to a named location in
+  // the query text or a nationwide search when it's absent (see
+  // resolveBuyerCoords.ts / route.ts), so this is a safe no-op, not a
+  // half-implemented feature.
   //
-  // Only a successful resolution is cached permanently (buyerLocationRef) —
-  // a denied/timed-out attempt clears buyerLocationPromise so the next call
-  // retries instead of being stuck on a stale null for the rest of the
-  // session (e.g. the buyer initially dismissed the prompt, then granted
-  // permission from the browser's address-bar icon).
-  const buyerLocationRef = useRef<BuyerLocation | null>(null);
-  const buyerLocationPromise = useRef<Promise<BuyerLocation | null> | null>(
-    null,
-  );
-  function getBuyerLocationOnce(): Promise<BuyerLocation | null> {
-    if (buyerLocationRef.current) {
-      return Promise.resolve(buyerLocationRef.current);
-    }
-    if (!buyerLocationPromise.current) {
-      buyerLocationPromise.current = new Promise<BuyerLocation | null>(
-        (resolve) => {
-          if (!navigator.geolocation) {
-            resolve(null);
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              const loc = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-              };
-              buyerLocationRef.current = loc;
-              resolve(loc);
-            },
-            (err) => {
-              // Swallowed to null either way (search still runs nationwide
-              // rather than blocking on location), but the specific reason
-              // matters for debugging "why did this go nationwide" — code 1
-              // is a real permission denial, 2 is the OS/browser reporting
-              // no location fix at all (e.g. Windows' own Location Services
-              // toggle is off, independent of the browser's own permission
-              // being granted), 3 is just the 8s timeout expiring.
-              console.warn(
-                `[search] geolocation failed (code ${err.code}): ${err.message}`,
-              );
-              resolve(null);
-            },
-            { timeout: 8000 },
-          );
-        },
-      ).finally(() => {
-        buyerLocationPromise.current = null;
-      });
-    }
-    return buyerLocationPromise.current;
-  }
-
-  // Checked via the Permissions API rather than calling getBuyerLocationOnce
-  // straight away — that would fire the browser's native geolocation prompt
-  // the instant the page loads, with zero context for why. "granted"
-  // fetches silently (no prompt, nothing to explain); "prompt" (undecided)
-  // shows our own explanation first via LocationPermissionModal; "denied"
-  // is left alone entirely — the browser won't re-prompt either way, and a
-  // getCurrentPosition() call would just fail again. Safari's geolocation
-  // support for this query has historically been inconsistent, so any
-  // failure/lack of support falls back to showing the modal too, rather
-  // than silently assuming permission either way.
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  // Flips true once we KNOW whether the modal is going to show at all —
-  // distinct from showLocationModal itself, which starts false and may only
-  // flip true a moment later once the (async) permissions check resolves.
-  // Velux's greeting is gated on this (see readyToGreet below) rather than
-  // on showLocationModal alone, so a granted-permission visitor doesn't
-  // start typing during that brief "we haven't checked yet" window only to
-  // have the modal pop up and interrupt it a beat later.
-  const [locationGateResolved, setLocationGateResolved] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    async function checkLocationPermission() {
-      if (!navigator.geolocation) {
-        if (!cancelled) setLocationGateResolved(true);
-        return;
-      }
-      if (!navigator.permissions?.query) {
-        if (!cancelled) {
-          setShowLocationModal(true);
-          setLocationGateResolved(true);
-        }
-        return;
-      }
-      try {
-        const status = await navigator.permissions.query({
-          name: "geolocation",
-        });
-        if (cancelled) return;
-        if (status.state === "granted") getBuyerLocationOnce();
-        else if (status.state === "prompt") setShowLocationModal(true);
-        setLocationGateResolved(true);
-      } catch {
-        if (!cancelled) {
-          setShowLocationModal(true);
-          setLocationGateResolved(true);
-        }
-      }
-    }
-    checkLocationPermission();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  // Velux stays silent until we know the location modal won't interrupt it
-  // — resolved-but-no-modal (permission already granted/denied) means type
-  // right away; resolved-and-showing-modal means wait for handleAllowLocation
-  // /onDismiss to flip showLocationModal back to false first.
-  const readyToGreet = locationGateResolved && !showLocationModal;
-  // A further beat once readyToGreet flips true — the avatar/bubble render
-  // immediately, but typing itself only starts after
+  // A further beat before Velux starts typing its greeting — the
+  // avatar/bubble render immediately, but typing itself only starts after
   // VELUX_TYPING_START_DELAY_MS, not the instant the page is ready.
   const [startGreetingTyping, setStartGreetingTyping] = useState(false);
   useEffect(() => {
-    if (!readyToGreet) return;
     const id = setTimeout(
       () => setStartGreetingTyping(true),
       VELUX_TYPING_START_DELAY_MS,
     );
     return () => clearTimeout(id);
-  }, [readyToGreet]);
+  }, []);
   const greeting = useTypewriter(
     startGreetingTyping ? VELUX_GREETING : "",
     VELUX_GREETING_TYPING_SPEED_MS,
@@ -845,11 +733,6 @@ export function SearchHome() {
     greetingDone ? VELUX_SUBTEXT : "",
     VELUX_GREETING_TYPING_SPEED_MS,
   );
-
-  const handleAllowLocation = () => {
-    setShowLocationModal(false);
-    getBuyerLocationOnce();
-  };
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -946,13 +829,14 @@ export function SearchHome() {
       },
     ]);
 
-    const location = await getBuyerLocationOnce();
-
     await runSearchStream(
       {
         message,
         imageUrl: currentImageUrl ?? undefined,
-        buyerLocation: location ?? undefined,
+        // buyerLocation intentionally omitted — location functionality is
+        // stepped down for now (see the comment above the greeting-typing
+        // effect). The backend resolves a named location from the query
+        // text, or falls back to a nationwide search, when it's absent.
         history,
         recentStatuses: shownStatusesRef.current,
       },
@@ -1166,11 +1050,6 @@ export function SearchHome() {
 
   return (
     <div className="h-dvh bg-white flex flex-col overflow-hidden">
-      <LocationPermissionModal
-        open={showLocationModal}
-        onAllow={handleAllowLocation}
-        onDismiss={() => setShowLocationModal(false)}
-      />
       <BuyerInstallPrompt />
       <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-white border-b border-gray-100 z-10">
         <Link href="/" className="shrink-0">
