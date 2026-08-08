@@ -68,10 +68,11 @@ export default function Header({ title }: HeaderProps) {
 
       <div className="flex items-center gap-3 md:gap-4">
         {/* A vendor is also a buyer sometimes — this hands them off to the
-            buyer-facing search (Velte Connect) instead of leaving no way
-            back to it once they're inside their own dashboard. */}
+            buyer-facing search (Velte Connect, at /velux — renamed from
+            /search) instead of leaving no way back to it once they're
+            inside their own dashboard. */}
         <Link
-          href="/search"
+          href="/velux"
           title="Looking to buy something yourself?"
           className="flex items-center gap-1.5 px-2.5 sm:px-3.5 h-8 sm:h-9 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors text-dash-caption sm:text-dash-body font-semibold shrink-0"
         >

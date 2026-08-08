@@ -52,7 +52,7 @@ export function AskVeluxButton({
   if (variant === "compact") {
     return (
       <Link
-        href="/search"
+        href="/velux"
         title="Ask Velux — search with AI"
         className={cn(
           "flex items-center gap-1.5 h-8 sm:h-9 pl-1 pr-2.5 sm:pr-3.5 rounded-full border border-orange-200 bg-orange-50 hover:bg-orange-100 transition-colors shrink-0",
@@ -69,7 +69,7 @@ export function AskVeluxButton({
 
   return (
     <Link
-      href="/search"
+      href="/velux"
       className={cn(
         "inline-flex items-center gap-3 pl-2 pr-5 sm:pr-6 py-2 rounded-full bg-white border border-orange-200 shadow-sm hover:shadow-md hover:border-orange-300 transition-all",
         className,

@@ -78,7 +78,10 @@ function SlidingCover({ images, name }: { images: string[]; name: string }) {
   );
 }
 
-function VendorCard({ item }: { item: VendorPreviewItem }) {
+// Exported — the /marketplace browse page reuses this directly (same
+// reasoning as MarketplacePreview's MarketplaceCard export: one card, not a
+// second copy that drifts).
+export function VendorCard({ item }: { item: VendorPreviewItem }) {
   const chatHref = buildWhatsappLink(
     item.whatsapp,
     `Hi ${item.name}! I found your store on Velte.`,
