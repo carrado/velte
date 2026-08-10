@@ -29,6 +29,11 @@ const alwaysPublicRoutes = [
 //    buyer-facing search/browse themselves — blocking either would remove
 //    a real, intentional feature. /velux was /search until the route was
 //    renamed to match the AI's own name.
+//  - /updates is what a super-admin broadcast SMS links a vendor to (see
+//    velte-super-admin's BroadcastMessageView.vue) — almost always opened
+//    by an already-logged-in vendor on their phone. Putting it in
+//    marketingRoutes below would bounce that vendor straight to their
+//    dashboard instead of showing the notice, defeating the whole point.
 const publicRegardlessOfAuth = [
   "/store",
   "/track",
@@ -36,6 +41,7 @@ const publicRegardlessOfAuth = [
   "/terms",
   "/velux",
   "/marketplace",
+  "/updates",
 ];
 
 // Marketing/onboarding pages — meant for a prospective or logged-out

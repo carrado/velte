@@ -60,13 +60,13 @@ const HOW_IT_WORKS = [
   },
   {
     icon: MailCheck,
-    title: "They sign up & verify",
-    body: "They create a Velte account with your code and confirm their email.",
+    title: "They sign up, verify & list",
+    body: "They create a Velte account with your code, confirm their email, and post at least 4 products or services.",
   },
   {
     icon: PartyPopper,
     title: `You earn ${REFERRAL_BONUS_NAIRA}`,
-    body: "The moment they verify, the bonus lands straight in your wallet.",
+    body: "Once they've verified and listed 4+ real offerings, the bonus lands straight in your wallet.",
   },
 ];
 
@@ -124,7 +124,7 @@ export default function ReferralPage() {
     },
     {
       key: "pending",
-      label: "Pending Verification",
+      label: "Pending",
       value: isLoading ? "—" : String(stats?.pending ?? 0),
       icon: Clock,
       iconClass: "bg-amber-50 text-amber-600",
@@ -155,9 +155,9 @@ export default function ReferralPage() {
           </div>
 
           <p className="text-dash-secondary text-gray-500 max-w-lg mb-5">
-            Every vendor you invite who signs up and verifies their email earns
-            you {REFERRAL_BONUS_NAIRA} in your wallet — no limit on how many
-            times.
+            Every vendor you invite earns you {REFERRAL_BONUS_NAIRA} in your
+            wallet once they verify their email and list at least 4 products or
+            services — no limit on how many times.
           </p>
 
           {/* Code display */}
@@ -273,8 +273,9 @@ export default function ReferralPage() {
               No referrals yet
             </p>
             <p className="text-dash-secondary text-gray-400 max-w-xs">
-              Share your code above — every vendor who joins and verifies their
-              email earns you {REFERRAL_BONUS_NAIRA}.
+              Share your code above — every vendor who joins, verifies their
+              email, and lists 4+ products or services earns you{" "}
+              {REFERRAL_BONUS_NAIRA}.
             </p>
           </div>
         ) : (
