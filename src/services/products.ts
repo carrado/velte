@@ -5,9 +5,10 @@ import type {
   ProductListParams,
   ProductListResult,
   CreateProductPayload,
+  ProductBonus,
 } from "@/types/product";
 
-export type { Category, CategoryProduct };
+export type { Category, CategoryProduct, ProductBonus };
 export type { ProductTab, CategoryCardProps } from "@/types/product";
 export type { ProductListParams, ProductListResult, CreateProductPayload };
 
@@ -64,12 +65,11 @@ export const categoriesApi = {
 
   createProduct: async (
     payload: CreateProductPayload,
-  ): Promise<CategoryProduct> => {
-    const { product } = await api.post<{ product: CategoryProduct }>(
+  ): Promise<{ product: CategoryProduct; bonus: ProductBonus | null }> => {
+    return api.post<{ product: CategoryProduct; bonus: ProductBonus | null }>(
       "/api/products",
       payload,
     );
-    return product;
   },
 
   updateProduct: async (
