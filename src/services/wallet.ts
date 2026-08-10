@@ -12,7 +12,7 @@ import type {
 /** Price charged per matched lead. Mirrors `LEAD_COST_KOBO` in
  * velte-backend's wallet.controller.js — keep these in sync until the price
  * is served from the wallet/stats response instead. */
-export const LEAD_COST_KOBO = 40_000; // ₦400
+export const LEAD_COST_KOBO = 50_000; // ₦500 (raised from ₦400)
 
 export const walletApi = {
   getWallet: async (): Promise<Wallet> => {

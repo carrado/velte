@@ -129,6 +129,18 @@ export interface ProductListResult {
   };
 }
 
+// Present on POST /api/products' response only when this listing actually
+// earned the catalog-building wallet bonus (see velte-backend's
+// creditWalletForProductPost) — null once a vendor's used up their first
+// 4, or if the credit itself failed server-side. Never derive this
+// client-side from a local product count; only the backend knows whether
+// the cap was already hit or a concurrent create won the race.
+export interface ProductBonus {
+  amountNaira: number;
+  grantedCount: number;
+  maxCount: number;
+}
+
 export interface CreateProductBasePayload {
   name: string;
   description?: string | null;

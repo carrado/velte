@@ -6,6 +6,7 @@ import type {
   ProductAttribute,
   ProductListResult,
   CreateProductPayload,
+  ProductBonus,
 } from "@/types/product";
 
 /* Server data module for products & categories. Maps the backend's snake_case /
@@ -72,6 +73,21 @@ interface ApiPagination {
 /** Upstream envelope. The backend wraps payloads as `{ success, data }`. */
 interface Wrapped<T> {
   data: T;
+}
+
+interface ApiBonus {
+  amount_kobo: number;
+  granted_count: number;
+  max_count: number;
+}
+
+function mapBonus(b: ApiBonus | null | undefined): ProductBonus | null {
+  if (!b) return null;
+  return {
+    amountNaira: b.amount_kobo / 100,
+    grantedCount: b.granted_count,
+    maxCount: b.max_count,
+  };
 }
 
 // ── Mappers ──────────────────────────────────────────────────────────────────
@@ -180,13 +196,15 @@ export async function getProduct(
 export async function createProduct(
   payload: CreateProductPayload,
   cookie: string,
-): Promise<CategoryProduct> {
-  const { data } = await backendFetch<Wrapped<ApiProduct>>("/products", {
+): Promise<{ product: CategoryProduct; bonus: ProductBonus | null }> {
+  const { data, bonus } = await backendFetch<
+    Wrapped<ApiProduct> & { bonus: ApiBonus | null }
+  >("/products", {
     method: "POST",
     body: payload,
     cookie,
   });
-  return mapProduct(data);
+  return { product: mapProduct(data), bonus: mapBonus(bonus) };
 }
 
 export async function updateProduct(

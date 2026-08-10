@@ -49,6 +49,7 @@ import type {
   ModifierOption,
   RetailProductPayload,
   FoodProductPayload,
+  ProductBonus,
 } from "@/types/product";
 import {
   isFoodBusiness,
@@ -1206,11 +1207,12 @@ export default function AddProductPage({
         } as RetailProductPayload;
       }
 
+      let bonus: ProductBonus | null = null;
       try {
         if (isEditMode && productId) {
           await categoriesApi.updateProduct(productId, payload);
         } else {
-          await categoriesApi.createProduct(payload);
+          ({ bonus } = await categoriesApi.createProduct(payload));
         }
       } finally {
         clearInterval(savingTimer);
@@ -1235,6 +1237,20 @@ export default function AddProductPage({
       await new Promise((r) => setTimeout(r, 1100));
       setPublishModal((prev) => ({ ...prev, open: false }));
       navigate(`/${userId}/products`);
+
+      // Fired after the publish modal closes (not inside it) — that modal is
+      // only on screen for ~1.1s, nowhere near enough to actually read a
+      // second message, and stacking it in there just visually competes with
+      // "Published successfully!". The Toaster lives in the root layout, so
+      // this survives the navigate() above and stays legible on the
+      // destination page — a longer duration than the sonner default since
+      // this is confirming real money landed, not just a routine save.
+      if (bonus) {
+        toast.success(
+          `+₦${bonus.amountNaira.toLocaleString("en-NG")} bonus credited to your wallet (${bonus.grantedCount}/${bonus.maxCount} used)`,
+          { duration: 6000 },
+        );
+      }
     } catch (err: unknown) {
       setPublishModal((prev) => ({ ...prev, open: false }));
       const apiErr = err as {
