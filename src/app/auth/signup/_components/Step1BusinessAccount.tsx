@@ -450,7 +450,7 @@ export default function Step1BusinessAccount({
               <p className="text-black/40 text-xs">
                 {referralLocked
                   ? "Applied from your invite link."
-                  : "Got invited by another vendor? Enter their code and they’ll earn a referral bonus once you verify your account."}
+                  : "Got invited by another vendor? Enter their code and they’ll earn a referral bonus once you verify your account and list a few products or services."}
               </p>
             </div>
           </div>
