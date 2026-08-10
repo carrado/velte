@@ -80,7 +80,7 @@ export default function WalletBonusesContent() {
                 ₦2,000
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                max from listing your first 4 products or services
+                max from listing your next 4 products or services
               </p>
             </div>
             <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
@@ -106,7 +106,7 @@ export default function WalletBonusesContent() {
             <p className="text-gray-500 text-[15px]">
               You now earn <strong className="text-[#023337]">₦500</strong>{" "}
               automatically for each of your{" "}
-              <strong className="text-[#023337]">first 4</strong> real products
+              <strong className="text-[#023337]">next 4</strong> real products
               or services listed — no forms, no request, it lands in your wallet
               the moment the listing is published.
             </p>
