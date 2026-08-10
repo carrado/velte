@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { MapPin, Package, Wrench } from "lucide-react";
-import { getPublicStore } from "@/lib/server/store";
+import { getPublicStore, getSimilarVendors } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
 import { getOptionalUserId } from "@/lib/server/guards";
 import { buildWhatsappLink, normalizeWhatsappNumber } from "@/lib/whatsapp";
@@ -15,6 +15,7 @@ import StoreNavbar from "./_components/StoreNavbar";
 import StoreHero from "./_components/StoreHero";
 import StoreFooter from "./_components/StoreFooter";
 import StoreTabs from "./_components/StoreTabs";
+import SimilarVendors from "./_components/SimilarVendors";
 import { StoreWhatsAppButton } from "./_components/shared";
 
 // Public storefront — server-rendered for SEO and link previews. This is the
@@ -171,6 +172,11 @@ export default async function PublicStorePage({
   const store = await fetchStore(handle);
   if (!store) notFound();
 
+  // Best-effort — a backend hiccup here shouldn't take the whole storefront
+  // down, just quietly drop the "Other vendors" section (see SimilarVendors'
+  // own empty-state).
+  const similarVendors = await getSimilarVendors(handle).catch(() => []);
+
   const currentUserId = await getOptionalUserId();
   const isOwn = currentUserId != null && currentUserId === store.vendorId;
 
@@ -232,6 +238,8 @@ export default async function PublicStorePage({
           }
         />
       </div>
+
+      <SimilarVendors vendors={similarVendors} />
 
       <StoreFooter
         name={store.name}

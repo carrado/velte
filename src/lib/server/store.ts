@@ -48,6 +48,18 @@ export async function getMarketplaceBrowse(): Promise<MarketplaceBrowseItem[]> {
   return backendData<MarketplaceBrowseItem[]>("/store/marketplace");
 }
 
+/** Public — no cookie; feeds the /store/[handle] page's "Other vendors you
+ *  may like" section — other discoverable vendors sharing this store's
+ *  sectors (backend pads with other eligible vendors when there's no/thin
+ *  overlap), same VendorPreviewItem shape as getVendorsPreview/Browse. */
+export async function getSimilarVendors(
+  handle: string,
+): Promise<VendorPreviewItem[]> {
+  return backendData<VendorPreviewItem[]>(
+    `/store/by-handle/${encodeURIComponent(handle)}/similar`,
+  );
+}
+
 /** Public — no cookie; feeds the /marketplace browse page's Vendors
  *  section — the full directory, not the "/" homepage's capped preview. */
 export async function getVendorsBrowse(): Promise<VendorPreviewItem[]> {
