@@ -11,6 +11,7 @@ const alwaysPublicRoutes = [
   "/site.webmanifest",
   "/robots.txt",
   "/sitemap.xml",
+  "/llms.txt",
   "/payment/callback",
   "/s", // branded short-link redirector (see src/app/s/[code]/route.ts)
 ];
@@ -51,6 +52,7 @@ const publicRegardlessOfAuth = [
 const marketingRoutes = [
   "/about",
   "/auth",
+  "/blog",
   "/careers",
   "/contact",
   "/pricing",
