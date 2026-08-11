@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { listStoreHandlesForSitemap } from "@/lib/server/store";
+import { blogPosts } from "@/lib/blog";
 
 // Forces this route to render dynamically (per-request) instead of Next's
 // default attempt to statically generate it at build time. Without this,
@@ -25,6 +26,7 @@ const STATIC_ROUTES: {
 }[] = [
   { path: "", changeFrequency: "daily", priority: 1 },
   { path: "/velux", changeFrequency: "daily", priority: 0.9 },
+  { path: "/blog", changeFrequency: "weekly", priority: 0.6 },
   { path: "/about", changeFrequency: "monthly", priority: 0.5 },
   { path: "/pricing", changeFrequency: "monthly", priority: 0.6 },
   { path: "/faq", changeFrequency: "monthly", priority: 0.5 },
@@ -39,6 +41,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: `${SITE_URL}${r.path}`,
     changeFrequency: r.changeFrequency,
     priority: r.priority,
+  }));
+
+  // Individual blog posts — same array that backs the /blog index page, so
+  // a new post added there shows up here automatically.
+  const blogEntries: MetadataRoute.Sitemap = blogPosts.map((post) => ({
+    url: `${SITE_URL}/blog/${post.slug}`,
+    lastModified: post.publishedAt,
+    changeFrequency: "monthly",
+    priority: 0.6,
+    ...(post.image ? { images: [post.image.src] } : {}),
   }));
 
   // Every vendor storefront is real, unique, indexable content — the
@@ -58,5 +70,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] failed to fetch store handles:", err);
   }
 
-  return [...staticEntries, ...storeEntries];
+  return [...staticEntries, ...blogEntries, ...storeEntries];
 }
