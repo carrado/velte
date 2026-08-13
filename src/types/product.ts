@@ -33,6 +33,8 @@ export interface CategoryProduct {
   colorClass: string;
   mainImageUrl?: string | null;
   thumbnailUrls?: string[];
+  /** Mux HLS playback URL (https://stream.mux.com/<playbackId>.m3u8). */
+  videoUrl?: string | null;
   manufacturingDate?: string | null;
   expirationDate?: string | null;
   attributes?: ProductAttribute[];
@@ -157,6 +159,8 @@ export interface CreateProductBasePayload {
   tags?: string[];
   main_image_url?: string | null;
   thumbnail_urls?: string[];
+  /** Mux HLS playback URL (https://stream.mux.com/<playbackId>.m3u8). */
+  video_url?: string | null;
 }
 
 export interface RetailProductPayload extends CreateProductBasePayload {
