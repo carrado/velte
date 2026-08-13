@@ -1,4 +1,14 @@
+"use client";
+
 import Script from "next/script";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
+
+declare global {
+  interface Window {
+    fbq?: (...args: unknown[]) => void;
+  }
+}
 
 // Meta Pixel (Facebook/Instagram ad conversion tracking) — no official
 // Next.js package for this one (unlike Google Analytics, see layout.tsx's
@@ -8,6 +18,26 @@ import Script from "next/script";
 // leave unset in local dev, only needs a real value in .env.production.
 export default function MetaPixel() {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+  const pathname = usePathname();
+  // App Router navigation never reloads the page, so the init script's own
+  // `fbq('track', 'PageView')` below only ever fires once per session (on
+  // first load) — every subsequent client-side route change (home ->
+  // /velux, /velux -> a store page, etc.) would otherwise go completely
+  // untracked. This re-fires PageView on every pathname change instead, so
+  // Meta's Events Manager can actually be broken down by URL to see how
+  // often each page (search included) gets visited. Skips the very first
+  // render so it doesn't double-count the init script's own PageView.
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (!pixelId || typeof window.fbq !== "function") return;
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    window.fbq("track", "PageView");
+  }, [pixelId, pathname]);
+
   if (!pixelId) return null;
 
   return (

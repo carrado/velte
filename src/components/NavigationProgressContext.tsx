@@ -1,123 +1,22 @@
 "use client";
 
+import { createNavigationProgress } from "@/lib/create-navigation-progress";
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useRef,
-  useState,
-} from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import {
-  getPrefetchFailureMessage,
   getPrefetchTasks,
   getRouteKey,
   normalizeDashboardHref,
-  runPrefetchTasks,
 } from "@/lib/prefetch-routes";
 
-type NavigationContextValue = { navigate: (href: string) => void };
-
-const NavigationContext = createContext<NavigationContextValue>({
-  navigate: () => {},
+// The vendor dashboard's instance (/[id]/*) of the shared navigation-
+// progress factory — see create-navigation-progress.tsx for the actual
+// provider/state machine. This file now just supplies vendor-specific
+// config (prefetch-routes.ts's userId-aware route keys/hrefs) and re-
+// exports under the same names every existing call site already imports,
+// so nothing else in the vendor dashboard needed to change.
+const { NavigationProgressProvider, useNavigation } = createNavigationProgress({
+  getRouteKey,
+  getPrefetchTasks,
+  normalizeHref: normalizeDashboardHref,
 });
 
-export function useNavigation() {
-  return useContext(NavigationContext);
-}
-
-export function NavigationProgressProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const queryClient = useQueryClient();
-
-  const [progress, setProgress] = useState(0);
-  const [visible, setVisible] = useState(false);
-  const [completing, setCompleting] = useState(false);
-
-  const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const navIdRef = useRef(0);
-
-  function clearTimers() {
-    if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-  }
-
-  const resetProgressBar = useCallback((navId: number) => {
-    if (navId !== navIdRef.current) return;
-    setVisible(false);
-    setCompleting(false);
-    setProgress(0);
-  }, []);
-
-  const navigate = useCallback(
-    async (href: string) => {
-      const navId = ++navIdRef.current;
-      const targetHref = normalizeDashboardHref(href, pathname);
-
-      if (targetHref === pathname) {
-        return;
-      }
-
-      const routeKey = getRouteKey(targetHref);
-      const tasks = getPrefetchTasks(routeKey);
-
-      clearTimers();
-      setCompleting(false);
-      setVisible(true);
-      setProgress(4);
-
-      try {
-        await runPrefetchTasks(queryClient, tasks, (pct) => {
-          if (navId !== navIdRef.current) return;
-          setProgress(pct);
-        });
-      } catch (error) {
-        if (navId !== navIdRef.current) return;
-        toast.error(getPrefetchFailureMessage(error));
-        resetProgressBar(navId);
-        return;
-      }
-
-      if (navId !== navIdRef.current) return;
-
-      setCompleting(true);
-      setProgress(100);
-
-      completeTimerRef.current = setTimeout(() => {
-        router.push(targetHref);
-        hideTimerRef.current = setTimeout(() => {
-          resetProgressBar(navId);
-        }, 200);
-      }, 120);
-    },
-    [router, pathname, queryClient, resetProgressBar],
-  );
-
-  return (
-    <NavigationContext.Provider value={{ navigate }}>
-      {visible && (
-        <div className="fixed top-0 left-0 right-0 z-[200] h-[3px]">
-          <div
-            className={cn(
-              "h-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.55)]",
-              completing
-                ? "transition-[width] duration-200 ease-out"
-                : "transition-[width] duration-100 ease-out",
-            )}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      )}
-      {children}
-    </NavigationContext.Provider>
-  );
-}
+export { NavigationProgressProvider, useNavigation };

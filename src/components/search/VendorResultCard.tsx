@@ -1,5 +1,4 @@
-/* eslint-disable @next/next/no-img-element */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   MapPin,
@@ -9,13 +8,16 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { fmt } from "@/lib/product-price";
+import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
-import { ExpandableText } from "@/components/search/ExpandableText";
+import { ListingDetailModal } from "@/components/ListingDetailModal";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
+import { buildWhatsappLink } from "@/lib/whatsapp";
 import type { VendorMatch } from "@/types/search";
 
 export function VendorResultCard({
@@ -28,9 +30,17 @@ export function VendorResultCard({
   // weakProducts, or a product whose store lookup failed) that has no other
   // path to the storefront at all.
   showViewStore = true,
+  // False for a matching-service companion rendered under its own store's
+  // StoreResultCard — that card already owns the "chat with vendor" CTA for
+  // this turn, so a second WhatsApp button right here would just double up
+  // the same contact point (and risk a second lead report for one buyer
+  // intent). Defaults true for every other context, where this card is the
+  // only place a chat CTA exists at all.
+  showChatButton = true,
 }: {
   match: VendorMatch;
   showViewStore?: boolean;
+  showChatButton?: boolean;
 }) {
   const symbol = match.currency === "USD" ? "$" : "₦";
   const isRange = match.priceMax != null && match.priceMax > match.price;
@@ -39,11 +49,11 @@ export function VendorResultCard({
   const currentUserId = useUserStore((s) => s.user?.id);
   const isOwn = currentUserId != null && currentUserId === match.vendorId;
 
-  const chatHref = match.whatsapp
-    ? `https://wa.me/${match.whatsapp}?text=${encodeURIComponent(
-        `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
-      )}`
-    : null;
+  const chatHref = buildWhatsappLink(
+    match.whatsapp,
+    `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
+    match.mainImageUrl ? match.productId : undefined,
+  );
 
   // Main image first, then whatever else the vendor uploaded — a buyer
   // shouldn't be stuck with just whichever single photo was set as "main"
@@ -62,11 +72,31 @@ export function VendorResultCard({
     setImgIndex((i) => (i + 1) % images.length);
   };
 
+  // "See more" opens the full ListingDetailModal (gallery + full
+  // description + attributes + vendor details) instead of expanding text
+  // in place — only offered when there's actually more than the compact
+  // card already shows (a clipped description, vendor-entered attributes,
+  // or extra photos beyond the one already visible above).
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [descOverflows, setDescOverflows] = useState(false);
+  const descRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    setDescOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [match.description]);
+  const hasMore =
+    descOverflows || match.attributes.length > 0 || images.length > 1;
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
-      <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
+      <div
+        className={`relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden ${images.length > 0 ? "cursor-zoom-in" : ""}`}
+        onClick={() => images.length > 0 && setLightboxOpen(true)}
+      >
         {images.length > 0 ? (
-          <img
+          <ProtectedImage
             src={optimizedImageUrl(images[imgIndex])}
             alt={match.name}
             className="w-full h-full object-cover"
@@ -136,28 +166,25 @@ export function VendorResultCard({
             {match.distanceKm != null && ` · ${match.distanceKm}km away`}
           </span>
         </div>
-        {match.kind === "service" && (
-          <>
-            {match.description && (
-              <ExpandableText
-                text={match.description}
-                className="text-xs text-gray-500 leading-relaxed"
-              />
-            )}
-            {match.attributes.length > 0 && (
-              <dl className="space-y-1 pt-1 border-t border-gray-100">
-                {match.attributes.map((attr) => (
-                  <div
-                    key={attr.name}
-                    className="flex items-baseline gap-1.5 text-xs"
-                  >
-                    <dt className="text-gray-400 shrink-0">{attr.name}:</dt>
-                    <dd className="text-gray-600 truncate">{attr.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </>
+        {match.description && (
+          <p
+            ref={descRef}
+            className="text-xs text-gray-500 leading-relaxed line-clamp-2"
+          >
+            {match.description}
+          </p>
+        )}
+        {hasMore && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailOpen(true);
+            }}
+            className="text-[11px] font-semibold text-orange-600 hover:text-orange-700 underline"
+          >
+            See more
+          </button>
         )}
         <div className="flex items-center justify-between gap-2 pt-1">
           <div className="flex items-center gap-1 text-xs text-gray-500 min-w-0">
@@ -167,14 +194,17 @@ export function VendorResultCard({
         </div>
         {isOwn ? (
           <OwnListingBadge label="This is your listing" />
-        ) : (
+        ) : (showChatButton && chatHref) ||
+          (showViewStore && match.storeHandle) ? (
           <div className="flex flex-col gap-2 mt-1">
-            {chatHref && (
+            {showChatButton && chatHref && (
               <WhatsAppButton
                 href={chatHref}
                 label="Chat with vendor"
                 className="w-full"
-                onClick={() => reportLead(match.vendorId, match.productId)}
+                onClick={() =>
+                  reportLead(match.vendorId, match.productId, "search")
+                }
               />
             )}
             {showViewStore && match.storeHandle && (
@@ -188,8 +218,49 @@ export function VendorResultCard({
               </Link>
             )}
           </div>
-        )}
+        ) : null}
       </div>
+
+      <ListingDetailModal
+        item={{
+          name: match.name,
+          kind: match.kind,
+          quoteOnRequest: match.quoteOnRequest,
+          price: match.price,
+          priceMax: match.priceMax,
+          currency: match.currency,
+          images,
+          description: match.description,
+          attributes: match.attributes,
+        }}
+        // The AI search pipeline already normalizes price/priceMax to naira
+        // server-side (see MarketplaceCard's own comment on the raw-kobo
+        // convention it doesn't share) — ListingDetailModal must not divide
+        // this by 100 again.
+        priceInKobo={false}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        isOwn={isOwn}
+        vendor={{
+          name: match.vendorName,
+          handle: match.storeHandle,
+          area: match.area,
+          state: match.state,
+        }}
+        chatHref={chatHref}
+        chatLabel="Chat with vendor"
+        onChatClick={() =>
+          reportLead(match.vendorId, match.productId, "search")
+        }
+      />
+
+      <ImageLightbox
+        images={images}
+        initialIndex={imgIndex}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        alt={match.name}
+      />
     </div>
   );
 }

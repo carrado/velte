@@ -26,7 +26,7 @@ import {
   Flame,
   ChefHat,
   Wrench,
-  PlayCircle,
+  Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { computePrice, fmt } from "@/lib/product-price";
@@ -379,6 +379,31 @@ export default function ViewProductPage({ productId }: { productId: string }) {
 
         {/* ── Right: Details ── */}
         <div className="lg:col-span-2 space-y-5">
+          {/* ── Suspension notice (super admin panel) — leads everything
+              else on a suspended listing, since it's the reason the vendor
+              followed the "See why" link here in the first place. ── */}
+          {product.isSuspended && (
+            <div className="bg-red-50 border border-red-100 sm:rounded-2xl overflow-hidden">
+              <div className="flex items-start gap-3 px-5 py-4">
+                <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <Ban size={16} className="text-red-500" />
+                </div>
+                <div>
+                  <p className="text-dash-body font-bold text-red-700">
+                    This listing has been suspended
+                  </p>
+                  <p className="text-dash-body text-red-600 mt-1 whitespace-pre-line">
+                    {product.suspensionReason ||
+                      "No reason was provided. Contact support for details."}
+                  </p>
+                  <p className="text-dash-caption text-red-400 mt-2">
+                    It's hidden from buyers until an admin unsuspends it.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Pricing card (with stock badge top-right) ── */}
           <SectionCard title="Pricing" icon={Tag}>
             <div className="flex items-start justify-between gap-3">

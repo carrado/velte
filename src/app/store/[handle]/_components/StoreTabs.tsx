@@ -4,9 +4,11 @@ import { useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { reportLead } from "@/lib/reportLead";
+import { buildWhatsappLink } from "@/lib/whatsapp";
 import type { PublicStoreTab, StoreTabsProps } from "@/types/store";
 import { OfferingCard } from "./shared";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 
 // Compact segmented control (Products / Services) plus a two-column body
 // (persistent Intro sidebar + the active panel). Only ever two tabs now —
@@ -20,15 +22,15 @@ export default function StoreTabs({
   vendorId,
   defaultTab,
   sidebar,
+  isOwn,
 }: StoreTabsProps) {
   const [active, setActive] = useState<PublicStoreTab>(defaultTab);
   const isEmpty = goods.length === 0 && services.length === 0;
 
-  const whatsappHref = whatsapp
-    ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(
-        `Hi ${storeName}! I found your store on Velte.`,
-      )}`
-    : null;
+  const whatsappHref = buildWhatsappLink(
+    whatsapp,
+    `Hi ${storeName}! I found your store on Velte.`,
+  );
 
   if (isEmpty) {
     return (
@@ -37,7 +39,9 @@ export default function StoreTabs({
           <div className="lg:sticky lg:top-24 space-y-4">{sidebar}</div>
         </aside>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10 text-center">
-          {whatsappHref ? (
+          {isOwn ? (
+            <OwnListingBadge label="This is your store" />
+          ) : whatsappHref ? (
             <>
               <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-50 flex items-center justify-center mb-4">
                 <MessageCircle size={22} className="text-orange-500" />
@@ -52,7 +56,7 @@ export default function StoreTabs({
                 href={whatsappHref}
                 label="Ask on WhatsApp"
                 className="mt-5"
-                onClick={() => reportLead(vendorId)}
+                onClick={() => reportLead(vendorId, undefined, "browse")}
               />
             </>
           ) : (
@@ -103,7 +107,7 @@ export default function StoreTabs({
         )}
 
         {active === "products" && goods.length > 0 && (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-2.5 gap-y-4 sm:gap-5">
             {goods.map((product) => (
               <OfferingCard
                 key={product.id}
@@ -111,13 +115,14 @@ export default function StoreTabs({
                 storeName={storeName}
                 whatsapp={whatsapp}
                 vendorId={vendorId}
+                isOwn={isOwn}
               />
             ))}
           </div>
         )}
 
         {active === "services" && services.length > 0 && (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-2.5 gap-y-4 sm:gap-5">
             {services.map((product) => (
               <OfferingCard
                 key={product.id}
@@ -125,6 +130,7 @@ export default function StoreTabs({
                 storeName={storeName}
                 whatsapp={whatsapp}
                 vendorId={vendorId}
+                isOwn={isOwn}
               />
             ))}
           </div>

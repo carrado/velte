@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
   if (!payload) return jsonError(400, "A product payload is required.");
 
   try {
-    const product = await createProduct(payload, gate.cookie);
-    return NextResponse.json({ product }, { status: 201 });
+    const { product, bonus } = await createProduct(payload, gate.cookie);
+    return NextResponse.json({ product, bonus }, { status: 201 });
   } catch (err) {
     return fail(err, "Failed to create listing.");
   }

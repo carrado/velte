@@ -9,6 +9,9 @@ const alwaysPublicRoutes = [
   "/_next",
   "/favicon.ico",
   "/site.webmanifest",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/llms.txt",
   "/payment/callback",
   "/s", // branded short-link redirector (see src/app/s/[code]/route.ts)
 ];
@@ -22,15 +25,32 @@ const alwaysPublicRoutes = [
 //    authenticated app itself (the wallet top-up / funding-method modals'
 //    "Privacy Policy" link, opened in a new tab) — blocking these would
 //    break that existing link.
-//  - /search is the deliberate "Buy on Velte" hand-off (see Header.tsx's
-//    own comment) letting a logged-in VENDOR use the buyer-facing search
-//    themselves — blocking it would remove a real, intentional feature.
+//  - /velux and /marketplace are the deliberate "Buy on Velte" hand-offs
+//    (see Header.tsx's own comment) letting a logged-in VENDOR use the
+//    buyer-facing search/browse themselves — blocking either would remove
+//    a real, intentional feature. /velux was /search until the route was
+//    renamed to match the AI's own name.
+//  - /updates is what a super-admin broadcast SMS links a vendor to (see
+//    velte-super-admin's BroadcastMessageView.vue) — almost always opened
+//    by an already-logged-in vendor on their phone. Putting it in
+//    marketingRoutes below would bounce that vendor straight to their
+//    dashboard instead of showing the notice, defeating the whole point.
 const publicRegardlessOfAuth = [
   "/store",
   "/track",
   "/privacy",
   "/terms",
-  "/search",
+  "/velux",
+  "/marketplace",
+  "/updates",
+  // The buyer-facing area (/buyer/auth, /buyer/requests, /buyer/saved,
+  // /buyer/profile) has its own SEPARATE auth system (buyer_auth_token,
+  // verified by requireBuyerAuth in the BFF layer) — this middleware only
+  // ever knows about the vendor's auth_token, so buyer routes must stay
+  // outside its gating entirely rather than being (wrongly) treated as an
+  // ungated vendor dashboard route below. A logged-in vendor visiting these
+  // is also intentional — same reasoning as /velux/marketplace above.
+  "/buyer",
 ];
 
 // Marketing/onboarding pages — meant for a prospective or logged-out
@@ -40,6 +60,7 @@ const publicRegardlessOfAuth = [
 const marketingRoutes = [
   "/about",
   "/auth",
+  "/blog",
   "/careers",
   "/contact",
   "/pricing",

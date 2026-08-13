@@ -157,6 +157,8 @@ async function getVendorStoresForProducts(
           description: string;
           sectors: string[];
           whatsapp: string | null;
+          avatar: string | null;
+          gallery: string[];
         }>(`/store/by-vendor/${match.vendorId}`);
         const result: StoreMatch = {
           storeId: store.storeId,
@@ -170,6 +172,8 @@ async function getVendorStoresForProducts(
           state: match.state,
           distanceKm: match.distanceKm,
           score: match.score,
+          avatar: store.avatar,
+          gallery: store.gallery,
         };
         return result;
       } catch (err) {
@@ -215,13 +219,37 @@ const STOPWORDS = new Set([
   "get",
   "near",
   "nearby",
+  // Near-meaningless as a relevance signal here specifically — almost every
+  // service listing's own description says "this service provides…"/"the
+  // service includes…" regardless of what the service actually is, so a
+  // businessType like "wedding planning services" would otherwise spuriously
+  // match ANY vendor's unrelated service purely on this one generic word
+  // (found live: matched a store's "Web & Mobile App development" listing to
+  // a wedding-planning search, scoring 1/3 on "service" alone).
+  "service",
+  "services",
 ]);
+// Light suffix stripping so word-form variants of the same idea overlap —
+// e.g. a buyer asking for an "event planner" should still hit a listing
+// whose description only ever says "wedding planning", not "planner". Not
+// a real stemmer (Porter etc.), just enough common-suffix collapsing to
+// catch gerund/agent-noun/plural mismatches without over-mangling short
+// words into false matches.
+function stem(word: string): string {
+  if (word.endsWith("ies") && word.length > 5) return word.slice(0, -3) + "y";
+  if (word.endsWith("ing") && word.length > 6) return word.slice(0, -3);
+  if (word.endsWith("ers") && word.length > 6) return word.slice(0, -3);
+  if (word.endsWith("er") && word.length > 5) return word.slice(0, -2);
+  if (word.endsWith("s") && word.length > 4) return word.slice(0, -1);
+  return word;
+}
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
-    .filter((t) => t.length > 1 && !STOPWORDS.has(t));
+    .filter((t) => t.length > 1 && !STOPWORDS.has(t))
+    .map(stem);
 }
 // Fraction of the query's own (non-stopword) tokens that also appear in the
 // candidate text — deliberately query-token-normalized, not candidate-
@@ -258,9 +286,10 @@ interface PublicStoreCatalogItem {
 // clicking through. Reuses the existing public /store/by-handle/:handle
 // catalog endpoint (same one getVendorProductsTool already calls) rather
 // than a new vector-search endpoint — a cheap keyword-overlap match against
-// each candidate's name+description, not a real embedding search (see
-// relevanceScore above). Best-effort per store: one failed lookup never
-// takes down the rest.
+// each candidate's name and description scored separately (not a real
+// embedding search, see relevanceScore above), so a listing that matches on
+// both outranks one that only happens to match on either alone. Best-effort
+// per store: one failed lookup never takes down the rest.
 async function getMatchingServicesForStores(
   stores: StoreMatch[],
   queryText: string | null,
@@ -276,42 +305,52 @@ async function getMatchingServicesForStores(
 
         return (data.products ?? [])
           .filter((item) => item.kind === "service")
-          .map((item) => ({
-            item,
-            score: relevanceScore(
+          .map((item) => {
+            const nameScore = relevanceScore(queryText, item.name);
+            const descriptionScore = relevanceScore(
               queryText,
-              `${item.name} ${item.description ?? ""}`,
-            ),
-          }))
-          .filter(({ score }) => score > 0)
+              item.description ?? "",
+            );
+            // A listing whose description backs up its name match is a
+            // stronger signal than either alone — bump it into its own tier
+            // (always above any single-signal match) rather than just
+            // nudging its score up by a fraction, so it reliably lands first
+            // once sorted, not just "usually."
+            const score =
+              (nameScore > 0 && descriptionScore > 0 ? 1 : 0) +
+              Math.max(nameScore, descriptionScore);
+            return { item, score, nameScore, descriptionScore };
+          })
+          .filter(
+            ({ nameScore, descriptionScore }) =>
+              nameScore > 0 || descriptionScore > 0,
+          )
           .sort((a, b) => b.score - a.score)
           .slice(0, MAX_MATCHING_SERVICES_PER_STORE)
-          .map(
-            ({ item, score }): VendorMatch => ({
-              productId: item.id,
-              kind: "service",
-              name: item.name,
-              price: item.price / 100,
-              priceMax: item.priceMax != null ? item.priceMax / 100 : null,
-              quoteOnRequest: Boolean(item.quoteOnRequest),
-              currency: item.currency,
-              mainImageUrl: item.mainImageUrl,
-              // Not selected by the lightweight public-catalog endpoint this
-              // reuses — a known tradeoff of the cheap-match approach over a
-              // real per-listing fetch. See this function's own doc comment.
-              thumbnailUrls: [],
-              storeHandle: store.handle,
-              description: item.description,
-              attributes: [],
-              vendorId: store.vendorId,
-              vendorName: store.name,
-              area: store.area,
-              state: store.state,
-              whatsapp: store.whatsapp,
-              distanceKm: store.distanceKm,
-              score,
-            }),
-          );
+          .map(({ item, score }): VendorMatch => ({
+            productId: item.id,
+            kind: "service",
+            name: item.name,
+            price: item.price / 100,
+            priceMax: item.priceMax != null ? item.priceMax / 100 : null,
+            quoteOnRequest: Boolean(item.quoteOnRequest),
+            currency: item.currency,
+            mainImageUrl: item.mainImageUrl,
+            // Not selected by the lightweight public-catalog endpoint this
+            // reuses — a known tradeoff of the cheap-match approach over a
+            // real per-listing fetch. See this function's own doc comment.
+            thumbnailUrls: [],
+            storeHandle: store.handle,
+            description: item.description,
+            attributes: [],
+            vendorId: store.vendorId,
+            vendorName: store.name,
+            area: store.area,
+            state: store.state,
+            whatsapp: store.whatsapp,
+            distanceKm: store.distanceKm,
+            score,
+          }));
       } catch (err) {
         console.error(
           `[search] matching-services lookup failed for store "${store.handle}":`,
@@ -384,6 +423,7 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   )?.output as
     | {
         results?: StoreMatch[];
+        furtherResults?: StoreMatch[];
         matchTier?: MatchTier;
         matchQuality?: MatchQuality;
         externalSuggestions?: NearbyBusiness[];
@@ -404,6 +444,7 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
     | undefined;
   const products = productResult?.results ?? [];
   const stores = storeResult?.results ?? [];
+  const furtherStores = storeResult?.furtherResults ?? [];
   const productsMatchTier = productResult?.matchTier ?? null;
   const storesMatchTier = storeResult?.matchTier ?? null;
   const productsMatchQuality = productResult?.matchQuality;
@@ -452,6 +493,7 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
     clarification,
     products,
     stores,
+    furtherStores,
     storesQuery,
     productsMatchTier,
     storesMatchTier,
@@ -750,6 +792,7 @@ export async function POST(req: Request) {
               outcome = {
                 ...outcome,
                 stores: fallback.results,
+                furtherStores: fallback.furtherResults,
                 storesMatchTier: fallback.matchTier,
                 storesMatchQuality: fallback.matchQuality,
                 storesQuery: businessType,
@@ -775,6 +818,7 @@ export async function POST(req: Request) {
           clarification,
           products,
           stores,
+          furtherStores,
           storesQuery,
           productsMatchTier,
           storesMatchTier,
@@ -802,10 +846,16 @@ export async function POST(req: Request) {
 
         // Same "skipped when the clarification actually won" reasoning —
         // only worth the extra per-store lookups when the buyer is actually
-        // going to see `stores` this turn.
+        // going to see `stores`/`furtherStores` this turn. Both buckets share
+        // one lookup — the function already keys its output by vendorId, so
+        // the frontend groups each result under whichever of its own two
+        // sections (near you vs further out) that vendor's card is in.
         const storeServices =
-          stores.length && !clarification
-            ? await getMatchingServicesForStores(stores, storesQuery)
+          (stores.length || furtherStores.length) && !clarification
+            ? await getMatchingServicesForStores(
+                [...stores, ...furtherStores],
+                storesQuery,
+              )
             : [];
 
         // A real SEARCH tool's results are what the buyer sees this turn
@@ -830,6 +880,7 @@ export async function POST(req: Request) {
             products,
             weakProducts,
             stores,
+            furtherStores,
             storesQuery,
             productStores,
             storeServices,
@@ -858,11 +909,9 @@ export async function POST(req: Request) {
         if (externalStoreSuggestions.length > 0) {
           try {
             const productInput = productCall?.input as
-              | { product?: string }
-              | undefined;
+              { product?: string } | undefined;
             const storeInput = storeCall?.input as
-              | { businessType?: string }
-              | undefined;
+              { businessType?: string } | undefined;
 
             await aiSearchFetch("/search/log", {
               method: "POST",

@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import Link from "next/link";
-import { Search as SearchIcon } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { Button } from "../ui/button";
+import { AskVeluxButton } from "@/components/AskVeluxButton";
 import Image from "next/image";
 
 export default function Navbar() {
@@ -49,10 +50,21 @@ export default function Navbar() {
                 Sign In
               </Button>
             </Link>
-            <Link href="/search">
+            {/* Ask Velux's label is always shown now (not just from sm: up)
+                — sits alongside Browse on every screen size, including
+                mobile. */}
+            <AskVeluxButton variant="compact" label="Ask Velux" />
+            {/* The site-wide entry point to the full catalog — now the ONLY
+                one (the marketplace preview section's own "Browse the full
+                marketplace" CTA was retired in favor of a "Post what you
+                need" CTA there instead, see MarketplacePreview's own
+                comment), so this links straight to /marketplace rather than
+                scrolling to the homepage's 12-item teaser, and shows on
+                every screen size — not hidden on mobile anymore. */}
+            <Link href="/marketplace">
               <Button className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 text-xs sm:text-sm px-3 sm:px-5 gap-1.5">
-                <SearchIcon className="w-3.5 h-3.5" />
-                Find on Velte
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Browse
               </Button>
             </Link>
           </div>

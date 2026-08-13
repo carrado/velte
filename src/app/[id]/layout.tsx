@@ -31,6 +31,7 @@ const PATH_TITLES: Record<string, string> = {
   products: "My Listings",
   settings: "Settings",
   wallet: "Wallet",
+  "buyer-requests": "Buyer Requests",
 };
 
 function getTitle(pathname: string): string {

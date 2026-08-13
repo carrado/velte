@@ -16,6 +16,7 @@ import {
   DollarSign,
   MessageCircle,
   Trash2,
+  Ban,
 } from "lucide-react";
 
 // Small, local, and deliberately coarse — a card caption, not a precise
@@ -38,6 +39,35 @@ function timeAgo(dateStr: string): string | null {
   return `Added ${Math.floor(months / 12)}y ago`;
 }
 
+// Set from the super admin panel. Covers the image area with a black scrim
+// and links through to the listing's own detail page, which renders the
+// full suspensionReason — this stays a short "why" pointer, not the
+// breakdown itself.
+function SuspendedOverlay({
+  userId,
+  productId,
+}: {
+  userId: string;
+  productId: string;
+}) {
+  const { navigate } = useNavigation();
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(`/${userId}/products/${productId}`);
+      }}
+      className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-1.5 bg-black/70 text-white cursor-pointer"
+    >
+      <Ban size={20} />
+      <span className="text-dash-body font-bold">Suspended</span>
+      <span className="text-dash-caption underline underline-offset-2">
+        See why
+      </span>
+    </button>
+  );
+}
+
 function ProductCard({
   product,
   isFood,
@@ -53,10 +83,15 @@ function ProductCard({
 }) {
   const pricing = computePrice(product);
   const posted = timeAgo(product.createdDate);
+  const pathname = usePathname();
+  const userId = pathname.split("/").filter(Boolean)[0];
 
   return (
     <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="relative w-full aspect-square overflow-hidden bg-gray-50">
+        {product.isSuspended && (
+          <SuspendedOverlay userId={userId} productId={product.id} />
+        )}
         {product.mainImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -193,6 +228,11 @@ function ProductRow({
         className="w-full flex items-center gap-3 px-4 pt-3 text-left cursor-pointer"
       >
         <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0">
+          {product.isSuspended && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70">
+              <Ban size={16} className="text-white" />
+            </div>
+          )}
           {product.mainImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -233,8 +273,17 @@ function ProductRow({
             </p>
           )}
 
-          {(product.kind === "service" || isFood || product.featured) && (
+          {(product.isSuspended ||
+            product.kind === "service" ||
+            isFood ||
+            product.featured) && (
             <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              {product.isSuspended && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-red-50 text-red-700">
+                  <Ban size={9} />
+                  Suspended — tap to see why
+                </span>
+              )}
               {product.kind === "service" ? (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-teal-50 text-teal-700">
                   Service

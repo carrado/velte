@@ -11,14 +11,19 @@ import {
 import Link from "next/link";
 import {
   ArrowRight,
-  MapPin,
+  LayoutGrid,
   ShieldCheck,
   Sparkles,
   Store as StoreIcon,
-  Search as SearchIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ProtectedImage } from "@/components/ProtectedImage";
+import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
+import { fmt } from "@/lib/product-price";
+import { optimizedImageUrl } from "@/lib/cloudinary";
+import { cn } from "@/lib/utils";
 import ShineSweep from "@/components/ShineSweep";
+import type { MarketplacePreviewItem } from "@/types/store";
 
 // Photo credit: Ali Mkumbwa / Unsplash (unsplash.com/photos/H1KbBGUs4bM) —
 // Unsplash's license doesn't require attribution, but it's kept here for
@@ -38,6 +43,12 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.55 } },
 };
 
+// Reworded 2026-08-05 alongside the marketplace pivot: "Closest vendor,
+// first" was dropped — it was only ever true of AI search's own proximity
+// ranking, not the homepage's own browse sections (MarketplacePreview /
+// VendorsPreview sample randomly, not by distance), so keeping it as a
+// blanket site-wide claim would have been overstating what browsing
+// actually does. Replaced with the browse-first value itself.
 const valueProps = [
   {
     icon: StoreIcon,
@@ -45,21 +56,31 @@ const valueProps = [
     subtitle: "Every result comes straight from the database — never invented",
   },
   {
-    icon: Sparkles,
-    title: "Matched by meaning, not keywords",
-    subtitle: "Describe it in your own words, in text or a photo",
+    icon: LayoutGrid,
+    title: "Browse real listings instantly",
+    subtitle: "See what's actually here right now — no typing required",
   },
   {
-    icon: MapPin,
-    title: "Closest vendor, first",
-    subtitle: "See what's genuinely near you before anything else",
+    icon: Sparkles,
+    title: "AI, when you need it",
+    subtitle: "Describe something specific, in your own words or a photo",
   },
 ];
 
-// Illustrative mockup of the real search UI (SearchHome.tsx) — an example
-// interaction, not a claim about a specific real vendor, same convention as
-// the old marketing Hero's fictional WhatsApp chat mockup.
-function SearchPreview() {
+// Real mockup of the "/" marketplace preview grid (MarketplacePreview.tsx)
+// — up to 2 of the SAME real items that endpoint returned for this page
+// load (passed down from page.tsx, same server fetch, no second request),
+// not illustrative placeholders. Matters here specifically: this sits
+// right above a section literally titled "On the marketplace right now"
+// showing different real items — a made-up "UrbanFlex"/"Fix Point" card
+// right above the real grid undercut the "never invented" claim the rest
+// of the site makes. Renders nothing if the catalog came back empty (same
+// convention as MarketplacePreview itself) rather than fall back to fake
+// data.
+function MarketplaceMockup({ items }: { items: MarketplacePreviewItem[] }) {
+  const shown = items.slice(0, 2);
+  if (shown.length === 0) return null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -68,56 +89,74 @@ function SearchPreview() {
       className="relative w-full max-w-md mx-auto"
     >
       <div className="bg-white rounded-3xl border border-gray-200 shadow-xl shadow-gray-200/60 p-4 sm:p-5">
-        {/* Search bar */}
-        <div className="flex items-center gap-2 bg-[#F1F5F9] rounded-2xl border border-gray-200 px-4 h-12 mb-4">
-          <SearchIcon size={16} className="text-gray-400 shrink-0" />
-          <span className="text-[14px] text-gray-500 truncate">
-            white sneakers, Independence Layout
-          </span>
-        </div>
-
-        {/* Status line */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.1, duration: 0.4 }}
+          transition={{ delay: 0.9, duration: 0.4 }}
           className="text-xs text-orange-600 font-medium mb-3 flex items-center gap-1.5"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-          2 vendors found nearby
+          On the marketplace right now
         </motion.p>
 
-        {/* Result card — mirrors VendorResultCard.tsx exactly */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.35, duration: 0.5 }}
-          className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+        <div
+          className={cn(
+            "grid gap-3",
+            shown.length > 1 ? "grid-cols-2" : "grid-cols-1",
+          )}
         >
-          <div className="flex gap-3 p-3">
-            <div className="w-16 h-16 rounded-xl bg-gray-50 flex items-center justify-center shrink-0">
-              <StoreIcon size={20} className="text-gray-300" />
-            </div>
-            <div className="min-w-0 flex-1 space-y-1">
-              <p className="text-sm font-semibold text-gray-800 truncate">
-                UrbanFlex White Sneakers
-              </p>
-              <p className="text-[15px] font-extrabold text-[#023337]">
-                ₦28,500
-              </p>
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <MapPin size={12} className="shrink-0" />
-                <span className="truncate">
-                  Independence Layout · 0.4km away
-                </span>
-              </div>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <ShieldCheck size={12} className="shrink-0 text-orange-500" />
-                <span>Verified vendor</span>
-              </div>
-            </div>
-          </div>
-        </motion.div>
+          {shown.map((item, i) => {
+            const symbol = item.currency === "USD" ? "$" : "₦";
+            const price = item.price / 100;
+            return (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.1 + i * 0.2, duration: 0.5 }}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+              >
+                <div className="aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
+                  {item.mainImageUrl ? (
+                    <ProtectedImage
+                      src={optimizedImageUrl(item.mainImageUrl)}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <StoreIcon size={22} className="text-gray-300" />
+                  )}
+                </div>
+                <div className="p-2.5 space-y-1">
+                  <p className="text-[11px] font-semibold text-gray-800 truncate">
+                    {item.name}
+                  </p>
+                  <p className="text-[13px] font-extrabold text-[#023337]">
+                    {item.quoteOnRequest ? "Ask for price" : fmt(price, symbol)}
+                  </p>
+                  <div className="flex items-center gap-1 min-w-0">
+                    <div className="w-3.5 h-3.5 rounded-full overflow-hidden bg-orange-100 shrink-0 flex items-center justify-center">
+                      {item.storeAvatar && (
+                        <ProtectedImage
+                          src={optimizedImageUrl(item.storeAvatar)}
+                          alt={item.storeName}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <span className="text-[9px] font-bold text-gray-600 truncate">
+                      {item.storeName}
+                    </span>
+                    <ShieldCheck
+                      size={9}
+                      className="text-orange-500 shrink-0"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Floating badge */}
@@ -136,7 +175,7 @@ function SearchPreview() {
   );
 }
 
-// Real business photo, floating beside the search mockup — drifts with
+// Real business photo, floating beside the marketplace mockup — drifts with
 // scroll (parallax) on top of its own idle float + hover tilt, so the page
 // reads as alive rather than a static screenshot next to a still photo.
 function HeroPhotoCard({ y }: { y: MotionValue<number> }) {
@@ -181,7 +220,11 @@ function HeroPhotoCard({ y }: { y: MotionValue<number> }) {
   );
 }
 
-export default function Hero() {
+export default function Hero({
+  marketplaceItems = [],
+}: {
+  marketplaceItems?: MarketplacePreviewItem[];
+}) {
   const sectionRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -209,34 +252,32 @@ export default function Hero() {
             variants={fadeUp}
             className="text-[2.4rem] sm:text-5xl lg:text-[3.4rem] font-bold text-[#023337] leading-[1.12] tracking-tight mb-5 text-balance"
           >
-            Describe what you need.
+            Real vendors. Real listings.
             <br />
-            We find who <span className="text-orange-500">
-              actually has it
-            </span>{" "}
-            — nearby.
+            All in <span className="text-orange-500">one place</span>.
           </motion.h1>
 
           <motion.p
             variants={fadeUp}
             className="text-lg text-gray-500 mb-9 leading-relaxed max-w-xl mx-auto"
           >
-            Tell us what you&apos;re looking for, in your own words or a photo.
-            Velte matches it against real vendor inventory by meaning,
-            proximity, and trust — then connects you directly.
+            Browse what&apos;s actually available near you and chat directly
+            with the vendor — or describe exactly what you need and let AI dig
+            deeper. Every result comes straight from the database, never
+            invented.
           </motion.p>
 
           <motion.div
             variants={fadeUp}
             className="flex flex-col sm:flex-row gap-3 justify-center mb-4"
           >
-            <Link href="/search">
+            <Link href="/" onClick={scrollToMarketplace}>
               <Button
                 size="lg"
                 className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-xl shadow-orange-500/20 text-[15px] px-8 gap-2 h-12 w-full sm:w-auto"
               >
-                <SearchIcon className="w-4 h-4" />
-                Find on Velte
+                <LayoutGrid className="w-4 h-4" />
+                Browse Products
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -254,7 +295,7 @@ export default function Hero() {
 
         <div className="relative max-w-md mx-auto">
           <HeroPhotoCard y={photoY} />
-          <SearchPreview />
+          <MarketplaceMockup items={marketplaceItems} />
         </div>
 
         {/* Value strip */}

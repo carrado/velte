@@ -8,6 +8,8 @@ import { Toaster } from "sonner";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ReferralCapture from "@/components/ReferralCapture";
 import MetaPixel from "@/components/MetaPixel";
+import BlockedAccountModal from "@/components/BlockedAccountModal";
+import { ScrollToTopButton } from "@/components/ScrollToTopButton";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -99,7 +101,10 @@ const APPLE_SPLASH_SCREENS: { url: string; media: string }[] = [
   },
 ];
 
+const SITE_URL = "https://velte.ng";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Velte | Find anything nearby",
     template: "%s | Velte",
@@ -113,9 +118,12 @@ export const metadata: Metadata = {
     "AI shopping assistant",
     "local marketplace search",
   ],
-  authors: [{ name: "Your Company Name", url: "https://yourcompany.com" }],
-  creator: "Your Company Name",
-  publisher: "Your Company Name",
+  authors: [{ name: "Velte Technologies", url: SITE_URL }],
+  creator: "Velte Technologies",
+  publisher: "Velte Technologies",
+  alternates: {
+    canonical: "/",
+  },
   formatDetection: {
     email: false,
     address: false,
@@ -125,14 +133,17 @@ export const metadata: Metadata = {
     title: "Velte | Find anything nearby",
     description:
       "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
-    url: "https://yourdomain.com",
+    url: SITE_URL,
     siteName: "Velte",
+    // No dedicated 1200×630 social banner exists yet — the logo at least
+    // resolves to something real instead of a 404'ing placeholder path.
+    // Replace with a proper share image when one's designed.
     images: [
       {
-        url: "https://yourdomain.com/og-image.jpg", // Replace with your actual image
-        width: 1200,
-        height: 630,
-        alt: "Velte – find anything nearby",
+        url: "/velte_manifest.png",
+        width: 1000,
+        height: 1000,
+        alt: "Velte",
       },
     ],
     locale: "en_US",
@@ -143,8 +154,7 @@ export const metadata: Metadata = {
     title: "Velte | Find anything nearby",
     description:
       "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
-    images: ["https://yourdomain.com/twitter-image.jpg"], // Replace
-    creator: "@yourtwitterhandle",
+    images: ["/velte_manifest.png"],
   },
   robots: {
     index: true,
@@ -207,6 +217,8 @@ export default function RootLayout({
         <Providers>
           <ServiceWorkerRegistrar />
           <ReferralCapture />
+          <BlockedAccountModal />
+          <ScrollToTopButton />
           {children}
           <Toaster
             position="top-right"

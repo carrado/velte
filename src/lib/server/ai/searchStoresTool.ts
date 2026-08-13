@@ -47,6 +47,14 @@ export interface SearchStoresCoreInput {
 
 export interface SearchStoresCoreResult {
   results: StoreMatch[];
+  // A small bonus bucket of other real vendors slightly further out than
+  // `results` (never the same ones — see retrieval.service.js's
+  // attachFurther) — 1 when `results` has 1-2 entries, 2 when it has more,
+  // never more than 2. Wallet-eligible and exposure-throttled same as any
+  // other match; empty when `results` itself is empty, or when `results`
+  // already came from the widest (nationwide) tier with nothing wider to
+  // draw a bonus from.
+  furtherResults: StoreMatch[];
   matchTier: MatchTier;
   // "similar" only reachable via the retrieval backend's weak-match fallback
   // (see retrieval.service.js's weakByTier) — a near-miss vendor shown as a
@@ -95,13 +103,15 @@ export async function searchStoresCore(
   const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
   let results: StoreMatch[],
+    furtherResults: StoreMatch[],
     matchTier: MatchTier,
     matchQuality: MatchQuality,
     externalSuggestions: NearbyBusiness[] | null;
   try {
-    ({ results, matchTier, matchQuality, externalSuggestions } =
+    ({ results, furtherResults, matchTier, matchQuality, externalSuggestions } =
       await aiSearchData<{
         results: StoreMatch[];
+        furtherResults: StoreMatch[];
         matchTier: MatchTier;
         matchQuality: MatchQuality;
         externalSuggestions: NearbyBusiness[] | null;
@@ -143,6 +153,7 @@ export async function searchStoresCore(
 
   return {
     results,
+    furtherResults,
     matchTier,
     matchQuality,
     externalSuggestions: externalSuggestions ?? [],

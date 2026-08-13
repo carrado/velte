@@ -16,10 +16,13 @@ import {
   Camera,
   Sparkles,
   Info,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/lib/api-client";
 import { storeApi } from "@/services/store";
 import { settingsApi } from "@/services/settings";
+import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
@@ -29,6 +32,7 @@ import { DescriptionQualityMeter } from "@/components/DescriptionQualityMeter";
 import SectorMultiSelect from "@/components/sectors/SectorMultiSelect";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import type { Store } from "@/types/store";
+import type { VendorFollower } from "@/types/followers";
 
 const MAX_DESCRIPTION = 600;
 const MAX_GALLERY = 6;
@@ -67,6 +71,7 @@ function SectionCard({
 
 export default function StorePage() {
   const queryClient = useQueryClient();
+  const { navigate } = useNavigation();
   const avatar = useUserStore((state) => state.user?.avatar);
   const sectors = useUserStore((state) => state.user?.sectors ?? EMPTY_SECTORS);
 
@@ -75,6 +80,19 @@ export default function StorePage() {
     queryFn: storeApi.getMyStore,
     staleTime: 30_000,
   });
+
+  // Same query key the Followers page itself uses — landing there right
+  // after is served from cache instead of refetching. staleTime here just
+  // means the overview card's own count won't refetch on every tab focus
+  // (a follower join isn't the kind of thing that needs second-by-second
+  // freshness).
+  const { data: followersData } = useQuery({
+    queryKey: ["vendor-followers"],
+    queryFn: () =>
+      api.get<{ followers: VendorFollower[] }>("/api/vendor/followers"),
+    staleTime: 30_000,
+  });
+  const followerCount = followersData?.followers.length ?? 0;
 
   const [form, setForm] = useState<Store | null>(null);
   // Sectors are canonical on User.sectors, not Store.sectors (a read-only
@@ -263,13 +281,28 @@ export default function StorePage() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            {/* Grid of 2 on mobile — a plain flex row here was squeezing
+                4 buttons into one line on narrow screens and shrinking
+                each one's tap target/label illegibly. sm: switches back to
+                a natural-width flex row once there's room for all 4 side
+                by side. */}
+            <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:flex-wrap">
+              <button
+                onClick={() => navigate("store/followers")}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-dash-secondary font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 cursor-pointer w-full sm:w-auto"
+              >
+                <Users size={13} />
+                Followers
+                <span className="text-gray-400 tabular-nums">
+                  · {followerCount}
+                </span>
+              </button>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(publicUrl);
                   toast.success("Link copied");
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-dash-secondary font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 cursor-pointer"
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-dash-secondary font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 cursor-pointer w-full sm:w-auto"
               >
                 <Copy size={13} />
                 Copy link
@@ -278,12 +311,13 @@ export default function StorePage() {
                 url={publicUrl}
                 title={form.name.trim() || "My store on Velte"}
                 text={`Check out ${form.name.trim() || "my store"} on Velte!`}
+                className="justify-center w-full sm:w-auto"
               />
               <a
                 href={publicPath}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1.5 px-3.5 py-2 text-dash-secondary font-semibold border border-orange-200 bg-orange-50 rounded-lg text-orange-600 hover:bg-orange-100"
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-dash-secondary font-semibold border border-orange-200 bg-orange-50 rounded-lg text-orange-600 hover:bg-orange-100 w-full sm:w-auto"
               >
                 <ExternalLink size={13} />
                 View store

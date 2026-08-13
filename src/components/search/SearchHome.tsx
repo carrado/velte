@@ -7,6 +7,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Loader2, Camera, X, Compass, ArrowUp } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { runSearchStream } from "@/lib/searchStream";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { VendorResultCard } from "@/components/search/VendorResultCard";
@@ -14,14 +15,13 @@ import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
 import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
-import { LocationPermissionModal } from "@/components/search/LocationPermissionModal";
 import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { getInitial } from "@/lib/initials";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
+import { useTypewriter } from "@/hooks/useTypewriter";
 import type {
-  BuyerLocation,
   Clarification,
   MatchQuality,
   MatchTier,
@@ -130,6 +130,73 @@ function storesHeading(
   return matchQuality === "similar"
     ? "Similar vendors nearby"
     : "Vendors near you";
+}
+
+// A store card plus its own "Matching service" companion(s), if any — shared
+// between the "near you" and "also available further out" sections so a
+// service listing that backs up the buyer's search shows up under EITHER
+// bucket's store, not just the near-you one. Rendered as a direct grid item
+// of its parent (see the `grid` container around each `.map()` call below),
+// not its own single-item grid — a store WITH attached services spans every
+// column (the thread of service cards underneath needs the full row's
+// width and doesn't tile into a fixed-width column), everything else sits
+// as one normal grid cell alongside its siblings.
+function StoreWithServices({
+  store,
+  services,
+  searchQuery,
+}: {
+  store: StoreMatch;
+  services: VendorMatch[];
+  searchQuery: string | null;
+}) {
+  const hasServices = services.length > 0;
+  return (
+    <div
+      className={cn("space-y-3", hasServices && "sm:col-span-2 lg:col-span-3")}
+    >
+      <StoreResultCard match={store} searchQuery={searchQuery} />
+      {services.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1 pl-9">
+            {services.length === 1 ? "Matching service" : "Matching services"}
+          </p>
+          {services.map((svc, i) => {
+            const isLast = i === services.length - 1;
+            return (
+              <div key={svc.productId} className="flex">
+                {/* Thread trunk column — stretches to the card's own height
+                    (flex row default align-items: stretch), so top-1/2 here
+                    always lands on that card's actual vertical center, no
+                    fixed pixel math. Line above the center connects up to
+                    the previous item (or the heading, for the first one);
+                    line below is omitted past the last item so the trunk
+                    visibly terminates instead of trailing off. The branch +
+                    node sit at that same center, reaching sideways into the
+                    card — the actual "this hangs off the thread" cue, not
+                    just a rail running past it. */}
+                <div className="w-8 shrink-0 relative">
+                  <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-1/2 w-px bg-orange-200" />
+                  {!isLast && (
+                    <div className="absolute left-1/2 -translate-x-1/2 top-1/2 bottom-0 w-px bg-orange-200" />
+                  )}
+                  <div className="absolute left-1/2 top-1/2 -translate-y-1/2 w-5 h-px bg-orange-200" />
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-orange-400 ring-4 ring-orange-50" />
+                </div>
+                <div className="flex-1 min-w-0 max-w-xs pb-3">
+                  <VendorResultCard
+                    match={svc}
+                    showViewStore={false}
+                    showChatButton={false}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Renders the AI's reply text as lightweight markdown — bold and lists only
@@ -245,6 +312,11 @@ interface ConversationTurn {
   // comment on SearchStreamEvent. Always empty when `products` is.
   weakProducts: VendorMatch[];
   stores: StoreMatch[];
+  // A small bonus bucket of real vendors slightly further out than `stores`
+  // (never the same ones) — see SearchStreamEvent's own furtherStores
+  // comment. Rendered as its own clearly-labeled section, never blended
+  // indistinguishably into `stores`.
+  furtherStores: StoreMatch[];
   // The businessType actually searched for this turn (e.g. "tailor") — null
   // when searchStores wasn't called. Passed to StoreResultCard only for a
   // pure vendor/store result (turn.products empty), so its WhatsApp message
@@ -312,9 +384,12 @@ function ConversationTurnView({
       </div>
 
       <div className="flex items-start gap-3">
+        {/* Velux's own avatar — same image for the status/"thinking" phase
+            and the final reply/results, since both are this one persona
+            talking, just at different points in the same turn. */}
         <img
-          src="/velte_manifest.png"
-          alt="Velte"
+          src="/velte_ai_assistant.png"
+          alt="Velux"
           className="w-8 h-8 rounded-full object-cover shrink-0"
         />
         <div className="flex-1 min-w-0 pt-0.5">
@@ -445,48 +520,60 @@ function ConversationTurnView({
                           )}
                         </h2>
                       )}
-                      <div className="space-y-5">
-                        {turn.stores.map((store) => {
-                          const services = turn.storeServices.filter(
-                            (s) => s.vendorId === store.vendorId,
-                          );
-                          return (
-                            <div key={store.storeId} className="space-y-3">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <StoreResultCard
-                                  match={store}
-                                  // Only when this is a pure vendor/store
-                                  // result (no product attached) — a
-                                  // dual-intent turn already has a product
-                                  // for the buyer to reference instead.
-                                  searchQuery={
-                                    turn.products.length === 0
-                                      ? turn.storesQuery
-                                      : null
-                                  }
-                                />
-                              </div>
-                              {services.length > 0 && (
-                                <div className="pl-3 border-l-2 border-orange-100 space-y-2">
-                                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                    {services.length === 1
-                                      ? "Matching service"
-                                      : "Matching services"}
-                                  </p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {services.map((svc) => (
-                                      <VendorResultCard
-                                        key={svc.productId}
-                                        match={svc}
-                                        showViewStore={false}
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                      <div
+                        className={cn(
+                          turn.stores.length > 1
+                            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start"
+                            : "space-y-5",
+                        )}
+                      >
+                        {turn.stores.map((store) => (
+                          <StoreWithServices
+                            key={store.storeId}
+                            store={store}
+                            services={turn.storeServices.filter(
+                              (s) => s.vendorId === store.vendorId,
+                            )}
+                            // Only when this is a pure vendor/store result
+                            // (no product attached) — a dual-intent turn
+                            // already has a product for the buyer to
+                            // reference instead.
+                            searchQuery={
+                              turn.products.length === 0
+                                ? turn.storesQuery
+                                : null
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {turn.furtherStores.length > 0 && (
+                    <div className="space-y-3">
+                      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        Also available further out
+                      </h2>
+                      <div
+                        className={cn(
+                          turn.furtherStores.length > 1
+                            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start"
+                            : "space-y-5",
+                        )}
+                      >
+                        {turn.furtherStores.map((store) => (
+                          <StoreWithServices
+                            key={store.storeId}
+                            store={store}
+                            services={turn.storeServices.filter(
+                              (s) => s.vendorId === store.vendorId,
+                            )}
+                            searchQuery={
+                              turn.products.length === 0
+                                ? turn.storesQuery
+                                : null
+                            }
+                          />
+                        ))}
                       </div>
                     </div>
                   )}
@@ -543,7 +630,27 @@ function ConversationTurnView({
   );
 }
 
-// Velte's buyer-facing search (build-order step d/e), at /search —
+// The idle screen's own greeting, typed out by Velux (see useTypewriter)
+// before the buyer has said anything — introduces the assistant by name so
+// "Velux" isn't only ever a silent avatar next to replies.
+const VELUX_GREETING = "Hi, I'm Velux — what are you looking for?";
+// The bubble's second line — types out too (not just fades in), starting
+// only once the greeting above finishes, so the whole bubble reads as one
+// continuous message rather than two independently-timed pieces of text.
+const VELUX_SUBTEXT =
+  "Describe it in your own words or a photo — I'll match it against real vendor inventory nearby, ranked by meaning, distance and trust. Never guessed, never invented.";
+// Slower than the reply typewriter's default (14ms) — this is a one-time
+// greeting meant to be read deliberately, not a results reply where a
+// buyer's already waited through the search itself and just wants the text
+// to catch up.
+const VELUX_GREETING_TYPING_SPEED_MS = 55;
+// A beat before Velux starts typing at all — the avatar and empty bubble
+// appear first, THEN typing begins, rather than text starting the instant
+// the page is ready. Reads as Velux actually pausing to "think" before
+// speaking, not a page element popping in mid-sentence.
+const VELUX_TYPING_START_DELAY_MS = 700;
+
+// Velte's buyer-facing search (build-order step d/e), at /velux —
 // `/` is now the marketing homepage. Structured as a conversation: each
 // submission appends a turn (ConversationTurn) rather than replacing the
 // last one, and a short text-only history is sent back to the model so
@@ -593,106 +700,39 @@ export function SearchHome() {
     prevTurnCountRef.current = turns.length;
   }, [turns.length]);
 
-  // A memoized promise, not a one-shot effect + ref: the buyer should
-  // always search around their real location unless they name a different
-  // one — a fast submit racing an unresolved getCurrentPosition() call used
-  // to silently drop it. Kicked off eagerly on mount (usually already
-  // settled by the time someone finishes typing) and awaited in
-  // handleSubmit as a safety net so it's never lost to the race, only
-  // capped by the same 8s timeout as before.
+  // Location functionality is stepped down for now (product decision — see
+  // git history for the previous browser-geolocation implementation:
+  // permission-gated LocationPermissionModal + getBuyerLocationOnce, both
+  // removed here). Buyers just search and get results; the backend already
+  // treats buyerLocation as optional and falls back to a named location in
+  // the query text or a nationwide search when it's absent (see
+  // resolveBuyerCoords.ts / route.ts), so this is a safe no-op, not a
+  // half-implemented feature.
   //
-  // Only a successful resolution is cached permanently (buyerLocationRef) —
-  // a denied/timed-out attempt clears buyerLocationPromise so the next call
-  // retries instead of being stuck on a stale null for the rest of the
-  // session (e.g. the buyer initially dismissed the prompt, then granted
-  // permission from the browser's address-bar icon).
-  const buyerLocationRef = useRef<BuyerLocation | null>(null);
-  const buyerLocationPromise = useRef<Promise<BuyerLocation | null> | null>(
-    null,
-  );
-  function getBuyerLocationOnce(): Promise<BuyerLocation | null> {
-    if (buyerLocationRef.current) {
-      return Promise.resolve(buyerLocationRef.current);
-    }
-    if (!buyerLocationPromise.current) {
-      buyerLocationPromise.current = new Promise<BuyerLocation | null>(
-        (resolve) => {
-          if (!navigator.geolocation) {
-            resolve(null);
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              const loc = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-              };
-              buyerLocationRef.current = loc;
-              resolve(loc);
-            },
-            (err) => {
-              // Swallowed to null either way (search still runs nationwide
-              // rather than blocking on location), but the specific reason
-              // matters for debugging "why did this go nationwide" — code 1
-              // is a real permission denial, 2 is the OS/browser reporting
-              // no location fix at all (e.g. Windows' own Location Services
-              // toggle is off, independent of the browser's own permission
-              // being granted), 3 is just the 8s timeout expiring.
-              console.warn(
-                `[search] geolocation failed (code ${err.code}): ${err.message}`,
-              );
-              resolve(null);
-            },
-            { timeout: 8000 },
-          );
-        },
-      ).finally(() => {
-        buyerLocationPromise.current = null;
-      });
-    }
-    return buyerLocationPromise.current;
-  }
-
-  // Checked via the Permissions API rather than calling getBuyerLocationOnce
-  // straight away — that would fire the browser's native geolocation prompt
-  // the instant the page loads, with zero context for why. "granted"
-  // fetches silently (no prompt, nothing to explain); "prompt" (undecided)
-  // shows our own explanation first via LocationPermissionModal; "denied"
-  // is left alone entirely — the browser won't re-prompt either way, and a
-  // getCurrentPosition() call would just fail again. Safari's geolocation
-  // support for this query has historically been inconsistent, so any
-  // failure/lack of support falls back to showing the modal too, rather
-  // than silently assuming permission either way.
-  const [showLocationModal, setShowLocationModal] = useState(false);
+  // A further beat before Velux starts typing its greeting — the
+  // avatar/bubble render immediately, but typing itself only starts after
+  // VELUX_TYPING_START_DELAY_MS, not the instant the page is ready.
+  const [startGreetingTyping, setStartGreetingTyping] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    async function checkLocationPermission() {
-      if (!navigator.geolocation) return;
-      if (!navigator.permissions?.query) {
-        if (!cancelled) setShowLocationModal(true);
-        return;
-      }
-      try {
-        const status = await navigator.permissions.query({
-          name: "geolocation",
-        });
-        if (cancelled) return;
-        if (status.state === "granted") getBuyerLocationOnce();
-        else if (status.state === "prompt") setShowLocationModal(true);
-      } catch {
-        if (!cancelled) setShowLocationModal(true);
-      }
-    }
-    checkLocationPermission();
-    return () => {
-      cancelled = true;
-    };
+    const id = setTimeout(
+      () => setStartGreetingTyping(true),
+      VELUX_TYPING_START_DELAY_MS,
+    );
+    return () => clearTimeout(id);
   }, []);
-
-  const handleAllowLocation = () => {
-    setShowLocationModal(false);
-    getBuyerLocationOnce();
-  };
+  const greeting = useTypewriter(
+    startGreetingTyping ? VELUX_GREETING : "",
+    VELUX_GREETING_TYPING_SPEED_MS,
+  );
+  const greetingDone = greeting.length === VELUX_GREETING.length;
+  // Held back to "" until the greeting above finishes — useTypewriter
+  // starts counting the moment it receives non-empty text, so gating the
+  // input itself (rather than just gating where the output is shown) is
+  // what actually delays this line's typing until the greeting is done.
+  const subtext = useTypewriter(
+    greetingDone ? VELUX_SUBTEXT : "",
+    VELUX_GREETING_TYPING_SPEED_MS,
+  );
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -773,6 +813,7 @@ export function SearchHome() {
         products: [],
         weakProducts: [],
         stores: [],
+        furtherStores: [],
         storesQuery: null,
         productStores: [],
         storeServices: [],
@@ -788,13 +829,14 @@ export function SearchHome() {
       },
     ]);
 
-    const location = await getBuyerLocationOnce();
-
     await runSearchStream(
       {
         message,
         imageUrl: currentImageUrl ?? undefined,
-        buyerLocation: location ?? undefined,
+        // buyerLocation intentionally omitted — location functionality is
+        // stepped down for now (see the comment above the greeting-typing
+        // effect). The backend resolves a named location from the query
+        // text, or falls back to a nationwide search, when it's absent.
         history,
         recentStatuses: shownStatusesRef.current,
       },
@@ -817,6 +859,9 @@ export function SearchHome() {
           const dedupedStores = event.stores.filter(
             (s) => !productVendorIds.has(s.vendorId),
           );
+          const dedupedFurtherStores = event.furtherStores.filter(
+            (s) => !productVendorIds.has(s.vendorId),
+          );
           // A machine-only breadcrumb for a LATER turn's history — lets the
           // model resolve a future "what do they sell" back to this exact
           // store via getVendorProducts, without needing the buyer-facing
@@ -824,7 +869,11 @@ export function SearchHome() {
           // Includes productStores too (guaranteed disjoint from
           // dedupedStores by vendor) — a store surfaced only via its
           // matched product's own card should still resolve the same way.
-          const allStoresFound = [...dedupedStores, ...event.productStores];
+          const allStoresFound = [
+            ...dedupedStores,
+            ...dedupedFurtherStores,
+            ...event.productStores,
+          ];
           const contextNote = allStoresFound.length
             ? `[Stores found: ${allStoresFound
                 .map((s) => `"${s.name}" (handle: ${s.handle})`)
@@ -838,6 +887,7 @@ export function SearchHome() {
             products: event.products,
             weakProducts: event.weakProducts,
             stores: dedupedStores,
+            furtherStores: dedupedFurtherStores,
             storesQuery: event.storesQuery,
             productStores: event.productStores,
             storeServices: event.storeServices,
@@ -1000,11 +1050,6 @@ export function SearchHome() {
 
   return (
     <div className="h-dvh bg-white flex flex-col overflow-hidden">
-      <LocationPermissionModal
-        open={showLocationModal}
-        onAllow={handleAllowLocation}
-        onDismiss={() => setShowLocationModal(false)}
-      />
       <BuyerInstallPrompt />
       <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-white border-b border-gray-100 z-10">
         <Link href="/" className="shrink-0">
@@ -1063,16 +1108,48 @@ export function SearchHome() {
 
       {!collapsed ? (
         <main className="flex-1 flex flex-col items-center justify-center px-5">
-          <div className="text-center mb-6 max-w-2xl">
-            <h1 className="text-[28px] sm:text-4xl font-semibold text-[#023337] mb-2 tracking-tight">
-              What are you looking for?
-            </h1>
-            <p className="text-gray-500 text-sm sm:text-base">
-              Describe it, tell us where you are, and we&apos;ll find the
-              nearest vendor who actually has it.
-            </p>
+          {/* The idle screen reads as Velux itself greeting the buyer — same
+              avatar-left, bubble-right chat layout as a real conversation
+              turn (see ConversationTurnView's own `items-start gap-3` row),
+              not a centered marketing headline. Everything Velux "says" —
+              the greeting AND the explanation — lives inside the one
+              bubble, same as a single real chat message would hold both. */}
+          <div className="flex items-start gap-3 sm:gap-4 mb-6 max-w-xl w-full text-left">
+            <img
+              src="/velte_ai_assistant.png"
+              alt="Velux"
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover shadow-md shadow-gray-300/40 shrink-0"
+            />
+            <div className="bg-white border border-gray-100 shadow-sm rounded-3xl rounded-tl-lg px-4 py-3 sm:px-5 sm:py-4 flex-1 min-w-0">
+              <h1 className="text-[16px] sm:text-lg font-semibold text-[#023337] leading-snug min-h-[1.4em]">
+                {greeting}
+                {!greetingDone && (
+                  <span className="inline-block w-[3px] h-[0.9em] ml-0.5 -mb-0.5 bg-orange-400 animate-pulse" />
+                )}
+              </h1>
+              {greetingDone && (
+                <p className="text-gray-500 text-sm sm:text-[15px] leading-relaxed mt-1.5">
+                  {subtext}
+                  {subtext.length < VELUX_SUBTEXT.length && (
+                    <span className="inline-block w-[3px] h-[0.85em] ml-0.5 -mb-0.5 bg-orange-400 animate-pulse" />
+                  )}
+                </p>
+              )}
+            </div>
           </div>
           <div className="w-full max-w-3xl">{inputForm}</div>
+          {/* Reciprocal to the "See more with AI search" / "Ask AI" CTAs on
+              the "/" homepage's browse sections — a buyer who lands here
+              directly (an ad, a bookmark, the Navbar CTA) without having
+              browsed first should have just as easy a way back the other
+              direction, not a dead end if AI search isn't what they wanted
+              after all. */}
+          <Link
+            href="/"
+            className="mt-5 text-xs sm:text-sm text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Prefer to browse? See what&apos;s on the marketplace →
+          </Link>
         </main>
       ) : (
         <>
