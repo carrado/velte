@@ -36,10 +36,21 @@ function getBuyerId(): string | null {
 // answer "is AI search actually converting, or is browse+chat carrying
 // everything" with real data instead of a guess, ahead of ever deciding to
 // swap fully onto AI search per CLAUDE.md's build order.
+//
+// `requestId` — only ever passed for source: "buyer_request" (see the
+// Buyer Requests detail page). Note `buyerId` here still calls
+// getBuyerId() (the anonymous per-browser id), NOT the authenticated
+// buyer's real account id — this beacon fires from a page a buyer only
+// ever reaches once verified, so in principle the real id is available,
+// but this function's contract (and the backend's cooldown dedup keyed on
+// this exact string) was built around the anonymous id; changing what it
+// carries for one source and not the others would be a bigger, separate
+// decision than this extension is scoped for.
 export function reportLead(
   vendorId: string,
   productId: string | undefined,
   source: LeadSource,
+  requestId?: string,
 ) {
   const url = "/api/search/lead";
   const body = JSON.stringify({
@@ -47,6 +58,7 @@ export function reportLead(
     productId,
     buyerId: getBuyerId(),
     source,
+    ...(requestId && { requestId }),
   });
 
   // sendBeacon's return value is whether the browser actually QUEUED the

@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import {
   BadgeCheck,
   Images,
-  LayoutGrid,
+  MessageSquarePlus,
   Store as StoreIcon,
   Wrench,
   Package,
@@ -18,6 +18,7 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import { reportLead } from "@/lib/reportLead";
 import { MARKETPLACE_SCROLL_FLAG } from "@/lib/scrollToMarketplace";
@@ -47,7 +48,17 @@ const fadeUp = {
 // a strict superset shape, MarketplaceBrowseItem extends
 // MarketplacePreviewItem) rather than maintaining a second near-identical
 // card that would inevitably drift from this one.
-export function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
+export function MarketplaceCard({
+  item,
+  saveSlot,
+}: {
+  item: MarketplacePreviewItem;
+  /** Optional Save-heart overlay (top-right of the image) — only the buyer
+   *  Discover/Saved pages pass this (a SaveButton), every public caller
+   *  (homepage, /marketplace, search results) renders nothing here, same
+   *  as before this prop existed. */
+  saveSlot?: React.ReactNode;
+}) {
   const symbol = item.currency === "USD" ? "$" : "₦";
   // Same raw-kobo convention as the public store page (shared.tsx's Price) —
   // this endpoint reads Product.price directly, unlike the AI search
@@ -68,6 +79,7 @@ export function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
 
   const images = resolveGalleryImages(item.mainImageUrl, item.thumbnailUrls);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
 
@@ -96,7 +108,10 @@ export function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
     // untouched — it was always plain CSS (hover:shadow-lg + the
     // hover:-translate-y-0.5 below), never motion-driven.
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex flex-col">
-      <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
+      <div
+        className={`relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden ${item.mainImageUrl ? "cursor-zoom-in" : ""}`}
+        onClick={() => item.mainImageUrl && setLightboxOpen(true)}
+      >
         {item.mainImageUrl ? (
           <ProtectedImage
             src={optimizedImageUrl(item.mainImageUrl)}
@@ -110,8 +125,11 @@ export function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
           <KindIcon size={10} />
           {isService ? "Service" : "Product"}
         </span>
+        {saveSlot && (
+          <div className="absolute top-2 right-2 z-10">{saveSlot}</div>
+        )}
         {images.length > 1 && (
-          <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold rounded-full">
+          <span className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold rounded-full">
             <Images size={10} />
             {images.length}
           </span>
@@ -136,7 +154,7 @@ export function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
               e.stopPropagation();
               setDetailOpen(true);
             }}
-            className="self-start text-[11px] font-semibold text-orange-600 hover:text-orange-700"
+            className="self-start text-[11px] font-semibold text-orange-600 hover:text-orange-700 underline"
           >
             See more
           </button>
@@ -211,6 +229,13 @@ export function MarketplaceCard({ item }: { item: MarketplacePreviewItem }) {
         chatHref={chatHref}
         chatLabel="Chat"
         onChatClick={() => reportLead(item.vendorId, item.id, "browse")}
+      />
+
+      <ImageLightbox
+        images={images}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        alt={item.name}
       />
     </div>
   );
@@ -302,15 +327,19 @@ export function MarketplacePreview({
           transition={{ duration: 0.4 }}
           className="flex flex-col sm:flex-row items-center justify-center gap-3"
         >
-          {/* Primary — the full /marketplace browse page, not just this
-              12-item teaser. AskVeluxButton stays secondary here on purpose
-              (see its own comment on why it's never the primary CTA). */}
+          {/* Primary — the full marketplace listing now lives one tap away
+              via Navbar's own Browse button (which links straight to
+              /marketplace), so this row's primary slot is freed up for the
+              fallback that actually needs one: a buyer whose need isn't in
+              this teaser (or found via AI) can post it instead of hitting a
+              dead end. AskVeluxButton stays secondary here on purpose (see
+              its own comment on why it's never the primary CTA). */}
           <Link
-            href="/marketplace"
+            href="/buyer/requests/new"
             className="inline-flex items-center gap-1.5 px-6 py-3 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow-lg shadow-orange-500/20 transition-colors"
           >
-            <LayoutGrid size={16} />
-            Browse the full marketplace
+            <MessageSquarePlus size={16} />
+            Post what you need
           </Link>
           <AskVeluxButton label="Ask Velux" subtext="See more with AI search" />
         </motion.div>

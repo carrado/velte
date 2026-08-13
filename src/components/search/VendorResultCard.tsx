@@ -13,6 +13,7 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
@@ -77,6 +78,7 @@ export function VendorResultCard({
   // card already shows (a clipped description, vendor-entered attributes,
   // or extra photos beyond the one already visible above).
   const [detailOpen, setDetailOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -89,7 +91,10 @@ export function VendorResultCard({
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
-      <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
+      <div
+        className={`relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden ${images.length > 0 ? "cursor-zoom-in" : ""}`}
+        onClick={() => images.length > 0 && setLightboxOpen(true)}
+      >
         {images.length > 0 ? (
           <ProtectedImage
             src={optimizedImageUrl(images[imgIndex])}
@@ -176,7 +181,7 @@ export function VendorResultCard({
               e.stopPropagation();
               setDetailOpen(true);
             }}
-            className="text-[11px] font-semibold text-orange-600 hover:text-orange-700"
+            className="text-[11px] font-semibold text-orange-600 hover:text-orange-700 underline"
           >
             See more
           </button>
@@ -247,6 +252,14 @@ export function VendorResultCard({
         onChatClick={() =>
           reportLead(match.vendorId, match.productId, "search")
         }
+      />
+
+      <ImageLightbox
+        images={images}
+        initialIndex={imgIndex}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        alt={match.name}
       />
     </div>
   );

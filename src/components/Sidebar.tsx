@@ -5,7 +5,16 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
-import { Wallet, PlusCircle, List, Settings, Gift, Store } from "lucide-react";
+import {
+  Wallet,
+  PlusCircle,
+  List,
+  Settings,
+  Gift,
+  Store,
+  MessageSquare,
+  Users,
+} from "lucide-react";
 import { getInitial } from "@/lib/initials";
 import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
@@ -78,6 +87,18 @@ export default function Sidebar() {
           icon: <Store size={16} />,
           href: "store",
           id: "store-nav",
+        },
+        {
+          label: "Followers",
+          icon: <Users size={16} />,
+          href: "store/followers",
+          id: "followers-nav",
+        },
+        {
+          label: "Buyer Requests",
+          icon: <MessageSquare size={16} />,
+          href: "buyer-requests",
+          id: "buyer-requests-nav",
         },
       ],
     },

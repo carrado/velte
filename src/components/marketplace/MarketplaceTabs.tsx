@@ -15,9 +15,13 @@ type Tab = "listings" | "vendors";
 export function MarketplaceTabs({
   items,
   vendors,
+  renderProductSaveSlot,
+  renderVendorSaveSlot,
 }: {
   items: MarketplaceBrowseItem[];
   vendors: VendorPreviewItem[];
+  renderProductSaveSlot?: (item: MarketplaceBrowseItem) => React.ReactNode;
+  renderVendorSaveSlot?: (vendor: VendorPreviewItem) => React.ReactNode;
 }) {
   const [active, setActive] = useState<Tab>("listings");
 
@@ -41,9 +45,12 @@ export function MarketplaceTabs({
       </div>
 
       {active === "listings" ? (
-        <MarketplaceBrowse items={items} />
+        <MarketplaceBrowse
+          items={items}
+          renderSaveSlot={renderProductSaveSlot}
+        />
       ) : (
-        <VendorsGrid vendors={vendors} />
+        <VendorsGrid vendors={vendors} renderSaveSlot={renderVendorSaveSlot} />
       )}
     </div>
   );

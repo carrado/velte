@@ -43,6 +43,14 @@ const publicRegardlessOfAuth = [
   "/velux",
   "/marketplace",
   "/updates",
+  // The buyer-facing area (/buyer/auth, /buyer/requests, /buyer/saved,
+  // /buyer/profile) has its own SEPARATE auth system (buyer_auth_token,
+  // verified by requireBuyerAuth in the BFF layer) — this middleware only
+  // ever knows about the vendor's auth_token, so buyer routes must stay
+  // outside its gating entirely rather than being (wrongly) treated as an
+  // ungated vendor dashboard route below. A logged-in vendor visiting these
+  // is also intentional — same reasoning as /velux/marketplace above.
+  "/buyer",
 ];
 
 // Marketing/onboarding pages — meant for a prospective or logged-out

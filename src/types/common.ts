@@ -2,12 +2,14 @@ import type { ReactNode } from "react";
 
 /** Which buyer-facing surface produced a WhatsApp lead click — 'browse' (the
  *  "/" homepage marketplace grid, or the public /store/[handle] page; a
- *  direct chat click with no AI involved) or 'search' (/velux's AI-matched
- *  result cards). The literal value stays "search", not "velux" — it's a
- *  persisted channel value on velte-backend's WalletTransaction, not a
- *  route; renaming it would be a data-model change, not a page rename. See
- *  reportLead(). */
-export type LeadSource = "browse" | "search";
+ *  direct chat click with no AI involved), 'search' (/velux's AI-matched
+ *  result cards), or 'buyer_request' (a buyer read vendor responses on
+ *  their posted Buyer Request and chose one to chat — see
+ *  docs/velte_buyer_requests_mvp_spec.md §27/§28). The literal value stays
+ *  "search", not "velux" — it's a persisted channel value on
+ *  velte-backend's WalletTransaction, not a route; renaming it would be a
+ *  data-model change, not a page rename. See reportLead(). */
+export type LeadSource = "browse" | "search" | "buyer_request";
 
 export interface PaginationProps {
   currentPage: number;

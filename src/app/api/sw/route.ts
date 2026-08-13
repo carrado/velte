@@ -86,8 +86,15 @@ self.addEventListener("pushsubscriptionchange", (event) => {
   // web-push 410, cleared site data, etc.). If we don't re-subscribe and
   // re-register right now, the backend row 410s and gets pruned, leaving this
   // device with no endpoint — push then silently stops until the next app open.
-  // Re-subscribing here needs no user gesture and no auth prompt; the POST to
-  // /api/push/subscribe rides the existing same-origin auth cookie.
+  // Re-subscribing here needs no user gesture and no auth prompt; the POSTs
+  // below ride whatever same-origin auth cookies already exist.
+  //
+  // Fires at BOTH /api/push/subscribe (vendor) and /api/buyer-push/subscribe
+  // (buyer) — this service worker is shared across the whole origin, so a
+  // device could hold a vendor session, a buyer session, or both at once,
+  // and there's no way to tell which one this subscription belonged to.
+  // Each endpoint 401s harmlessly if that session type isn't active here;
+  // Promise.allSettled means one failing never blocks the other.
   event.waitUntil(
     (async () => {
       try {
@@ -110,11 +117,19 @@ self.addEventListener("pushsubscriptionchange", (event) => {
             applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
           });
         }
-        await fetch("/api/push/subscribe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ subscription: sub.toJSON() }),
-        });
+        const body = JSON.stringify({ subscription: sub.toJSON() });
+        await Promise.allSettled([
+          fetch("/api/push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          }),
+          fetch("/api/buyer-push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          }),
+        ]);
       } catch (err) {
         // Best-effort — the app-load self-heal retries on next open.
       }

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { installPromptStore } from "@/lib/installPromptStore";
 import { isTranssionDevice } from "@/lib/deviceDetection";
@@ -459,18 +460,13 @@ export function PushNotificationToggle() {
         </p>
       </div>
 
-      <button
-        onClick={isSubscribed ? unsubscribe : subscribe}
+      <Switch
+        checked={isSubscribed}
+        onCheckedChange={(checked) => (checked ? subscribe() : unsubscribe())}
         disabled={isLoading}
-        className={cn(
-          "shrink-0 rounded-xl px-4 py-2 text-xs font-semibold transition-all disabled:opacity-60",
-          isSubscribed
-            ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            : "bg-orange-500 text-white shadow-sm shadow-orange-200 hover:bg-orange-600",
-        )}
-      >
-        {isLoading ? "…" : isSubscribed ? "Turn off" : "Turn on"}
-      </button>
+        aria-label="Push notifications"
+        className="shrink-0"
+      />
     </div>
   );
 }

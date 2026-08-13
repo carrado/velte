@@ -2,9 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, LogOut, Search } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
+import { AskVeluxButton } from "@/components/AskVeluxButton";
 import { useUserStore } from "@/store/userStore";
 import { useMutation } from "@tanstack/react-query";
 import { usersApi } from "@/services/users";
@@ -70,15 +70,12 @@ export default function Header({ title }: HeaderProps) {
         {/* A vendor is also a buyer sometimes — this hands them off to the
             buyer-facing search (Velte Connect, at /velux — renamed from
             /search) instead of leaving no way back to it once they're
-            inside their own dashboard. */}
-        <Link
-          href="/velux"
-          title="Looking to buy something yourself?"
-          className="flex items-center gap-1.5 px-2.5 sm:px-3.5 h-8 sm:h-9 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors text-dash-caption sm:text-dash-body font-semibold shrink-0"
-        >
-          <Search size={15} className="shrink-0" />
-          <span className="leading-none">Find on Velte</span>
-        </Link>
+            inside their own dashboard. Reuses the site-wide AskVeluxButton
+            (same component the public Navbar/marketplace use) rather than a
+            one-off styled link, so the label/styling stay in sync with the
+            "Ask Velux" convention everywhere else instead of drifting under
+            its own "Find on Velte" wording. */}
+        <AskVeluxButton variant="compact" label="Ask Velux" />
 
         {/* Mobile: navigate to notifications page */}
         <button

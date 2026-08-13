@@ -14,6 +14,7 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { reportLead } from "@/lib/reportLead";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import type {
@@ -144,6 +145,7 @@ export function OfferingCard({
   const isService = product.kind === "service";
   const KindIcon = isService ? Wrench : Package;
   const [detailOpen, setDetailOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
   const enquireHref = enquireHrefFor(product, storeName, whatsapp);
@@ -171,7 +173,12 @@ export function OfferingCard({
 
   return (
     <div className="bg-white border rounded-2xl border-gray-100 shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md flex flex-col h-full">
-      <div className="relative">
+      <div
+        className={
+          product.mainImageUrl ? "relative cursor-zoom-in" : "relative"
+        }
+        onClick={() => product.mainImageUrl && setLightboxOpen(true)}
+      >
         <OfferingMedia product={product} aspectClassName="aspect-[4/3]" />
         <span className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm text-white text-[11px] font-semibold rounded-full">
           <KindIcon size={11} />
@@ -204,7 +211,7 @@ export function OfferingCard({
               e.stopPropagation();
               setDetailOpen(true);
             }}
-            className="self-start text-[12px] font-semibold text-orange-600 hover:text-orange-700"
+            className="self-start text-[12px] font-semibold text-orange-600 hover:text-orange-700 underline"
           >
             See more
           </button>
@@ -243,6 +250,13 @@ export function OfferingCard({
         chatHref={enquireHref}
         chatLabel={isService ? "Enquire about this service" : "Enquire"}
         onChatClick={() => reportLead(vendorId, product.id, "browse")}
+      />
+
+      <ImageLightbox
+        images={images}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        alt={product.name}
       />
     </div>
   );

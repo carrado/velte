@@ -18,6 +18,7 @@ import {
   LogOut,
   MessageSquare,
   Send,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -28,6 +29,8 @@ import { usersApi } from "@/services/users";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
 import LogoutModal from "@/components/LogOutModal";
+import { InstallRow } from "@/components/InstallRow";
+import { PushNotificationToggle } from "@/components/PushNotificationManager";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 import { NIGERIA_STATES } from "@/lib/states";
 import {
@@ -972,6 +975,23 @@ export default function SettingsPage() {
         Manage your profile and account security
       </p>
       <AccountSettingsPanel />
+
+      {/* Permanent — not the dismissible install banner PushNotificationManager
+          shows on its own delay/cooldown. Same InstallRow the buyer Profile
+          page uses (see its own comment: no actor-specific logic in it at
+          all, so this is the same component, not a copy). */}
+      <div className="px-5 sm:px-0">
+        <InstallRow />
+      </div>
+
+      <SectionCard
+        icon={Bell}
+        title="Notifications"
+        description="Push alerts for new leads, messages, and orders."
+      >
+        <PushNotificationToggle />
+      </SectionCard>
+
       <FeedbackSection />
       <LogoutSection />
     </div>

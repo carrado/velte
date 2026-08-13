@@ -15,13 +15,22 @@ import type { MarketplaceBrowseItem } from "@/types/store";
 // without interrupting the browsing itself.
 export function MarketplaceBrowse({
   items,
+  renderSaveSlot,
 }: {
   items: MarketplaceBrowseItem[];
+  /** Buyer Discover/Saved pages pass this to overlay a SaveButton on every
+   *  card — the public /marketplace page omits it, same as before this
+   *  prop existed. */
+  renderSaveSlot?: (item: MarketplaceBrowseItem) => React.ReactNode;
 }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-2.5 gap-y-4 sm:gap-5">
       {items.map((item) => (
-        <MarketplaceCard key={item.id} item={item} />
+        <MarketplaceCard
+          key={item.id}
+          item={item}
+          saveSlot={renderSaveSlot?.(item)}
+        />
       ))}
       <AskVeluxCard subtext="Describe what you need and our AI searches across every vendor on Velte, not just what's shown here." />
     </div>

@@ -2,7 +2,14 @@
 "use client";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
-import { LayoutGrid, PlusCircle, Wallet, Store, Settings } from "lucide-react";
+import {
+  LayoutGrid,
+  PlusCircle,
+  Wallet,
+  Store,
+  Settings,
+  MessageSquare,
+} from "lucide-react";
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -41,6 +48,17 @@ export default function BottomNav() {
       segment: "store",
       active: subPath.startsWith("store"),
       id: "store-mobile",
+    },
+    {
+      // Short label, not "Buyer Requests" — six tabs in this row already
+      // tightens things up (see the sidebar's own comment: mobile has no
+      // drawer, this is the vendor's only nav surface), matches the buyer
+      // side's own nav using "Requests" too.
+      label: "Requests",
+      icon: <MessageSquare size={20} />,
+      segment: "buyer-requests",
+      active: subPath.startsWith("buyer-requests"),
+      id: "buyer-requests-mobile",
     },
     {
       label: "Settings",
