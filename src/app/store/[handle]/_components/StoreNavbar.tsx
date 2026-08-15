@@ -11,7 +11,7 @@ export default function StoreNavbar() {
             src="/velte_logo_esn5dj.png"
             alt="Velte"
             width={120}
-            height={18}
+            height={59}
             className="w-20 sm:w-[110px] h-auto"
             priority
           />

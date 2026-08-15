@@ -66,6 +66,16 @@ const marketingRoutes = [
   "/pricing",
   "/faq",
   "/welcome",
+  // How It Works (2026-08-16) — same treatment as /about/pricing/faq: pure
+  // explanatory content for a prospective visitor. Was missing from every
+  // list here entirely, which meant it fell through to the "protected
+  // dashboard route" branch at the bottom and redirected straight to
+  // /auth/login for anyone without a session — i.e. everyone.
+  "/how-it-works",
+  // The unified "Join Velte" chooser (2026-08-14) — same treatment as
+  // /auth: a logged-in vendor lands on their dashboard instead, a
+  // logged-out visitor picks Buyer or Business from here.
+  "/join",
 ];
 
 export async function proxy(request: NextRequest) {

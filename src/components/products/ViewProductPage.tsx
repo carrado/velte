@@ -27,6 +27,7 @@ import {
   ChefHat,
   Wrench,
   Ban,
+  PlayCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { computePrice, fmt } from "@/lib/product-price";

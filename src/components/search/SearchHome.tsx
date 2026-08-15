@@ -908,6 +908,32 @@ export function SearchHome() {
     );
   }
 
+  // One-shot handoff from the homepage's own Velux input (Hero.tsx) and any
+  // other "?q=…" link into /velux — read directly off window.location
+  // rather than useSearchParams() so this already-fully-client component
+  // doesn't need a Suspense boundary just for a one-time initial read.
+  // `auto=1` submits it immediately (a real search, not a prefilled draft);
+  // without it, the text just lands in the composer for the buyer to edit
+  // first. Strips both params from the URL afterward so a refresh doesn't
+  // resend/reprefill the same query.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q");
+    if (!q) return;
+    if (params.get("auto") === "1") {
+      // Deliberate: this IS the mount-time handoff (Hero.tsx's own composer
+      // navigates here with `auto=1` specifically to fire a real search
+      // immediately, not just prefill the composer) — there's no external
+      // event to defer this to a callback for.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void submitMessage(q, null, null);
+    } else {
+      setQuery(q);
+    }
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Shared by the form's onSubmit and the composer textarea's Enter-to-send
   // (see textareaRef below) — both are just "the buyer hit send," the only
   // difference is which DOM event triggered it.
@@ -1056,9 +1082,9 @@ export function SearchHome() {
           <Image
             src="/velte_logo_esn5dj.png"
             alt="Velte"
-            width={120}
-            height={18}
-            className="w-20 sm:w-[110px] h-auto"
+            width={90}
+            height={44}
+            className="w-16 sm:w-[90px] h-auto"
             priority
           />
         </Link>

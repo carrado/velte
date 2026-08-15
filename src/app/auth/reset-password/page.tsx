@@ -101,7 +101,7 @@ function ResetPasswordForm() {
           src="/velte_logo_esn5dj.png"
           alt="Velte"
           width={100}
-          height={20}
+          height={49}
         />
       </Link>
 

@@ -80,7 +80,7 @@ export default function ForgotPassword() {
               src="/velte_logo_esn5dj.png"
               alt="Velte logo"
               width={100}
-              height={20}
+              height={49}
               priority
             />
           </Link>

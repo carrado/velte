@@ -1,37 +1,15 @@
 "use client";
 
-import { useRef } from "react";
-import Image from "next/image";
-import {
-  motion,
-  useScroll,
-  useTransform,
-  type MotionValue,
-} from "motion/react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  ArrowRight,
-  LayoutGrid,
-  ShieldCheck,
-  Sparkles,
-  Store as StoreIcon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ProtectedImage } from "@/components/ProtectedImage";
+import { motion } from "motion/react";
+// Icons from Phosphor (2026-08-16, swapped from lucide-react for this
+// session's pages only — see MobileMenu.tsx's comment on the trade-off).
+// LayoutGrid has no exact Phosphor match; SquaresFour is its closest
+// equivalent (four-square grid glyph, same "browse a grid" meaning).
+import { ArrowRight, Camera, SquaresFour } from "@phosphor-icons/react";
 import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
-import { fmt } from "@/lib/product-price";
-import { optimizedImageUrl } from "@/lib/cloudinary";
-import { cn } from "@/lib/utils";
-import ShineSweep from "@/components/ShineSweep";
-import type { MarketplacePreviewItem } from "@/types/store";
-
-// Photo credit: Ali Mkumbwa / Unsplash (unsplash.com/photos/H1KbBGUs4bM) —
-// Unsplash's license doesn't require attribution, but it's kept here for
-// maintainability.
-const heroPhoto = {
-  src: "https://images.unsplash.com/photo-1687422808384-c896d0efd4ab",
-  alt: "Woman standing in front of a store holding a cell phone",
-};
 
 const stagger = {
   hidden: {},
@@ -43,284 +21,146 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.55 } },
 };
 
-// Reworded 2026-08-05 alongside the marketplace pivot: "Closest vendor,
-// first" was dropped — it was only ever true of AI search's own proximity
-// ranking, not the homepage's own browse sections (MarketplacePreview /
-// VendorsPreview sample randomly, not by distance), so keeping it as a
-// blanket site-wide claim would have been overstating what browsing
-// actually does. Replaced with the browse-first value itself.
-const valueProps = [
-  {
-    icon: StoreIcon,
-    title: "Real vendors, not listings",
-    subtitle: "Every result comes straight from the database — never invented",
-  },
-  {
-    icon: LayoutGrid,
-    title: "Browse real listings instantly",
-    subtitle: "See what's actually here right now — no typing required",
-  },
-  {
-    icon: Sparkles,
-    title: "AI, when you need it",
-    subtitle: "Describe something specific, in your own words or a photo",
-  },
+// Real examples, not filler copy — "Ushering service for an event in Awka"
+// specifically because that's a real category with a real matched vendor on
+// Velte today (see the 2026-08-13 buyer-request matching fix), not a made-up
+// showcase phrase.
+const EXAMPLE_PROMPTS = [
+  "Fast charger for a Tecno phone near Enugu",
+  "Someone to fix my generator this week",
+  "Ushering service for an event in Awka",
 ];
 
-// Real mockup of the "/" marketplace preview grid (MarketplacePreview.tsx)
-// — up to 2 of the SAME real items that endpoint returned for this page
-// load (passed down from page.tsx, same server fetch, no second request),
-// not illustrative placeholders. Matters here specifically: this sits
-// right above a section literally titled "On the marketplace right now"
-// showing different real items — a made-up "UrbanFlex"/"Fix Point" card
-// right above the real grid undercut the "never invented" claim the rest
-// of the site makes. Renders nothing if the catalog came back empty (same
-// convention as MarketplacePreview itself) rather than fall back to fake
-// data.
-function MarketplaceMockup({ items }: { items: MarketplacePreviewItem[] }) {
-  const shown = items.slice(0, 2);
-  if (shown.length === 0) return null;
+// Redesigned 2026-08-13, trimmed further 2026-08-15 — replaces the old
+// "Real vendors. Real listings." headline + parallax photo/mockup pair.
+// That version's job (show real catalog items) now belongs entirely to
+// MarketplacePreview right below it; duplicating a mockup of that section
+// here just to fill hero space read as noise once this box could do
+// something real instead. The box below isn't a decorative mockup — it's
+// the actual composer, wired straight to /velux (see SearchHome's own
+// `?q=`/`auto=1` handoff) — so typing here and hitting enter is a real
+// search, not a fake preview of one. Deliberately plain: no gradient panel,
+// no "Powered by X" badge, no glow around the input itself — the AI here is
+// meant to feel like a normal text box that happens to understand you, not
+// a chatbot product being sold on its own.
+//
+// 2026-08-15: cut the explanatory paragraph down to one line and made the
+// composer itself the visually dominant element (was competing with the
+// surrounding copy for attention) — the first screen's only job is "I tell
+// Velte what I need," not an explanation of how the matching pipeline
+// works.
+export default function Hero() {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function go(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      textareaRef.current?.focus();
+      return;
+    }
+    router.push(`/velux?q=${encodeURIComponent(trimmed)}&auto=1`);
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    go(query);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      go(query);
+    }
+  }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.7, delay: 0.55, ease: "easeOut" }}
-      className="relative w-full max-w-md mx-auto"
-    >
-      <div className="bg-white rounded-3xl border border-gray-200 shadow-xl shadow-gray-200/60 p-4 sm:p-5">
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.9, duration: 0.4 }}
-          className="text-xs text-orange-600 font-medium mb-3 flex items-center gap-1.5"
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-          On the marketplace right now
-        </motion.p>
+    <section className="relative overflow-hidden bg-[#F1F5F9] pt-24 pb-12 sm:pt-28 sm:pb-16">
+      {/* Soft glows — same subtle background texture the rest of the site
+          already uses (Profile/Home hero cards), not an AI-product effect
+          specific to this box. */}
+      <div className="absolute top-0 left-1/4 w-[420px] h-[420px] bg-orange-400/[0.08] rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] bg-orange-400/[0.06] rounded-full blur-[80px] pointer-events-none" />
 
-        <div
-          className={cn(
-            "grid gap-3",
-            shown.length > 1 ? "grid-cols-2" : "grid-cols-1",
-          )}
-        >
-          {shown.map((item, i) => {
-            const symbol = item.currency === "USD" ? "$" : "₦";
-            const price = item.price / 100;
-            return (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.1 + i * 0.2, duration: 0.5 }}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
-              >
-                <div className="aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
-                  {item.mainImageUrl ? (
-                    <ProtectedImage
-                      src={optimizedImageUrl(item.mainImageUrl)}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <StoreIcon size={22} className="text-gray-300" />
-                  )}
-                </div>
-                <div className="p-2.5 space-y-1">
-                  <p className="text-[11px] font-semibold text-gray-800 truncate">
-                    {item.name}
-                  </p>
-                  <p className="text-[13px] font-extrabold text-[#023337]">
-                    {item.quoteOnRequest ? "Ask for price" : fmt(price, symbol)}
-                  </p>
-                  <div className="flex items-center gap-1 min-w-0">
-                    <div className="w-3.5 h-3.5 rounded-full overflow-hidden bg-orange-100 shrink-0 flex items-center justify-center">
-                      {item.storeAvatar && (
-                        <ProtectedImage
-                          src={optimizedImageUrl(item.storeAvatar)}
-                          alt={item.storeName}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-                    <span className="text-[9px] font-bold text-gray-600 truncate">
-                      {item.storeName}
-                    </span>
-                    <ShieldCheck
-                      size={9}
-                      className="text-orange-500 shrink-0"
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Floating badge */}
-      <motion.div
-        initial={{ opacity: 0, x: 16 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.5, delay: 1.7 }}
-        className="absolute -right-3 -top-3 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
-      >
-        <ShieldCheck className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-        <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
-          From the real catalog
-        </span>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-// Real business photo, floating beside the marketplace mockup — drifts with
-// scroll (parallax) on top of its own idle float + hover tilt, so the page
-// reads as alive rather than a static screenshot next to a still photo.
-function HeroPhotoCard({ y }: { y: MotionValue<number> }) {
-  return (
-    <motion.div
-      style={{ y }}
-      initial={{ opacity: 0, x: -50, rotate: -12 }}
-      animate={{ opacity: 1, x: 0, rotate: -6 }}
-      transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
-      whileHover={{ rotate: -2, scale: 1.03 }}
-      className="relative mx-auto mb-6 w-32 sm:w-36 md:absolute md:mx-0 md:mb-0 md:-left-12 md:top-2 md:w-32 lg:-left-24 lg:top-6 lg:w-40 z-10"
-    >
-      <motion.div
-        animate={{ y: [0, -14, 0] }}
-        transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
-        className="relative aspect-[4/5] rounded-2xl overflow-hidden shadow-2xl shadow-gray-400/30 border-4 border-white"
-      >
-        <Image
-          src={heroPhoto.src}
-          alt={heroPhoto.alt}
-          fill
-          sizes="200px"
-          quality={90}
-          priority
-          className="object-cover"
-        />
-        <ShineSweep />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.3, duration: 0.5 }}
-        className="mt-2.5 bg-white rounded-xl border border-gray-200 shadow-md px-2.5 py-2 flex items-center gap-1.5"
-      >
-        <ShieldCheck className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-        <span className="text-[#023337] text-[10.5px] font-medium leading-tight">
-          Verified storefront
-        </span>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-export default function Hero({
-  marketplaceItems = [],
-}: {
-  marketplaceItems?: MarketplacePreviewItem[];
-}) {
-  const sectionRef = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ["start start", "end start"],
-  });
-  const photoY = useTransform(scrollYProgress, [0, 1], [0, 140]);
-
-  return (
-    <section
-      ref={sectionRef}
-      className="relative min-h-screen flex items-center lg:items-start overflow-hidden bg-[#F1F5F9] pt-20 sm:pt-24"
-    >
-      {/* Soft glows */}
-      <div className="absolute top-1/4 left-1/4 w-[420px] h-[420px] bg-orange-400/[0.08] rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] bg-orange-400/[0.06] rounded-full blur-[80px] pointer-events-none" />
-
-      <div className="relative max-w-7xl mx-auto px-5 sm:px-8 pt-8 pb-16 sm:py-16 lg:pt-4 w-full">
-        <motion.div
-          variants={stagger}
-          initial="hidden"
-          animate="show"
-          className="max-w-3xl mx-auto text-center mb-14"
-        >
+      <div className="relative max-w-3xl mx-auto px-5 sm:px-8 text-center">
+        <motion.div variants={stagger} initial="hidden" animate="show">
           <motion.h1
             variants={fadeUp}
-            className="text-[2.4rem] sm:text-5xl lg:text-[3.4rem] font-bold text-[#023337] leading-[1.12] tracking-tight mb-5 text-balance"
+            className="text-[2.3rem] sm:text-5xl lg:text-[3.2rem] font-bold text-[#023337] leading-[1.12] tracking-tight mb-4 text-balance"
           >
-            Real vendors. Real listings.
+            Need something?
             <br />
-            All in <span className="text-orange-500">one place</span>.
+            <span className="text-orange-500">Tell Velte.</span>
           </motion.h1>
 
           <motion.p
             variants={fadeUp}
-            className="text-lg text-gray-500 mb-9 leading-relaxed max-w-xl mx-auto"
+            className="text-base sm:text-lg text-gray-500 mb-7 leading-relaxed max-w-md mx-auto"
           >
-            Browse what&apos;s actually available near you and chat directly
-            with the vendor — or describe exactly what you need and let AI dig
-            deeper. Every result comes straight from the database, never
-            invented.
+            Find products, businesses or services near you — or let vendors come
+            to you.
           </motion.p>
 
-          <motion.div
+          <motion.form
             variants={fadeUp}
-            className="flex flex-col sm:flex-row gap-3 justify-center mb-4"
+            onSubmit={handleSubmit}
+            className="text-left"
           >
-            <Link href="/" onClick={scrollToMarketplace}>
-              <Button
-                size="lg"
-                className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-xl shadow-orange-500/20 text-[15px] px-8 gap-2 h-12 w-full sm:w-auto"
-              >
-                <LayoutGrid className="w-4 h-4" />
-                Browse Products
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/auth/signup">
-              <Button
-                size="lg"
-                variant="outline"
-                className="text-gray-700 cursor-pointer hover:bg-gray-100 text-[15px] h-12 border-gray-300 w-full sm:w-auto"
-              >
-                List your business
-              </Button>
+            <div className="flex flex-col bg-white rounded-[28px] border-2 border-gray-100 shadow-xl shadow-gray-300/30 focus-within:border-orange-300 transition-colors">
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="What are you looking for?"
+                className="w-full resize-none bg-transparent outline-none text-base sm:text-lg leading-6 text-gray-900 placeholder:text-gray-400 px-6 pt-5 sm:pt-6 pb-2"
+              />
+              <div className="flex items-center justify-between px-4 sm:px-5 pb-4 pt-1">
+                <span className="hidden sm:flex items-center gap-1.5 pl-2 text-xs text-gray-400">
+                  <Camera size={14} />
+                  Photos work too, once you&apos;re in
+                </span>
+                <button
+                  type="submit"
+                  className="ml-auto shrink-0 inline-flex items-center gap-1.5 pl-4 pr-3.5 h-10 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors cursor-pointer"
+                >
+                  Ask
+                  <ArrowRight size={15} />
+                </button>
+              </div>
+            </div>
+          </motion.form>
+
+          <motion.div variants={fadeUp} className="mt-4">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+              Try
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {EXAMPLE_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => go(prompt)}
+                  className="text-xs sm:text-[13px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full px-3.5 py-2 hover:border-orange-300 hover:text-orange-700 hover:bg-orange-50 transition-colors cursor-pointer"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+
+          <motion.div variants={fadeUp} className="mt-6">
+            <Link
+              href="/"
+              onClick={scrollToMarketplace}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+            >
+              <SquaresFour className="w-3.5 h-3.5" />
+              Prefer to browse first? ↓
             </Link>
           </motion.div>
-        </motion.div>
-
-        <div className="relative max-w-md mx-auto">
-          <HeroPhotoCard y={photoY} />
-          <MarketplaceMockup items={marketplaceItems} />
-        </div>
-
-        {/* Value strip */}
-        <motion.div
-          variants={stagger}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: "-80px" }}
-          className="grid sm:grid-cols-3 gap-6 sm:gap-4 max-w-4xl mx-auto mt-20"
-        >
-          {valueProps.map(({ icon: Icon, title, subtitle }) => (
-            <motion.div
-              key={title}
-              variants={fadeUp}
-              className="flex flex-col items-center text-center gap-2 px-2"
-            >
-              <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center mb-1">
-                <Icon className="w-[18px] h-[18px] text-orange-500" />
-              </div>
-              <p className="text-sm font-semibold text-[#023337]">{title}</p>
-              <p className="text-xs text-gray-500 leading-relaxed max-w-[200px]">
-                {subtitle}
-              </p>
-            </motion.div>
-          ))}
         </motion.div>
       </div>
     </section>

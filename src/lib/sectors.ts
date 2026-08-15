@@ -147,7 +147,6 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         // photocopying, and binding as a service side.
         listingConfig: {
           productCategoryId: "books",
-          productCategoryId: "books",
           attributeCategoryId: "stationery",
           presetGroups: ["Printing & Publishing"],
         },
@@ -472,9 +471,8 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Auto Parts & Accessories",
         classification: "both",
         listingConfig: {
-          productCategoryId: "automotive",
-          presetGroups: ["Auto Parts Sales & Fitting"],
           productCategoryId: "auto-parts",
+          presetGroups: ["Auto Parts Sales & Fitting"],
           attributeCategoryId: "auto-parts",
         },
       },
@@ -504,9 +502,8 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Tyre Sales & Vulcanizing",
         classification: "both",
         listingConfig: {
-          productCategoryId: "automotive",
-          presetGroups: ["Tyre Services"],
           productCategoryId: "tyres-vulcanizing",
+          presetGroups: ["Tyre Services"],
           attributeCategoryId: "auto-parts",
         },
       },
@@ -532,7 +529,6 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         listingConfig: {
           productCategoryId: "power-energy",
           presetGroups: ["Appliance & Generator Repair"],
-          productCategoryId: "power-energy",
           attributeCategoryId: "power-energy",
         },
       },
@@ -541,9 +537,8 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         label: "Solar Panel Installation & Repair",
         classification: "both",
         listingConfig: {
-          productCategoryId: "power-energy",
-          presetGroups: ["Solar Installation"],
           productCategoryId: "solar-panels",
+          presetGroups: ["Solar Installation"],
           attributeCategoryId: "power-energy",
         },
       },
