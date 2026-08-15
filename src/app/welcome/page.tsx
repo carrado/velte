@@ -20,7 +20,7 @@ export default function WelcomePage() {
         src="/velte_logo_esn5dj.png"
         alt="Velte"
         width={130}
-        height={26}
+        height={64}
         priority
         className="mb-6"
       />

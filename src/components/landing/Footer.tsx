@@ -29,22 +29,58 @@ const socialLinks = [
   },
 ];
 
-const footerLinks = [
+// Grouped columns (2026-08-16, replaces the flat "essential links" list from
+// 2026-08-15 below) — the flat-list version was itself a reaction to an
+// EARLIER two-column attempt that stacked too tall on mobile (no side-by-side
+// grid there). This version fixes that instead of re-triggering it: on
+// mobile the 4 groups sit in a 2x2 grid (`grid-cols-2`), not stacked full
+// height one under another, so it's barely taller than the old flat list;
+// desktop goes to one row (`sm:grid-cols-6` — brand takes 2, each group 1).
+// Also folds in real pages that had no link anywhere on the public site
+// (`/marketplace`, `/velux` — both already live in Navbar, just not
+// re-surfaced here the way footers conventionally repeat primary nav) plus
+// `/how-it-works`. Pricing deliberately left out of Product (2026-08-16) —
+// not dropped for a design reason, just not ready to be a footer-level link
+// yet on its own; it's still reachable from How It Works' vendor column.
+//
+// `/updates` swapped for `/how-it-works` (2026-08-16) — Updates is a vendor-
+// account changelog ("policy and feature changes that affect your Velte
+// vendor account"), content for people who already have a store, not
+// something a first-time visitor gets value from. How It Works fills the
+// same Resources slot with a real step-by-step page instead (grounded in
+// existing Hero/VeluxShowcase/RegisterCta/pricing copy, not new claims).
+const footerGroups: {
+  heading: string;
+  links: { label: string; href: string }[];
+}[] = [
+  {
+    heading: "Product",
+    links: [
+      { label: "Marketplace", href: "/marketplace" },
+      { label: "Ask Velux", href: "/velux" },
+    ],
+  },
   {
     heading: "Company",
     links: [
       { label: "About", href: "/about" },
+      { label: "Careers", href: "/careers" },
+      { label: "Contact", href: "/contact" },
+    ],
+  },
+  {
+    heading: "Resources",
+    links: [
       { label: "Blog", href: "/blog" },
       { label: "FAQ", href: "/faq" },
-      { label: "Contact", href: "/contact" },
-      { label: "Careers", href: "/careers" },
+      { label: "How It Works", href: "/how-it-works" },
     ],
   },
   {
     heading: "Legal",
     links: [
-      { label: "Privacy Policy", href: "/privacy" },
-      { label: "Terms of Service", href: "/terms" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
     ],
   },
 ];
@@ -54,23 +90,32 @@ export default function Footer() {
 
   return (
     <footer className="bg-white border-t border-gray-200">
-      <div className="max-w-7xl mx-auto px-5 sm:px-8 py-14">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
-          <div className="col-span-1 sm:col-span-2 lg:col-span-2">
-            <Link href="/" className="flex items-center gap-2.5 mb-4">
+      {/* Widened 5xl → 6xl and switched brand/groups to a justified flex row
+          (2026-08-16) — the old grid-cols-6 packed everything toward the
+          left edge of a narrower container; this spreads the 4 groups across
+          the full row with real gaps between them instead of being squeezed
+          together, closer to the airy spacing on the reference site. Logo
+          also sized down (72px → 56px) — the 2026-08-14 aspect-ratio fix
+          (see Navbar's own comment) rendered every logo instance at its true
+          undistorted height, which read as noticeably larger than intended
+          here. */}
+      <div className="max-w-6xl mx-auto px-5 sm:px-8 py-9 sm:py-10">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8 mb-8">
+          <div className="max-w-[260px] shrink-0">
+            <Link href="/" className="flex items-center gap-2.5 mb-2.5">
               <Image
                 src="/velte_logo_esn5dj.png"
                 alt="Velte"
-                width={90}
-                height={12}
+                width={56}
+                height={28}
                 priority
               />
             </Link>
-            <p className="text-gray-500 text-sm leading-relaxed max-w-[280px]">
+            <p className="text-gray-500 text-sm leading-relaxed mb-3.5">
               Describe what you need — we find the nearest real vendor who
               actually has it.
             </p>
-            <div className="flex items-center gap-3 mt-5">
+            <div className="flex items-center gap-3">
               {socialLinks.map(({ label, href, iconSrc }) => (
                 <a
                   key={label}
@@ -81,38 +126,40 @@ export default function Footer() {
                   className="opacity-90 hover:opacity-100 transition-opacity duration-150"
                 >
                   {iconSrc ? (
-                    <Image src={iconSrc} alt={label} width={32} height={32} />
+                    <Image src={iconSrc} alt={label} width={28} height={28} />
                   ) : (
-                    <FacebookLogo className="h-8 w-8" />
+                    <FacebookLogo className="h-7 w-7" />
                   )}
                 </a>
               ))}
             </div>
           </div>
 
-          {footerLinks.map((col) => (
-            <div key={col.heading}>
-              <p className="text-gray-400 text-xs font-semibold tracking-widest uppercase mb-4">
-                {col.heading}
-              </p>
-              <ul className="space-y-3">
-                {col.links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-gray-500 hover:text-gray-900 text-sm transition-colors duration-150"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <div className="grid grid-cols-2 gap-8 sm:flex sm:gap-10 lg:gap-16">
+            {footerGroups.map((group) => (
+              <div key={group.heading}>
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-3">
+                  {group.heading}
+                </p>
+                <ul className="space-y-2.5">
+                  {group.links.map((link) => (
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
+                        className="text-gray-500 hover:text-gray-900 text-sm transition-colors duration-150"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="border-t border-gray-200 pt-7 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-gray-400 text-sm">
+        <div className="border-t border-gray-200 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-gray-400 text-xs text-center sm:text-left">
             &copy; {year} Velte Technologies. All rights reserved.
           </p>
           <p className="text-gray-400 text-xs">

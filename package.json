@@ -25,6 +25,7 @@
     "@mux/mux-player-react": "^3.13.2",
     "@mux/upchunk": "^3.5.0",
     "@next/third-parties": "^16.2.12",
+    "@phosphor-icons/react": "^2.1.10",
     "@tanstack/query-core": "^5.90.20",
     "@tanstack/query-db-collection": "^1.0.30",
     "@tanstack/react-db": "^0.1.77",

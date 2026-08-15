@@ -3,10 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
-import { BadgeCheck, Store as StoreIcon } from "lucide-react";
+// Icons from Phosphor (2026-08-16, swapped from lucide-react for this
+// session's pages only — see MobileMenu.tsx's own comment). BadgeCheck and
+// Store have no exact match; SealCheck and Storefront are their closest
+// Phosphor equivalents.
+import {
+  ArrowRight,
+  SealCheck,
+  Storefront as StoreIcon,
+} from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { ProtectedImage } from "@/components/ProtectedImage";
-import { AskVeluxButton } from "@/components/AskVeluxButton";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { buildWhatsappLink } from "@/lib/whatsapp";
@@ -166,7 +173,7 @@ export function VendorCard({
           <p className="font-bold text-[#023337] text-[15px] truncate">
             {item.name}
           </p>
-          <BadgeCheck
+          <SealCheck
             size={15}
             className="text-orange-500 shrink-0 fill-orange-500/15"
           />
@@ -247,35 +254,33 @@ export function VendorCard({
 export function VendorsPreview({ items }: { items: VendorPreviewItem[] }) {
   if (items.length === 0) return null;
 
+  // Capped at 3 on the homepage (2026-08-15, same reasoning as
+  // MarketplacePreview's own 6-item cap) — a full directory belongs on
+  // /marketplace, not the landing page.
+  const shown = items.slice(0, 3);
+
   return (
-    <section className="relative bg-white border-t border-gray-200 py-20">
-      <div className="max-w-6xl mx-auto px-5 sm:px-8">
+    <section className="relative bg-white border-t border-gray-100 py-14 sm:py-16">
+      <div className="max-w-5xl mx-auto px-5 sm:px-8">
         <motion.div
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
-          className="text-center mb-10"
+          className="text-center mb-8"
         >
           <motion.h2
             variants={fadeUp}
-            className="text-3xl sm:text-4xl font-bold text-[#023337] tracking-tight mb-3 text-balance"
+            className="text-2xl sm:text-3xl font-bold text-[#023337] tracking-tight text-balance"
           >
-            Vendors on Velte
+            Find businesses you can actually talk to
           </motion.h2>
-          <motion.p
-            variants={fadeUp}
-            className="text-gray-500 max-w-xl mx-auto"
-          >
-            Real businesses, verified and reachable — take a look around their
-            stores.
-          </motion.p>
         </motion.div>
 
         {/* Plain div — see VendorCard's own comment on why the
             scroll-triggered stagger reveal was dropped from this grid. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {items.map((item) => (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          {shown.map((item) => (
             <VendorCard key={item.vendorId} item={item} />
           ))}
         </div>
@@ -285,12 +290,22 @@ export function VendorsPreview({ items }: { items: VendorPreviewItem[] }) {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4 }}
-          className="text-center mt-10"
+          className="text-center mt-8"
         >
-          <AskVeluxButton
-            label="Ask Velux"
-            subtext="Looking for a specific business?"
-          />
+          {/* A real "second primary" CTA, not a muted link — same outline-
+              button treatment as MarketplacePreview's own "Explore the
+              marketplace" (2026-08-15), for the same reason: it's this
+              section's actual exit action, and undersold it as gray text.
+              Border lightened 2px orange-500 → 1px orange-200 (2026-08-16,
+              matches MarketplacePreview's own CTA — see that file's
+              comment). */}
+          <Link
+            href="/marketplace"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-orange-200 bg-orange-50 text-orange-600 font-semibold text-sm hover:border-orange-300 hover:bg-orange-100 transition-colors"
+          >
+            Explore all businesses
+            <ArrowRight size={14} />
+          </Link>
         </motion.div>
       </div>
     </section>

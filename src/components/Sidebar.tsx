@@ -148,11 +148,16 @@ export default function Sidebar() {
     <aside className="hidden lg:flex w-[260px] h-full bg-white flex-col border-r border-gray-200 overflow-y-auto flex-shrink-0">
       <div className="flex items-center px-4 py-2 h-[70px] border-b border-gray-200">
         <div className="flex gap-1.5 -ml-4">
+          {/* Swapped off the stale Cloudinary-hosted copy (2026-08-14) —
+              that upload predates the local file's crop, so it still had
+              the old ~40%-empty-margin version baked in. The local
+              /public asset is the single source of truth for this logo
+              everywhere else; this brings Sidebar in line with that. */}
           <img
-            src="https://res.cloudinary.com/dbhpul04t/image/upload/v1779377619/velte_logo_esn5dj_tbfllz.png"
+            src="/velte_logo_esn5dj.png"
             alt="Velte logo"
-            width={100}
-            height={20}
+            width={80}
+            height={39}
           />
         </div>
       </div>

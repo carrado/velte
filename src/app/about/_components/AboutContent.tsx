@@ -5,20 +5,50 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import {
   Database,
-  Search,
-  Store,
+  MagnifyingGlass,
+  Storefront,
   MapPin,
   ArrowRight,
+  ArrowUpRight,
   ShieldCheck,
-  Sparkles,
-  LayoutGrid,
-} from "lucide-react";
+  SquaresFour,
+  CheckCircle,
+} from "@phosphor-icons/react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { AskVeluxButton } from "@/components/AskVeluxButton";
 import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
 import ShineSweep from "@/components/ShineSweep";
+
+// Redesigned 2026-08-16 — three real fixes, not just a visual pass:
+//
+// 1. Both CTAs that used to point straight at /auth/signup now go to /join
+//    (the unified buyer/business chooser, built 2026-08-14) — every other
+//    surface on the site routes that path through /join already; this page
+//    was the one holdout still reopening the "which button do I click"
+//    ambiguity /join exists to remove.
+//
+// 2. "Built for both sides" shrank from two full bullet-list cards with
+//    their own CTAs down to a slim two-column band that links out to
+//    /how-it-works instead of restating it — once that page shipped
+//    (2026-08-16), this section's old form duplicated it almost line for
+//    line. This version leans into what About is actually for (why this
+//    matters) and hands the procedural detail (what happens, in order) to
+//    the page built specifically for that.
+//
+// 3. Icons swapped to Phosphor (this page is a substantial redesign this
+//    session, same reasoning as the other pages that got the swap — see
+//    MobileMenu.tsx's own comment) and animation is more consistent
+//    end-to-end: Our Story used to run its own bespoke x-slide transitions
+//    outside the shared stagger/fadeUp system every other section uses;
+//    it's on that shared system now too (its distinctive photo
+//    tilt/float/hover treatment is untouched — that was already good, it
+//    just needed to sit inside the same reveal rhythm as everything else).
+//
+// No fabricated numbers anywhere on this page — same rule the marketplace
+// pages hold to (see MarketplaceTabs's own comments): nothing here claims a
+// vendor count, a buyer count, or any stat that isn't true today.
 
 // Photo credit: Ben Iwara / Unsplash (unsplash.com/photos/w1EaPjX71Sw) —
 // two women at a food stall, Benin City, Nigeria. Unsplash's license
@@ -36,13 +66,13 @@ const values = [
       "Our AI never invents a vendor, price, or stock level — every result comes straight from the database.",
   },
   {
-    icon: Search,
+    icon: MagnifyingGlass,
     title: "Buyer‑First",
     description:
       "Browse real listings directly, or describe what you need in your own words or a photo — either way, we do the matching, not you.",
   },
   {
-    icon: Store,
+    icon: Storefront,
     title: "Seller Empowerment",
     description:
       "Any real seller is discoverable — no listing fee or ad budget required.",
@@ -55,49 +85,26 @@ const values = [
   },
 ];
 
+// Slimmed 2026-08-16 (see file-level comment) — three short lines each,
+// not a duplicate of /how-it-works' full step sequence.
 const sides = [
   {
-    audience: "For Buyers",
-    icon: Search,
+    audience: "For buyers",
+    icon: MagnifyingGlass,
     points: [
-      {
-        title: "Browse or describe — your call",
-        detail:
-          "Real listings right on the homepage, or search with AI for something specific",
-      },
-      {
-        title: "Describe it your way",
-        detail: "Text or a photo — matched by meaning, not keywords",
-      },
-      {
-        title: "See what's real",
-        detail: "Only actual inventory, never an invented listing",
-      },
-      {
-        title: "Closest match first",
-        detail: "Proximity and trust decide the ranking, not ad spend",
-      },
+      "Browse real listings, or describe what you need",
+      "Matched by meaning, proximity and trust — never invented",
+      "Straight to the vendor's chat, no middleman",
     ],
-    cta: { label: "Browse Products", href: "/" },
   },
   {
-    audience: "For Sellers",
-    icon: Store,
+    audience: "For sellers",
+    icon: Storefront,
     points: [
-      {
-        title: "List free, always",
-        detail: "No listing fee or ad budget required to be found",
-      },
-      {
-        title: "Found by real demand",
-        detail: "Matched to buyers already searching nearby, right now",
-      },
-      {
-        title: "Straight to WhatsApp",
-        detail: "You get the conversation directly — no middleman",
-      },
+      "List free, always — no fee or ad budget required",
+      "Found by real demand, matched nearby",
+      "Pay only when we send a genuine, matched lead",
     ],
-    cta: { label: "List your business", href: "/auth/signup" },
   },
 ];
 
@@ -127,6 +134,11 @@ export default function AboutContent() {
                 "radial-gradient(ellipse 70% 60% at 50% 20%, black, transparent)",
             }}
           />
+          {/* Soft glows — same treatment Hero.tsx's own homepage composer
+              uses, so the brand's "AI section" feel is consistent, not a
+              one-off effect invented for this page. */}
+          <div className="absolute top-10 left-1/4 w-[420px] h-[420px] bg-orange-400/[0.08] rounded-full blur-[100px] pointer-events-none" />
+          <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] bg-orange-400/[0.06] rounded-full blur-[80px] pointer-events-none" />
 
           <div className="relative max-w-3xl mx-auto px-5 sm:px-8 text-center">
             <motion.div initial="hidden" animate="show" variants={stagger}>
@@ -158,14 +170,17 @@ export default function AboutContent() {
                   "Real vendors only",
                   "No invented listings",
                   "Built for both sides",
-                ].map((badge) => (
-                  <span
+                ].map((badge, i) => (
+                  <motion.span
                     key={badge}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.5 + i * 0.08, duration: 0.35 }}
                     className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-[#023337] text-xs font-medium px-3 py-1.5 rounded-full shadow-sm"
                   >
                     <ShieldCheck className="w-3 h-3 text-orange-500" />
                     {badge}
-                  </span>
+                  </motion.span>
                 ))}
               </motion.div>
             </motion.div>
@@ -174,13 +189,14 @@ export default function AboutContent() {
 
         {/* Our Story */}
         <section className="max-w-7xl mx-auto px-5 sm:px-8 py-24">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-            >
+          <motion.div
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            variants={stagger}
+            className="grid md:grid-cols-2 gap-16 items-center"
+          >
+            <motion.div variants={fadeUp}>
               <span className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-3 block">
                 Our story
               </span>
@@ -209,13 +225,7 @@ export default function AboutContent() {
               </p>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-              className="relative"
-            >
+            <motion.div variants={fadeUp} className="relative">
               <motion.div
                 initial={{ rotate: 2 }}
                 whileInView={{ rotate: 0 }}
@@ -266,80 +276,68 @@ export default function AboutContent() {
                 </span>
               </motion.div>
             </motion.div>
-          </div>
+          </motion.div>
         </section>
 
-        {/* Built for both sides */}
-        <section className="max-w-7xl mx-auto px-5 sm:px-8 pb-24">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-center mb-12"
-          >
-            <span className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-3 block">
-              Two sides, one platform
-            </span>
-            <h2 className="text-4xl font-bold text-[#023337] text-balance">
-              Whether you&apos;re buying or selling, Velte works the same way
-            </h2>
-          </motion.div>
-
+        {/* Built for both sides — slim band, not a full duplicate of
+            /how-it-works (see file-level comment). */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-8 pb-24">
           <motion.div
             initial="hidden"
             whileInView="show"
             viewport={{ once: true, margin: "-80px" }}
             variants={stagger}
-            className="grid md:grid-cols-2 gap-6"
+            className="bg-white border border-gray-200 rounded-3xl shadow-sm p-8 sm:p-10"
           >
-            {sides.map(({ audience, icon: Icon, points, cta }) => (
-              <motion.div
-                key={audience}
-                variants={fadeUp}
-                whileHover={{ y: -4 }}
-                className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm transition-shadow duration-200 hover:shadow-lg hover:shadow-gray-300/40"
-              >
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-11 h-11 rounded-2xl bg-orange-500/10 flex items-center justify-center shrink-0">
-                    <Icon className="w-5 h-5 text-orange-500" />
+            <motion.div variants={fadeUp} className="text-center mb-10">
+              <span className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-3 block">
+                Two sides, one platform
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-bold text-[#023337] text-balance">
+                Whether you&apos;re buying or selling, Velte works the same way
+              </h2>
+            </motion.div>
+
+            <div className="grid sm:grid-cols-2 gap-10 mb-8">
+              {sides.map(({ audience, icon: Icon, points }) => (
+                <motion.div key={audience} variants={fadeUp}>
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <motion.div
+                      whileHover={{ rotate: -8, scale: 1.08 }}
+                      className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0"
+                    >
+                      <Icon className="w-4 h-4 text-orange-500" />
+                    </motion.div>
+                    <h3 className="text-base font-bold text-[#023337]">
+                      {audience}
+                    </h3>
                   </div>
-                  <h3 className="text-xl font-bold text-[#023337]">
-                    {audience}
-                  </h3>
-                </div>
+                  <ul className="space-y-2.5">
+                    {points.map((point) => (
+                      <li key={point} className="flex items-start gap-2">
+                        <CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                        <span className="text-sm text-gray-500 leading-relaxed">
+                          {point}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              ))}
+            </div>
 
-                <ul className="space-y-4 mb-7">
-                  {points.map(({ title, detail }) => (
-                    <li key={title} className="flex items-start gap-2.5">
-                      <Sparkles className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-semibold text-[#023337]">
-                          {title}
-                        </p>
-                        <p className="text-xs text-gray-500 leading-relaxed">
-                          {detail}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-
-                <Link
-                  href={cta.href}
-                  // Only the "For Buyers" card's cta.href is the
-                  // marketplace link ("/") — "For Sellers" points at
-                  // /auth/signup, which must navigate normally, so this
-                  // can't be unconditional the way the other single-purpose
-                  // Links below are.
-                  onClick={cta.href === "/" ? scrollToMarketplace : undefined}
-                  className="inline-flex items-center gap-1.5 text-orange-600 font-semibold text-sm hover:text-orange-700 transition-colors"
-                >
-                  {cta.label}
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </motion.div>
-            ))}
+            <motion.div
+              variants={fadeUp}
+              className="text-center pt-6 border-t border-gray-100"
+            >
+              <Link
+                href="/how-it-works"
+                className="inline-flex items-center gap-1.5 text-orange-600 font-semibold text-sm hover:text-orange-700 transition-colors"
+              >
+                See the full flow, step by step
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </motion.div>
           </motion.div>
         </section>
 
@@ -375,9 +373,12 @@ export default function AboutContent() {
                   whileHover={{ y: -4 }}
                   className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 text-center transition-shadow duration-200 hover:shadow-lg hover:shadow-gray-300/40"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center mx-auto mb-4">
+                  <motion.div
+                    whileHover={{ rotate: -8, scale: 1.1 }}
+                    className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center mx-auto mb-4"
+                  >
                     <Icon className="w-6 h-6 text-orange-500" />
-                  </div>
+                  </motion.div>
                   <h3 className="text-[#023337] font-semibold text-lg mb-2">
                     {value.title}
                   </h3>
@@ -418,18 +419,24 @@ export default function AboutContent() {
                     size="lg"
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   >
-                    <LayoutGrid className="w-4 h-4" />
+                    <SquaresFour className="w-4 h-4" />
                     Browse Products
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>
-                <Link href="/auth/signup">
+                {/* → /join (2026-08-16, was /auth/signup — see file-level
+                    comment). No conditional onClick needed here unlike the
+                    Browse Products button above: that one still needs
+                    scrollToMarketplace because its href is "/", this one's
+                    href is its own real destination. */}
+                <Link href="/join">
                   <Button
                     size="lg"
                     variant="outline"
-                    className="text-gray-700 cursor-pointer hover:bg-gray-100 border-gray-300 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
+                    className="text-gray-700 cursor-pointer hover:bg-gray-100 border-gray-300 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98] gap-2"
                   >
                     List your business
+                    <ArrowUpRight className="w-4 h-4" />
                   </Button>
                 </Link>
               </div>

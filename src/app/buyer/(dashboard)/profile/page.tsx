@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -13,6 +14,9 @@ import {
   Store,
   UserRound,
   AtSign,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 
 import { buyerApi } from "@/lib/buyer-api-client";
@@ -25,6 +29,7 @@ import { BuyerPushToggle } from "@/components/buyer/BuyerPushToggle";
 import { getInitial } from "@/lib/initials";
 import { BuyerEmptyState } from "@/components/buyer/BuyerEmptyState";
 import type { BuyerRequest } from "@/types/buyerRequest";
+import type { Buyer } from "@/types/buyer";
 
 /* "My Velte" — spec §39's "Buyer profile should remain minimal" is about
    the account FEATURE set (name/phone/location, no address book, no order
@@ -58,6 +63,125 @@ function DetailRow({
           {value}
         </p>
       </div>
+    </div>
+  );
+}
+
+// Name/username are the two fields registration deliberately deferred
+// (see buyer/auth/page.tsx's 2026-08-14 rework — name is skippable, username
+// is auto-generated) — this is where a buyer actually comes back to set a
+// real value later, per the "let them change it later" model. Phone/location
+// stay plain DetailRows: phone is the verified identity itself (not
+// editable in place — changing it means re-verifying, out of scope here),
+// and location comes from geolocation, not manual entry.
+function EditableDetailRow({
+  icon: Icon,
+  label,
+  value,
+  placeholder,
+  prefix,
+  normalize,
+  validate,
+  onSave,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  placeholder: string;
+  prefix?: string;
+  normalize?: (v: string) => string;
+  validate: (v: string) => string | null;
+  onSave: (v: string) => Promise<unknown>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-3.5 py-3 first:pt-0 last:pb-0 group">
+        <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+          <Icon size={15} className="text-orange-500" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-dash-caption text-gray-400">{label}</p>
+          <p className="text-dash-body font-medium text-gray-900 truncate">
+            {value || `${placeholder} not set`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(value);
+            setEditing(true);
+          }}
+          className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-gray-300 hover:text-orange-500 hover:bg-orange-50 transition-colors cursor-pointer"
+          aria-label={`Edit ${label.toLowerCase()}`}
+        >
+          <Pencil size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  async function handleSave() {
+    const normalized = (normalize ? normalize(draft) : draft).trim();
+    const error = validate(normalized);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(normalized);
+      setEditing(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save that.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3.5 py-3 first:pt-0 last:pb-0">
+      <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+        <Icon size={15} className="text-orange-500" />
+      </div>
+      <div className="min-w-0 flex-1 flex items-center gap-2">
+        {prefix && (
+          <span className="text-dash-body text-gray-400">{prefix}</span>
+        )}
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void handleSave();
+            if (e.key === "Escape") setEditing(false);
+          }}
+          placeholder={placeholder}
+          autoFocus
+          disabled={saving}
+          className="min-w-0 flex-1 text-dash-body font-medium text-gray-900 bg-transparent border-b border-orange-300 outline-none disabled:opacity-60"
+        />
+      </div>
+      <button
+        type="button"
+        onClick={() => void handleSave()}
+        disabled={saving}
+        className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-green-600 hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-60"
+        aria-label="Save"
+      >
+        <Check size={15} />
+      </button>
+      <button
+        type="button"
+        onClick={() => setEditing(false)}
+        disabled={saving}
+        className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-60"
+        aria-label="Cancel"
+      >
+        <X size={15} />
+      </button>
     </div>
   );
 }
@@ -125,6 +249,16 @@ export default function BuyerProfilePage() {
     retry: false,
   });
   const requests = requestsData?.requests ?? [];
+
+  const setBuyer = useBuyerStore((s) => s.setBuyer);
+  const updateProfileMutation = useMutation({
+    mutationFn: (patch: { name?: string; username?: string }) =>
+      buyerApi.patch<{ buyer: Buyer }>("/api/buyer-auth/me", patch),
+    onSuccess: ({ buyer }) => {
+      setBuyer(buyer);
+      toast.success("Updated.");
+    },
+  });
 
   const logoutMutation = useMutation({
     mutationFn: () => buyerApi.post("/api/buyer-auth/logout"),
@@ -248,15 +382,27 @@ export default function BuyerProfilePage() {
           Your Details
         </h2>
         <div className="divide-y divide-gray-100">
-          <DetailRow
+          <EditableDetailRow
             icon={UserRound}
             label="Name"
-            value={shown.name || "Not set"}
+            value={shown.name ?? ""}
+            placeholder="Your name"
+            validate={(v) => (v.length < 2 ? "Enter your name" : null)}
+            onSave={(v) => updateProfileMutation.mutateAsync({ name: v })}
           />
-          <DetailRow
+          <EditableDetailRow
             icon={AtSign}
             label="Username"
-            value={shown.username ? `@${shown.username}` : "Not set"}
+            value={shown.username ?? ""}
+            placeholder="username"
+            prefix="@"
+            normalize={(v) => v.toLowerCase().replace(/^@/, "")}
+            validate={(v) =>
+              /^[a-z0-9_]{3,20}$/.test(v)
+                ? null
+                : "3-20 characters — letters, numbers and underscores only"
+            }
+            onSave={(v) => updateProfileMutation.mutateAsync({ username: v })}
           />
           <DetailRow icon={Phone} label="Phone" value={shown.phone} />
           <DetailRow

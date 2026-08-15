@@ -3,8 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
-import { ArrowRight } from "lucide-react";
-import { featuredFaqs } from "@/lib/faqs";
+// Icon from Phosphor (2026-08-16, swapped from lucide-react for this
+// session's pages only — see MobileMenu.tsx's comment).
+import { ArrowRight } from "@phosphor-icons/react";
+import { homepageFaqs } from "@/lib/faqs";
 import FaqAccordionItem from "@/components/landing/FaqAccordionItem";
 import type { FaqSectionImage } from "@/types/common";
 
@@ -74,7 +76,7 @@ export default function FAQ() {
             </motion.div>
 
             <div className="space-y-3">
-              {featuredFaqs.map((faq, i) => (
+              {homepageFaqs.map((faq, i) => (
                 <motion.div key={faq.question} variants={fadeUp}>
                   <FaqAccordionItem faq={faq} defaultOpen={i === 0} />
                 </motion.div>
@@ -82,9 +84,16 @@ export default function FAQ() {
             </div>
 
             <motion.div variants={fadeUp} className="mt-8">
+              {/* Bumped from a bare text+arrow link to a bordered button
+                  (2026-08-16) — same treatment as VeluxShowcase's "Try
+                  Velux yourself" (see that file's own comment): started
+                  matched to MarketplacePreview/VendorsPreview's `border-2
+                  border-orange-500`, then toned down to a lighter 1px
+                  border the same day since 2px orange-500 read too bold
+                  for a secondary link at this size. */}
               <Link
                 href="/faq"
-                className="inline-flex items-center gap-1.5 text-orange-600 font-semibold text-sm hover:text-orange-700 transition-colors"
+                className="inline-flex items-center gap-1.5 border border-orange-200 bg-orange-50 hover:border-orange-300 hover:bg-orange-100 text-orange-600 font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
               >
                 View all FAQs
                 <ArrowRight className="w-3.5 h-3.5" />

@@ -4,9 +4,37 @@ export const faqs: FaqItem[] = [
   {
     category: "buyer",
     featured: true,
-    question: "How does Velte find what I'm looking for?",
+    question: "What is Velte?",
     answer:
-      "You can browse real vendor listings directly on our homepage, or describe what you need in your own words, or upload a photo. Our AI reads the request the way a person would, then matches it against real vendor inventory nearby — ranked by meaning and distance.",
+      "Velte is where you find real vendors nearby — browse what's listed, describe what you need to Velux (our AI), or post a request and let vendors respond to you. Every result comes from a real business's real inventory, never invented.",
+  },
+  {
+    category: "buyer",
+    featured: true,
+    question: "How does Velux work?",
+    answer:
+      "You can browse real vendor listings directly on our homepage, or describe what you need in your own words, or upload a photo. Velux reads the request the way a person would, then matches it against real vendor inventory nearby — ranked by meaning and distance.",
+  },
+  {
+    category: "buyer",
+    featured: true,
+    question: "Can I post a request?",
+    answer:
+      "Yes — if you can't find something listed, describe what you need once and every nearby vendor who actually has it gets notified. You'll hear back directly from them, no reposting or re-searching required.",
+  },
+  {
+    category: "buyer",
+    featured: true,
+    question: "How do vendor responses work?",
+    answer:
+      "When a vendor responds to your request, we notify you in-app, by push notification, and by SMS — so you'll know even if you're not on the site. Tap through to see their offer and chat with them directly.",
+  },
+  {
+    category: "buyer",
+    featured: true,
+    question: "How does Velte use my phone number?",
+    answer:
+      "Only for verification (a one-time code) and notifications about your own activity — like a vendor responding to your request. It's never shared or sold, and there's no marketing spam.",
   },
   {
     category: "buyer",
@@ -104,3 +132,24 @@ export const faqs: FaqItem[] = [
 ];
 
 export const featuredFaqs = faqs.filter((faq) => faq.featured);
+
+// The homepage's own curated set (landing/FAQ.tsx) — trimmed to 5 on
+// 2026-08-15 (was showing every buyer-featured question, which made the FAQ
+// section run long relative to the rest of the now-compact page). In the
+// order a first-time buyer would actually ask them: what is this → how does
+// the AI part work → can I ask for something specific → what happens after
+// → what's the phone number actually for (SMS is now a real part of the
+// product, see buyerNotification.service.js's SMS_TYPES — this question
+// earns its place here). Deliberately excludes every vendor-category
+// question — the buyer homepage's own FAQ shouldn't be answering "how do I
+// get discovered by buyers," that belongs on a vendor landing page instead
+// (see VendorPitch.tsx's own 2026-08-13 de-emphasis note).
+export const homepageFaqs = [
+  "What is Velte?",
+  "How does Velux work?",
+  "Can I post a request?",
+  "How do vendor responses work?",
+  "How does Velte use my phone number?",
+]
+  .map((q) => faqs.find((f) => f.question === q))
+  .filter((f): f is FaqItem => !!f);

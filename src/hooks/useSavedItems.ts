@@ -86,7 +86,9 @@ export function useSavedItems() {
     onError: (error: unknown, intent) => {
       if (error instanceof ApiError && error.status === 401) {
         stashIntent(intent);
-        router.push(`/buyer/auth?redirect=${encodeURIComponent(pathname)}`);
+        router.push(
+          `/buyer/auth?redirect=${encodeURIComponent(pathname)}&reason=save`,
+        );
         return;
       }
       const message =

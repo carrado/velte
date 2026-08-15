@@ -3,16 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
+// Icons from Phosphor (2026-08-16, swapped from lucide-react for this
+// session's pages only — see MobileMenu.tsx's own comment). BadgeCheck,
+// LayoutGrid and Store have no exact match; SealCheck, SquaresFour and
+// Storefront are their closest Phosphor equivalents.
 import {
-  BadgeCheck,
   Images,
-  MessageSquarePlus,
-  Store as StoreIcon,
-  Wrench,
   Package,
-} from "lucide-react";
+  SealCheck,
+  SquaresFour,
+  Storefront as StoreIcon,
+  Wrench,
+} from "@phosphor-icons/react";
 import { ProtectedImage } from "@/components/ProtectedImage";
-import { AskVeluxButton } from "@/components/AskVeluxButton";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { resolveGalleryImages } from "@/lib/media";
@@ -193,7 +196,7 @@ export function MarketplaceCard({
           <span className="text-xs font-bold text-gray-700 truncate min-w-0">
             {item.storeName}
           </span>
-          <BadgeCheck
+          <SealCheck
             size={13}
             className="text-orange-500 shrink-0 fill-orange-500/15"
           />
@@ -281,41 +284,42 @@ export function MarketplacePreview({
 
   if (items.length === 0) return null;
 
+  // Capped at 6 on the homepage (2026-08-15) — this used to show every item
+  // the endpoint returned (up to 12), which read as "Velte is basically a
+  // product marketplace" before the visitor ever reached the Request/Velux/
+  // Compare story below. The full catalog is one tap away via "Explore the
+  // marketplace" below; this teaser's only job is proving there's real
+  // inventory, not being the inventory browser itself.
+  const shown = items.slice(0, 6);
+
   return (
     // scroll-mt-20 — the fixed Navbar (h-16) would otherwise sit right on
     // top of this section's own heading once scrolled here (see
     // scrollToMarketplace / the mount effect above).
     <section
       id="marketplace"
-      className="relative bg-[#F1F5F9] border-t border-gray-200 py-20 scroll-mt-20"
+      className="relative bg-[#F1F5F9] border-t border-gray-100 py-12 sm:py-16 scroll-mt-20"
     >
-      <div className="max-w-6xl mx-auto px-3 sm:px-8">
+      <div className="max-w-4xl mx-auto px-3 sm:px-8">
         <motion.div
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
-          className="text-center mb-10"
+          className="text-center mb-7"
         >
           <motion.h2
             variants={fadeUp}
-            className="text-3xl sm:text-4xl font-bold text-[#023337] tracking-tight mb-3 text-balance"
+            className="text-2xl sm:text-3xl font-bold text-[#023337] tracking-tight text-balance"
           >
-            On the marketplace right now
+            Discover what&apos;s available near you
           </motion.h2>
-          <motion.p
-            variants={fadeUp}
-            className="text-gray-500 max-w-xl mx-auto"
-          >
-            Real listings from real vendors — chat with them directly, or let AI
-            find something more specific.
-          </motion.p>
         </motion.div>
 
         {/* Plain div — see MarketplaceCard's own comment on why the
             scroll-triggered stagger reveal was dropped from this grid. */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-2.5 gap-y-4 sm:gap-5 mb-10">
-          {items.map((item) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-2.5 gap-y-4 sm:gap-5 mb-8">
+          {shown.map((item) => (
             <MarketplaceCard key={item.id} item={item} />
           ))}
         </div>
@@ -325,23 +329,27 @@ export function MarketplacePreview({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-3"
+          className="text-center"
         >
-          {/* Primary — the full marketplace listing now lives one tap away
-              via Navbar's own Browse button (which links straight to
-              /marketplace), so this row's primary slot is freed up for the
-              fallback that actually needs one: a buyer whose need isn't in
-              this teaser (or found via AI) can post it instead of hitting a
-              dead end. AskVeluxButton stays secondary here on purpose (see
-              its own comment on why it's never the primary CTA). */}
+          {/* A real "second primary" CTA (2026-08-15) — tried muting this to
+              plain gray text first, but that undersold it: browsing is
+              this whole section's actual point (see MarketplacePreview's
+              own "browse-first converts better" comment further up), so
+              the exit off a 6-item teaser deserves a genuine button, not a
+              barely-visible link. Outlined rather than solid orange so it
+              still reads as secondary to Hero's composer / Join Velte
+              without disappearing. Border lightened 2px orange-500 → 1px
+              orange-200 (2026-08-16, same change as VendorsPreview's
+              matching CTA and the two other secondary CTAs on the page,
+              VeluxShowcase/FAQ) — the bold 2px border read heavier than a
+              secondary action needed. */}
           <Link
-            href="/buyer/requests/new"
-            className="inline-flex items-center gap-1.5 px-6 py-3 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow-lg shadow-orange-500/20 transition-colors"
+            href="/marketplace"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-orange-200 bg-orange-50 text-orange-600 font-semibold text-sm hover:border-orange-300 hover:bg-orange-100 transition-colors"
           >
-            <MessageSquarePlus size={16} />
-            Post what you need
+            Explore the marketplace
+            <SquaresFour size={14} />
           </Link>
-          <AskVeluxButton label="Ask Velux" subtext="See more with AI search" />
         </motion.div>
       </div>
     </section>

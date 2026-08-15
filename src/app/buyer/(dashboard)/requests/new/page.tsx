@@ -81,7 +81,7 @@ export default function PostRequestPage() {
           imageUrl: variables.imageUrl,
         };
         sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-        router.push("/buyer/auth?redirect=/buyer/requests/new");
+        router.push("/buyer/auth?redirect=/buyer/requests/new&reason=request");
         return;
       }
       const message =

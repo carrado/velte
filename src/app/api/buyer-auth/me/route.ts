@@ -18,3 +18,24 @@ export async function GET() {
     return fail(err, "Failed to load your profile.");
   }
 }
+
+// PATCH /api/buyer-auth/me — { name?, username?, location? }. The
+// progressive-profile counterpart to registration no longer collecting
+// name/username upfront (see verify-otp's own 2026-08-13 comment) — the
+// Profile page's edit-in-place rows and the post-verify "what should we
+// call you?" step both land here.
+export async function PATCH(req: Request) {
+  const gate = await requireBuyerAuth();
+  if ("response" in gate) return gate.response;
+  const body = await req.json().catch(() => ({}));
+  try {
+    const { buyer } = await backendData<{ buyer: Buyer }>("/buyer-auth/me", {
+      method: "PATCH",
+      body,
+      cookie: gate.cookie,
+    });
+    return NextResponse.json({ buyer });
+  } catch (err) {
+    return fail(err, "Couldn't update your profile.");
+  }
+}

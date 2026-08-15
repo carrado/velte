@@ -134,7 +134,7 @@ export default function BuyerRequestDetailPage() {
           <BuyerEmptyState
             icon={MessageSquare}
             title="No vendors have responded yet"
-            subtitle="We'll notify you when someone responds."
+            subtitle="We'll text you and notify you in-app the moment someone does."
           />
         ) : (
           <div className="space-y-3">
