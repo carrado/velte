@@ -8,7 +8,7 @@ import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { installPromptStore } from "@/lib/installPromptStore";
 import { cn } from "@/lib/utils";
 
-// Buyer-facing install nudge for /velux — deliberately separate from
+// Buyer-facing install nudge for /chat — deliberately separate from
 // PushNotificationManager, which is vendor-only (usePushNotifications gates
 // its own install banner on `!!user`, i.e. a logged-in vendor) and chains
 // straight into an "Enable alerts" step right after install. A buyer here is
@@ -22,7 +22,7 @@ const SHOW_DELAY_MS = 30 * 1000; // a buyer isn't logged in for 5 min like a ven
 
 function useInstallPrompt() {
   // Captured by ServiceWorkerRegistrar (root layout, mounted site-wide) —
-  // already populated by the time a buyer reaches /velux either way.
+  // already populated by the time a buyer reaches /chat either way.
   const prompt = useSyncExternalStore(
     installPromptStore.subscribe,
     installPromptStore.get,

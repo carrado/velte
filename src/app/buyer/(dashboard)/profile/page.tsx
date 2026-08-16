@@ -264,7 +264,7 @@ export default function BuyerProfilePage() {
     mutationFn: () => buyerApi.post("/api/buyer-auth/logout"),
     onSuccess: () => {
       clearBuyer();
-      router.push("/velux");
+      router.push("/chat");
     },
     onError: () => {
       toast.error("Couldn't log out. Try again.");
@@ -413,7 +413,7 @@ export default function BuyerProfilePage() {
         </div>
       </div>
 
-      {/* Permanent — not the dismissible /velux install popup, not the
+      {/* Permanent — not the dismissible /chat install popup, not the
           notification bell's own inline opt-in row. Same spot every time,
           whether or not either of those ever showed. Its own card, not
           nested in another one — when installable it IS the tap target,

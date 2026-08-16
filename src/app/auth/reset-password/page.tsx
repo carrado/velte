@@ -36,7 +36,7 @@ function ResetPasswordForm() {
     mutationFn: (data: { email: string; otp: string; password: string }) =>
       api.post("/api/auth/reset-password", data),
     onSuccess: () => {
-      toast.success("Password updated! You can now log in.");
+      toast.success("Password updated! You can now sign in.");
       router.push("/auth/login");
     },
     onError: (error: Error) => {
@@ -100,8 +100,8 @@ function ResetPasswordForm() {
         <Image
           src="/velte_logo_esn5dj.png"
           alt="Velte"
-          width={100}
-          height={49}
+          width={72}
+          height={35}
         />
       </Link>
 

@@ -25,11 +25,13 @@ const alwaysPublicRoutes = [
 //    authenticated app itself (the wallet top-up / funding-method modals'
 //    "Privacy Policy" link, opened in a new tab) — blocking these would
 //    break that existing link.
-//  - /velux and /marketplace are the deliberate "Buy on Velte" hand-offs
+//  - /chat and /marketplace are the deliberate "Buy on Velte" hand-offs
 //    (see Header.tsx's own comment) letting a logged-in VENDOR use the
 //    buyer-facing search/browse themselves — blocking either would remove
-//    a real, intentional feature. /velux was /search until the route was
-//    renamed to match the AI's own name.
+//    a real, intentional feature. /chat's route history: /search → /velux
+//    (renamed to match the AI's own persona name at the time) → /chat
+//    (2026-08-16, once that persona — "Velux" — was retired for colliding
+//    with the real Velux trademark; see chat/page.tsx's own comment).
 //  - /updates is what a super-admin broadcast SMS links a vendor to (see
 //    velte-super-admin's BroadcastMessageView.vue) — almost always opened
 //    by an already-logged-in vendor on their phone. Putting it in
@@ -40,7 +42,7 @@ const publicRegardlessOfAuth = [
   "/track",
   "/privacy",
   "/terms",
-  "/velux",
+  "/chat",
   "/marketplace",
   "/updates",
   // The buyer-facing area (/buyer/auth, /buyer/requests, /buyer/saved,
@@ -49,7 +51,7 @@ const publicRegardlessOfAuth = [
   // ever knows about the vendor's auth_token, so buyer routes must stay
   // outside its gating entirely rather than being (wrongly) treated as an
   // ungated vendor dashboard route below. A logged-in vendor visiting these
-  // is also intentional — same reasoning as /velux/marketplace above.
+  // is also intentional — same reasoning as /chat/marketplace above.
   "/buyer",
 ];
 

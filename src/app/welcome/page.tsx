@@ -19,8 +19,8 @@ export default function WelcomePage() {
       <Image
         src="/velte_logo_esn5dj.png"
         alt="Velte"
-        width={130}
-        height={64}
+        width={72}
+        height={35}
         priority
         className="mb-6"
       />
@@ -30,7 +30,7 @@ export default function WelcomePage() {
       </p>
 
       <div className="w-full max-w-[280px] flex flex-col gap-3">
-        <Link href="/velux" className="w-full">
+        <Link href="/chat" className="w-full">
           <Button
             size="lg"
             className="w-full bg-orange-500 hover:bg-orange-600 cursor-pointer text-white shadow-lg shadow-orange-500/20 gap-2 h-12"

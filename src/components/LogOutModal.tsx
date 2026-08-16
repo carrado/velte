@@ -32,7 +32,7 @@ export default function LogoutModal({
 
         <div className="px-6 py-4">
           <p className="text-gray-600">
-            Are you sure you want to log out? You will need to log in again to
+            Are you sure you want to log out? You will need to sign in again to
             access your account.
           </p>
         </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-// Reveals `text` progressively, one character at a time, simulating Velux
+// Reveals `text` progressively, one character at a time, simulating Velte
 // "typing" its reply — purely a client-side animation over text that
 // already arrived complete. route.ts streams a "staged reveal" (status
 // events, then ONE final event with the full reply), not a token-by-token

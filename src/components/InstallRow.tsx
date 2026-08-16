@@ -26,7 +26,7 @@ const BENEFITS = [
 const GUIDE_ICONS = { share: Share, dots: MoreVertical, lines: MenuIcon };
 
 /* A permanent settings-page card — NOT the dismissible install banner
- * (PushNotificationManager, vendor) or the dismissible /velux popup
+ * (PushNotificationManager, vendor) or the dismissible /chat popup
  * (BuyerInstallPrompt, buyer), both of which can be skipped/cooled-down
  * away. Shared between the buyer Profile page and the vendor Settings
  * page verbatim, on purpose: this component has no actor-specific logic

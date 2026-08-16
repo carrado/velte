@@ -11,14 +11,22 @@ const API_BASE = process.env.BACKEND_API_URL || "http://localhost:5000/api";
 export class BackendError extends Error {
   status: number;
   fields?: Record<string, string>;
+  /** The raw parsed upstream error body — most routes only need
+   *  message/fields (already unwrapped above), but a few carry extra
+   *  ad-hoc data on specific status codes (e.g. login's 403 including the
+   *  vendor's real email for the verify redirect) that isn't worth adding
+   *  a dedicated field for here. */
+  data?: unknown;
   constructor(
     status: number,
     message: string,
     fields?: Record<string, string>,
+    data?: unknown,
   ) {
     super(message);
     this.status = status;
     this.fields = fields;
+    this.data = data;
     this.name = "BackendError";
   }
 }
@@ -106,6 +114,7 @@ export async function backendFetch<T = unknown>(
       res.status,
       messageFrom(data, res.status),
       fieldsFrom(data),
+      data,
     );
   return data as T;
 }
@@ -130,6 +139,7 @@ export async function backendFetchWithCookies<T = unknown>(
       res.status,
       messageFrom(data, res.status),
       fieldsFrom(data),
+      data,
     );
   const setCookie =
     typeof res.headers.getSetCookie === "function"

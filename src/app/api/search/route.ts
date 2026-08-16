@@ -13,13 +13,17 @@ import {
 } from "@/lib/server/ai/searchStoresTool";
 import { getVendorProductsTool } from "@/lib/server/ai/getVendorProductsTool";
 import { askClarifyingQuestionTool } from "@/lib/server/ai/askClarifyingQuestionTool";
+import { createBuyerRequestTool } from "@/lib/server/ai/createBuyerRequestTool";
+import { offerBuyerRequestTool } from "@/lib/server/ai/offerBuyerRequestTool";
 import {
   understandingRequestPhrase,
   pickAvoiding,
 } from "@/lib/server/ai/statusPhrases";
 import { buildSystemPrompt } from "@/lib/server/ai/systemPrompt";
 import { getSectorClarifiers } from "@/lib/server/ai/sectorClarifiers";
+import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
 import type {
+  BuyerRequestOffer,
   Clarification,
   MatchQuality,
   MatchTier,
@@ -327,30 +331,32 @@ async function getMatchingServicesForStores(
           )
           .sort((a, b) => b.score - a.score)
           .slice(0, MAX_MATCHING_SERVICES_PER_STORE)
-          .map(({ item, score }): VendorMatch => ({
-            productId: item.id,
-            kind: "service",
-            name: item.name,
-            price: item.price / 100,
-            priceMax: item.priceMax != null ? item.priceMax / 100 : null,
-            quoteOnRequest: Boolean(item.quoteOnRequest),
-            currency: item.currency,
-            mainImageUrl: item.mainImageUrl,
-            // Not selected by the lightweight public-catalog endpoint this
-            // reuses — a known tradeoff of the cheap-match approach over a
-            // real per-listing fetch. See this function's own doc comment.
-            thumbnailUrls: [],
-            storeHandle: store.handle,
-            description: item.description,
-            attributes: [],
-            vendorId: store.vendorId,
-            vendorName: store.name,
-            area: store.area,
-            state: store.state,
-            whatsapp: store.whatsapp,
-            distanceKm: store.distanceKm,
-            score,
-          }));
+          .map(
+            ({ item, score }): VendorMatch => ({
+              productId: item.id,
+              kind: "service",
+              name: item.name,
+              price: item.price / 100,
+              priceMax: item.priceMax != null ? item.priceMax / 100 : null,
+              quoteOnRequest: Boolean(item.quoteOnRequest),
+              currency: item.currency,
+              mainImageUrl: item.mainImageUrl,
+              // Not selected by the lightweight public-catalog endpoint this
+              // reuses — a known tradeoff of the cheap-match approach over a
+              // real per-listing fetch. See this function's own doc comment.
+              thumbnailUrls: [],
+              storeHandle: store.handle,
+              description: item.description,
+              attributes: [],
+              vendorId: store.vendorId,
+              vendorName: store.name,
+              area: store.area,
+              state: store.state,
+              whatsapp: store.whatsapp,
+              distanceKm: store.distanceKm,
+              score,
+            }),
+          );
       } catch (err) {
         console.error(
           `[search] matching-services lookup failed for store "${store.handle}":`,
@@ -442,6 +448,19 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
         };
       }
     | undefined;
+  // createBuyerRequestTool's execute() return value IS the full
+  // BuyerRequestOffer already — no reshaping needed, unlike the search
+  // tools above (which return a raw retrieval-service shape).
+  const buyerRequestOffer =
+    (result.toolResults.findLast((r) => r.toolName === "createBuyerRequest")
+      ?.output as BuyerRequestOffer | undefined) ?? null;
+  // See offerBuyerRequestTool's own comment — a mechanical signal, not
+  // inferred from the reply text, that this turn's reply IS the reach-out
+  // offer, so route.ts/the frontend know to hold back any Google Places
+  // fallback the co-called search may have already returned.
+  const buyerRequestOffered = result.toolResults.some(
+    (r) => r.toolName === "offerBuyerRequest",
+  );
   const products = productResult?.results ?? [];
   const stores = storeResult?.results ?? [];
   const furtherStores = storeResult?.furtherResults ?? [];
@@ -502,6 +521,8 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
     externalStoreSuggestions,
     vendorProducts,
     vendorProductsStore,
+    buyerRequestOffer,
+    buyerRequestOffered,
     productCall,
     storeCall,
   };
@@ -511,6 +532,11 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as SearchRequestBody | null;
   const message = body?.message?.trim() ?? "";
   const imageUrl = body?.imageUrl;
+  // Resolved once, up front — search itself stays fully anonymous either
+  // way (see this route's own top comment), this is only ever read by
+  // createBuyerRequestTool to decide whether it can create the request
+  // immediately or has to hand back `needs_identity` instead.
+  const buyerAuth = await getOptionalBuyerAuth();
 
   if (!message && !imageUrl) {
     return new Response(
@@ -603,6 +629,13 @@ export async function POST(req: Request) {
           ),
           searchStores: searchStoresTool(body?.buyerLocation, push),
           getVendorProducts: getVendorProductsTool(push),
+          createBuyerRequest: createBuyerRequestTool(
+            buyerAuth,
+            body?.buyerLocation,
+            imageUrl,
+            push,
+          ),
+          offerBuyerRequest: offerBuyerRequestTool(),
         };
         const system = buildSystemPrompt(
           Boolean(body?.buyerLocation),
@@ -827,6 +860,8 @@ export async function POST(req: Request) {
           externalStoreSuggestions,
           vendorProducts,
           vendorProductsStore,
+          buyerRequestOffer,
+          buyerRequestOffered,
           productCall,
           storeCall,
         } = outcome;
@@ -891,6 +926,8 @@ export async function POST(req: Request) {
             externalStoreSuggestions,
             vendorProducts,
             vendorProductsStore,
+            buyerRequestOffer,
+            buyerRequestOffered,
           }),
         );
 
@@ -909,9 +946,11 @@ export async function POST(req: Request) {
         if (externalStoreSuggestions.length > 0) {
           try {
             const productInput = productCall?.input as
-              { product?: string } | undefined;
+              | { product?: string }
+              | undefined;
             const storeInput = storeCall?.input as
-              { businessType?: string } | undefined;
+              | { businessType?: string }
+              | undefined;
 
             await aiSearchFetch("/search/log", {
               method: "POST",

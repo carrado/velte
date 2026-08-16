@@ -9,7 +9,7 @@ import { ArrowUp } from "lucide-react";
 // "src/app/[id]/ — protected dashboard scoped to a user ID" note) — there's
 // no other static prefix to match against, since the id itself is dynamic.
 // A 24-hex-char first segment is specific enough that nothing buyer-facing
-// (/velux, /marketplace, /store/:handle, /about, /auth/..., etc.) could
+// (/chat, /marketplace, /store/:handle, /about, /auth/..., etc.) could
 // ever collide with it.
 const DASHBOARD_PATH_RE = /^\/[0-9a-f]{24}(\/|$)/i;
 

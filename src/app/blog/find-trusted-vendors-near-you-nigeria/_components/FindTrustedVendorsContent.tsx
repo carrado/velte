@@ -191,10 +191,10 @@ export default function FindTrustedVendorsContent() {
               stock photo standing in for actual stock. Describe what you need,
               in your own words or a photo, and{" "}
               <Link
-                href="/velux"
+                href="/chat"
                 className="font-semibold text-orange-700 underline"
               >
-                Ask Velux
+                Ask Velte
               </Link>{" "}
               matches you to the nearest real vendor who actually has it, ranked
               by meaning, distance, and trust — not by who paid for placement.

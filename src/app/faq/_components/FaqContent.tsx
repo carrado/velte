@@ -8,7 +8,6 @@ import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { AskVeluxButton } from "@/components/AskVeluxButton";
-import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
 import { faqs } from "@/lib/faqs";
 import FaqCard from "@/components/faq/FaqCard";
 import FaqTabs, { type FaqTabKey } from "@/components/faq/FaqTabs";
@@ -184,7 +183,13 @@ export default function FaqContent() {
                 out directly — we&apos;re happy to help.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link href="/" onClick={scrollToMarketplace}>
+                {/* Was href="/" + scrollToMarketplace, scrolling to a
+                    homepage #marketplace section — that section
+                    (MarketplacePreview) was removed from page.tsx during
+                    the AI-agent pivot and isn't rendered anywhere anymore,
+                    so the scroll silently did nothing. Points straight at
+                    the real destination now. */}
+                <Link href="/marketplace">
                   <Button
                     size="lg"
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
@@ -206,7 +211,7 @@ export default function FaqContent() {
               </div>
               <div className="flex justify-center mt-5">
                 <AskVeluxButton
-                  label="Ask Velux"
+                  label="Ask Velte"
                   subtext="Velte's AI shopping assistant"
                 />
               </div>

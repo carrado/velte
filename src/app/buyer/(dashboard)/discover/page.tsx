@@ -5,7 +5,7 @@ import { getMarketplaceBrowse, getVendorsBrowse } from "@/lib/server/store";
    why — Home is now the search-first "what do you need today?" surface,
    this is the "browse when you already know what you want" one, per the
    buyer-redesign brief's §1 "Browse when you know what you want / Ask
-   Velux when you don't"). Same data/component this used to render on
+   Velte when you don't"). Same data/component this used to render on
    Home — getMarketplaceBrowse/getVendorsBrowse + MarketplaceTabs — just
    living at its own destination now that Home needs the room. */
 export default async function BuyerDiscoverPage() {
@@ -22,7 +22,7 @@ export default async function BuyerDiscoverPage() {
         </h1>
         <p className="text-dash-body text-gray-400">
           Real listings from real vendors — chat with them directly, or ask
-          Velux to search further.
+          Velte to search further.
         </p>
       </div>
       <BuyerDiscoverTabs items={items} vendors={vendors} />

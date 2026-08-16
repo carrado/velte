@@ -22,6 +22,7 @@ import type {
 import { useVendorSectorCapabilities } from "@/hooks/useBusinessType";
 import DeleteProductModal from "./DeleteProductModal";
 import ProductsTable from "./ProductsTable";
+import { OpportunitiesBanner } from "./OpportunitiesBanner";
 import { Pagination } from "../Pagination";
 import { useNavigation } from "../NavigationProgressContext";
 import { Input } from "../ui/input";
@@ -235,6 +236,9 @@ export default function ProductsPage() {
 
   return (
     <div className="w-full space-y-5">
+      <div className="px-5 sm:px-0">
+        <OpportunitiesBanner />
+      </div>
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
         <div>

@@ -36,11 +36,11 @@ const buyerSteps = [
     icon: Camera,
     title: "Describe what you need",
     detail:
-      "Type it in your own words, or snap a photo — Velux takes either one, same as the search box on the homepage.",
+      "Type it in your own words, or snap a photo — Velte takes either one, same as the search box on the homepage.",
   },
   {
     icon: Sparkle,
-    title: "Velux matches you to real vendors",
+    title: "Velte matches you to real vendors",
     detail:
       "Ranked by meaning, proximity and trust — never invented. If nothing real matches nearby, you're told that too.",
   },
@@ -66,7 +66,7 @@ const vendorSteps = [
     icon: Users,
     title: "Get matched to real buyer requests",
     detail:
-      "Velux sends you buyers already looking for what you sell nearby, plus requests posted directly to your store.",
+      "Velte sends you buyers already looking for what you sell nearby, plus requests posted directly to your store.",
   },
   {
     icon: Wallet,
@@ -154,10 +154,10 @@ export default function HowItWorksContent() {
               <StepList steps={buyerSteps} />
               <motion.div variants={fadeUp} className="mt-5">
                 <Link
-                  href="/velux"
+                  href="/chat"
                   className="inline-flex items-center gap-1.5 text-orange-600 font-semibold text-sm hover:text-orange-700 transition-colors"
                 >
-                  Try Velux yourself
+                  Try Velte yourself
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </motion.div>
@@ -188,7 +188,7 @@ export default function HowItWorksContent() {
             </div>
             <div>
               <Link
-                href="/join"
+                href="/auth/signup"
                 className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-[15px] font-semibold shadow-lg shadow-orange-500/20 transition-colors"
               >
                 Join Velte

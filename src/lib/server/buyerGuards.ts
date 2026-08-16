@@ -35,3 +35,22 @@ export async function getOptionalBuyerId(): Promise<string | null> {
   const session = await verifyBuyerSession(token);
   return session?.buyerId ?? null;
 }
+
+/** Like getOptionalBuyerId, but also hands back the cookie string a caller
+ * needs to forward to the backend (see requireBuyerAuth) — for a route that
+ * has to KEEP WORKING for an anonymous buyer (never 401s) but still wants
+ * to act on their behalf when a session happens to exist. /api/search's
+ * createBuyerRequest tool is the first user of this: it can't gate the
+ * whole search endpoint behind buyer auth (search itself stays anonymous),
+ * but needs the cookie to actually create a request when one is already
+ * signed in. */
+export async function getOptionalBuyerAuth(): Promise<{
+  buyerId: string;
+  cookie: string;
+} | null> {
+  const token = (await cookies()).get(BUYER_AUTH_COOKIE)?.value;
+  if (!token) return null;
+  const session = await verifyBuyerSession(token);
+  if (!session) return null;
+  return { buyerId: session.buyerId, cookie: `${BUYER_AUTH_COOKIE}=${token}` };
+}

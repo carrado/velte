@@ -4,7 +4,7 @@ import { MagnifyingGlass, X } from "@phosphor-icons/react";
 
 // Client-side filter, not a new search backend — this narrows what's
 // already been fetched (name for listings, business name for vendors), it
-// never calls the AI pipeline. That's deliberate: /velux already owns
+// never calls the AI pipeline. That's deliberate: /chat already owns
 // "describe what you need" AI search (see AskVeluxCard, which sits in both
 // grids below this), this box is the plain "type a few letters" filter a
 // browse page is expected to have, not a second search engine.

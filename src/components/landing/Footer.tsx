@@ -33,15 +33,12 @@ const socialLinks = [
 // 2026-08-15 below) — the flat-list version was itself a reaction to an
 // EARLIER two-column attempt that stacked too tall on mobile (no side-by-side
 // grid there). This version fixes that instead of re-triggering it: on
-// mobile the 4 groups sit in a 2x2 grid (`grid-cols-2`), not stacked full
+// mobile the groups sit in a 2x2-ish grid (`grid-cols-2`), not stacked full
 // height one under another, so it's barely taller than the old flat list;
-// desktop goes to one row (`sm:grid-cols-6` — brand takes 2, each group 1).
-// Also folds in real pages that had no link anywhere on the public site
-// (`/marketplace`, `/velux` — both already live in Navbar, just not
-// re-surfaced here the way footers conventionally repeat primary nav) plus
-// `/how-it-works`. Pricing deliberately left out of Product (2026-08-16) —
-// not dropped for a design reason, just not ready to be a footer-level link
-// yet on its own; it's still reachable from How It Works' vendor column.
+// desktop goes to one row (a justified flex, not a fixed grid-cols-N — see
+// the render below). Pricing deliberately left out (2026-08-16) — not
+// dropped for a design reason, just not ready to be a footer-level link yet
+// on its own; it's still reachable from How It Works' vendor column.
 //
 // `/updates` swapped for `/how-it-works` (2026-08-16) — Updates is a vendor-
 // account changelog ("policy and feature changes that affect your Velte
@@ -49,17 +46,26 @@ const socialLinks = [
 // something a first-time visitor gets value from. How It Works fills the
 // same Resources slot with a real step-by-step page instead (grounded in
 // existing Hero/VeluxShowcase/RegisterCta/pricing copy, not new claims).
+//
+// Standalone "Product" column (Marketplace + Ask Velux) folded into
+// Resources same day — it originally existed because "both already live in
+// Navbar, just not re-surfaced here"; that stopped being true once Navbar's
+// AI-agent-pivot redesign dropped its own Ask Velux button and Browse link
+// (see Navbar.tsx's own comment). "Ask Velte" kept — Footer renders on
+// every static page (About, FAQ, How It Works, ...) and FloatingAskBar/
+// Hero's composer only exist on "/", so this is genuinely the only path
+// into /chat from anywhere else. "Marketplace" dropped entirely, not just
+// de-emphasized (2026-08-16) — the product itself doesn't work that way
+// anymore: AI search is what surfaces every product/business/service now,
+// there's no separate "browse the stacked-up catalog" experience left to
+// send anyone to. The /marketplace route and its MarketplaceBrowse/
+// VendorsGrid components are UNTOUCHED by this — only the navigational
+// path to it is gone; deleting the page itself is a separate, bigger call
+// nobody's made yet.
 const footerGroups: {
   heading: string;
   links: { label: string; href: string }[];
 }[] = [
-  {
-    heading: "Product",
-    links: [
-      { label: "Marketplace", href: "/marketplace" },
-      { label: "Ask Velux", href: "/velux" },
-    ],
-  },
   {
     heading: "Company",
     links: [
@@ -71,9 +77,10 @@ const footerGroups: {
   {
     heading: "Resources",
     links: [
+      { label: "How It Works", href: "/how-it-works" },
+      { label: "Ask Velte", href: "/chat" },
       { label: "Blog", href: "/blog" },
       { label: "FAQ", href: "/faq" },
-      { label: "How It Works", href: "/how-it-works" },
     ],
   },
   {

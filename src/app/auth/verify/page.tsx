@@ -80,8 +80,8 @@ function VerifyForm() {
         <Image
           src="/velte_logo_esn5dj.png"
           alt="Velte logo"
-          width={100}
-          height={49}
+          width={72}
+          height={35}
           priority
         />
       </Link>

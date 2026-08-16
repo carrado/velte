@@ -13,7 +13,7 @@ import { Sparkles } from "lucide-react";
 export function AskVeluxCard({ subtext }: { subtext: string }) {
   return (
     <Link
-      href="/velux"
+      href="/chat"
       className="self-start bg-white rounded-2xl border border-orange-100 shadow-sm p-4 flex flex-col items-center text-center gap-1.5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
     >
       <Image
@@ -28,7 +28,7 @@ export function AskVeluxCard({ subtext }: { subtext: string }) {
         Still looking?
       </p>
       <p className="text-xs text-gray-500 leading-relaxed">{subtext}</p>
-      <span className="text-xs font-semibold text-orange-600">Ask Velux →</span>
+      <span className="text-xs font-semibold text-orange-600">Ask Velte →</span>
     </Link>
   );
 }

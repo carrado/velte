@@ -1,59 +1,57 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/landing/Navbar";
+import { FloatingAskBar } from "@/components/landing/FloatingAskBar";
 import Hero from "@/components/landing/Hero";
-import { WaysToHelp } from "@/components/landing/WaysToHelp";
-import { MarketplacePreview } from "@/components/landing/MarketplacePreview";
+import { HowItWorksSteps } from "@/components/landing/HowItWorksSteps";
 import { VeluxShowcase } from "@/components/landing/VeluxShowcase";
-import { RequestShowcase } from "@/components/landing/RequestShowcase";
-import { VendorsPreview } from "@/components/landing/VendorsPreview";
+import { NoMatchShowcase } from "@/components/landing/NoMatchShowcase";
+import { AskAnythingScope } from "@/components/landing/AskAnythingScope";
+import { MarketplaceComparison } from "@/components/landing/MarketplaceComparison";
+import { WhatsAppHighlight } from "@/components/landing/WhatsAppHighlight";
+import { BuiltForNigeria } from "@/components/landing/BuiltForNigeria";
+import { FinalAskCta } from "@/components/landing/FinalAskCta";
 import { RegisterCta } from "@/components/landing/RegisterCta";
 import FAQ from "@/components/landing/FAQ";
 import Footer from "@/components/landing/Footer";
 import StandaloneHomeRedirect from "@/components/StandaloneHomeRedirect";
-import { getMarketplacePreview, getVendorsPreview } from "@/lib/server/store";
 
 // Velte's homepage — redesigned for the pivot (replaces the old
 // pre-pivot "WhatsApp AI Sales Rep" marketing site that used to live at
-// /vendors). The buyer search experience itself lives at /velux.
+// /vendors). The buyer search experience itself lives at /chat.
 //
-// Redesigned again 2026-08-13: leads with a real Velux search box instead
-// of a generic headline (see Hero.tsx), keeps real-catalog browsing
-// (MarketplacePreview) right below it, surfaces Buyer Requests and a
-// comparison example much earlier, and de-emphasized the vendor pitch down
-// to a single closing strip (VendorPitch.tsx, since removed — see below).
+// Full redesign 2026-08-15 (second pass, same day) — the whole page now
+// tells one story end to end, in this order: Hero (the ask) →
+// HowItWorksSteps (the mental model, three words) → VeluxShowcase (seeing
+// it actually work) → NoMatchShowcase (what happens when nothing matches
+// yet — corrected, see that file's own comment, to show Velte OFFERING to
+// help rather than a "Post a Request" button) → AskAnythingScope (breadth:
+// products/services/businesses/anything else) → MarketplaceComparison (the
+// explicit old-way-vs-new-way pitch) → WhatsAppHighlight + BuiltForNigeria
+// (two short trust strips) → FinalAskCta (a second, unmissable chance to
+// act) → RegisterCta (the account pitch, kept but pushed below everything
+// else — see that file's own comment) → FAQ → Footer. FloatingAskBar sits
+// outside this flow entirely (fixed positioning, appears once scrolled past
+// Hero) so a visitor can start a conversation from anywhere on the page,
+// not just the first screen. Navbar simplified alongside this pass — see
+// its own comment.
 //
-// Trimmed hard 2026-08-15 — the 2026-08-13 pass added the right SECTIONS
-// but too many of them ran long (large cards, full paragraphs, uncapped
-// grids), so the page still read as "explain the product" rather than
-// "demonstrate it." This pass: shrank Hero's copy and made its composer the
-// visually dominant element, collapsed WaysToHelp into a one-line-each row
-// establishing the site's three verbs (Find/Request/Choose, repeated as
-// section headings below rather than a rotating cast of search/discover/
-// browse/ask synonyms), capped MarketplacePreview/VendorsPreview to 6/3
-// items instead of showing everything the endpoint returns, reordered
-// VeluxShowcase before RequestShowcase and rewrote its example around an
-// image-search interaction (the one case a hero text box can't demonstrate
-// on its own), dropped the standalone WhyVelte section (its content didn't
-// earn a full section once the rest of the page got more demonstrative),
-// and rewrote RegisterCta's three description-cards down to a one-line
-// pitch + a compact pill row.
+// VendorsPreview ("Find businesses you can actually talk to") was briefly
+// back in this composition the same day, then pulled again — it was
+// re-introduced as a "real supply, not vaporware" proof section, but with
+// NoMatchShowcase already showing a real business example inline (ABC
+// Catering) and BuiltForNigeria already covering trust, a third proof
+// section that's ALSO a browse-a-grid affordance stopped earning its place;
+// it just re-introduced the exact pattern the rest of this redesign moves
+// away from. The component file/export and its VendorCard/SlidingCover
+// pieces stay untouched (still used by /marketplace and SimilarVendors) —
+// only this page stopped rendering the section again.
 //
-// VendorPitch retired entirely 2026-08-14 (file deleted, not just unused)
-// once /join became the single unified entry point for both buyer and
-// vendor journeys — RegisterCta was rewritten to speak to both audiences
-// itself (two quiet "Finding things" / "Selling things" columns, no
-// separate "FOR BUSINESSES" section underneath it), so a whole second
-// section just to repeat "click here to sign up" stopped earning its
-// space. See RegisterCta.tsx's own comment.
-//
-// CompareSection pulled 2026-08-15 (file deleted; the searchProducts tool's
-// matching compareNote/buildCompareNote logic was reverted the same day) —
-// built as a real "Velux picks a winner and says why" feature, but a live
-// DB check showed the current catalog has no product with 2+ different
-// vendors both pricing it, so it had nothing to ever compare in practice.
-// Revisit once the catalog has real cross-vendor overlap. WaysToHelp's
-// "Choose" item now points at /velux generally instead of a #compare
-// anchor that no longer exists.
+// Kept from the earlier trims: Hero's own composer stays the visually
+// dominant element on the first screen (now with a "Your AI shopping
+// agent" eyebrow above it — see Hero.tsx), and the supply numbers (42
+// products, 25 vendors) still never appear anywhere on this page as a
+// headline — BuiltForNigeria sells real-and-growing, not a number that
+// reads small today and would need rewriting constantly as it changes.
 export const metadata: Metadata = {
   title: "Velte | Find anything nearby",
   description:
@@ -66,8 +64,8 @@ export const metadata: Metadata = {
 // Organization + WebSite structured data — helps Google associate the site
 // with the Velte brand (knowledge panel eligibility) and its real social
 // profiles. A SearchAction was added 2026-08-13 alongside Hero's own real
-// `?q=`/`auto=1` handoff into /velux (see SearchHome.tsx) — before that,
-// /velux had no query-param entry point, so a sitelinks-searchbox action
+// `?q=`/`auto=1` handoff into /chat (see SearchHome.tsx) — before that,
+// /chat had no query-param entry point, so a sitelinks-searchbox action
 // would have described behavior the site didn't actually have.
 const jsonLd = {
   "@context": "https://schema.org",
@@ -90,7 +88,7 @@ const jsonLd = {
         "@type": "SearchAction",
         target: {
           "@type": "EntryPoint",
-          urlTemplate: "https://velte.ng/velux?q={search_term_string}&auto=1",
+          urlTemplate: "https://velte.ng/chat?q={search_term_string}&auto=1",
         },
         "query-input": "required name=search_term_string",
       },
@@ -98,15 +96,7 @@ const jsonLd = {
   ],
 };
 
-export default async function HomePage() {
-  // Best-effort, fetched in parallel — a backend hiccup shouldn't take the
-  // whole marketing homepage down with it; both sections render nothing
-  // when their list is empty, so this degrades to the pre-2026-08-05 page.
-  const [marketplaceItems, vendorItems] = await Promise.all([
-    getMarketplacePreview().catch(() => []),
-    getVendorsPreview().catch(() => []),
-  ]);
-
+export default function HomePage() {
   return (
     <div className="min-h-screen">
       <script
@@ -116,12 +106,16 @@ export default async function HomePage() {
       />
       <StandaloneHomeRedirect />
       <Navbar />
+      <FloatingAskBar />
       <Hero />
-      <WaysToHelp />
-      <MarketplacePreview items={marketplaceItems} />
+      <HowItWorksSteps />
       <VeluxShowcase />
-      <RequestShowcase />
-      <VendorsPreview items={vendorItems} />
+      <NoMatchShowcase />
+      <AskAnythingScope />
+      <MarketplaceComparison />
+      <WhatsAppHighlight />
+      <BuiltForNigeria />
+      <FinalAskCta />
       <RegisterCta />
       <FAQ />
       <Footer />
