@@ -68,14 +68,16 @@ export default function Header({ title }: HeaderProps) {
 
       <div className="flex items-center gap-3 md:gap-4">
         {/* A vendor is also a buyer sometimes — this hands them off to the
-            buyer-facing search (Velte Connect, at /velux — renamed from
-            /search) instead of leaving no way back to it once they're
-            inside their own dashboard. Reuses the site-wide AskVeluxButton
-            (same component the public Navbar/marketplace use) rather than a
-            one-off styled link, so the label/styling stay in sync with the
-            "Ask Velux" convention everywhere else instead of drifting under
-            its own "Find on Velte" wording. */}
-        <AskVeluxButton variant="compact" label="Ask Velux" />
+            buyer-facing search (Velte Connect, at /chat — route history:
+            /search → /velux → /chat, see chat/page.tsx's own comment)
+            instead of leaving no way back to it once they're inside their
+            own dashboard. Reuses the site-wide AskVeluxButton (same
+            component the public Navbar/marketplace use, name kept as an
+            internal identifier post-rebrand — see that file's own comment)
+            rather than a one-off styled link, so the label/styling stay in
+            sync with the "Ask Velte" convention everywhere else instead of
+            drifting under its own "Find on Velte" wording. */}
+        <AskVeluxButton variant="compact" label="Ask Velte" />
 
         {/* Mobile: navigate to notifications page */}
         <button

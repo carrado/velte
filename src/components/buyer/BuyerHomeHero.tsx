@@ -39,7 +39,7 @@ export function BuyerHomeHero() {
         </p>
 
         <AskVeluxButton
-          label="Ask Velux"
+          label="Ask Velte"
           subtext="Describe what you need, in your own words or a photo"
           className="w-full justify-between mb-4"
         />

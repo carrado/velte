@@ -18,7 +18,6 @@ import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { AskVeluxButton } from "@/components/AskVeluxButton";
-import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
 import ShineSweep from "@/components/ShineSweep";
 
 // Redesigned 2026-08-16 — three real fixes, not just a visual pass:
@@ -414,7 +413,14 @@ export default function AboutContent() {
                 buyers can find you.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link href="/" onClick={scrollToMarketplace}>
+                {/* Was href="/" + scrollToMarketplace, scrolling to a
+                    homepage #marketplace section — that section
+                    (MarketplacePreview) was removed from page.tsx during
+                    the AI-agent pivot and isn't rendered anywhere anymore,
+                    so the scroll silently did nothing. Points straight at
+                    the real destination now, same fix as FaqContent.tsx's
+                    own "Browse Products" CTA. */}
+                <Link href="/marketplace">
                   <Button
                     size="lg"
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
@@ -424,12 +430,11 @@ export default function AboutContent() {
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>
-                {/* → /join (2026-08-16, was /auth/signup — see file-level
-                    comment). No conditional onClick needed here unlike the
-                    Browse Products button above: that one still needs
-                    scrollToMarketplace because its href is "/", this one's
-                    href is its own real destination. */}
-                <Link href="/join">
+                {/* → /auth/signup directly — /join is just a redirect
+                    shim now (kept alive for old external links/bookmarks),
+                    so this skips the extra hop, same as Navbar's own "Join"
+                    button. */}
+                <Link href="/auth/signup">
                   <Button
                     size="lg"
                     variant="outline"
@@ -442,7 +447,7 @@ export default function AboutContent() {
               </div>
               <div className="flex justify-center mt-5">
                 <AskVeluxButton
-                  label="Ask Velux"
+                  label="Ask Velte"
                   subtext="Velte's AI shopping assistant"
                 />
               </div>

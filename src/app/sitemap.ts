@@ -25,7 +25,7 @@ const STATIC_ROUTES: {
   priority: number;
 }[] = [
   { path: "", changeFrequency: "daily", priority: 1 },
-  { path: "/velux", changeFrequency: "daily", priority: 0.9 },
+  { path: "/chat", changeFrequency: "daily", priority: 0.9 },
   { path: "/blog", changeFrequency: "weekly", priority: 0.6 },
   { path: "/about", changeFrequency: "monthly", priority: 0.5 },
   { path: "/pricing", changeFrequency: "monthly", priority: 0.6 },

@@ -15,13 +15,17 @@ import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
 import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
+import { BuyerRequestOfferWidget } from "@/components/search/BuyerRequestOfferWidget";
 import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
+import { buyerApi } from "@/lib/buyer-api-client";
+import { useBuyerSession } from "@/hooks/useBuyerSession";
 import { getInitial } from "@/lib/initials";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import { useTypewriter } from "@/hooks/useTypewriter";
 import type {
+  BuyerRequestOffer,
   Clarification,
   MatchQuality,
   MatchTier,
@@ -31,6 +35,7 @@ import type {
   StoreProductItem,
   VendorMatch,
 } from "@/types/search";
+import type { BuyerConversation } from "@/types/buyerConversation";
 
 // `products` decides the noun: a pure service turn (e.g. "haircut near me")
 // shouldn't be headed "Products", and a turn can genuinely mix both kinds
@@ -295,6 +300,11 @@ interface ConversationTurn {
   id: string;
   query: string;
   imagePreview: string | null;
+  // The real uploaded (Cloudinary) URL behind imagePreview's local blob —
+  // imagePreview alone can't be reused past this render (it's a client-only
+  // object URL). Needed so BuyerRequestOfferWidget can attach the same
+  // photo to a buyer request created from this turn.
+  imageUrl: string | null;
   phase: "loading" | "done";
   status: string;
   reply: string;
@@ -342,6 +352,15 @@ interface ConversationTurn {
     whatsapp: string | null;
     vendorId: string;
   } | null;
+  // Non-null when createBuyerRequest ran this turn — see BuyerRequestOffer's
+  // own comment and BuyerRequestOfferWidget, which renders this.
+  buyerRequestOffer: BuyerRequestOffer | null;
+  // True when offerBuyerRequestTool ran this turn (see its own comment) —
+  // the reach-out offer is being made in `reply`'s text this turn. Used
+  // below to suppress externalStoreSuggestions cards: Buyer Requests come
+  // first, Google Places only surfaces if the buyer declines on a later
+  // turn (that turn re-searches with this false again).
+  buyerRequestOffered: boolean;
   // A machine-only breadcrumb (e.g. store handles just found) appended to
   // this turn's text in `history` so a LATER turn's model call can resolve
   // "what do they sell" back to a specific store — never rendered to the
@@ -354,10 +373,12 @@ function ConversationTurnView({
   turn,
   isLatest,
   onAnswerClarification,
+  onBuyerRequestResolved,
 }: {
   turn: ConversationTurn;
   isLatest: boolean;
   onAnswerClarification: (text: string) => void;
+  onBuyerRequestResolved: (offer: BuyerRequestOffer) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -384,12 +405,12 @@ function ConversationTurnView({
       </div>
 
       <div className="flex items-start gap-3">
-        {/* Velux's own avatar — same image for the status/"thinking" phase
+        {/* Velte's own avatar — same image for the status/"thinking" phase
             and the final reply/results, since both are this one persona
             talking, just at different points in the same turn. */}
         <img
           src="/velte_ai_assistant.png"
-          alt="Velux"
+          alt="Velte"
           className="w-8 h-8 rounded-full object-cover shrink-0"
         />
         <div className="flex-1 min-w-0 pt-0.5">
@@ -578,10 +599,21 @@ function ConversationTurnView({
                     </div>
                   )}
                 </>
-              ) : turn.externalStoreSuggestions.length > 0 ? (
+              ) : turn.externalStoreSuggestions.length > 0 &&
+                !turn.buyerRequestOffered ? (
                 // No Velte vendor matched — real nearby businesses via Google
                 // Places (searchStores Tier 5), visibly distinct from an actual
-                // Velte listing (see ExternalBusinessCard).
+                // Velte listing (see ExternalBusinessCard). `!buyerRequestOffered`
+                // is the "Buyer Requests come first" gate (2026-08-16, see
+                // offerBuyerRequestTool's own comment): Tier 5 can come back in
+                // the SAME tool result as an otherwise-empty search, but on the
+                // turn where the model is making the reach-out offer instead,
+                // these stay hidden and this falls through to the dead-end
+                // Compass card below — visually identical whether or not Places
+                // secretly found something, so the offer is always what the
+                // buyer sees first. They only render once a later turn
+                // re-searches with the offer declined (buyerRequestOffered
+                // false again that time).
                 <>
                   <FormattedReply text={turn.reply} />
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -593,6 +625,12 @@ function ConversationTurnView({
                     ))}
                   </div>
                 </>
+              ) : turn.buyerRequestOffer ? (
+                // createBuyerRequest ran this turn (see systemPrompt.ts) —
+                // real agent action, not a dead end, so this gets the same
+                // plain-reply treatment as the clarification branch below,
+                // never the "nothing found anywhere" Compass card.
+                <FormattedReply text={turn.reply} />
               ) : !turn.toolCalled ? (
                 // The model asked a clarifying question instead of searching
                 // (see systemPrompt.ts) — a plain reply, same as the text above
@@ -622,6 +660,13 @@ function ConversationTurnView({
                   onAnswer={onAnswerClarification}
                 />
               )}
+              {turn.buyerRequestOffer && isLatest && (
+                <BuyerRequestOfferWidget
+                  offer={turn.buyerRequestOffer}
+                  imageUrl={turn.imageUrl}
+                  onResolved={onBuyerRequestResolved}
+                />
+              )}
             </div>
           )}
         </div>
@@ -630,10 +675,10 @@ function ConversationTurnView({
   );
 }
 
-// The idle screen's own greeting, typed out by Velux (see useTypewriter)
+// The idle screen's own greeting, typed out by Velte (see useTypewriter)
 // before the buyer has said anything — introduces the assistant by name so
-// "Velux" isn't only ever a silent avatar next to replies.
-const VELUX_GREETING = "Hi, I'm Velux — what are you looking for?";
+// "Velte" isn't only ever a silent avatar next to replies.
+const VELUX_GREETING = "Hi, I'm Velte — what are you looking for?";
 // The bubble's second line — types out too (not just fades in), starting
 // only once the greeting above finishes, so the whole bubble reads as one
 // continuous message rather than two independently-timed pieces of text.
@@ -644,25 +689,39 @@ const VELUX_SUBTEXT =
 // buyer's already waited through the search itself and just wants the text
 // to catch up.
 const VELUX_GREETING_TYPING_SPEED_MS = 55;
-// A beat before Velux starts typing at all — the avatar and empty bubble
+// A beat before Velte starts typing at all — the avatar and empty bubble
 // appear first, THEN typing begins, rather than text starting the instant
-// the page is ready. Reads as Velux actually pausing to "think" before
+// the page is ready. Reads as Velte actually pausing to "think" before
 // speaking, not a page element popping in mid-sentence.
 const VELUX_TYPING_START_DELAY_MS = 700;
 
-// Velte's buyer-facing search (build-order step d/e), at /velux —
+// Velte's buyer-facing search (build-order step d/e), at /chat —
 // `/` is now the marketing homepage. Structured as a conversation: each
 // submission appends a turn (ConversationTurn) rather than replacing the
 // last one, and a short text-only history is sent back to the model so
-// follow-ups ("cheaper", "in red instead") have context. Nothing here is
-// persisted — `turns` is plain component state, never written to
-// localStorage or a database, so refreshing the page starts a new
-// conversation from scratch, by design.
+// follow-ups ("cheaper", "in red instead") have context.
+//
+// Persistence (2026-08-15, AI-agent pivot — "chat history is the buyer
+// dashboard"): an ANONYMOUS conversation stays exactly as ephemeral as it
+// always was — nothing is saved, a refresh starts fresh, by design, same as
+// before this change. The moment a buyer session exists (see
+// useBuyerSession below), every completed exchange is also upserted to
+// /api/buyer-conversations — same {role, content} shape already being sent
+// as `history` to the model, not a second data model to keep in sync. That
+// unlocks two things: the buyer dashboard's "Recent" list
+// (BuyerConversationsList), and resuming a specific thread via
+// /chat?c=<id> (see the effect below) — which also means a refresh no
+// longer loses an identified buyer's conversation, only an anonymous one's.
 export function SearchHome() {
   const [query, setQuery] = useState("");
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const isSending = turns.some((t) => t.phase === "loading");
   const userDetails = useUserStore((state) => state.user);
+  const { buyer } = useBuyerSession();
+  // null until either a resumed conversation is loaded (from ?c=) or the
+  // first successful save assigns one — every save after that updates the
+  // SAME conversation instead of creating a new one each turn.
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   // This page is public (no buyer account) — a vendor can land here too, and
   // must never be silently bounced to /auth/login just for loading it (see
@@ -709,7 +768,7 @@ export function SearchHome() {
   // resolveBuyerCoords.ts / route.ts), so this is a safe no-op, not a
   // half-implemented feature.
   //
-  // A further beat before Velux starts typing its greeting — the
+  // A further beat before Velte starts typing its greeting — the
   // avatar/bubble render immediately, but typing itself only starts after
   // VELUX_TYPING_START_DELAY_MS, not the instant the page is ready.
   const [startGreetingTyping, setStartGreetingTyping] = useState(false);
@@ -803,6 +862,7 @@ export function SearchHome() {
         id: turnId,
         query: message,
         imagePreview: currentImagePreview,
+        imageUrl: currentImageUrl,
         phase: "loading",
         status: currentImageUrl
           ? "Looking at your photo…"
@@ -824,6 +884,8 @@ export function SearchHome() {
         externalStoreSuggestions: [],
         vendorProducts: [],
         vendorProductsStore: null,
+        buyerRequestOffer: null,
+        buyerRequestOffered: false,
         contextNote: null,
         error: null,
       },
@@ -898,8 +960,48 @@ export function SearchHome() {
             externalStoreSuggestions: event.externalStoreSuggestions,
             vendorProducts: event.vendorProducts,
             vendorProductsStore: event.vendorProductsStore,
+            buyerRequestOffer: event.buyerRequestOffer,
+            buyerRequestOffered: event.buyerRequestOffered,
             contextNote,
           });
+
+          // Persist — only ever for an identified buyer (see this
+          // component's own top comment); an anonymous conversation stays
+          // exactly as ephemeral as it always was. Best-effort: a failed
+          // save never blocks or interrupts the chat itself, it just means
+          // this one exchange won't show up in "Recent" later. `history`
+          // (prior turns, built at the top of submitMessage) plus this
+          // turn's own query+reply is the exact same {role, content} pair
+          // sequence already being sent to the model — nothing new to
+          // compute. conversationId starts null (a fresh chat) and gets
+          // set from the response; every save after that updates the SAME
+          // conversation instead of creating a new one each turn. The URL
+          // update afterward is what makes a refresh recoverable for an
+          // identified buyer (see /chat?c= resume effect above) — plain
+          // replaceState, not a navigation, so it never interrupts typing.
+          if (buyer) {
+            const fullHistory: SearchHistoryTurn[] = [
+              ...history,
+              { role: "user", content: message || "[sent a photo]" },
+              { role: "assistant", content: event.reply },
+            ];
+            void buyerApi
+              .post<{ conversation: { id: string } }>(
+                "/api/buyer-conversations",
+                { conversationId, turns: fullHistory },
+              )
+              .then(({ conversation }) => {
+                setConversationId(conversation.id);
+                window.history.replaceState(
+                  null,
+                  "",
+                  `/chat?c=${conversation.id}`,
+                );
+              })
+              .catch(() => {
+                /* best-effort, see comment above */
+              });
+          }
         },
         onError: (errorMessage) => {
           updateTurn(turnId, { phase: "done", error: errorMessage });
@@ -908,16 +1010,84 @@ export function SearchHome() {
     );
   }
 
-  // One-shot handoff from the homepage's own Velux input (Hero.tsx) and any
-  // other "?q=…" link into /velux — read directly off window.location
+  // Resume a persisted conversation (2026-08-15) — /chat?c=<conversationId>,
+  // the link the buyer dashboard's "Recent" list (BuyerConversationsList)
+  // and BuyerHomeActiveConversation use. Ownership is re-checked server-side
+  // regardless of how the id got here (see the BFF route) — a bad, expired,
+  // or someone-else's id just fails silently and the buyer lands on a
+  // normal empty conversation, same treatment any other bad deep link gets.
+  // Read directly off window.location for the same reason the `?q=` effect
+  // below does: no Suspense boundary needed for a one-time initial read.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const c = params.get("c");
+    if (!c) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    (async () => {
+      try {
+        const { conversation } = await buyerApi.get<{
+          conversation: BuyerConversation;
+        }>(`/api/buyer-conversations/${c}`);
+        setConversationId(conversation.id);
+        // Stored turns strictly alternate user→assistant→user→assistant…
+        // (every save pushes exactly one of each, together — see the save
+        // effect below), so pairing them up two-at-a-time reconstructs the
+        // same one-exchange-per-ConversationTurn shape a live turn has.
+        // Only `query`/`reply` are real; there's no stored result data to
+        // replay (see BuyerConversation's own comment), so every other
+        // field is just this type's normal "nothing here" default.
+        const resumed: ConversationTurn[] = [];
+        for (let i = 0; i < conversation.turns.length; i += 2) {
+          resumed.push({
+            id: `resumed-${i}`,
+            query: conversation.turns[i]?.content ?? "",
+            imagePreview: null,
+            imageUrl: null,
+            phase: "done",
+            status: "",
+            reply: conversation.turns[i + 1]?.content ?? "",
+            toolCalled: true,
+            clarification: null,
+            products: [],
+            weakProducts: [],
+            stores: [],
+            furtherStores: [],
+            storesQuery: null,
+            productStores: [],
+            storeServices: [],
+            productsMatchTier: null,
+            storesMatchTier: null,
+            productsMatchQuality: undefined,
+            storesMatchQuality: undefined,
+            externalStoreSuggestions: [],
+            vendorProducts: [],
+            vendorProductsStore: null,
+            buyerRequestOffer: null,
+            buyerRequestOffered: false,
+            contextNote: null,
+            error: null,
+          });
+        }
+        setTurns(resumed);
+      } catch {
+        // Fail open — start a normal fresh conversation instead.
+      }
+    })();
+  }, []);
+
+  // One-shot handoff from the homepage's own Velte input (Hero.tsx) and any
+  // other "?q=…" link into /chat — read directly off window.location
   // rather than useSearchParams() so this already-fully-client component
   // doesn't need a Suspense boundary just for a one-time initial read.
   // `auto=1` submits it immediately (a real search, not a prefilled draft);
   // without it, the text just lands in the composer for the buyer to edit
   // first. Strips both params from the URL afterward so a refresh doesn't
-  // resend/reprefill the same query.
+  // resend/reprefill the same query. Skipped entirely when `?c=` (resume,
+  // above) is also present — the two links are mutually exclusive in
+  // practice, but resuming a real conversation should always win.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    if (params.get("c")) return;
     const q = params.get("q");
     if (!q) return;
     if (params.get("auto") === "1") {
@@ -1082,9 +1252,9 @@ export function SearchHome() {
           <Image
             src="/velte_logo_esn5dj.png"
             alt="Velte"
-            width={90}
-            height={44}
-            className="w-16 sm:w-[90px] h-auto"
+            width={72}
+            height={35}
+            className="w-14 sm:w-[72px] h-auto"
             priority
           />
         </Link>
@@ -1119,14 +1289,13 @@ export function SearchHome() {
               href="/auth/login"
               className="text-gray-600 hover:text-gray-900 transition-colors px-2 py-2 sm:px-1 sm:py-0"
             >
-              Log in
+              Sign in
             </Link>
             <Link
               href="/auth/signup"
               className="flex items-center h-8 sm:h-auto px-3 sm:px-4 sm:py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-semibold sm:font-medium transition-colors whitespace-nowrap"
             >
-              <span className="sm:hidden">List business</span>
-              <span className="hidden sm:inline">List your business</span>
+              Join
             </Link>
           </div>
         )}
@@ -1134,16 +1303,16 @@ export function SearchHome() {
 
       {!collapsed ? (
         <main className="flex-1 flex flex-col items-center justify-center px-5">
-          {/* The idle screen reads as Velux itself greeting the buyer — same
+          {/* The idle screen reads as Velte itself greeting the buyer — same
               avatar-left, bubble-right chat layout as a real conversation
               turn (see ConversationTurnView's own `items-start gap-3` row),
-              not a centered marketing headline. Everything Velux "says" —
+              not a centered marketing headline. Everything Velte "says" —
               the greeting AND the explanation — lives inside the one
               bubble, same as a single real chat message would hold both. */}
           <div className="flex items-start gap-3 sm:gap-4 mb-6 max-w-xl w-full text-left">
             <img
               src="/velte_ai_assistant.png"
-              alt="Velux"
+              alt="Velte"
               className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover shadow-md shadow-gray-300/40 shrink-0"
             />
             <div className="bg-white border border-gray-100 shadow-sm rounded-3xl rounded-tl-lg px-4 py-3 sm:px-5 sm:py-4 flex-1 min-w-0">
@@ -1189,6 +1358,9 @@ export function SearchHome() {
                   turn={turn}
                   isLatest={i === turns.length - 1}
                   onAnswerClarification={handleClarificationAnswer}
+                  onBuyerRequestResolved={(offer) =>
+                    updateTurn(turn.id, { buyerRequestOffer: offer })
+                  }
                 />
               ))}
               <div ref={bottomRef} />

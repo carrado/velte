@@ -392,6 +392,19 @@ export function noVendorMatchPhrase(hasExternal: boolean): string[] {
       ];
 }
 
+// Sole status line for createBuyerRequestTool's "created" path — the
+// "needs_identity" path shows no status line at all (the frontend takes
+// over with the inline phone+OTP capture instead of a spinner).
+export function sendingRequestPhrase(): string[] {
+  return [
+    "Sending your request to businesses that may be able to help…",
+    "Reaching out to businesses on Velte…",
+    "Passing your request along to relevant businesses…",
+    "Getting this in front of businesses who might have it…",
+    "Sending this out to businesses on Velte now…",
+  ];
+}
+
 // Sole status line for getVendorProductsTool — a plain lookup by handle
 // (see that file), not a ranked search, so there's nothing to report other
 // than "working on it."

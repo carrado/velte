@@ -26,7 +26,7 @@ export async function GET() {
 > Velte is a marketplace and AI discovery engine for Nigeria: a buyer describes what they need (text or a photo), or browses real listings directly, and is matched to the nearest real vendor who actually has it — by meaning, proximity, and trust. Every vendor, price, and stock figure comes straight from Velte's database; nothing is invented. Buyers hand off to the vendor directly on WhatsApp, no in-app messaging or middleman.
 
 ## Search
-- [Ask Velux](${SITE_URL}/velux): Velte's AI shopping assistant — describe what you need in your own words or a photo, matched against real vendor inventory nearby.
+- [Ask Velte](${SITE_URL}/chat): Velte's AI shopping assistant — describe what you need in your own words or a photo, matched against real vendor inventory nearby.
 - [Browse the marketplace](${SITE_URL}/): Real, current vendor listings, browsable without searching.
 
 ## Company

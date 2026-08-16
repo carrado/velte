@@ -62,4 +62,5 @@ export const buyerApi = {
       method: "PATCH",
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
+  del: <T = unknown>(path: string) => request<T>(path, { method: "DELETE" }),
 };

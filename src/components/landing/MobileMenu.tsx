@@ -20,7 +20,6 @@ import {
   Path,
   Question,
   Sparkle,
-  SquaresFour,
   X,
 } from "@phosphor-icons/react";
 
@@ -36,18 +35,17 @@ import {
 // (Velte has ~11 public pages total) to justify the reference's much
 // bigger multi-column density; every row below is a real, working route,
 // nothing padded in to fill space.
+// "Marketplace" dropped entirely (2026-08-16, not just de-emphasized) —
+// the product doesn't have a separate "browse the stacked-up catalog"
+// experience anymore, AI search is what surfaces everything now, so there
+// was nothing honest left to send this link to. /marketplace itself is
+// untouched, just no longer linked from anywhere in this menu.
 const exploreItems = [
   {
-    icon: SquaresFour,
-    title: "Marketplace",
-    subtitle: "Browse real listings nearby",
-    href: "/marketplace",
-  },
-  {
     icon: Sparkle,
-    title: "Ask Velux",
+    title: "Ask Velte",
     subtitle: "Describe it — AI finds it",
-    href: "/velux",
+    href: "/chat",
   },
   {
     icon: Path,
@@ -266,7 +264,7 @@ export function MobileMenu({
 
             <div className="p-5 border-t border-gray-100 shrink-0">
               <Link
-                href="/join"
+                href="/auth/signup"
                 onClick={onClose}
                 className="h-12 flex items-center justify-center gap-1.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-[14px] font-semibold shadow-lg shadow-orange-500/20 transition-colors"
               >

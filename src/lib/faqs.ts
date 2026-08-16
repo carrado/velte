@@ -6,21 +6,21 @@ export const faqs: FaqItem[] = [
     featured: true,
     question: "What is Velte?",
     answer:
-      "Velte is where you find real vendors nearby — browse what's listed, describe what you need to Velux (our AI), or post a request and let vendors respond to you. Every result comes from a real business's real inventory, never invented.",
+      "Velte is an AI shopping agent for Nigeria — describe what you need and it searches real vendor inventory nearby to find it. If nothing matches yet, Velte can offer to reach out to businesses on your behalf, right in the same conversation. Every result comes from a real business's real inventory, never invented.",
   },
   {
     category: "buyer",
     featured: true,
-    question: "How does Velux work?",
+    question: "How does Velte work?",
     answer:
-      "You can browse real vendor listings directly on our homepage, or describe what you need in your own words, or upload a photo. Velux reads the request the way a person would, then matches it against real vendor inventory nearby — ranked by meaning and distance.",
+      "Describe what you need in your own words, or upload a photo — Velte reads the request the way a person would, then matches it against real vendor inventory nearby, ranked by meaning and distance. No categories to click through and no filters to set — you can still browse the full marketplace yourself if you'd rather, but most people find it faster to just ask.",
   },
   {
     category: "buyer",
     featured: true,
-    question: "Can I post a request?",
+    question: "What if nothing matches what I'm looking for?",
     answer:
-      "Yes — if you can't find something listed, describe what you need once and every nearby vendor who actually has it gets notified. You'll hear back directly from them, no reposting or re-searching required.",
+      "Velte tells you honestly rather than showing you something close enough — then offers to reach out to businesses that might be able to help, right there in the conversation. Say yes and it creates the request itself; you'll hear back directly from whoever responds, no separate form to fill in.",
   },
   {
     category: "buyer",
@@ -40,7 +40,7 @@ export const faqs: FaqItem[] = [
     category: "buyer",
     question: "Can I just browse instead of searching?",
     answer:
-      "Yes — our homepage shows real listings from real vendors, ready to chat about right away. AI search is there whenever you want something more specific than what's shown.",
+      "Yes — the full marketplace is still there if you'd rather look yourself. Most people find it faster to just tell Velte what they need, though, since it searches the same real listings and does the comparing for you.",
   },
   {
     category: "buyer",
@@ -52,7 +52,7 @@ export const faqs: FaqItem[] = [
     category: "buyer",
     question: "What if no vendor has what I need?",
     answer:
-      "We tell you honestly rather than showing you something close enough. Your search is logged as demand, and we may point you to a nearby physical market where it's more likely to turn up.",
+      "We tell you honestly rather than showing you something close enough — Velte can then offer to reach out to businesses that might be able to help, right in the same conversation. If that comes up empty too, we may point you to a nearby physical market where it's more likely to turn up.",
   },
   {
     category: "buyer",
@@ -83,7 +83,7 @@ export const faqs: FaqItem[] = [
     category: "buyer",
     question: "Do I need an account to search?",
     answer:
-      "No — searching is open to anyone, no sign-up required. Just describe what you need or send a photo and start browsing matches straight away.",
+      "No — searching is open to anyone, no sign-up required. Just describe what you need or send a photo and see what turns up. You'll only be asked for a phone number if you want Velte to follow up on something for you later, like when a business responds to a request.",
   },
   {
     category: "vendor",
@@ -137,17 +137,27 @@ export const featuredFaqs = faqs.filter((faq) => faq.featured);
 // 2026-08-15 (was showing every buyer-featured question, which made the FAQ
 // section run long relative to the rest of the now-compact page). In the
 // order a first-time buyer would actually ask them: what is this → how does
-// the AI part work → can I ask for something specific → what happens after
+// the AI part work → what happens when nothing matches → what happens after
 // → what's the phone number actually for (SMS is now a real part of the
 // product, see buyerNotification.service.js's SMS_TYPES — this question
 // earns its place here). Deliberately excludes every vendor-category
 // question — the buyer homepage's own FAQ shouldn't be answering "how do I
 // get discovered by buyers," that belongs on a vendor landing page instead
 // (see VendorPitch.tsx's own 2026-08-13 de-emphasis note).
+//
+// "Can I post a request?" renamed "What if nothing matches what I'm
+// looking for?" (2026-08-15, AI-agent pivot) — the old title/answer framed
+// posting a request as a buyer-initiated action ("describe what you need
+// once and every nearby vendor gets notified"). It's not one anymore:
+// createBuyerRequestTool.ts has Velte itself offer this mid-conversation
+// once a real search comes up empty, and only creates the request once the
+// buyer agrees — there's no separate "post" step or form for a buyer to
+// go looking for, so a question phrased around "posting" no longer matches
+// what actually happens.
 export const homepageFaqs = [
   "What is Velte?",
-  "How does Velux work?",
-  "Can I post a request?",
+  "How does Velte work?",
+  "What if nothing matches what I'm looking for?",
   "How do vendor responses work?",
   "How does Velte use my phone number?",
 ]

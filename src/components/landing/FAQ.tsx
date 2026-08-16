@@ -38,12 +38,24 @@ export default function FAQ() {
           whileInView="show"
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
-          className="grid lg:grid-cols-[0.85fr_1.15fr] gap-10 lg:gap-14 items-center"
+          className="grid lg:grid-cols-[0.85fr_1.15fr] gap-10 lg:gap-14 items-start"
         >
-          {/* Photo */}
+          {/* Photo — `hidden lg:block` (was `sm:block`, mismatched against
+              the grid's own `lg:grid-cols-...`): between sm and lg the
+              photo used to show at full width, stacked above the questions
+              in a single column, since the grid hadn't gone two-column yet
+              — a visibly different, un-intended layout in that range.
+              Matching both to the same breakpoint means the photo is either
+              hidden (mobile) or correctly side-by-side (lg+), never
+              stacked full-width on its own. `items-start` on the parent
+              grid (was `items-center`) keeps this pinned to the top of the
+              row — with items-center, it visibly drifted up/down as the
+              questions column's own height changed (a real FAQ item is
+              open by default, and each one is a genuine height animation,
+              not a fixed truncation — see FaqAccordionItem.tsx). */}
           <motion.div
             variants={fadeUp}
-            className="relative rounded-3xl overflow-hidden aspect-[4/5] lg:aspect-[3/4] shadow-xl shadow-gray-300/40 hidden sm:block"
+            className="relative rounded-3xl overflow-hidden aspect-[4/5] lg:aspect-[3/4] shadow-xl shadow-gray-300/40 hidden lg:block"
           >
             <Image
               src={image.src}
@@ -86,7 +98,7 @@ export default function FAQ() {
             <motion.div variants={fadeUp} className="mt-8">
               {/* Bumped from a bare text+arrow link to a bordered button
                   (2026-08-16) — same treatment as VeluxShowcase's "Try
-                  Velux yourself" (see that file's own comment): started
+                  Velte yourself" (see that file's own comment): started
                   matched to MarketplacePreview/VendorsPreview's `border-2
                   border-orange-500`, then toned down to a lighter 1px
                   border the same day since 2px orange-500 read too bold

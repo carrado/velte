@@ -11,7 +11,7 @@ import { getMarketplaceBrowse, getVendorsBrowse } from "@/lib/server/store";
 export const metadata: Metadata = {
   title: "Marketplace",
   description:
-    "Browse real listings and vendors on Velte — or ask Velux, our AI, to find exactly what you need.",
+    "Browse real listings and vendors on Velte — or ask Velte to find exactly what you need.",
   alternates: {
     canonical: "/marketplace",
   },
@@ -50,7 +50,7 @@ export default async function MarketplacePage() {
           </h1>
           <p className="text-gray-500 mt-2 max-w-xl">
             Real listings from real vendors — chat with them directly, or ask
-            Velux to search further.
+            Velte to search further.
           </p>
         </div>
       </div>

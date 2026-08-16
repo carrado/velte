@@ -1,25 +1,40 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Home, Compass, ClipboardList, Heart, User } from "lucide-react";
+import {
+  MessageCircle,
+  Compass,
+  ClipboardList,
+  Heart,
+  User,
+} from "lucide-react";
 import { useBuyerNavigation } from "@/components/buyer/BuyerNavigationProgressContext";
 
-/* Home / Discover / Requests / Saved / Profile. "Post a Request" is
-   deliberately NOT a nav tab, it's a CTA on Home and Requests instead.
-   "Home" points at /buyer (this dashboard's own home), NOT /marketplace —
-   that used to send a buyer OUT of the whole dashboard shell (header/
-   bottom nav gone, back to the marketing Navbar/Footer), which is the
-   wrong "home" for someone who already has a buyer account.
+/* Chat / Discover / Requests / Saved / Profile. "Post a Request" is
+   deliberately NOT a nav tab, it's something the AI itself offers mid-
+   conversation instead (see createBuyerRequestTool.ts) — never a button to
+   tap. "Home" relabeled "Chat" (2026-08-15, AI-agent pivot — "chat should
+   dominate the interface") and its icon swapped from a house to a chat
+   bubble; the destination is UNCHANGED (still /buyer) since that page
+   already leads with the Ask Velte composer, Recent conversations, and
+   active requests — it already functions as the chat-first launchpad the
+   label now actually says, this was a naming/icon catch-up, not a routing
+   change. NOT /marketplace — that used to send a buyer OUT of the whole
+   dashboard shell (header/bottom nav gone, back to the marketing Navbar/
+   Footer), which is the wrong "home" for someone who already has a buyer
+   account.
 
    Discover is its own tab (added per the buyer-redesign brief's §18 nav
    restructure) rather than folded into Home — Home used to carry the full
    browse catalog directly, which made it read as a second Discover with a
    hero glued on top. Splitting them out matches the brief's core
-   principle: "Browse when you know what you want [Discover], Ask Velux
-   when you don't [Home's own search-first CTA]." Ask Velux itself stays
+   principle: "Browse when you know what you want [Discover], Ask Velte
+   when you don't [Home's own search-first CTA]." Ask Velte itself stays
    off this bar on purpose — a secondary, consistently-labeled CTA
    reachable from Home/the header, never a tab competing with real
-   destinations (see AskVeluxButton's own doc comment).
+   destinations (see AskVeluxButton's own doc comment — component name
+   kept as an internal identifier post-rebrand, see that file's own
+   comment).
 
    Uses BuyerNavigationProgressContext's own navigate() — the buyer
    dashboard's instance of the same top-progress-bar navigation the vendor
@@ -30,8 +45,8 @@ export default function BuyerBottomNav() {
 
   const items = [
     {
-      label: "Home",
-      icon: <Home size={20} />,
+      label: "Chat",
+      icon: <MessageCircle size={20} />,
       href: "/buyer",
       active: pathname === "/buyer",
     },

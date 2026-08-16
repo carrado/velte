@@ -145,6 +145,24 @@ export interface StoreProductItem {
   quoteOnRequest: boolean;
 }
 
+// A structured outcome from createBuyerRequestTool — the AI-agent fallback
+// (2026-08-15) that replaces a standalone "Post a Request" page: the model
+// calls this itself, mid-conversation, once a real search has come up empty
+// and the buyer has agreed to have Velte reach out to businesses on their
+// behalf. `description` is always present — the model's own self-contained
+// summary of what the buyer needs, same text a human would have typed into
+// the old manual form.
+export type BuyerRequestOffer =
+  // No buyer session exists yet — nothing was created. The frontend renders
+  // an inline phone+OTP capture (see BuyerRequestIdentityCapture) and, once
+  // verified, creates the request itself via a plain POST /buyer-requests —
+  // no second AI turn needed for that part.
+  | { status: "needs_identity"; description: string }
+  // A buyer session already existed — the tool created the request
+  // immediately, server-side, same turn.
+  | { status: "created"; requestId: string; description: string }
+  | { status: "error"; description: string };
+
 // A structured clarifying question from askClarifyingQuestionTool — the
 // model's own `reply` text for the turn IS the question itself; this just
 // carries the widget metadata needed to render it as buttons or a dedicated
@@ -247,5 +265,23 @@ export type SearchStreamEvent =
         whatsapp: string | null;
         vendorId: string;
       } | null;
+      // Non-null only when createBuyerRequest was called this turn — see
+      // BuyerRequestOffer's own comment. Independent of `clarification`
+      // (askClarifyingQuestion) and of toolCalled (a search tool result) —
+      // in practice this only ever appears when both are otherwise empty,
+      // since the model is only supposed to reach for this after a real
+      // search already came up with nothing, but the type doesn't enforce
+      // that itself.
+      buyerRequestOffer: BuyerRequestOffer | null;
+      // True only when offerBuyerRequestTool ran this turn — see its own
+      // comment. A "genuine dead end" (both search tools empty) doesn't
+      // always mean nothing at all exists: searchProducts/searchStores'
+      // own Tier 5 (Google Places) can still have populated
+      // `externalStoreSuggestions` in the SAME turn. This flag is what
+      // tells the frontend to hold those back and show the reach-out offer
+      // instead — Buyer Requests come first; Places only surfaces if the
+      // buyer declines the offer on a later turn (a fresh search, this
+      // flag false that time — see systemPrompt.ts's own rule).
+      buyerRequestOffered: boolean;
     }
   | { type: "error"; message: string };

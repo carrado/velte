@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  Home,
+  MessageCircle,
   Compass,
   ClipboardList,
   Heart,
@@ -30,8 +30,12 @@ import { getInitial } from "@/lib/initials";
 // vendor Sidebar's 3 sections make sense across 8 items, but this is the
 // same 5 flat destinations BuyerBottomNav already has; forcing them into
 // invented categories would be grouping for its own sake.
+// "Home" relabeled "Chat" (2026-08-15, AI-agent pivot) — same destination
+// (/buyer), same reasoning as BuyerBottomNav's own comment: that page
+// already IS the chat-first launchpad, this just makes the label/icon say
+// so instead of a generic house glyph.
 const NAV_ITEMS = [
-  { label: "Home", icon: Home, href: "/buyer" },
+  { label: "Chat", icon: MessageCircle, href: "/buyer" },
   { label: "Discover", icon: Compass, href: "/buyer/discover" },
   { label: "Requests", icon: ClipboardList, href: "/buyer/requests" },
   { label: "Saved", icon: Heart, href: "/buyer/saved" },
@@ -50,8 +54,8 @@ export default function BuyerSidebar() {
           <Image
             src="/velte_logo_esn5dj.png"
             alt="Velte"
-            width={80}
-            height={39}
+            width={72}
+            height={35}
             priority
           />
         </button>

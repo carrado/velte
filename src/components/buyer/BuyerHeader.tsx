@@ -9,14 +9,15 @@ import { useBuyerNavigation } from "@/components/buyer/BuyerNavigationProgressCo
 import { getInitial } from "@/lib/initials";
 
 // The buyer dashboard's own top bar — gives the shell the same chrome
-// weight as the vendor dashboard's Header (Ask Velux + notifications +
+// weight as the vendor dashboard's Header (Ask Velte + notifications +
 // account avatar right) instead of pages just starting cold at the
 // viewport top. Still NOT a full vendor Header clone: no account popover —
 // the avatar is a plain link straight to Profile (which already owns
 // logout) rather than duplicating that popover here. Reuses the site-wide
 // AskVeluxButton (same component the public Navbar/marketplace and vendor
-// Header use) so the "go talk to Velux" affordance stays visually identical
-// everywhere it shows up. The bell IS its own thing though — see
+// Header use, name kept as an internal identifier post-rebrand — see that
+// file's own comment) so the "go talk to Velte" affordance stays visually
+// identical everywhere it shows up. The bell IS its own thing though — see
 // BuyerNotificationBell's own comment on why it's a simpler build than the
 // vendor Header's, not a copy of it.
 //
@@ -56,14 +57,14 @@ export default function BuyerHeader() {
           <Image
             src="/velte_logo_esn5dj.png"
             alt="Velte"
-            width={80}
-            height={39}
-            className="w-[68px] sm:w-[80px] h-auto"
+            width={72}
+            height={35}
+            className="w-14 sm:w-[72px] h-auto"
             priority
           />
         </button>
         <div className="flex items-center gap-2.5">
-          <AskVeluxButton variant="compact" label="Ask Velux" />
+          <AskVeluxButton variant="compact" label="Ask Velte" />
           <BuyerNotificationBell />
           <button
             onClick={() => navigate("/buyer/profile")}

@@ -79,8 +79,8 @@ export default function ForgotPassword() {
             <Image
               src="/velte_logo_esn5dj.png"
               alt="Velte logo"
-              width={100}
-              height={49}
+              width={72}
+              height={35}
               priority
             />
           </Link>
@@ -167,7 +167,7 @@ export default function ForgotPassword() {
                 href="/auth/login"
                 className="text-orange-500 hover:text-orange-400 font-medium"
               >
-                Log in
+                Sign in
               </Link>
             </p>
           </div>

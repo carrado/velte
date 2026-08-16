@@ -156,8 +156,8 @@ export default function Sidebar() {
           <img
             src="/velte_logo_esn5dj.png"
             alt="Velte logo"
-            width={80}
-            height={39}
+            width={72}
+            height={35}
           />
         </div>
       </div>

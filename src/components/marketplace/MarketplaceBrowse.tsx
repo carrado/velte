@@ -71,7 +71,7 @@ function sortItems(
 // buyer scanning a normal product grid shouldn't hit an "ad" mixed in every
 // few items; one real card at the natural end of the feed does the same job
 // without interrupting the browsing itself. Still true once filtered to
-// zero matches — it doubles as the empty state's own next step ("ask Velux
+// zero matches — it doubles as the empty state's own next step ("try Velte
 // instead"), rather than needing separate empty-state artwork.
 export function MarketplaceBrowse({
   items,
@@ -116,7 +116,7 @@ export function MarketplaceBrowse({
       {hasActiveFilter && filtered.length === 0 && (
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
           <MagnifyingGlass size={15} className="shrink-0" />
-          Nothing matches these filters — try Velux instead.
+          Nothing matches these filters — try Velte instead.
         </div>
       )}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-2.5 gap-y-4 sm:gap-5">

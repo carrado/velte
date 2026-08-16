@@ -16,22 +16,33 @@ interface AskVeluxButtonProps {
   className?: string;
 }
 
-// The site-wide "go talk to Velux" CTA — one component instead of a
+// The site-wide "go talk to Velte" CTA — one component instead of a
 // one-off styled link per page, so the AI path reads as the same real,
 // designed feature everywhere it shows up (Navbar, Hero, the marketplace/
 // vendor section endings, About/FAQ) rather than a bare text link some
-// places and a full button elsewhere. Uses Velux's own avatar rather than a
-// generic search icon, on purpose — this is "go talk to Velux specifically",
-// not "here's a search feature."
+// places and a full button elsewhere. Uses the AI's own avatar rather than
+// a generic search icon, on purpose — this is "go talk to Velte
+// specifically", not "here's a search feature."
+//
+// Component/prop names kept as "Velux" (2026-08-16, AI-agent-pivot
+// rebrand) — purely an internal identifier at this point, not user-facing;
+// renaming it everywhere it's imported (Navbar, Header, BuyerHeader,
+// BuyerHomeHero, About, FAQ, ...) was a much bigger, purely-cosmetic diff
+// for zero user-visible benefit. Every actual STRING this component
+// renders — the default label, the tooltip — says "Velte", never "Velux".
+// See chat/page.tsx's own comment for why "Velux" (a real, internationally
+// known roof-window/skylight trademark) was retired as the AI's persona
+// name in the first place.
 //
 // Deliberately never the PRIMARY action anywhere it's placed (that's
-// Browse, per the 2026-08-05 marketplace pivot) — but "secondary" here
-// still means a real, photo-bearing chip, not a muted gray afterthought
-// link, since AI genuinely is a built, working differentiator and
-// shouldn't read as one.
+// Browse, per the 2026-08-05 marketplace pivot — since superseded by the
+// AI-agent pivot; see page.tsx's own comment) — but "secondary" here still
+// means a real, photo-bearing chip, not a muted gray afterthought link,
+// since AI genuinely is a built, working differentiator and shouldn't
+// read as one.
 export function AskVeluxButton({
   variant = "full",
-  label = "Ask Velux",
+  label = "Ask Velte",
   subtext,
   className,
 }: AskVeluxButtonProps) {
@@ -52,8 +63,8 @@ export function AskVeluxButton({
   if (variant === "compact") {
     return (
       <Link
-        href="/velux"
-        title="Ask Velux — search with AI"
+        href="/chat"
+        title="Ask Velte — search with AI"
         className={cn(
           "flex items-center gap-1.5 h-8 sm:h-9 pl-1 pr-2.5 sm:pr-3.5 rounded-full border border-orange-200 bg-orange-50 hover:bg-orange-100 transition-colors shrink-0",
           className,
@@ -69,7 +80,7 @@ export function AskVeluxButton({
 
   return (
     <Link
-      href="/velux"
+      href="/chat"
       className={cn(
         "inline-flex items-center gap-3 pl-2 pr-5 sm:pr-6 py-2 rounded-full bg-white border border-orange-200 shadow-sm hover:shadow-md hover:border-orange-300 transition-all",
         className,

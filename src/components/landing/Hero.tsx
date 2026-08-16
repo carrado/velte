@@ -2,14 +2,11 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { motion } from "motion/react";
 // Icons from Phosphor (2026-08-16, swapped from lucide-react for this
 // session's pages only — see MobileMenu.tsx's comment on the trade-off).
-// LayoutGrid has no exact Phosphor match; SquaresFour is its closest
-// equivalent (four-square grid glyph, same "browse a grid" meaning).
-import { ArrowRight, Camera, SquaresFour } from "@phosphor-icons/react";
-import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
+import { ArrowRight, Camera } from "@phosphor-icons/react";
+import { goAskVelte } from "@/lib/askVelte";
 
 const stagger = {
   hidden: {},
@@ -33,11 +30,8 @@ const EXAMPLE_PROMPTS = [
 
 // Redesigned 2026-08-13, trimmed further 2026-08-15 — replaces the old
 // "Real vendors. Real listings." headline + parallax photo/mockup pair.
-// That version's job (show real catalog items) now belongs entirely to
-// MarketplacePreview right below it; duplicating a mockup of that section
-// here just to fill hero space read as noise once this box could do
-// something real instead. The box below isn't a decorative mockup — it's
-// the actual composer, wired straight to /velux (see SearchHome's own
+// The box below isn't a decorative mockup — it's
+// the actual composer, wired straight to /chat (see SearchHome's own
 // `?q=`/`auto=1` handoff) — so typing here and hitting enter is a real
 // search, not a fake preview of one. Deliberately plain: no gradient panel,
 // no "Powered by X" badge, no glow around the input itself — the AI here is
@@ -49,18 +43,27 @@ const EXAMPLE_PROMPTS = [
 // surrounding copy for attention) — the first screen's only job is "I tell
 // Velte what I need," not an explanation of how the matching pipeline
 // works.
+//
+// 2026-08-15 (AI-agent pivot): dropped the "Prefer to browse first? ↓"
+// scroll-to-marketplace link entirely — its target (MarketplacePreview) was
+// cut from page.tsx the same day (see that file's own comment), and even
+// before that, offering an escape hatch OUT of the AI conversation and back
+// into "browse a grid" worked against the whole point of this page: Velte
+// figures out what you need, you don't go find it yourself.
+//
+// 2026-08-15 (full homepage redesign): added the "Your AI shopping agent"
+// eyebrow above the headline — the page now has enough sections below to
+// earn a positioning line up top instead of jumping straight to the ask,
+// and `go()` moved out to lib/askVelte.ts's goAskVelte so FloatingAskBar
+// and FinalAskCta share the exact same /chat handoff instead of each
+// re-implementing it.
 export default function Hero() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function go(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed) {
-      textareaRef.current?.focus();
-      return;
-    }
-    router.push(`/velux?q=${encodeURIComponent(trimmed)}&auto=1`);
+    if (!goAskVelte(router, text)) textareaRef.current?.focus();
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -85,21 +88,28 @@ export default function Hero() {
 
       <div className="relative max-w-3xl mx-auto px-5 sm:px-8 text-center">
         <motion.div variants={stagger} initial="hidden" animate="show">
+          <motion.p
+            variants={fadeUp}
+            className="text-orange-500 text-xs sm:text-sm font-bold uppercase tracking-[0.14em] mb-3"
+          >
+            Your AI shopping agent
+          </motion.p>
+
           <motion.h1
             variants={fadeUp}
             className="text-[2.3rem] sm:text-5xl lg:text-[3.2rem] font-bold text-[#023337] leading-[1.12] tracking-tight mb-4 text-balance"
           >
-            Need something?
+            Just tell Velte
             <br />
-            <span className="text-orange-500">Tell Velte.</span>
+            <span className="text-orange-500">what you need.</span>
           </motion.h1>
 
           <motion.p
             variants={fadeUp}
             className="text-base sm:text-lg text-gray-500 mb-7 leading-relaxed max-w-md mx-auto"
           >
-            Find products, businesses or services near you — or let vendors come
-            to you.
+            Find products, businesses and services near you — Velte figures out
+            the rest.
           </motion.p>
 
           <motion.form
@@ -149,17 +159,6 @@ export default function Hero() {
                 </button>
               ))}
             </div>
-          </motion.div>
-
-          <motion.div variants={fadeUp} className="mt-6">
-            <Link
-              href="/"
-              onClick={scrollToMarketplace}
-              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-            >
-              <SquaresFour className="w-3.5 h-3.5" />
-              Prefer to browse first? ↓
-            </Link>
           </motion.div>
         </motion.div>
       </div>

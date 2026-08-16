@@ -37,7 +37,7 @@ export function VendorsGrid({
           saveSlot={renderSaveSlot?.(vendor)}
         />
       ))}
-      <AskVeluxCard subtext="Looking for a specific business? Ask Velux and we'll help you find them." />
+      <AskVeluxCard subtext="Looking for a specific business? Ask Velte and we'll help you find them." />
     </div>
   );
 }

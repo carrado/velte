@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
@@ -14,6 +15,34 @@ import {
   ShieldCheck,
   WifiHigh,
 } from "@phosphor-icons/react";
+import { cn } from "@/lib/utils";
+
+// A real iPhone 14 Pro Max screen recording of Velte in use — 2026-08-15.
+// Uploaded to Cloudinary as .mkv (per the source file); Cloudinary
+// transcodes on delivery when the URL's own extension differs from the
+// upload's — `.mp4` here is that delivery format, not the original, and
+// `f_auto,q_auto` (same trick optimizedImageUrl already uses for every
+// image on the site) lets Cloudinary pick the best actual codec/quality per
+// requesting browser on top of that. Hosted on Cloudinary rather than Mux
+// deliberately — Mux is this codebase's pipeline for vendor-UPLOADED
+// product videos, built around adaptive HLS streaming for unpredictable
+// length/quality; this is one small (~5MB), fixed, silent, controls-less
+// loop, which just needs a plain <video> tag, not a player library.
+//
+// `c_crop,w_704,h_1408,x_0,y_120` crops out the top 120px of the SOURCE
+// 704×1528 recording — that's the site's own real Navbar (logo/Log in/List
+// business) as it looked when this was captured, baked into the footage
+// itself. Redundant here: the phone mockup already sits inside a page that
+// has its own real Navbar above it, so a second one inside the recording
+// read as a duplicate rather than "authentic." Exact pixel values, found by
+// pulling a frame with ffprobe/ffmpeg and checking where the header's own
+// bottom divider actually falls, not a guessed/rounded percentage — see
+// this component's own scratch verification before this line was set.
+// object-cover on the <video> below absorbs the resulting aspect-ratio
+// change against the phone frame's own `aspect-[9/18.5]`, same as it
+// already would for any source/container mismatch.
+const DEMO_VIDEO_URL =
+  "https://res.cloudinary.com/campnet/video/upload/c_crop,w_704,h_1408,x_0,y_120,f_auto,q_auto/v1786834423/iPhone-14-PRO-MAX-velte.ng-79xj1yg1dz_5fk_cllhnx.mp4";
 
 const stagger = {
   hidden: {},
@@ -73,6 +102,42 @@ const EXAMPLE_RESULTS = [
 // text-query examples duplicated Hero's own "Try" chips without adding
 // anything new.
 export function VeluxShowcase() {
+  // Lazy-loaded on scroll, not on page load — this section sits well below
+  // the fold (after Hero and HowItWorksSteps), so a visitor who never
+  // scrolls this far never fetches the ~5MB clip at all, and one who does
+  // only starts the fetch once the phone mockup is actually about to enter
+  // view, never during initial page load/LCP. `showVideo` gates whether the
+  // <video> element (and its `src`) exists in the DOM at all — mounting it
+  // conditionally, not just toggling `autoPlay`, is what keeps `preload`
+  // from having anything to eagerly buffer before then.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [showVideo, setShowVideo] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+
+  useEffect(() => {
+    // A visitor with this OS-level preference never gets the autoplaying
+    // recording at all — the illustrated mockup underneath stays the
+    // permanent, static, non-motion visual for them instead (see the
+    // conditional render below: the mockup is never removed, the video is
+    // layered ON TOP of it once ready).
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const el = frameRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShowVideo(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <section className="relative bg-white border-t border-gray-100 py-14 sm:py-16">
       <div className="max-w-5xl mx-auto px-5 sm:px-8">
@@ -98,7 +163,7 @@ export function VeluxShowcase() {
               variants={fadeUp}
               className="text-gray-500 leading-relaxed mb-6 max-w-md mx-auto lg:mx-0"
             >
-              Snap a photo of what you want — Velux identifies it and checks
+              Snap a photo of what you want — Velte identifies it and checks
               real vendor stock nearby. Nothing here is invented.
             </motion.p>
 
@@ -106,10 +171,10 @@ export function VeluxShowcase() {
                 change, inline under the paragraph in the copy column. */}
             <motion.div variants={fadeUp} className="hidden lg:block">
               <Link
-                href="/velux"
+                href="/chat"
                 className="inline-flex items-center gap-1.5 border border-orange-200 bg-orange-50 hover:border-orange-300 hover:bg-orange-100 text-orange-600 font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
               >
-                Try Velux yourself
+                Try Velte yourself
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </motion.div>
@@ -128,7 +193,7 @@ export function VeluxShowcase() {
             <div className="absolute -inset-x-6 top-10 bottom-0 bg-orange-400/[0.08] blur-[60px] rounded-full pointer-events-none" />
 
             <Link
-              href="/velux"
+              href="/chat"
               className="group relative block rounded-[2.75rem] bg-gray-900 p-2.5 shadow-2xl shadow-gray-900/20 ring-1 ring-black/5 hover:-translate-y-1 transition-transform"
             >
               {/* Side buttons — pure device chrome, decorative only */}
@@ -136,7 +201,10 @@ export function VeluxShowcase() {
               <div className="absolute -left-[3px] top-36 w-[3px] h-12 bg-gray-800 rounded-l-sm" />
               <div className="absolute -right-[3px] top-32 w-[3px] h-16 bg-gray-800 rounded-r-sm" />
 
-              <div className="relative bg-[#F1F5F9] rounded-[2.15rem] overflow-hidden aspect-[9/18.5]">
+              <div
+                ref={frameRef}
+                className="relative bg-[#F1F5F9] rounded-[2.15rem] overflow-hidden aspect-[9/18.5]"
+              >
                 {/* Dynamic island */}
                 <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[76px] h-[22px] bg-gray-900 rounded-full z-10" />
 
@@ -154,13 +222,13 @@ export function VeluxShowcase() {
                 <div className="flex items-center gap-1.5 px-4 pt-2 pb-2.5 border-b border-gray-200/80">
                   <Image
                     src="/velte_ai_assistant.png"
-                    alt="Velux"
+                    alt="Velte"
                     width={20}
                     height={20}
                     className="rounded-full object-cover shrink-0"
                   />
                   <span className="text-[12px] font-bold text-[#023337]">
-                    Velux
+                    Velte
                   </span>
                   <span className="ml-auto text-[9px] font-medium text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5">
                     velte.ng
@@ -222,6 +290,32 @@ export function VeluxShowcase() {
                     </div>
                   </div>
                 </div>
+
+                {/* The real recording, layered directly on top of the
+                    illustrated mockup above — it already IS a real iPhone
+                    screen (dynamic island, status bar and all baked into
+                    the footage itself), so it fully covers the illustrated
+                    one once visible rather than needing to replace it in
+                    the DOM. Starts transparent and fades in on
+                    `onCanPlay` (not just "mounted") so there's never a
+                    flash of a black/blank video frame — the mockup stays
+                    the visible content underneath for the entire time the
+                    clip is still fetching. */}
+                {showVideo && (
+                  <video
+                    src={DEMO_VIDEO_URL}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="none"
+                    onCanPlay={() => setVideoReady(true)}
+                    className={cn(
+                      "absolute inset-0 w-full h-full object-cover transition-opacity duration-500",
+                      videoReady ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                )}
               </div>
             </Link>
           </motion.div>
@@ -234,10 +328,10 @@ export function VeluxShowcase() {
               inline next to copy. */}
           <motion.div variants={fadeUp} className="lg:hidden">
             <Link
-              href="/velux"
+              href="/chat"
               className="inline-flex items-center gap-2 border border-orange-200 bg-orange-50 hover:border-orange-300 hover:bg-orange-100 text-orange-600 font-semibold text-base px-7 py-3.5 rounded-lg transition-colors"
             >
-              Try Velux yourself
+              Try Velte yourself
               <ArrowRight className="w-4 h-4" />
             </Link>
           </motion.div>

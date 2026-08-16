@@ -246,11 +246,11 @@ export function MarketplaceCard({
 
 // A flat, Instagram-shop-style preview of the real marketplace catalog —
 // deliberately browse-first, not AI search. Decided 2026-08-05: at 14
-// vendors / ~17 listings, /velux alone (a blind text box, zero pre-search
+// vendors / ~17 listings, /chat alone (a blind text box, zero pre-search
 // content) wasn't converting existing vendors into sales — an open-ended
 // query over a thin catalog misses more often than it hits. This gives
 // buyers something real to look at and chat about immediately; "See more"
-// hands off to /velux, which stays the deeper AI-assisted discovery layer
+// hands off to /chat, which stays the deeper AI-assisted discovery layer
 // for once the catalog is big enough to lean on fully.
 //
 // Renders nothing when the catalog is empty (rather than an empty section)

@@ -22,7 +22,7 @@ export default function MetaPixel() {
   // App Router navigation never reloads the page, so the init script's own
   // `fbq('track', 'PageView')` below only ever fires once per session (on
   // first load) — every subsequent client-side route change (home ->
-  // /velux, /velux -> a store page, etc.) would otherwise go completely
+  // /chat, /chat -> a store page, etc.) would otherwise go completely
   // untracked. This re-fires PageView on every pathname change instead, so
   // Meta's Events Manager can actually be broken down by URL to see how
   // often each page (search included) gets visited. Skips the very first

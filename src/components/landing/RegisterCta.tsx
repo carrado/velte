@@ -3,15 +3,11 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 // Icons from Phosphor (2026-08-16, swapped from lucide-react for this
-// session's pages only — see MobileMenu.tsx's comment). ClipboardList and
-// MessageSquarePlus have no exact match; ClipboardText and ChatCircleText
-// are their closest Phosphor equivalents.
+// session's pages only — see MobileMenu.tsx's comment). MessageSquarePlus
+// has no exact match; ChatCircleText is its closest Phosphor equivalent.
 import {
   ArrowRight,
-  Bell,
   ChatCircleText,
-  ClipboardText,
-  Heart,
   Users,
   Wallet,
 } from "@phosphor-icons/react";
@@ -26,29 +22,20 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
-// Rewritten 2026-08-14 — this section and VendorPitch used to be two
-// separate, separately-labeled sections back to back ("Keep everything you
-// find" for buyers, then a "FOR BUSINESSES" divider + its own pitch right
-// underneath), which was the fix for an EARLIER problem (the two reading as
-// one confused, audience-switching flow). Once /join became the single
-// unified entry point for both journeys, keeping two full sections back to
-// back just to say "click here" twice stopped earning its space — this is
-// now the ONE closing section, worded for both audiences, and VendorPitch
-// is retired (deleted, not just unused — see page.tsx).
+// Vendor-only again as of 2026-08-16 (was briefly a shared "one account,
+// two sides" closer for both audiences, 2026-08-14 through 2026-08-15 —
+// see git history on this file for that version). The "why do buyers have
+// to sign up" decision retired buyer accounts as a thing anyone "joins":
+// a buyer's identity is just a verified phone number, created silently the
+// first time it's actually needed, never a CTA to click on the homepage.
+// Keeping the old shared framing here would have this section telling a
+// buyer to "Join Velte" one screen after FinalAskCta (directly above)
+// already told them the opposite — just ask, nothing to sign up for.
 //
-// The two columns below are deliberately NOT labeled with a big "FOR
-// BUYERS" / "FOR BUSINESSES" eyebrow the way the old split sections were —
-// just a quiet parallel heading each ("Buying & discovering" / "Selling &
-// growing" — matched phrasing weight on purpose, "Finding things" read
-// noticeably more casual than "Selling things") — so this reads as one
-// account with two sides, not two audiences being addressed separately
-// again.
-const buyerKeeps = [
-  { icon: Heart, label: "Saved vendors & products" },
-  { icon: ClipboardText, label: "Active requests" },
-  { icon: Bell, label: "Price alerts" },
-];
-
+// That leaves this as the vendor half of the old split, on its own, doing
+// real work FinalAskCta doesn't: it's the only place on the homepage (the
+// navbar's bare "Join" button aside) that actually makes the case to a
+// vendor for why they'd list — not just where to click.
 const sellerKeeps = [
   { icon: ChatCircleText, label: "Buyer requests" },
   { icon: Users, label: "Store followers" },
@@ -59,32 +46,26 @@ const sellerKeeps = [
 ];
 
 function KeepList({
-  heading,
   items,
 }: {
-  heading: string;
   items: { icon: React.ElementType; label: string }[];
 }) {
   return (
-    <div>
-      <p className="text-white/40 text-xs font-semibold uppercase tracking-wide mb-3">
-        {heading}
-      </p>
-      <div className="space-y-2">
-        {items.map(({ icon: Icon, label }) => (
-          <motion.div
-            key={label}
-            variants={fadeUp}
-            className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5"
-          >
-            <Icon className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-            <span className="text-[13px] font-medium text-white/80">
-              {label}
-            </span>
-          </motion.div>
-        ))}
-      </div>
-    </div>
+    <motion.div
+      variants={stagger}
+      className="flex flex-wrap items-center justify-center gap-2.5 mb-9"
+    >
+      {items.map(({ icon: Icon, label }) => (
+        <motion.div
+          key={label}
+          variants={fadeUp}
+          className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2"
+        >
+          <Icon className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+          <span className="text-[13px] font-medium text-white/80">{label}</span>
+        </motion.div>
+      ))}
+    </motion.div>
   );
 }
 
@@ -105,38 +86,30 @@ export function RegisterCta() {
             variants={fadeUp}
             className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2 text-balance"
           >
-            One Velte account.
-            <br />
-            For buying and selling.
+            Run your business from one dashboard.
           </motion.h2>
           <motion.p
             variants={fadeUp}
             className="text-white/55 mb-9 max-w-md mx-auto"
           >
-            Whether you&apos;re looking for something or selling it, Velte keeps
-            your activity, requests and updates in one place.
+            List once — Velte matches you against real buyer demand nearby, and
+            keeps every request, follower and payout in one place.
           </motion.p>
 
-          <motion.div
-            variants={stagger}
-            className="grid sm:grid-cols-2 gap-6 mb-9 text-left"
-          >
-            <KeepList heading="Buying & discovering" items={buyerKeeps} />
-            <KeepList heading="Selling & growing" items={sellerKeeps} />
-          </motion.div>
+          <KeepList items={sellerKeeps} />
 
           <motion.div variants={fadeUp}>
             <Link
-              href="/join"
+              href="/auth/signup"
               className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-[15px] font-semibold shadow-lg shadow-orange-500/20 transition-colors"
             >
-              Join Velte
+              List your business
               <ArrowRight className="w-4 h-4" />
             </Link>
           </motion.div>
 
           <motion.p variants={fadeUp} className="text-white/40 text-xs mt-4">
-            Already have an account?{" "}
+            Already listing?{" "}
             <Link href="/auth/login" className="text-white/70 hover:text-white">
               Sign in
             </Link>

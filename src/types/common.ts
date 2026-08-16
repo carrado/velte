@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 /** Which buyer-facing surface produced a WhatsApp lead click — 'browse' (the
  *  "/" homepage marketplace grid, or the public /store/[handle] page; a
- *  direct chat click with no AI involved), 'search' (/velux's AI-matched
+ *  direct chat click with no AI involved), 'search' (/chat's AI-matched
  *  result cards), or 'buyer_request' (a buyer read vendor responses on
  *  their posted Buyer Request and chose one to chat — see
  *  docs/velte_buyer_requests_mvp_spec.md §27/§28). The literal value stays
@@ -105,4 +105,20 @@ export interface FaqSectionImage {
 export interface PricingFaqItem {
   q: string;
   a: string;
+}
+
+/** BuyerAuthShell's left marketing panel content — overridable per page
+ *  since the shell is now shared by the unified login AND signup (buyer
+ *  and vendor branches alike), not just the buyer-only screens it started
+ *  as. `icon` takes a component reference (e.g. from lucide-react),
+ *  matching NavItem's own `icon` convention elsewhere in this file. */
+export interface AuthPanelFeature {
+  icon: React.ComponentType<{ className?: string }>;
+  text: string;
+}
+
+export interface AuthPanelContent {
+  headline: string;
+  subtitle: string;
+  features: AuthPanelFeature[];
 }
