@@ -8,13 +8,15 @@ import { useRouter, usePathname } from "next/navigation";
 import { buyerApi } from "@/lib/buyer-api-client";
 import { ApiError } from "@/lib/api-client";
 import { useBuyerSession } from "@/hooks/useBuyerSession";
-import type { MarketplaceBrowseItem, VendorPreviewItem } from "@/types/store";
+import type { MarketplaceBrowseItem } from "@/types/store";
 
-export type SavedKind = "product" | "vendor";
+// "vendor" (follow-a-store) dropped 2026-08-17 — vendors no longer need
+// removing per the matching vendor-side Followers teardown; only product
+// saves remain.
+export type SavedKind = "product";
 
 interface SavedResponse {
   products: MarketplaceBrowseItem[];
-  vendors: VendorPreviewItem[];
 }
 
 interface SaveIntent {
@@ -44,7 +46,7 @@ function readAndClearIntent(): SaveIntent | null {
   }
 }
 
-/* Centralizes Saved/Follow state for the whole buyer app — one shared query
+/* Centralizes Saved state for the whole buyer app — one shared query
  * (["buyer-saved", "my"]) so a heart tapped on one page is instantly
  * reflected everywhere else a SaveButton for that same item renders, one
  * toggle mutation every SaveButton shares, and the registration-gate
@@ -67,14 +69,11 @@ export function useSavedItems() {
   });
 
   const products = data?.products ?? [];
-  const vendors = data?.vendors ?? [];
   const savedProductIds = new Set(products.map((p) => p.id));
-  const savedVendorIds = new Set(vendors.map((v) => v.vendorId));
 
   function isSaved(kind: SavedKind, targetId: string): boolean {
-    return kind === "product"
-      ? savedProductIds.has(targetId)
-      : savedVendorIds.has(targetId);
+    void kind; // only "product" exists now — kept for SaveButton's call shape
+    return savedProductIds.has(targetId);
   }
 
   const toggleMutation = useMutation({
@@ -113,13 +112,12 @@ export function useSavedItems() {
     if (!intent) return;
     replayedRef.current = true;
     toggleMutation.mutate(intent);
-    toast.success(intent.kind === "vendor" ? "Vendor followed." : "Saved.");
+    toast.success("Saved.");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buyer]);
 
   return {
     products,
-    vendors,
     isLoading: isLoading && !!buyer,
     isSaved,
     toggle,

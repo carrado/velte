@@ -60,6 +60,10 @@ interface GenerateTextOpts {
   tools?: Parameters<typeof generateText>[0]["tools"];
   stopWhen?: Parameters<typeof generateText>[0]["stopWhen"];
   providerOptions?: Parameters<typeof generateText>[0]["providerOptions"];
+  // Only ever passed by route.ts's forced-clarification retry (see its own
+  // comment) — everywhere else relies on the model's own judgment ('auto',
+  // the SDK default) over which tool, if any, to call.
+  toolChoice?: Parameters<typeof generateText>[0]["toolChoice"];
 }
 
 /**

@@ -390,20 +390,28 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
     (c) => c.toolName === "askClarifyingQuestion",
   );
   const clarifyInput = clarifyCall?.input as
-    | { question: string; kind: "choice" | "text"; options?: string[] }
+    | {
+        question: string;
+        kind: "choice" | "text" | "location";
+        options?: string[];
+      }
     | undefined;
   // Downgrades a malformed "choice" (missing/too-few options) to "text"
   // server-side, so the frontend's discriminated Clarification type never
-  // has to re-validate what the model actually sent.
+  // has to re-validate what the model actually sent. "location" passes
+  // through as-is — it never has options to validate in the first place.
   const clarifyCandidate: Clarification | null = !clarifyInput
     ? null
-    : clarifyInput.kind === "choice" && (clarifyInput.options?.length ?? 0) >= 2
-      ? {
-          kind: "choice",
-          question: clarifyInput.question,
-          options: clarifyInput.options!,
-        }
-      : { kind: "text", question: clarifyInput.question };
+    : clarifyInput.kind === "location"
+      ? { kind: "location", question: clarifyInput.question }
+      : clarifyInput.kind === "choice" &&
+          (clarifyInput.options?.length ?? 0) >= 2
+        ? {
+            kind: "choice",
+            question: clarifyInput.question,
+            options: clarifyInput.options!,
+          }
+        : { kind: "text", question: clarifyInput.question };
 
   // .findLast, not .find: a fallback model (Groq) occasionally calls a tool
   // more than once for one turn — the last call is what its final reply is
@@ -609,8 +617,20 @@ export async function POST(req: Request) {
       // a turn with history is a follow-up (refinement, decline, or answer
       // to a clarifying question already asked) — injecting a second sector
       // note there could re-trigger a question the one-round rule forbids.
+      //
+      // Also gated on buyerLocation being known: giving the model a second,
+      // more "interesting" clarifying-question option (charger type, size,
+      // color…) on the SAME turn location is genuinely missing turned out
+      // to reliably beat the location gate in practice — a prose precedence
+      // rule telling the model "location wins" wasn't enough (found live,
+      // repeatable across runs). Removing the competing option outright,
+      // the same fix already proven for the mirror bug below (a retry that
+      // removes askClarifyingQuestion entirely rather than re-asking nicely
+      // not to use it), is what actually holds. Once location IS known —
+      // including from an earlier turn this session, since the client keeps
+      // resending it — this reverts to computing normally.
       const sectorClarifiers =
-        message && !imageUrl && !body?.history?.length
+        message && !imageUrl && !body?.history?.length && body?.buyerLocation
           ? getSectorClarifiers(message)
           : null;
 
@@ -693,6 +713,20 @@ export async function POST(req: Request) {
         // tool instead.
         const LOCATION_CLARIFY_PATTERN =
           /\b(city|area|location|located|situated|whereabouts|neighbo(?:u)?rhood|which (?:state|town)|where (?:are|do) you|part of town)\b/i;
+        // Guards the two NEW "force a location ask" retries below (see
+        // their own comments) — without this, a buyer who already declined
+        // ("Search without sharing my location", the widget's own canned
+        // decline text — see ClarificationPrompt.tsx) gets asked AGAIN on
+        // this very turn, because a forced retry can't otherwise tell
+        // "never asked yet" apart from "already asked, buyer said no."
+        // Checking the whole history, not just the immediately-prior turn:
+        // systemPrompt.ts's own rule is "don't ask again for the same need
+        // EITHER way" for the rest of the conversation, not just once.
+        const alreadyAskedLocationThisConversation = (body?.history ?? []).some(
+          (turn) =>
+            turn.role === "assistant" &&
+            LOCATION_CLARIFY_PATTERN.test(turn.content),
+        );
         const looksLikeLocationClarify =
           Boolean(body?.buyerLocation) &&
           Boolean(outcome.clarifyCandidate) &&
@@ -737,6 +771,104 @@ export async function POST(req: Request) {
             providerOrder,
           );
           outcome = extractOutcome(result);
+        }
+
+        // Mirror of the gap above, opposite direction and a NEW failure mode
+        // (2026-08-16, once the "every search needs a location" gate went
+        // in — see systemPrompt.ts's own comment): the buyer's location is
+        // genuinely NOT known here, so SOME location ask is correct, but
+        // gpt-4o-mini reliably fails to produce the right ONE in practice —
+        // caught live across four distinct shapes, in order of how each fix
+        // was found insufficient: (1) writing the ask as plain reply text
+        // with no tool call at all, even after strengthening the prompt
+        // wording twice; (2) once forced to call askClarifyingQuestion,
+        // asking about a product attribute (charger type, model…) instead
+        // of location, even with an explicit prose "location wins"
+        // precedence rule; (3) doing that same wrong-attribute ask on its
+        // own initiative, with no sectorNote in the prompt at all to blame
+        // it on (route.ts now suppresses that note whenever location is
+        // unknown — see its own comment — so this is the model's unprompted
+        // default, not something it picked up from the sector hint); (4)
+        // skipping the location gate entirely and just calling
+        // searchProducts/searchStores nationwide, landing in a genuine dead
+        // end it could have avoided by asking first.
+        //
+        // The fix that finally holds for (1)-(3): don't just force the TOOL
+        // (tried that — case 2 above is what forcing alone still produced)
+        // — swap the entire system prompt for the retry down to a single-
+        // purpose instruction with nothing else competing for the model's
+        // attention, no sector hints, no cascade rules, nothing to ask
+        // about except location. `messages` (the buyer's real conversation)
+        // stays as-is; only `system` shrinks. Case (4) reuses the exact
+        // same retry, just triggered by a different detector below.
+        async function retryLocationOnly() {
+          const locationOnlySystem = `The buyer just asked: "${
+            message || "(sent a photo, no caption)"
+          }". Their location is unknown — neither a device location nor a named place exists for this search, and this search needs one. Call the askClarifyingQuestion tool with kind: "location" and a short, natural, ONE-sentence \`question\` asking for their location so you can find vendors actually near them — make clear this is only to find nearby vendors, never to track them. Do not ask about anything else (brand, model, size, type, budget, etc.) this turn, and do not call any other tool.`;
+          const retryResult = await callLLM(
+            {
+              system: locationOnlySystem,
+              messages,
+              tools: { askClarifyingQuestion: askClarifyingQuestionTool() },
+              toolChoice: "required",
+            },
+            providerOrder,
+          );
+          return { retryResult, retryOutcome: extractOutcome(retryResult) };
+        }
+
+        const needsLocationButDidntAsk =
+          !body?.buyerLocation &&
+          !alreadyAskedLocationThisConversation &&
+          !outcome.productCall &&
+          !outcome.storeCall &&
+          !outcome.hasUsefulResults &&
+          outcome.clarifyCandidate?.kind !== "location";
+
+        if (needsLocationButDidntAsk) {
+          console.warn(
+            outcome.clarifyCandidate
+              ? `[search] discarded a non-location clarify (${outcome.clarifyCandidate.kind}) when location was actually needed — retrying with a location-only system prompt`
+              : "[search] discarded a bare-text location ask with no tool call (buyer location unknown) — retrying with a location-only system prompt",
+          );
+          ({ retryResult: result, retryOutcome: outcome } =
+            await retryLocationOnly());
+        }
+
+        // Case (4) above — a real search DID run, without ever asking for
+        // location first. Only steps in when it turned out to be worth
+        // nothing: a useful nationwide result is still a genuinely useful
+        // answer (don't discard it just to force a process technicality).
+        // Deliberately NOT exempting a dual-intent turn (both tools
+        // called) the way the tool-choice decision's own prose exemption
+        // does — both calls are ALSO populated by the ordinary MANDATORY
+        // zero-result cascade (searchProducts empty → searchStores next,
+        // see that rule below) for a perfectly ordinary single-item query,
+        // and nothing about the tool-call shape here distinguishes that
+        // from a real "buyer named two things" turn. Found live: this
+        // exemption silently let a plain single-item dead end through
+        // uncaught. Worst case for a genuine dual-intent dead end is one
+        // extra location offer before falling through to the same outcome
+        // — not a regression. `location` absent on BOTH calls' own input is
+        // what distinguishes "never had a signal" from "buyer named a
+        // place, tool used it correctly" — reusing whichever one the model
+        // actually made rather than re-deciding product-vs-store here.
+        const searchedNationwideWithoutAsking =
+          !body?.buyerLocation &&
+          !alreadyAskedLocationThisConversation &&
+          !outcome.hasUsefulResults &&
+          [outcome.productCall, outcome.storeCall].some(
+            (call) =>
+              call &&
+              !(call.input as { location?: string } | undefined)?.location,
+          );
+
+        if (searchedNationwideWithoutAsking) {
+          console.warn(
+            "[search] searched nationwide with no location signal and found nothing — retrying with a location-only system prompt",
+          );
+          ({ retryResult: result, retryOutcome: outcome } =
+            await retryLocationOnly());
         }
 
         // Deterministic cross-check — don't trust the model to reliably call
@@ -909,7 +1041,17 @@ export async function POST(req: Request) {
         controller.enqueue(
           encodeEvent({
             type: "final",
-            reply: replyOverride ?? sanitizeReply(result.text),
+            // The `|| clarification?.question` fallback matters specifically
+            // for the forced-tool retry above: some providers return a
+            // forced tool call with little or no accompanying text content,
+            // and askClarifyingQuestion's own `question` field IS meant to
+            // double as the reply either way (see that tool's own comment)
+            // — so a buyer never sees a blank bubble sitting above a
+            // perfectly good clarification widget.
+            reply:
+              replyOverride ??
+              (sanitizeReply(result.text) || clarification?.question) ??
+              "",
             toolCalled,
             clarification,
             products,

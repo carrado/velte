@@ -8,7 +8,7 @@ import { motion } from "motion/react";
 import {
   ArrowRight,
   ChatCircleText,
-  Users,
+  Storefront,
   Wallet,
 } from "@phosphor-icons/react";
 
@@ -38,7 +38,7 @@ const fadeUp = {
 // vendor for why they'd list — not just where to click.
 const sellerKeeps = [
   { icon: ChatCircleText, label: "Buyer requests" },
-  { icon: Users, label: "Store followers" },
+  { icon: Storefront, label: "Your own storefront" },
   // "Wallet & leads" read as jargon to a first-time visitor (2026-08-14
   // copy pass) — "leads" meant nothing without dashboard context. "Buyer
   // leads & wallet" leads with the word that actually explains the value.

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { MapPin, Store as StoreIcon } from "lucide-react";
+import { MapPin, Store as StoreIcon, Wrench } from "lucide-react";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -30,9 +30,21 @@ export function StoreResultCard({
   // "interested in what you offer." Omit/null for every other usage
   // (productStores, or a dual-intent turn that already has a product).
   searchQuery = null,
+  // Undefined/0 when this store has no matching service listings at all —
+  // the link below only renders when there's something for it to open.
+  // The panel itself isn't rendered here (see SearchHome.tsx's
+  // MatchingServicesThread) — a carousel slide is too narrow for the
+  // thread's own layout, so it renders full-width below the whole
+  // carousel instead, this link just toggles it open/closed.
+  matchingServicesCount,
+  matchingServicesOpen = false,
+  onToggleMatchingServices,
 }: {
   match: StoreMatch;
   searchQuery?: string | null;
+  matchingServicesCount?: number;
+  matchingServicesOpen?: boolean;
+  onToggleMatchingServices?: () => void;
 }) {
   const chatHref = buildWhatsappLink(
     match.whatsapp,
@@ -78,26 +90,46 @@ export function StoreResultCard({
         </p>
       </div>
 
-      {match.description && (
-        <p
-          ref={descRef}
-          className="text-[13px] text-gray-500 leading-relaxed line-clamp-2"
-        >
-          {match.description}
-        </p>
-      )}
-      {hasMore && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setDetailOpen(true);
-          }}
-          className="text-[12px] font-semibold text-orange-600 hover:text-orange-700"
-        >
-          See more
-        </button>
-      )}
+      {(() => {
+        const seeMoreButton = hasMore && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailOpen(true);
+            }}
+            // Underlined so it reads as a link on sight, not just orange
+            // text — found live: sitting close to the sector pills below
+            // (also orange), plain color alone wasn't enough to tell them
+            // apart.
+            className="text-[12px] font-semibold text-orange-600 hover:text-orange-700 underline underline-offset-2 w-fit"
+          >
+            See more
+          </button>
+        );
+        if (!match.description) return seeMoreButton;
+        // A negative margin on the button alone can't reliably win against
+        // the outer card's own space-y-2.5 rhythm — Tailwind's space-y
+        // sibling rule and a plain margin utility land at the same
+        // specificity, so which one visually "wins" isn't dependable
+        // (found live: it silently didn't). Nesting description + "See
+        // more" in their OWN tightly-spaced sub-container sidesteps that
+        // fight entirely — the outer space-y-2.5 only ever sees this
+        // wrapper as ONE item, never reaching inside it, so the gap
+        // between the two is real CSS here, not a margin fighting another
+        // margin for control.
+        return (
+          <div className="space-y-0.5">
+            <p
+              ref={descRef}
+              className="text-[13px] text-gray-500 leading-relaxed line-clamp-2"
+            >
+              {match.description}
+            </p>
+            {seeMoreButton}
+          </div>
+        );
+      })()}
 
       {match.sectors.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -110,6 +142,26 @@ export function StoreResultCard({
             </span>
           ))}
         </div>
+      )}
+
+      {Boolean(matchingServicesCount) && onToggleMatchingServices && (
+        // A hairline divider + extra top padding, on top of the underline,
+        // is what actually separates this from the sector pills directly
+        // above — both are orange and sit right next to each other, and
+        // color alone didn't read as "this one's a link, those are tags."
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleMatchingServices();
+          }}
+          className="w-fit flex items-center gap-1.5 text-[12px] font-semibold text-orange-600 hover:text-orange-700 underline underline-offset-2 pt-2 mt-0.5 border-t border-gray-100"
+        >
+          <Wrench size={12} className="shrink-0" />
+          {matchingServicesOpen
+            ? "Hide matching service" + (matchingServicesCount === 1 ? "" : "s")
+            : `View matching service${matchingServicesCount === 1 ? "" : "s"} (${matchingServicesCount})`}
+        </button>
       )}
 
       <div className="flex items-center gap-1.5 text-xs text-gray-500">

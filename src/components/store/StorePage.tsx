@@ -16,10 +16,8 @@ import {
   Camera,
   Sparkles,
   Info,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api-client";
 import { storeApi } from "@/services/store";
 import { settingsApi } from "@/services/settings";
 import { useNavigation } from "@/components/NavigationProgressContext";
@@ -32,7 +30,6 @@ import { DescriptionQualityMeter } from "@/components/DescriptionQualityMeter";
 import SectorMultiSelect from "@/components/sectors/SectorMultiSelect";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import type { Store } from "@/types/store";
-import type { VendorFollower } from "@/types/followers";
 
 const MAX_DESCRIPTION = 600;
 const MAX_GALLERY = 6;
@@ -80,19 +77,6 @@ export default function StorePage() {
     queryFn: storeApi.getMyStore,
     staleTime: 30_000,
   });
-
-  // Same query key the Followers page itself uses — landing there right
-  // after is served from cache instead of refetching. staleTime here just
-  // means the overview card's own count won't refetch on every tab focus
-  // (a follower join isn't the kind of thing that needs second-by-second
-  // freshness).
-  const { data: followersData } = useQuery({
-    queryKey: ["vendor-followers"],
-    queryFn: () =>
-      api.get<{ followers: VendorFollower[] }>("/api/vendor/followers"),
-    staleTime: 30_000,
-  });
-  const followerCount = followersData?.followers.length ?? 0;
 
   const [form, setForm] = useState<Store | null>(null);
   // Sectors are canonical on User.sectors, not Store.sectors (a read-only
@@ -287,16 +271,6 @@ export default function StorePage() {
                 a natural-width flex row once there's room for all 4 side
                 by side. */}
             <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:flex-wrap">
-              <button
-                onClick={() => navigate("store/followers")}
-                className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-dash-secondary font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 cursor-pointer w-full sm:w-auto"
-              >
-                <Users size={13} />
-                Followers
-                <span className="text-gray-400 tabular-nums">
-                  · {followerCount}
-                </span>
-              </button>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(publicUrl);

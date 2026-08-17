@@ -1,8 +1,6 @@
 export type BuyerNotificationType =
   | "request-response"
   | "saved-price-change"
-  | "followed-new-listing"
-  | "followed-store-update"
   | "system";
 
 export interface BuyerNotification {

@@ -161,6 +161,13 @@ export type BuyerRequestOffer =
   // A buyer session already existed — the tool created the request
   // immediately, server-side, same turn.
   | { status: "created"; requestId: string; description: string }
+  // A buyer session existed (or was just verified), but matching found zero
+  // vendors for this need — the backend deliberately skips persisting a
+  // request nobody would ever see (see createRequest's own comment).
+  // systemPrompt.ts re-searches in the SAME turn on seeing this, so the
+  // buyer gets Google Places suggestions instead of a hollow "I've reached
+  // out" confirmation.
+  | { status: "no_match"; description: string }
   | { status: "error"; description: string };
 
 // A structured clarifying question from askClarifyingQuestionTool — the
@@ -171,7 +178,13 @@ export type BuyerRequestOffer =
 // the frontend never has to re-validate that itself.
 export type Clarification =
   | { kind: "text"; question: string }
-  | { kind: "choice"; question: string; options: string[] };
+  | { kind: "choice"; question: string; options: string[] }
+  // No options — the frontend renders a one-tap "share my location" action
+  // (real browser geolocation) plus a plain decline, not buttons built from
+  // model-supplied text. See systemPrompt.ts's location rule for when this
+  // fires: neither a named place nor a known device location exists for a
+  // search that needs one.
+  | { kind: "location"; question: string };
 
 // Build-order step d — /api/search streams a sequence of these as
 // newline-delimited JSON: zero or more "status" events while the model +

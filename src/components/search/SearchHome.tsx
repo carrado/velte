@@ -3,17 +3,15 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
 import { Loader2, Camera, X, Compass, ArrowUp } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { runSearchStream } from "@/lib/searchStream";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { VendorResultCard } from "@/components/search/VendorResultCard";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
+import { CardCarousel } from "@/components/search/CardCarousel";
 import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
 import { BuyerRequestOfferWidget } from "@/components/search/BuyerRequestOfferWidget";
 import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
@@ -21,10 +19,9 @@ import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { buyerApi } from "@/lib/buyer-api-client";
 import { useBuyerSession } from "@/hooks/useBuyerSession";
-import { getInitial } from "@/lib/initials";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
-import { useTypewriter } from "@/hooks/useTypewriter";
 import type {
+  BuyerLocation,
   BuyerRequestOffer,
   Clarification,
   MatchQuality,
@@ -137,69 +134,97 @@ function storesHeading(
     : "Vendors near you";
 }
 
-// A store card plus its own "Matching service" companion(s), if any — shared
-// between the "near you" and "also available further out" sections so a
-// service listing that backs up the buyer's search shows up under EITHER
-// bucket's store, not just the near-you one. Rendered as a direct grid item
-// of its parent (see the `grid` container around each `.map()` call below),
-// not its own single-item grid — a store WITH attached services spans every
-// column (the thread of service cards underneath needs the full row's
-// width and doesn't tile into a fixed-width column), everything else sits
-// as one normal grid cell alongside its siblings.
+// A store card, plus the "View matching service(s)" link when this store
+// has any (see StoreResultCard's own props) — the thread panel itself is
+// NOT rendered here anymore (2026-08-16, carousel rework): a carousel slide
+// is only ~260-280px wide, nowhere near enough for the thread's own layout,
+// so the panel now renders once, full-width, below the whole carousel (see
+// MatchingServicesThread + its call sites) rather than cramped inside a
+// slide. This wrapper just forwards the open/toggle state through to the
+// card's own link.
 function StoreWithServices({
   store,
   services,
   searchQuery,
+  isServicesOpen,
+  onToggleServices,
 }: {
   store: StoreMatch;
   services: VendorMatch[];
   searchQuery: string | null;
+  isServicesOpen: boolean;
+  onToggleServices: () => void;
 }) {
-  const hasServices = services.length > 0;
   return (
-    <div
-      className={cn("space-y-3", hasServices && "sm:col-span-2 lg:col-span-3")}
-    >
-      <StoreResultCard match={store} searchQuery={searchQuery} />
-      {services.length > 0 && (
-        <div className="mt-3">
-          <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1 pl-9">
-            {services.length === 1 ? "Matching service" : "Matching services"}
-          </p>
-          {services.map((svc, i) => {
-            const isLast = i === services.length - 1;
-            return (
-              <div key={svc.productId} className="flex">
-                {/* Thread trunk column — stretches to the card's own height
-                    (flex row default align-items: stretch), so top-1/2 here
-                    always lands on that card's actual vertical center, no
-                    fixed pixel math. Line above the center connects up to
-                    the previous item (or the heading, for the first one);
-                    line below is omitted past the last item so the trunk
-                    visibly terminates instead of trailing off. The branch +
-                    node sit at that same center, reaching sideways into the
-                    card — the actual "this hangs off the thread" cue, not
-                    just a rail running past it. */}
-                <div className="w-8 shrink-0 relative">
-                  <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-1/2 w-px bg-orange-200" />
-                  {!isLast && (
-                    <div className="absolute left-1/2 -translate-x-1/2 top-1/2 bottom-0 w-px bg-orange-200" />
-                  )}
-                  <div className="absolute left-1/2 top-1/2 -translate-y-1/2 w-5 h-px bg-orange-200" />
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-orange-400 ring-4 ring-orange-50" />
-                </div>
-                <div className="flex-1 min-w-0 max-w-xs pb-3">
-                  <VendorResultCard
-                    match={svc}
-                    showViewStore={false}
-                    showChatButton={false}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <StoreResultCard
+      match={store}
+      searchQuery={searchQuery}
+      matchingServicesCount={services.length}
+      matchingServicesOpen={isServicesOpen}
+      onToggleMatchingServices={
+        services.length > 0 ? onToggleServices : undefined
+      }
+    />
+  );
+}
+
+// The "matching services" thread itself — exact same trunk/branch/node
+// visual as before the carousel rework, just re-parented: it used to sit
+// directly under its one store card (guaranteed adjacent, since stores
+// rendered in a plain stacked/grid layout); now that stores scroll
+// horizontally, the card that opened this can be scrolled anywhere in the
+// row, so visual adjacency can't carry the "this belongs to that store"
+// context anymore — the heading now names the store explicitly instead.
+// `panelRef` is what ConversationTurnView scrolls into view on open (see
+// its own effect) for a buyer whose card-click has this panel appearing
+// below their current scroll position.
+function MatchingServicesThread({
+  storeName,
+  services,
+  panelRef,
+}: {
+  storeName: string;
+  services: VendorMatch[];
+  panelRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  return (
+    <div ref={panelRef} className="pl-1">
+      <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1 pl-9">
+        {services.length === 1 ? "Matching service" : "Matching services"} —{" "}
+        {storeName}
+      </p>
+      {services.map((svc, i) => {
+        const isLast = i === services.length - 1;
+        return (
+          <div key={svc.productId} className="flex">
+            {/* Thread trunk column — stretches to the card's own height
+                (flex row default align-items: stretch), so top-1/2 here
+                always lands on that card's actual vertical center, no
+                fixed pixel math. Line above the center connects up to
+                the previous item (or the heading, for the first one);
+                line below is omitted past the last item so the trunk
+                visibly terminates instead of trailing off. The branch +
+                node sit at that same center, reaching sideways into the
+                card — the actual "this hangs off the thread" cue, not
+                just a rail running past it. */}
+            <div className="w-8 shrink-0 relative">
+              <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-1/2 w-px bg-orange-200" />
+              {!isLast && (
+                <div className="absolute left-1/2 -translate-x-1/2 top-1/2 bottom-0 w-px bg-orange-200" />
+              )}
+              <div className="absolute left-1/2 top-1/2 -translate-y-1/2 w-5 h-px bg-orange-200" />
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-orange-400 ring-4 ring-orange-50" />
+            </div>
+            <div className="flex-1 min-w-0 max-w-xs pb-3">
+              <VendorResultCard
+                match={svc}
+                showViewStore={false}
+                showChatButton={false}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -225,6 +250,23 @@ function renderInlineBold(text: string, keyPrefix: string): React.ReactNode[] {
   );
 }
 
+// Shared by paragraph blocks and list items alike — a block/item can itself
+// span multiple source lines (see the "\n"-joined continuation lines pushed
+// in the parse loop below), so both need the same "one <br/> per embedded
+// newline, bold parsed within each line" treatment rather than duplicating
+// it per call site.
+function renderMultilineBold(
+  text: string,
+  keyPrefix: string,
+): React.ReactNode[] {
+  return text.split("\n").map((line, j) => (
+    <span key={`${keyPrefix}-${j}`}>
+      {j > 0 && <br />}
+      {renderInlineBold(line, `${keyPrefix}-${j}`)}
+    </span>
+  ));
+}
+
 // Three distinct literal discriminants, not "ul" | "ol" grouped into one
 // member — a shared discriminant value doesn't narrow cleanly through
 // sequential `if (block.type === ...)` checks below.
@@ -236,7 +278,13 @@ type ReplyBlock =
 function FormattedReply({ text }: { text: string }) {
   const blocks: ReplyBlock[] = [];
   for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
+    // Strips a leading markdown heading marker ("#" through "######") if
+    // the model writes one anyway despite the system prompt saying never
+    // to (found live) — there's no heading treatment to render it AS, so
+    // this just degrades to a plain line rather than leaving literal "#"
+    // characters visible, same defensive spirit as renderInlineBold below
+    // handling "**bold**" instead of trusting the model never to send it.
+    const line = rawLine.trim().replace(/^#{1,6}\s+/, "");
     if (!line) continue;
 
     const bulletMatch = /^[-*•]\s+(.*)$/.exec(line);
@@ -251,19 +299,29 @@ function FormattedReply({ text }: { text: string }) {
       else blocks.push({ type: "ol", items: [numberedMatch[1]] });
     } else if (last?.type === "p") {
       last.lines.push(line);
+    } else if (last?.type === "ul" || last?.type === "ol") {
+      // A plain line right after a list item is that item's OWN
+      // continuation (a sub-detail on its own line), not a new paragraph —
+      // append it to the last item instead of starting a stray "p" block.
+      // Ending the list here would split a single numbered/bulleted list
+      // into two separate <ol>/<ul> elements, and since each one numbers
+      // itself independently (list-decimal), the second list would render
+      // starting back at "1." instead of continuing the count — exactly the
+      // "every item shows 1" bug this avoids.
+      last.items[last.items.length - 1] += `\n${line}`;
     } else {
       blocks.push({ type: "p", lines: [line] });
     }
   }
 
   return (
-    <div className="text-[15px] text-gray-700 leading-relaxed space-y-2">
+    <div className="text-[15px] sm:text-base text-gray-800 leading-7 space-y-3">
       {blocks.map((block, i) => {
         if (block.type === "ul") {
           return (
             <ul key={i} className="list-disc pl-5 space-y-1">
               {block.items.map((item, j) => (
-                <li key={j}>{renderInlineBold(item, `${i}-${j}`)}</li>
+                <li key={j}>{renderMultilineBold(item, `${i}-${j}`)}</li>
               ))}
             </ul>
           );
@@ -272,20 +330,13 @@ function FormattedReply({ text }: { text: string }) {
           return (
             <ol key={i} className="list-decimal pl-5 space-y-1">
               {block.items.map((item, j) => (
-                <li key={j}>{renderInlineBold(item, `${i}-${j}`)}</li>
+                <li key={j}>{renderMultilineBold(item, `${i}-${j}`)}</li>
               ))}
             </ol>
           );
         }
         return (
-          <p key={i}>
-            {block.lines.map((line, j) => (
-              <span key={j}>
-                {j > 0 && <br />}
-                {renderInlineBold(line, `${i}-${j}`)}
-              </span>
-            ))}
-          </p>
+          <p key={i}>{renderMultilineBold(block.lines.join("\n"), `${i}`)}</p>
         );
       })}
     </div>
@@ -373,13 +424,40 @@ function ConversationTurnView({
   turn,
   isLatest,
   onAnswerClarification,
+  onLocationShared,
   onBuyerRequestResolved,
+  expandedServicesVendorId,
+  onToggleServices,
 }: {
   turn: ConversationTurn;
   isLatest: boolean;
   onAnswerClarification: (text: string) => void;
+  onLocationShared: (location: BuyerLocation) => void;
   onBuyerRequestResolved: (offer: BuyerRequestOffer) => void;
+  // Which store's "matching services" panel is open, if any, across the
+  // WHOLE conversation, not just this turn — lifted up to SearchHome (see
+  // its own comment) so opening one on any turn closes whichever was open
+  // on any other, rather than each turn tracking its own independently and
+  // leaving an earlier turn's panel visibly stuck open.
+  expandedServicesVendorId: string | null;
+  onToggleServices: (vendorId: string) => void;
 }) {
+  // Scrolls the panel into view the moment it opens — a buyer who clicked
+  // "View matching services" on a card scrolled into the middle of a
+  // carousel, or who's scrolled the page itself away from where the panel
+  // renders (below the whole carousel row), would otherwise see nothing
+  // happen. `block: "nearest"` rather than "center"/"start" — just enough
+  // to bring it on screen, not a jarring re-center of the whole page.
+  const servicesThreadRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (expandedServicesVendorId) {
+      servicesThreadRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [expandedServicesVendorId]);
+
   return (
     <div className="space-y-4">
       {/* The buyer's own message — right-aligned, shaded with the app's
@@ -387,7 +465,7 @@ function ConversationTurnView({
           its own row with an avatar, plain text/cards rather than a bubble —
           same structure as ChatGPT's thread. */}
       <div className="flex justify-end">
-        <div className="max-w-[85%] sm:max-w-[70%] bg-orange-50 border border-orange-100 rounded-3xl rounded-br-lg px-4 py-2.5 flex items-start gap-2.5">
+        <div className="max-w-[85%] sm:max-w-[75%] bg-orange-100/70 rounded-3xl px-4 py-2.5 flex items-start gap-2.5">
           {turn.imagePreview && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -397,7 +475,7 @@ function ConversationTurnView({
             />
           )}
           {turn.query && (
-            <p className="text-[15px] text-[#023337] leading-relaxed">
+            <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed">
               {turn.query}
             </p>
           )}
@@ -411,13 +489,14 @@ function ConversationTurnView({
         <img
           src="/velte_ai_assistant.png"
           alt="Velte"
-          className="w-8 h-8 rounded-full object-cover shrink-0"
+          className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shrink-0"
         />
         <div className="flex-1 min-w-0 pt-0.5">
           {turn.phase === "loading" && (
-            <div className="flex items-center gap-2 text-sm text-gray-500 animate-pulse min-w-0">
-              <Loader2 size={15} className="animate-spin shrink-0" />
-              <span className="truncate min-w-0">{turn.status}</span>
+            <div className="min-w-0">
+              <span className="status-shimmer block truncate text-[15px] font-medium">
+                {turn.status}
+              </span>
             </div>
           )}
 
@@ -438,39 +517,48 @@ function ConversationTurnView({
                         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                           From {turn.vendorProductsStore.name}
                         </h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {turn.vendorProducts.map((item) => (
+                        {turn.vendorProducts.length > 1 ? (
+                          <CardCarousel
+                            items={turn.vendorProducts}
+                            getKey={(item) => item.productId}
+                            renderItem={(item) => (
+                              <StoreProductCard
+                                match={item}
+                                storeName={turn.vendorProductsStore!.name}
+                                storeWhatsapp={
+                                  turn.vendorProductsStore!.whatsapp
+                                }
+                                vendorId={turn.vendorProductsStore!.vendorId}
+                              />
+                            )}
+                          />
+                        ) : (
+                          <div className="max-w-[280px]">
                             <StoreProductCard
-                              key={item.productId}
-                              match={item}
-                              storeName={turn.vendorProductsStore!.name}
-                              storeWhatsapp={turn.vendorProductsStore!.whatsapp}
-                              vendorId={turn.vendorProductsStore!.vendorId}
+                              match={turn.vendorProducts[0]}
+                              storeName={turn.vendorProductsStore.name}
+                              storeWhatsapp={turn.vendorProductsStore.whatsapp}
+                              vendorId={turn.vendorProductsStore.vendorId}
                             />
-                          ))}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     )}
-                  {turn.products.length > 0 && (
-                    <div className="space-y-6">
-                      {(turn.stores.length > 0 ||
-                        (turn.productsMatchTier &&
-                          turn.productsMatchTier !== "local") ||
-                        turn.productsMatchQuality) && (
-                        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          {productsHeading(
-                            turn.productsMatchTier,
-                            turn.productsMatchQuality,
-                            turn.products,
-                          )}
-                        </h2>
-                      )}
-                      {groupProductsByVendor(
+                  {turn.products.length > 0 &&
+                    (() => {
+                      const groups = groupProductsByVendor(
                         turn.products,
                         turn.productStores,
-                      ).map((group) => (
-                        <div key={group.vendorId} className="space-y-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      );
+                      // Each group's own card content — product(s) + "Sold
+                      // by" companion — unchanged from before the carousel
+                      // rework, just stacked vertically (space-y-3) instead
+                      // of tiled in a responsive grid: once a group can sit
+                      // in its own fixed-width carousel slide, there's no
+                      // longer a row wide enough for 2-3 columns to matter.
+                      const renderGroup = (group: (typeof groups)[number]) => (
+                        <div className="space-y-3">
+                          <div className="space-y-3">
                             {group.products.map((match) => (
                               <VendorResultCard
                                 key={match.productId}
@@ -489,9 +577,7 @@ function ConversationTurnView({
                               <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
                                 Sold by
                               </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <StoreResultCard match={group.store} />
-                              </div>
+                              <StoreResultCard match={group.store} />
                             </div>
                           ) : (
                             // Service-only vendor group — no store card (see
@@ -510,22 +596,54 @@ function ConversationTurnView({
                             )
                           )}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                      return (
+                        <div className="space-y-3">
+                          {(turn.stores.length > 0 ||
+                            (turn.productsMatchTier &&
+                              turn.productsMatchTier !== "local") ||
+                            turn.productsMatchQuality) && (
+                            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                              {productsHeading(
+                                turn.productsMatchTier,
+                                turn.productsMatchQuality,
+                                turn.products,
+                              )}
+                            </h2>
+                          )}
+                          {groups.length > 1 ? (
+                            <CardCarousel
+                              items={groups}
+                              getKey={(group) => group.vendorId}
+                              renderItem={renderGroup}
+                              slideClassName="w-[280px] sm:w-[300px]"
+                            />
+                          ) : (
+                            <div className="max-w-[300px]">
+                              {renderGroup(groups[0])}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   {turn.weakProducts.length > 0 && (
                     <div className="space-y-3">
                       <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                         A couple more options — not an exact match
                       </h2>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {turn.weakProducts.map((match) => (
-                          <VendorResultCard
-                            key={match.productId}
-                            match={match}
-                          />
-                        ))}
-                      </div>
+                      {turn.weakProducts.length > 1 ? (
+                        <CardCarousel
+                          items={turn.weakProducts}
+                          getKey={(match) => match.productId}
+                          renderItem={(match) => (
+                            <VendorResultCard match={match} />
+                          )}
+                        />
+                      ) : (
+                        <div className="max-w-[280px]">
+                          <VendorResultCard match={turn.weakProducts[0]} />
+                        </div>
+                      )}
                     </div>
                   )}
                   {turn.stores.length > 0 && (
@@ -541,32 +659,80 @@ function ConversationTurnView({
                           )}
                         </h2>
                       )}
-                      <div
-                        className={cn(
-                          turn.stores.length > 1
-                            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start"
-                            : "space-y-5",
-                        )}
-                      >
-                        {turn.stores.map((store) => (
+                      {turn.stores.length > 1 ? (
+                        <CardCarousel
+                          items={turn.stores}
+                          getKey={(store) => store.storeId}
+                          renderItem={(store) => (
+                            <StoreWithServices
+                              store={store}
+                              services={turn.storeServices.filter(
+                                (s) => s.vendorId === store.vendorId,
+                              )}
+                              // Only when this is a pure vendor/store result
+                              // (no product attached) — a dual-intent turn
+                              // already has a product for the buyer to
+                              // reference instead.
+                              searchQuery={
+                                turn.products.length === 0
+                                  ? turn.storesQuery
+                                  : null
+                              }
+                              isServicesOpen={
+                                expandedServicesVendorId === store.vendorId
+                              }
+                              onToggleServices={() =>
+                                onToggleServices(store.vendorId)
+                              }
+                            />
+                          )}
+                        />
+                      ) : (
+                        // A lone result skips the carousel (nothing to
+                        // scroll to) but still caps to a normal card width
+                        // — matches the carousel's own slide width, so "1
+                        // result" and "many results" read as the same
+                        // design, not two different ones.
+                        <div className="max-w-[280px]">
                           <StoreWithServices
-                            key={store.storeId}
-                            store={store}
+                            store={turn.stores[0]}
                             services={turn.storeServices.filter(
-                              (s) => s.vendorId === store.vendorId,
+                              (s) => s.vendorId === turn.stores[0].vendorId,
                             )}
-                            // Only when this is a pure vendor/store result
-                            // (no product attached) — a dual-intent turn
-                            // already has a product for the buyer to
-                            // reference instead.
                             searchQuery={
                               turn.products.length === 0
                                 ? turn.storesQuery
                                 : null
                             }
+                            isServicesOpen={
+                              expandedServicesVendorId ===
+                              turn.stores[0].vendorId
+                            }
+                            onToggleServices={() =>
+                              onToggleServices(turn.stores[0].vendorId)
+                            }
                           />
-                        ))}
-                      </div>
+                        </div>
+                      )}
+                      {(() => {
+                        const activeStore = turn.stores.find(
+                          (s) => s.vendorId === expandedServicesVendorId,
+                        );
+                        const activeServices = activeStore
+                          ? turn.storeServices.filter(
+                              (s) => s.vendorId === activeStore.vendorId,
+                            )
+                          : [];
+                        if (!activeStore || activeServices.length === 0)
+                          return null;
+                        return (
+                          <MatchingServicesThread
+                            storeName={activeStore.name}
+                            services={activeServices}
+                            panelRef={servicesThreadRef}
+                          />
+                        );
+                      })()}
                     </div>
                   )}
                   {turn.furtherStores.length > 0 && (
@@ -574,28 +740,72 @@ function ConversationTurnView({
                       <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                         Also available further out
                       </h2>
-                      <div
-                        className={cn(
-                          turn.furtherStores.length > 1
-                            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start"
-                            : "space-y-5",
-                        )}
-                      >
-                        {turn.furtherStores.map((store) => (
+                      {turn.furtherStores.length > 1 ? (
+                        <CardCarousel
+                          items={turn.furtherStores}
+                          getKey={(store) => store.storeId}
+                          renderItem={(store) => (
+                            <StoreWithServices
+                              store={store}
+                              services={turn.storeServices.filter(
+                                (s) => s.vendorId === store.vendorId,
+                              )}
+                              searchQuery={
+                                turn.products.length === 0
+                                  ? turn.storesQuery
+                                  : null
+                              }
+                              isServicesOpen={
+                                expandedServicesVendorId === store.vendorId
+                              }
+                              onToggleServices={() =>
+                                onToggleServices(store.vendorId)
+                              }
+                            />
+                          )}
+                        />
+                      ) : (
+                        <div className="max-w-[280px]">
                           <StoreWithServices
-                            key={store.storeId}
-                            store={store}
+                            store={turn.furtherStores[0]}
                             services={turn.storeServices.filter(
-                              (s) => s.vendorId === store.vendorId,
+                              (s) =>
+                                s.vendorId === turn.furtherStores[0].vendorId,
                             )}
                             searchQuery={
                               turn.products.length === 0
                                 ? turn.storesQuery
                                 : null
                             }
+                            isServicesOpen={
+                              expandedServicesVendorId ===
+                              turn.furtherStores[0].vendorId
+                            }
+                            onToggleServices={() =>
+                              onToggleServices(turn.furtherStores[0].vendorId)
+                            }
                           />
-                        ))}
-                      </div>
+                        </div>
+                      )}
+                      {(() => {
+                        const activeStore = turn.furtherStores.find(
+                          (s) => s.vendorId === expandedServicesVendorId,
+                        );
+                        const activeServices = activeStore
+                          ? turn.storeServices.filter(
+                              (s) => s.vendorId === activeStore.vendorId,
+                            )
+                          : [];
+                        if (!activeStore || activeServices.length === 0)
+                          return null;
+                        return (
+                          <MatchingServicesThread
+                            storeName={activeStore.name}
+                            services={activeServices}
+                            panelRef={servicesThreadRef}
+                          />
+                        );
+                      })()}
                     </div>
                   )}
                 </>
@@ -616,34 +826,58 @@ function ConversationTurnView({
                 // false again that time).
                 <>
                   <FormattedReply text={turn.reply} />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {turn.externalStoreSuggestions.map((match) => (
+                  {turn.externalStoreSuggestions.length > 1 ? (
+                    <CardCarousel
+                      items={turn.externalStoreSuggestions}
+                      getKey={(match) => match.name + match.address}
+                      renderItem={(match) => (
+                        <ExternalBusinessCard match={match} />
+                      )}
+                    />
+                  ) : (
+                    <div className="max-w-[280px]">
                       <ExternalBusinessCard
-                        key={match.name + match.address}
-                        match={match}
+                        match={turn.externalStoreSuggestions[0]}
                       />
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </>
               ) : turn.buyerRequestOffer ? (
                 // createBuyerRequest ran this turn (see systemPrompt.ts) —
                 // real agent action, not a dead end, so this gets the same
                 // plain-reply treatment as the clarification branch below,
-                // never the "nothing found anywhere" Compass card.
+                // never the "nothing found anywhere" Compass treatment.
+                <FormattedReply text={turn.reply} />
+              ) : turn.buyerRequestOffered ? (
+                // offerBuyerRequest ran this turn (see offerBuyerRequestTool's
+                // own comment) — the model is actively making the reach-out
+                // offer in `reply`'s text right now. There's a real next step
+                // on the table (the buyer can say yes/no), so this is NOT a
+                // dead end either — same plain-reply treatment, not the
+                // "nothing found anywhere" Compass case below. Previously
+                // this fell all the way through to that case, which visually
+                // boxed a perfectly normal offer message as if the search had
+                // truly gone nowhere.
                 <FormattedReply text={turn.reply} />
               ) : !turn.toolCalled ? (
                 // The model asked a clarifying question instead of searching
                 // (see systemPrompt.ts) — a plain reply, same as the text above
-                // a result grid, never the "nothing found anywhere" card below:
+                // a result grid, never the "nothing found anywhere" case below:
                 // the conversation is still open, not a dead end.
                 <FormattedReply text={turn.reply} />
               ) : (
-                // A real search ran and came up completely empty — an AI
-                // suggestion card (spec §3.5), not a bare empty state.
-                <div className="flex items-start gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                // A real search ran and came up completely empty, with no
+                // further move on the table (no reach-out offer, no
+                // clarification) — genuinely nothing to show. Still just a
+                // message, not product/vendor cards, so it stays plain text
+                // like every other reply — a bordered/shadowed box here read
+                // as a card competing with the real result cards elsewhere on
+                // the page. The Compass icon alone (not a box around the
+                // text) is what marks this as the "nothing found" case.
+                <div className="flex items-start gap-2.5">
                   <Compass
-                    size={20}
-                    className="text-orange-500 shrink-0 mt-0.5"
+                    size={18}
+                    className="text-orange-400 shrink-0 mt-0.5"
                   />
                   <FormattedReply text={turn.reply} />
                 </div>
@@ -658,6 +892,7 @@ function ConversationTurnView({
                 <ClarificationPrompt
                   clarification={turn.clarification}
                   onAnswer={onAnswerClarification}
+                  onLocationShared={onLocationShared}
                 />
               )}
               {turn.buyerRequestOffer && isLatest && (
@@ -675,25 +910,12 @@ function ConversationTurnView({
   );
 }
 
-// The idle screen's own greeting, typed out by Velte (see useTypewriter)
-// before the buyer has said anything — introduces the assistant by name so
-// "Velte" isn't only ever a silent avatar next to replies.
+// The idle screen's own greeting — introduces the assistant by name so
+// "Velte" isn't only ever a silent avatar next to replies. Shown as plain,
+// static text (no typing animation).
 const VELUX_GREETING = "Hi, I'm Velte — what are you looking for?";
-// The bubble's second line — types out too (not just fades in), starting
-// only once the greeting above finishes, so the whole bubble reads as one
-// continuous message rather than two independently-timed pieces of text.
 const VELUX_SUBTEXT =
   "Describe it in your own words or a photo — I'll match it against real vendor inventory nearby, ranked by meaning, distance and trust. Never guessed, never invented.";
-// Slower than the reply typewriter's default (14ms) — this is a one-time
-// greeting meant to be read deliberately, not a results reply where a
-// buyer's already waited through the search itself and just wants the text
-// to catch up.
-const VELUX_GREETING_TYPING_SPEED_MS = 55;
-// A beat before Velte starts typing at all — the avatar and empty bubble
-// appear first, THEN typing begins, rather than text starting the instant
-// the page is ready. Reads as Velte actually pausing to "think" before
-// speaking, not a page element popping in mid-sentence.
-const VELUX_TYPING_START_DELAY_MS = 700;
 
 // Velte's buyer-facing search (build-order step d/e), at /chat —
 // `/` is now the marketing homepage. Structured as a conversation: each
@@ -716,8 +938,19 @@ export function SearchHome() {
   const [query, setQuery] = useState("");
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const isSending = turns.some((t) => t.phase === "loading");
-  const userDetails = useUserStore((state) => state.user);
   const { buyer } = useBuyerSession();
+
+  // Which store's "matching services" panel is open, if any — across the
+  // WHOLE conversation, not per turn (see ConversationTurnView's own
+  // comment on why this lives here and not lower): at most one open at a
+  // time, so opening one on any turn closes whichever was open on any
+  // other turn, not just within the same one.
+  const [expandedServicesVendorId, setExpandedServicesVendorId] = useState<
+    string | null
+  >(null);
+  function toggleServices(vendorId: string) {
+    setExpandedServicesVendorId((cur) => (cur === vendorId ? null : vendorId));
+  }
   // null until either a resumed conversation is loaded (from ?c=) or the
   // first successful save assigns one — every save after that updates the
   // SAME conversation instead of creating a new one each turn.
@@ -759,39 +992,17 @@ export function SearchHome() {
     prevTurnCountRef.current = turns.length;
   }, [turns.length]);
 
-  // Location functionality is stepped down for now (product decision — see
-  // git history for the previous browser-geolocation implementation:
-  // permission-gated LocationPermissionModal + getBuyerLocationOnce, both
-  // removed here). Buyers just search and get results; the backend already
-  // treats buyerLocation as optional and falls back to a named location in
-  // the query text or a nationwide search when it's absent (see
-  // resolveBuyerCoords.ts / route.ts), so this is a safe no-op, not a
-  // half-implemented feature.
-  //
-  // A further beat before Velte starts typing its greeting — the
-  // avatar/bubble render immediately, but typing itself only starts after
-  // VELUX_TYPING_START_DELAY_MS, not the instant the page is ready.
-  const [startGreetingTyping, setStartGreetingTyping] = useState(false);
-  useEffect(() => {
-    const id = setTimeout(
-      () => setStartGreetingTyping(true),
-      VELUX_TYPING_START_DELAY_MS,
-    );
-    return () => clearTimeout(id);
-  }, []);
-  const greeting = useTypewriter(
-    startGreetingTyping ? VELUX_GREETING : "",
-    VELUX_GREETING_TYPING_SPEED_MS,
-  );
-  const greetingDone = greeting.length === VELUX_GREETING.length;
-  // Held back to "" until the greeting above finishes — useTypewriter
-  // starts counting the moment it receives non-empty text, so gating the
-  // input itself (rather than just gating where the output is shown) is
-  // what actually delays this line's typing until the greeting is done.
-  const subtext = useTypewriter(
-    greetingDone ? VELUX_SUBTEXT : "",
-    VELUX_GREETING_TYPING_SPEED_MS,
-  );
+  // Set once the buyer actually shares their location via a "location"
+  // clarification (see handleLocationShared) — never requested up front on
+  // page load (the OLD permission-gated LocationPermissionModal +
+  // getBuyerLocationOnce, both removed 2026-08, see git history), only when
+  // the AI itself decides a specific search genuinely needs it (see
+  // systemPrompt.ts's location rule). A plain ref, not state: it's read
+  // fresh inside submitMessage on every call once set, so every later
+  // search this session reuses it automatically without re-rendering
+  // anything or asking again — same "device location known" treatment the
+  // backend already gives a real device location (resolveBuyerCoords.ts).
+  const buyerLocationRef = useRef<BuyerLocation | null>(null);
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -895,10 +1106,11 @@ export function SearchHome() {
       {
         message,
         imageUrl: currentImageUrl ?? undefined,
-        // buyerLocation intentionally omitted — location functionality is
-        // stepped down for now (see the comment above the greeting-typing
-        // effect). The backend resolves a named location from the query
-        // text, or falls back to a nationwide search, when it's absent.
+        // Undefined until the buyer actually shares their location (see
+        // buyerLocationRef's own comment) — the backend resolves a named
+        // location from the query text, or asks via a "location"
+        // clarification, when this is absent (see systemPrompt.ts).
+        buyerLocation: buyerLocationRef.current ?? undefined,
         history,
         recentStatuses: shownStatusesRef.current,
       },
@@ -1150,6 +1362,24 @@ export function SearchHome() {
     void submitMessage(text, null, null);
   }
 
+  // The "location" clarification's own answer path (LocationShareAction, via
+  // ClarificationPrompt) — sharing location isn't really a typed reply, but
+  // it's still just the buyer's next message from the conversation's point
+  // of view, so it goes through the exact same submitMessage as everything
+  // else. Two things happen: the coordinates get cached (buyerLocationRef,
+  // read fresh inside submitMessage) so THIS and every later search this
+  // session uses them automatically without asking again; and a short,
+  // honest visible message stands in for "I shared my location" — the
+  // buyer really did just do that, so it reads as their own turn rather
+  // than a fabricated one. The toast is the "let them know it worked"
+  // moment that doesn't depend on anything staying mounted (the widget
+  // itself unmounts the instant this appends a new turn).
+  function handleLocationShared(location: BuyerLocation) {
+    buyerLocationRef.current = location;
+    toast.success("Got your location!");
+    void submitMessage("📍 Shared my location", null, null);
+  }
+
   const lastTurn = turns[turns.length - 1];
   // Only the LATEST turn's clarification is actionable — once answered, a
   // new turn is appended and this naturally flips back to false.
@@ -1207,7 +1437,7 @@ export function SearchHome() {
                 ? "Ask a follow-up, or search for something else…"
                 : "e.g. 'Tecno fast charger near me'"
           }
-          className="w-full resize-none bg-transparent outline-none text-[15px] leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 max-h-40 overflow-y-auto disabled:opacity-50"
+          className="w-full resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 max-h-40 overflow-y-auto disabled:opacity-50"
         />
         <div className="flex items-center justify-between px-3 pb-3 pt-1">
           <input
@@ -1245,61 +1475,12 @@ export function SearchHome() {
   );
 
   return (
-    <div className="h-dvh bg-white flex flex-col overflow-hidden">
+    // `h-full`, not `h-dvh` — this is no longer the whole screen, just the
+    // content column beside chat/layout.tsx's own sidebar (that layout owns
+    // the actual viewport-height boundary now; ChatHeader replaced the
+    // <header> that used to live here). See chat/layout.tsx's own comment.
+    <div className="h-full bg-white flex flex-col overflow-hidden">
       <BuyerInstallPrompt />
-      <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-white border-b border-gray-100 z-10">
-        <Link href="/" className="shrink-0">
-          <Image
-            src="/velte_logo_esn5dj.png"
-            alt="Velte"
-            width={72}
-            height={35}
-            className="w-14 sm:w-[72px] h-auto"
-            priority
-          />
-        </Link>
-        {userDetails ? (
-          // A vendor who wandered in from their own dashboard — send them
-          // back to it (their wallet, specifically) rather than showing a
-          // CTA to sign up for an account they already have.
-          <Link
-            href={`/${userDetails.id}/wallet`}
-            className="flex items-center gap-2 min-w-0 pl-1 pr-2 sm:pr-3 py-1 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <div className="w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
-              {userDetails.avatar ? (
-                <img
-                  src={userDetails.avatar}
-                  alt="avatar"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span>
-                  {getInitial(userDetails.company?.name ?? userDetails.name)}
-                </span>
-              )}
-            </div>
-            <span className="max-w-[100px] sm:max-w-[160px] truncate text-xs sm:text-sm font-medium text-gray-800">
-              {userDetails.company?.name ?? userDetails.name}
-            </span>
-          </Link>
-        ) : (
-          <div className="flex items-center gap-1.5 sm:gap-4 text-sm font-medium shrink-0">
-            <Link
-              href="/auth/login"
-              className="text-gray-600 hover:text-gray-900 transition-colors px-2 py-2 sm:px-1 sm:py-0"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/auth/signup"
-              className="flex items-center h-8 sm:h-auto px-3 sm:px-4 sm:py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-semibold sm:font-medium transition-colors whitespace-nowrap"
-            >
-              Join
-            </Link>
-          </div>
-        )}
-      </header>
 
       {!collapsed ? (
         <main className="flex-1 flex flex-col items-center justify-center px-5">
@@ -1316,35 +1497,15 @@ export function SearchHome() {
               className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover shadow-md shadow-gray-300/40 shrink-0"
             />
             <div className="bg-white border border-gray-100 shadow-sm rounded-3xl rounded-tl-lg px-4 py-3 sm:px-5 sm:py-4 flex-1 min-w-0">
-              <h1 className="text-[16px] sm:text-lg font-semibold text-[#023337] leading-snug min-h-[1.4em]">
-                {greeting}
-                {!greetingDone && (
-                  <span className="inline-block w-[3px] h-[0.9em] ml-0.5 -mb-0.5 bg-orange-400 animate-pulse" />
-                )}
+              <h1 className="text-[16px] sm:text-lg font-semibold text-[#023337] leading-snug">
+                {VELUX_GREETING}
               </h1>
-              {greetingDone && (
-                <p className="text-gray-500 text-sm sm:text-[15px] leading-relaxed mt-1.5">
-                  {subtext}
-                  {subtext.length < VELUX_SUBTEXT.length && (
-                    <span className="inline-block w-[3px] h-[0.85em] ml-0.5 -mb-0.5 bg-orange-400 animate-pulse" />
-                  )}
-                </p>
-              )}
+              <p className="text-gray-500 text-sm sm:text-[15px] leading-relaxed mt-1.5">
+                {VELUX_SUBTEXT}
+              </p>
             </div>
           </div>
           <div className="w-full max-w-3xl">{inputForm}</div>
-          {/* Reciprocal to the "See more with AI search" / "Ask AI" CTAs on
-              the "/" homepage's browse sections — a buyer who lands here
-              directly (an ad, a bookmark, the Navbar CTA) without having
-              browsed first should have just as easy a way back the other
-              direction, not a dead end if AI search isn't what they wanted
-              after all. */}
-          <Link
-            href="/"
-            className="mt-5 text-xs sm:text-sm text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            Prefer to browse? See what&apos;s on the marketplace →
-          </Link>
         </main>
       ) : (
         <>
@@ -1358,6 +1519,9 @@ export function SearchHome() {
                   turn={turn}
                   isLatest={i === turns.length - 1}
                   onAnswerClarification={handleClarificationAnswer}
+                  onLocationShared={handleLocationShared}
+                  expandedServicesVendorId={expandedServicesVendorId}
+                  onToggleServices={toggleServices}
                   onBuyerRequestResolved={(offer) =>
                     updateTurn(turn.id, { buyerRequestOffer: offer })
                   }

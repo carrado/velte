@@ -13,7 +13,6 @@ import {
   Gift,
   Store,
   MessageSquare,
-  Users,
 } from "lucide-react";
 import { getInitial } from "@/lib/initials";
 import { walletApi } from "@/services/wallet";
@@ -89,12 +88,6 @@ export default function Sidebar() {
           id: "store-nav",
         },
         {
-          label: "Followers",
-          icon: <Users size={16} />,
-          href: "store/followers",
-          id: "followers-nav",
-        },
-        {
           label: "Buyer Requests",
           icon: <MessageSquare size={16} />,
           href: "buyer-requests",
@@ -147,17 +140,23 @@ export default function Sidebar() {
   return (
     <aside className="hidden lg:flex w-[260px] h-full bg-white flex-col border-r border-gray-200 overflow-y-auto flex-shrink-0">
       <div className="flex items-center px-4 py-2 h-[70px] border-b border-gray-200">
-        <div className="flex gap-1.5 -ml-4">
+        <div className="flex gap-1.5">
           {/* Swapped off the stale Cloudinary-hosted copy (2026-08-14) —
               that upload predates the local file's crop, so it still had
               the old ~40%-empty-margin version baked in. The local
               /public asset is the single source of truth for this logo
-              everywhere else; this brings Sidebar in line with that. */}
+              everywhere else; this brings Sidebar in line with that.
+              The `-ml-4` that used to sit here was compensating for that
+              old baked-in margin — with the properly-cropped local asset
+              it just dragged the logo past the row's own px-4 padding, up
+              against the sidebar's left edge (2026-08-17, reported too
+              close to the edge). Dropped now that there's nothing left to
+              compensate for. */}
           <img
             src="/velte_logo_esn5dj.png"
             alt="Velte logo"
-            width={72}
-            height={35}
+            width={56}
+            height={27}
           />
         </div>
       </div>
