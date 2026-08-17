@@ -168,6 +168,36 @@ button {
   animation: spin-slow 14s linear infinite;
 }
 
+/* ── /chat: ChatGPT/Claude-style shimmering status text ─────────────────────
+   A moving light/dark band sweeping across the status phrase (e.g.
+   "Searching for chargers near you…") instead of a spinner + static gray
+   line — matches how both ChatGPT and Claude render their in-progress
+   status/"thinking" text. */
+@keyframes status-shimmer-sweep {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+.status-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    rgba(107, 114, 128, 0.55) 0%,
+    rgba(107, 114, 128, 0.55) 38%,
+    rgba(17, 24, 39, 0.92) 50%,
+    rgba(107, 114, 128, 0.55) 62%,
+    rgba(107, 114, 128, 0.55) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: status-shimmer-sweep 2.2s ease-in-out infinite;
+}
+
 /* ── PWA: splash animation + installed-app chrome ──────────────────────────── */
 
 @keyframes splash-pop {

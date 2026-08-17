@@ -405,6 +405,31 @@ export function sendingRequestPhrase(): string[] {
   ];
 }
 
+// Client-side only, unlike every other function in this file — rotated by
+// ClarificationPrompt.tsx (via pickAvoiding, also exported above) while the
+// browser's own getCurrentPosition() call is in flight, so the "share my
+// location" button reads as actively working rather than frozen for
+// however many seconds that takes. Grouped here anyway rather than in a
+// separate module: same rotating-phrase voice/mechanism as everything else
+// in this file, just triggered by the browser's geolocation API instead of
+// a search tool call — nothing in this file needs a server-only capability,
+// so importing it into a "use client" component is safe.
+export function gettingLocationPhrase(): string[] {
+  return [
+    "Getting your location…",
+    "Finding out where you are…",
+    "Pinpointing your location…",
+    "Working out where you are…",
+    "Locating you now…",
+    "Checking your device's location…",
+    "One moment, getting your location…",
+    "Figuring out where you are…",
+    "Getting your coordinates…",
+    "Zeroing in on your location…",
+    "Just a moment — locating you…",
+  ];
+}
+
 // Sole status line for getVendorProductsTool — a plain lookup by handle
 // (see that file), not a ranked search, so there's nothing to report other
 // than "working on it."

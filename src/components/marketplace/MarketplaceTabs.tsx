@@ -26,12 +26,10 @@ export function MarketplaceTabs({
   items,
   vendors,
   renderProductSaveSlot,
-  renderVendorSaveSlot,
 }: {
   items: MarketplaceBrowseItem[];
   vendors: VendorPreviewItem[];
   renderProductSaveSlot?: (item: MarketplaceBrowseItem) => React.ReactNode;
-  renderVendorSaveSlot?: (vendor: VendorPreviewItem) => React.ReactNode;
 }) {
   const [active, setActive] = useState<Tab>("listings");
   const [search, setSearch] = useState("");
@@ -99,11 +97,7 @@ export function MarketplaceTabs({
           renderSaveSlot={renderProductSaveSlot}
         />
       ) : (
-        <VendorsGrid
-          vendors={vendors}
-          search={search}
-          renderSaveSlot={renderVendorSaveSlot}
-        />
+        <VendorsGrid vendors={vendors} search={search} />
       )}
     </div>
   );

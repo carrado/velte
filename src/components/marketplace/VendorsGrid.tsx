@@ -14,28 +14,18 @@ function matchesSearch(vendor: VendorPreviewItem, query: string): boolean {
 export function VendorsGrid({
   vendors,
   search = "",
-  renderSaveSlot,
 }: {
   vendors: VendorPreviewItem[];
   /** Defaults to "no filter" — only MarketplaceTabs passes this live (see
-   *  MarketplaceBrowse's own comment on the same pattern); the buyer Saved
-   *  page's already-curated "vendors you follow" list has no real use for
-   *  a name filter. */
+   *  MarketplaceBrowse's own comment on the same pattern). */
   search?: string;
-  /** Buyer Discover/Saved pages pass this to overlay a Follow SaveButton on
-   *  every card — the public /marketplace page omits it. */
-  renderSaveSlot?: (vendor: VendorPreviewItem) => React.ReactNode;
 }) {
   const filtered = vendors.filter((v) => matchesSearch(v, search));
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
       {filtered.map((vendor) => (
-        <VendorCard
-          key={vendor.vendorId}
-          item={vendor}
-          saveSlot={renderSaveSlot?.(vendor)}
-        />
+        <VendorCard key={vendor.vendorId} item={vendor} />
       ))}
       <AskVeluxCard subtext="Looking for a specific business? Ask Velte and we'll help you find them." />
     </div>

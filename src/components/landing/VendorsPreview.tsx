@@ -97,16 +97,7 @@ export function SlidingCover({
 // Exported — the /marketplace browse page reuses this directly (same
 // reasoning as MarketplacePreview's MarketplaceCard export: one card, not a
 // second copy that drifts).
-export function VendorCard({
-  item,
-  saveSlot,
-}: {
-  item: VendorPreviewItem;
-  /** Optional Follow-heart overlay (top-right of the cover strip) — same
-   *  opt-in pattern as MarketplaceCard's own saveSlot; every public caller
-   *  renders nothing here. */
-  saveSlot?: React.ReactNode;
-}) {
+export function VendorCard({ item }: { item: VendorPreviewItem }) {
   const chatHref = buildWhatsappLink(
     item.whatsapp,
     `Hi ${item.name}! I found your store on Velte.`,
@@ -144,9 +135,6 @@ export function VendorCard({
           image+name card like the product grid above. */}
       <div className="relative h-24 bg-gray-100 shrink-0">
         <SlidingCover images={item.gallery} name={item.name} />
-        {saveSlot && (
-          <div className="absolute top-2 right-2 z-10">{saveSlot}</div>
-        )}
       </div>
 
       {/* flex-1 + the button row's own mt-auto below (same pattern as

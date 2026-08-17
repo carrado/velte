@@ -14,11 +14,17 @@ export async function POST(req: Request) {
   if (!body) return jsonError(400, "A request payload is required.");
 
   try {
-    const { request } = await backendData<{ request: BuyerRequest }>(
-      "/buyer-requests",
-      { method: "POST", body, cookie: gate.cookie },
+    // Backend skips persisting anything when matching found zero vendors —
+    // `created: false`, no `request` (see createRequest's own comment) —
+    // rather than always creating a request nobody would ever see.
+    const { created, request } = await backendData<{
+      created: boolean;
+      request?: BuyerRequest;
+    }>("/buyer-requests", { method: "POST", body, cookie: gate.cookie });
+    return NextResponse.json(
+      { created, request: request ?? null },
+      { status: created ? 201 : 200 },
     );
-    return NextResponse.json({ request }, { status: 201 });
   } catch (err) {
     return fail(err, "Failed to post your request.");
   }

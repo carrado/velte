@@ -35,17 +35,33 @@ export function BuyerRequestOfferWidget({
   onResolved: (offer: BuyerRequestOffer) => void;
 }) {
   const [creating, setCreating] = useState(false);
+  // True only when THIS widget is what discovered "no_match" — after the
+  // buyer verified their phone (handleVerified below), a plain REST call,
+  // no AI turn involved, so `turn.reply` above still just says the old
+  // "I'll text you when someone responds" line and never mentions the
+  // outcome. Distinguishes that from a `no_match` arriving straight from
+  // the server-side tool call (an already-identified buyer's agreement
+  // turn), where the model's own reply text already explained it in full
+  // (see systemPrompt.ts's `no_match` handling, which re-searches and shows
+  // Google Places in that same turn) — rendering this component's own text
+  // there too would just repeat what the buyer already read above.
+  const [selfResolvedNoMatch, setSelfResolvedNoMatch] = useState(false);
 
   if (offer.status === "created") {
     return (
-      <div className="flex items-start gap-2.5 bg-green-50 border border-green-100 rounded-2xl px-4 py-3 max-w-md">
+      // No max-w here (deliberately) — a fixed cap made this confirmation
+      // the one message on the page with its own narrower column than
+      // everything around it. It's still a status card, not a plain reply,
+      // so it keeps its bg/border, just sized to the same width as
+      // everything else in the thread instead of a bespoke one.
+      <div className="flex items-start gap-2.5 bg-green-50 border border-green-100 rounded-2xl px-4 py-3">
         <CheckCircle2 size={17} className="text-green-600 shrink-0 mt-0.5" />
         <div className="text-sm text-green-800">
           <p className="font-medium">Request sent.</p>
           <p className="text-green-700/80">
             I&apos;ll let you know the moment a business responds.{" "}
             <Link
-              href={`/buyer/requests/${offer.requestId}`}
+              href={`/chat/requests/${offer.requestId}`}
               className="underline font-medium"
             >
               View request
@@ -56,22 +72,49 @@ export function BuyerRequestOfferWidget({
     );
   }
 
-  if (offer.status === "error") {
+  if (offer.status === "no_match") {
+    // Only render something when THIS widget is the one that found out (see
+    // selfResolvedNoMatch's own comment) — otherwise the turn's own reply
+    // above already said it, and this would just repeat it. A plain
+    // message, not a card, same reasoning as every other pure-text reply in
+    // this thread. No auto-retry here: rather than silently resending the
+    // buyer's own words as a synthetic message (risking the AI re-offering
+    // the exact same reach-out in a loop), this stays honest and hands
+    // control back — the always-visible composer below is already the
+    // "search again" path.
+    if (!selfResolvedNoMatch) return null;
     return (
-      <p className="text-sm text-red-600">
-        Couldn&apos;t send your request just now — say &quot;try again&quot; and
-        I&apos;ll give it another go.
+      <p className="text-sm text-gray-500">
+        Couldn&apos;t find any businesses to reach out to for that just now —
+        new vendors join often, so it&apos;s worth trying again later.
       </p>
     );
+  }
+
+  if (offer.status === "error") {
+    // The model's own reply above already apologizes and offers to retry
+    // (see systemPrompt.ts's `status: "error"` handling) — a second, red
+    // "couldn't send" line repeating that in a different voice/color read
+    // as a broken, inconsistent UI rather than one assistant talking.
+    // Nothing further to render here.
+    return null;
   }
 
   async function handleVerified() {
     setCreating(true);
     try {
-      const { request } = await buyerApi.post<{ request: { id: string } }>(
-        "/api/buyer-requests",
-        { description: offer.description, imageUrl: imageUrl ?? null },
-      );
+      const { created, request } = await buyerApi.post<{
+        created: boolean;
+        request: { id: string } | null;
+      }>("/api/buyer-requests", {
+        description: offer.description,
+        imageUrl: imageUrl ?? null,
+      });
+      if (!created || !request) {
+        setSelfResolvedNoMatch(true);
+        onResolved({ status: "no_match", description: offer.description });
+        return;
+      }
       onResolved({
         status: "created",
         requestId: request.id,

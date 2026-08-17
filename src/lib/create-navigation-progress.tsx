@@ -30,13 +30,16 @@ export interface NavigationProgressConfig {
   normalizeHref: (href: string, pathname: string) => string;
 }
 
-/** Factory behind both NavigationProgressContext (vendor dashboard,
- *  /[id]/*) and BuyerNavigationProgressContext (buyer dashboard, /buyer/*)
- *  — same "prefetch the next page's data before pushing, with a real top
- *  progress bar driven by that prefetch's own progress" behavior, just
- *  pointed at each tree's own routes/query keys via `config`. Extracted
- *  here instead of copy-pasting the whole provider a second time, which
- *  would inevitably drift from the original as either tree evolves. */
+/** Factory behind NavigationProgressContext (vendor dashboard, /[id]/*) —
+ *  "prefetch the next page's data before pushing, with a real top progress
+ *  bar driven by that prefetch's own progress," pointed at that tree's own
+ *  routes/query keys via `config`. Kept as its own factory (not inlined
+ *  into NavigationProgressContext directly) since it also backed
+ *  BuyerNavigationProgressContext until the buyer dashboard was removed
+ *  (2026-08-17, /chat became the buyer shell instead, using plain
+ *  next/link/useRouter — see chat/layout.tsx) — reusable again the moment
+ *  a second tree needs the same behavior, without copy-pasting the whole
+ *  provider a second time. */
 export function createNavigationProgress(config: NavigationProgressConfig) {
   const NavigationContext = createContext<NavigationContextValue>({
     navigate: () => {},

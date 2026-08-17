@@ -47,18 +47,27 @@ export function createBuyerRequestTool(
       }
       push?.(sendingRequestPhrase());
       try {
-        const { request } = await backendData<{ request: { id: string } }>(
-          "/buyer-requests",
-          {
-            method: "POST",
-            cookie: buyerAuth.cookie,
-            body: {
-              description,
-              imageUrl: imageUrl ?? null,
-              ...(buyerLocation && { location: buyerLocation }),
-            },
+        // Backend now skips persisting anything when matching found zero
+        // vendors (see createRequest's own comment) — `created: false`, no
+        // `request`. Surfacing that as its own status rather than a fake
+        // "created" lets systemPrompt.ts tell the buyer the truth and fall
+        // back to a fresh search (Google Places) in the SAME turn, instead
+        // of promising an outreach that reached nobody.
+        const { created, request } = await backendData<{
+          created: boolean;
+          request?: { id: string };
+        }>("/buyer-requests", {
+          method: "POST",
+          cookie: buyerAuth.cookie,
+          body: {
+            description,
+            imageUrl: imageUrl ?? null,
+            ...(buyerLocation && { location: buyerLocation }),
           },
-        );
+        });
+        if (!created || !request) {
+          return { status: "no_match", description };
+        }
         return { status: "created", description, requestId: request.id };
       } catch (err) {
         console.error("[createBuyerRequest] failed:", err);
