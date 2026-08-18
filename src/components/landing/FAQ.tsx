@@ -3,12 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
-// Icon from Phosphor (2026-08-16, swapped from lucide-react for this
-// session's pages only — see MobileMenu.tsx's comment).
-import { ArrowRight } from "@phosphor-icons/react";
 import { homepageFaqs } from "@/lib/faqs";
 import FaqAccordionItem from "@/components/landing/FaqAccordionItem";
 import type { FaqSectionImage } from "@/types/common";
+import { ArrowRightIcon } from "@/components/icons";
 
 const stagger = {
   hidden: {},
@@ -108,7 +106,7 @@ export default function FAQ() {
                 className="inline-flex items-center gap-1.5 border border-orange-200 bg-orange-50 hover:border-orange-300 hover:bg-orange-100 text-orange-600 font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
               >
                 View all FAQs
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRightIcon className="w-3.5 h-3.5" />
               </Link>
             </motion.div>
           </div>

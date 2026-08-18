@@ -7,12 +7,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import Image from "next/image";
 import { passwordApi } from "@/services/password";
+import { ArrowRightIcon, MailIcon } from "@/components/icons";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -121,7 +121,7 @@ export default function ForgotPassword() {
                 {(field) => (
                   <div>
                     <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                      <Mail className="w-3.5 h-3.5 text-orange-400" />
+                      <MailIcon className="w-3.5 h-3.5 text-orange-400" />
                       Email
                     </Label>
                     <Input
@@ -153,7 +153,7 @@ export default function ForgotPassword() {
                       ? "Sending..."
                       : "Send OTP"}
                     {!isSubmitting && !forgotMutation.isPending && (
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRightIcon className="w-4 h-4" />
                     )}
                   </Button>
                 )}

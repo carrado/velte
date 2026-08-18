@@ -3,8 +3,8 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { ArrowRight } from "@phosphor-icons/react";
 import { goAskVelte } from "@/lib/askVelte";
+import { ArrowRightIcon } from "@/components/icons";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 18 },
@@ -54,7 +54,7 @@ export function FinalAskCta() {
             className="shrink-0 inline-flex items-center gap-1.5 pl-4 pr-3.5 h-10 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors cursor-pointer"
           >
             Ask
-            <ArrowRight size={15} />
+            <ArrowRightIcon size={18} />
           </button>
         </form>
       </motion.div>

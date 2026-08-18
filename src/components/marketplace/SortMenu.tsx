@@ -1,9 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowsDownUp, CaretDown, Check } from "@phosphor-icons/react";
 import AnchoredPopover from "@/components/AnchoredPopover";
 import { cn } from "@/lib/utils";
+import {
+  ArrowUpDownIcon,
+  CheckIcon,
+  ChevronDownIcon,
+} from "@/components/icons";
 
 export type SortOrder = "relevance" | "price-asc" | "price-desc";
 
@@ -46,9 +50,9 @@ export function SortMenu({
         aria-expanded={open}
         className="shrink-0 inline-flex items-center gap-1.5 h-11 px-3.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:border-gray-300 transition-colors cursor-pointer"
       >
-        <ArrowsDownUp size={14} className="text-gray-400" />
+        <ArrowUpDownIcon size={14} className="text-gray-400" />
         Sort
-        <CaretDown
+        <ChevronDownIcon
           size={12}
           className={cn(
             "text-gray-400 transition-transform",
@@ -76,7 +80,7 @@ export function SortMenu({
             >
               {opt.label}
               {opt.value === value && (
-                <Check size={14} className="text-orange-600 shrink-0" />
+                <CheckIcon size={14} className="text-orange-600 shrink-0" />
               )}
             </button>
           ))}

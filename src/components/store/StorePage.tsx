@@ -2,21 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Store as StoreIcon,
-  ExternalLink,
-  Copy,
-  Loader2,
-  ImagePlus,
-  X,
-  CheckCircle2,
-  FileText,
-  Tags,
-  MessageCircle,
-  Camera,
-  Sparkles,
-  Info,
-} from "lucide-react";
 import { toast } from "sonner";
 import { storeApi } from "@/services/store";
 import { settingsApi } from "@/services/settings";
@@ -30,6 +15,21 @@ import { DescriptionQualityMeter } from "@/components/DescriptionQualityMeter";
 import SectorMultiSelect from "@/components/sectors/SectorMultiSelect";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import type { Store } from "@/types/store";
+import {
+  CameraIcon,
+  CheckCircleIcon,
+  CloseIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
+  ImagePlusIcon,
+  InfoIcon,
+  LoaderIcon,
+  MessageCircleIcon,
+  SparklesIcon,
+  StoreIcon,
+  TagsIcon,
+} from "@/components/icons";
 
 const MAX_DESCRIPTION = 600;
 const MAX_GALLERY = 6;
@@ -278,7 +278,7 @@ export default function StorePage() {
                 }}
                 className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-dash-secondary font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 cursor-pointer w-full sm:w-auto"
               >
-                <Copy size={13} />
+                <CopyIcon size={13} />
                 Copy link
               </button>
               <ShareButton
@@ -293,7 +293,7 @@ export default function StorePage() {
                 rel="noreferrer"
                 className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-dash-secondary font-semibold border border-orange-200 bg-orange-50 rounded-lg text-orange-600 hover:bg-orange-100 w-full sm:w-auto"
               >
-                <ExternalLink size={13} />
+                <ExternalLinkIcon size={13} />
                 View store
               </a>
             </div>
@@ -304,7 +304,7 @@ export default function StorePage() {
         <div className="px-5 sm:px-6 py-4 bg-gray-50/60 border-t border-gray-100">
           {percent === 100 ? (
             <p className="flex items-center gap-2 text-dash-secondary font-medium text-green-600">
-              <CheckCircle2 size={15} />
+              <CheckCircleIcon size={15} />
               Your storefront is complete — buyers see the full picture.
             </p>
           ) : (
@@ -386,7 +386,7 @@ export default function StorePage() {
 
       {/* ── Sectors ────────────────────────────────────────────────────── */}
       <SectionCard
-        icon={Tags}
+        icon={TagsIcon}
         title="Sectors"
         hint="Pick up to 5 that describe your business — the same list as signup, editable here anytime."
       >
@@ -400,13 +400,16 @@ export default function StorePage() {
 
       {/* ── About ──────────────────────────────────────────────────────── */}
       <SectionCard
-        icon={FileText}
+        icon={FileTextIcon}
         title="What do you do?"
         hint="Our AI uses this to match buyers to you — even before you list anything."
       >
         {sectorsChanged && (
           <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-3">
-            <Info size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+            <InfoIcon
+              size={14}
+              className="text-amber-500 mt-0.5 flex-shrink-0"
+            />
             <p className="text-dash-caption text-amber-700">
               You changed your sectors — this description may not match anymore.
               Update it, or regenerate it with AI below.
@@ -438,9 +441,9 @@ export default function StorePage() {
             className="flex items-center gap-1 text-dash-caption font-medium text-orange-500 hover:text-orange-600 disabled:opacity-60 cursor-pointer"
           >
             {generateMutation.isPending ? (
-              <Loader2 size={12} className="animate-spin" />
+              <LoaderIcon size={12} className="animate-spin" />
             ) : (
-              <Sparkles size={12} />
+              <SparklesIcon size={12} />
             )}
             {generateMutation.isPending ? "Generating…" : "Ask AI to generate"}
           </button>
@@ -452,7 +455,7 @@ export default function StorePage() {
 
       {/* ── Contact ────────────────────────────────────────────────────── */}
       <SectionCard
-        icon={MessageCircle}
+        icon={MessageCircleIcon}
         title="WhatsApp number"
         hint="Buyers are handed off to this number to chat and close the deal."
       >
@@ -472,7 +475,7 @@ export default function StorePage() {
 
       {/* ── Photos ─────────────────────────────────────────────────────── */}
       <SectionCard
-        icon={Camera}
+        icon={CameraIcon}
         title="Showcase photos"
         hint={`Up to ${MAX_GALLERY} photos of your shop, work, or products.`}
       >
@@ -495,7 +498,7 @@ export default function StorePage() {
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-900/80 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-gray-900"
                 aria-label="Remove photo"
               >
-                <X size={11} />
+                <CloseIcon size={11} />
               </button>
             </div>
           ))}
@@ -506,10 +509,10 @@ export default function StorePage() {
               className="w-24 h-24 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-colors cursor-pointer disabled:opacity-50"
             >
               {uploading ? (
-                <Loader2 size={18} className="animate-spin" />
+                <LoaderIcon size={18} className="animate-spin" />
               ) : (
                 <>
-                  <ImagePlus size={18} />
+                  <ImagePlusIcon size={18} />
                   <span className="text-dash-caption">Add</span>
                 </>
               )}
@@ -560,7 +563,7 @@ export default function StorePage() {
                 className="flex items-center gap-2 px-4 py-2 text-dash-secondary font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {saveMutation.isPending && (
-                  <Loader2 size={13} className="animate-spin" />
+                  <LoaderIcon size={13} className="animate-spin" />
                 )}
                 Save changes
               </button>

@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import {
-  MapPin,
-  ShieldCheck,
-  Store as StoreIcon,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
 import { fmt } from "@/lib/product-price";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
@@ -19,6 +12,13 @@ import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import type { VendorMatch } from "@/types/search";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  MapPinIcon,
+  ShieldCheckIcon,
+  StoreIcon,
+} from "@/components/icons";
 
 export function VendorResultCard({
   match,
@@ -112,7 +112,7 @@ export function VendorResultCard({
               aria-label="Previous photo"
               className="absolute left-1.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-black/40 text-white"
             >
-              <ChevronLeft size={14} />
+              <ChevronLeftIcon size={14} />
             </button>
             <button
               type="button"
@@ -120,7 +120,7 @@ export function VendorResultCard({
               aria-label="Next photo"
               className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-black/40 text-white"
             >
-              <ChevronRight size={14} />
+              <ChevronRightIcon size={14} />
             </button>
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
               {images.map((url, i) => (
@@ -158,7 +158,7 @@ export function VendorResultCard({
           </p>
         )}
         <div className="flex items-center gap-1.5 text-xs text-gray-500">
-          <MapPin size={13} className="shrink-0" />
+          <MapPinIcon size={13} className="shrink-0" />
           <span className="truncate">
             {match.area ??
               match.state ??
@@ -188,7 +188,7 @@ export function VendorResultCard({
         )}
         <div className="flex items-center justify-between gap-2 pt-1">
           <div className="flex items-center gap-1 text-xs text-gray-500 min-w-0">
-            <ShieldCheck size={13} className="shrink-0 text-orange-500" />
+            <ShieldCheckIcon size={13} className="shrink-0 text-orange-500" />
             <span className="truncate">{match.vendorName}</span>
           </div>
         </div>

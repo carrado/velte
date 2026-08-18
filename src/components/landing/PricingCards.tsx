@@ -2,8 +2,8 @@
 
 import { motion } from "motion/react";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SparklesIcon } from "@/components/icons";
 
 /**
  * Velte drops subscription tiers for pay-per-lead — there's no fixed
@@ -33,7 +33,7 @@ export default function PricingCards({
         }`}
       >
         <div className="w-12 h-12 rounded-2xl bg-[rgb(247,107,16)]/10 flex items-center justify-center mx-auto mb-5">
-          <Sparkles className="w-5 h-5 text-[rgb(247,107,16)]" />
+          <SparklesIcon className="w-5 h-5 text-[rgb(247,107,16)]" />
         </div>
         <h3
           className={`text-2xl font-bold tracking-tight mb-3 ${

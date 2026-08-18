@@ -3,8 +3,9 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Camera, X, Compass, ArrowUp } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { generateUUID } from "@/lib/uuid";
 import { runSearchStream } from "@/lib/searchStream";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { VendorResultCard } from "@/components/search/VendorResultCard";
@@ -17,8 +18,6 @@ import { BuyerRequestOfferWidget } from "@/components/search/BuyerRequestOfferWi
 import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
-import { buyerApi } from "@/lib/buyer-api-client";
-import { useBuyerSession } from "@/hooks/useBuyerSession";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import type {
   BuyerLocation,
@@ -32,7 +31,12 @@ import type {
   StoreProductItem,
   VendorMatch,
 } from "@/types/search";
-import type { BuyerConversation } from "@/types/buyerConversation";
+import { CompassIcon, MapPinIcon } from "@/components/icons";
+// Composer icons only (upload spinner, remove-photo, camera, send) are
+// lucide-react, not the custom set — reverted 2026-08-17 per explicit
+// request, scoped to just this textarea; every other icon on this page
+// stays on @/components/icons. See [[custom_icon_system]].
+import { ArrowUp, Camera, Loader2, X } from "lucide-react";
 
 // `products` decides the noun: a pure service turn (e.g. "haircut near me")
 // shouldn't be headed "Products", and a turn can genuinely mix both kinds
@@ -42,6 +46,14 @@ import type { BuyerConversation } from "@/types/buyerConversation";
 // Mirrors route.ts's own RECENT_STATUS_MEMORY cap — see shownStatusesRef's
 // comment below for why the client tracks this at all.
 const RECENT_STATUS_MEMORY = 8;
+
+// Shared background for every pure-text AI message — clarifying questions,
+// the "nothing found" dead end, the buyer-request offer/confirmation — but
+// deliberately NOT the result cards (products/stores/vendors stay exactly
+// as they render today, unboxed). Matches slate-100/#F1F5F9, the app's
+// existing light-surface token, so it reads as "a message from Velte" set
+// against the plain white chat background, not a competing card style.
+const AI_MESSAGE_BUBBLE_CLASS = "bg-slate-100 rounded-2xl px-4 py-3 max-w-md";
 
 function productsNoun(products: VendorMatch[]): string {
   const hasProduct = products.some((p) => p.kind !== "service");
@@ -426,6 +438,7 @@ function ConversationTurnView({
   onAnswerClarification,
   onLocationShared,
   onBuyerRequestResolved,
+  buyerLocation,
   expandedServicesVendorId,
   onToggleServices,
 }: {
@@ -434,6 +447,11 @@ function ConversationTurnView({
   onAnswerClarification: (text: string) => void;
   onLocationShared: (location: BuyerLocation) => void;
   onBuyerRequestResolved: (offer: BuyerRequestOffer) => void;
+  // The buyer's device location, if granted earlier this session — passed
+  // straight through to BuyerRequestOfferWidget below so a request created
+  // from THIS turn can use it (see that widget's own comment). Lives in
+  // SearchHome's own ref, not this component's state.
+  buyerLocation: BuyerLocation | undefined;
   // Which store's "matching services" panel is open, if any, across the
   // WHOLE conversation, not just this turn — lifted up to SearchHome (see
   // its own comment) so opening one on any turn closes whichever was open
@@ -475,7 +493,13 @@ function ConversationTurnView({
             />
           )}
           {turn.query && (
-            <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed">
+            <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed flex items-center gap-1.5">
+              {/* Same MapPinIcon Settings' own location field uses (see
+                  [[custom_icon_system]]) — was a literal 📍 emoji character
+                  baked into the submitted text before this. */}
+              {turn.query === "Shared my location" && (
+                <MapPinIcon size={16} className="text-orange-600 shrink-0" />
+              )}
               {turn.query}
             </p>
           )}
@@ -845,37 +869,75 @@ function ConversationTurnView({
               ) : turn.buyerRequestOffer ? (
                 // createBuyerRequest ran this turn (see systemPrompt.ts) —
                 // real agent action, not a dead end, so this gets the same
-                // plain-reply treatment as the clarification branch below,
+                // message-bubble treatment as every other pure-text reply,
                 // never the "nothing found anywhere" Compass treatment.
-                <FormattedReply text={turn.reply} />
+                <div className={AI_MESSAGE_BUBBLE_CLASS}>
+                  <FormattedReply text={turn.reply} />
+                </div>
               ) : turn.buyerRequestOffered ? (
                 // offerBuyerRequest ran this turn (see offerBuyerRequestTool's
                 // own comment) — the model is actively making the reach-out
                 // offer in `reply`'s text right now. There's a real next step
-                // on the table (the buyer can say yes/no), so this is NOT a
-                // dead end either — same plain-reply treatment, not the
-                // "nothing found anywhere" Compass case below. Previously
-                // this fell all the way through to that case, which visually
-                // boxed a perfectly normal offer message as if the search had
-                // truly gone nowhere.
-                <FormattedReply text={turn.reply} />
+                // on the table, so this is NOT a dead end either — same
+                // message-bubble treatment, not the "nothing found anywhere"
+                // Compass case below. The Yes/No pair turns that next step
+                // into an actual click instead of the buyer having to type
+                // "yes" — both just submit canned text as the next message,
+                // same mechanism ClarificationPrompt's "choice" pills already
+                // use (see handleClarificationAnswer), so no new plumbing
+                // was needed for this. Only rendered on the latest turn, same
+                // gate every other still-actionable widget in this thread
+                // uses — an answered offer shouldn't still show buttons on
+                // scrollback.
+                <div className={cn(AI_MESSAGE_BUBBLE_CLASS, "space-y-3")}>
+                  <FormattedReply text={turn.reply} />
+                  {isLatest && (
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onAnswerClarification("Yes, find someone")
+                        }
+                        className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
+                      >
+                        Yes, find someone
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onAnswerClarification("No thanks, that's okay")
+                        }
+                        className="text-sm text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                      >
+                        No thanks
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : !turn.toolCalled ? (
                 // The model asked a clarifying question instead of searching
-                // (see systemPrompt.ts) — a plain reply, same as the text above
-                // a result grid, never the "nothing found anywhere" case below:
-                // the conversation is still open, not a dead end.
-                <FormattedReply text={turn.reply} />
+                // (see systemPrompt.ts) — same message-bubble treatment as
+                // the text above a result grid, never the "nothing found
+                // anywhere" case below: the conversation is still open, not
+                // a dead end.
+                <div className={AI_MESSAGE_BUBBLE_CLASS}>
+                  <FormattedReply text={turn.reply} />
+                </div>
               ) : (
                 // A real search ran and came up completely empty, with no
                 // further move on the table (no reach-out offer, no
                 // clarification) — genuinely nothing to show. Still just a
-                // message, not product/vendor cards, so it stays plain text
-                // like every other reply — a bordered/shadowed box here read
-                // as a card competing with the real result cards elsewhere on
-                // the page. The Compass icon alone (not a box around the
-                // text) is what marks this as the "nothing found" case.
-                <div className="flex items-start gap-2.5">
-                  <Compass
+                // message, not product/vendor cards, so it gets the same
+                // message-bubble treatment as every other pure-text reply
+                // (see AI_MESSAGE_BUBBLE_CLASS) rather than sitting bare —
+                // only the actual result cards stay unboxed.
+                <div
+                  className={cn(
+                    AI_MESSAGE_BUBBLE_CLASS,
+                    "flex items-start gap-2.5",
+                  )}
+                >
+                  <CompassIcon
                     size={18}
                     className="text-orange-400 shrink-0 mt-0.5"
                   />
@@ -899,6 +961,7 @@ function ConversationTurnView({
                 <BuyerRequestOfferWidget
                   offer={turn.buyerRequestOffer}
                   imageUrl={turn.imageUrl}
+                  location={buyerLocation}
                   onResolved={onBuyerRequestResolved}
                 />
               )}
@@ -923,22 +986,15 @@ const VELUX_SUBTEXT =
 // last one, and a short text-only history is sent back to the model so
 // follow-ups ("cheaper", "in red instead") have context.
 //
-// Persistence (2026-08-15, AI-agent pivot — "chat history is the buyer
-// dashboard"): an ANONYMOUS conversation stays exactly as ephemeral as it
-// always was — nothing is saved, a refresh starts fresh, by design, same as
-// before this change. The moment a buyer session exists (see
-// useBuyerSession below), every completed exchange is also upserted to
-// /api/buyer-conversations — same {role, content} shape already being sent
-// as `history` to the model, not a second data model to keep in sync. That
-// unlocks two things: the buyer dashboard's "Recent" list
-// (BuyerConversationsList), and resuming a specific thread via
-// /chat?c=<id> (see the effect below) — which also means a refresh no
-// longer loses an identified buyer's conversation, only an anonymous one's.
+// Deliberately never persisted anywhere (2026-08-18 — buyers have no
+// account to save it to, and stay anonymous otherwise): a refresh always
+// starts a fresh conversation. The one thing that outlives a single
+// conversation is a Buyer Request (see BuyerRequestOfferWidget) — that's
+// its own explicit, named action, not a side effect of chatting.
 export function SearchHome() {
   const [query, setQuery] = useState("");
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const isSending = turns.some((t) => t.phase === "loading");
-  const { buyer } = useBuyerSession();
 
   // Which store's "matching services" panel is open, if any — across the
   // WHOLE conversation, not per turn (see ConversationTurnView's own
@@ -951,11 +1007,6 @@ export function SearchHome() {
   function toggleServices(vendorId: string) {
     setExpandedServicesVendorId((cur) => (cur === vendorId ? null : vendorId));
   }
-  // null until either a resumed conversation is loaded (from ?c=) or the
-  // first successful save assigns one — every save after that updates the
-  // SAME conversation instead of creating a new one each turn.
-  const [conversationId, setConversationId] = useState<string | null>(null);
-
   // This page is public (no buyer account) — a vendor can land here too, and
   // must never be silently bounced to /auth/login just for loading it (see
   // getMeSilent's own note), so this checks quietly rather than via getMe.
@@ -1049,7 +1100,7 @@ export function SearchHome() {
     currentImageUrl: string | null,
     currentImagePreview: string | null,
   ): Promise<void> {
-    const turnId = crypto.randomUUID();
+    const turnId = generateUUID();
 
     // Text-only history from prior completed turns (see SearchHistoryTurn) —
     // built before the new turn is appended, so it doesn't include itself.
@@ -1176,44 +1227,6 @@ export function SearchHome() {
             buyerRequestOffered: event.buyerRequestOffered,
             contextNote,
           });
-
-          // Persist — only ever for an identified buyer (see this
-          // component's own top comment); an anonymous conversation stays
-          // exactly as ephemeral as it always was. Best-effort: a failed
-          // save never blocks or interrupts the chat itself, it just means
-          // this one exchange won't show up in "Recent" later. `history`
-          // (prior turns, built at the top of submitMessage) plus this
-          // turn's own query+reply is the exact same {role, content} pair
-          // sequence already being sent to the model — nothing new to
-          // compute. conversationId starts null (a fresh chat) and gets
-          // set from the response; every save after that updates the SAME
-          // conversation instead of creating a new one each turn. The URL
-          // update afterward is what makes a refresh recoverable for an
-          // identified buyer (see /chat?c= resume effect above) — plain
-          // replaceState, not a navigation, so it never interrupts typing.
-          if (buyer) {
-            const fullHistory: SearchHistoryTurn[] = [
-              ...history,
-              { role: "user", content: message || "[sent a photo]" },
-              { role: "assistant", content: event.reply },
-            ];
-            void buyerApi
-              .post<{ conversation: { id: string } }>(
-                "/api/buyer-conversations",
-                { conversationId, turns: fullHistory },
-              )
-              .then(({ conversation }) => {
-                setConversationId(conversation.id);
-                window.history.replaceState(
-                  null,
-                  "",
-                  `/chat?c=${conversation.id}`,
-                );
-              })
-              .catch(() => {
-                /* best-effort, see comment above */
-              });
-          }
         },
         onError: (errorMessage) => {
           updateTurn(turnId, { phase: "done", error: errorMessage });
@@ -1221,71 +1234,6 @@ export function SearchHome() {
       },
     );
   }
-
-  // Resume a persisted conversation (2026-08-15) — /chat?c=<conversationId>,
-  // the link the buyer dashboard's "Recent" list (BuyerConversationsList)
-  // and BuyerHomeActiveConversation use. Ownership is re-checked server-side
-  // regardless of how the id got here (see the BFF route) — a bad, expired,
-  // or someone-else's id just fails silently and the buyer lands on a
-  // normal empty conversation, same treatment any other bad deep link gets.
-  // Read directly off window.location for the same reason the `?q=` effect
-  // below does: no Suspense boundary needed for a one-time initial read.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const c = params.get("c");
-    if (!c) return;
-    window.history.replaceState(null, "", window.location.pathname);
-    (async () => {
-      try {
-        const { conversation } = await buyerApi.get<{
-          conversation: BuyerConversation;
-        }>(`/api/buyer-conversations/${c}`);
-        setConversationId(conversation.id);
-        // Stored turns strictly alternate user→assistant→user→assistant…
-        // (every save pushes exactly one of each, together — see the save
-        // effect below), so pairing them up two-at-a-time reconstructs the
-        // same one-exchange-per-ConversationTurn shape a live turn has.
-        // Only `query`/`reply` are real; there's no stored result data to
-        // replay (see BuyerConversation's own comment), so every other
-        // field is just this type's normal "nothing here" default.
-        const resumed: ConversationTurn[] = [];
-        for (let i = 0; i < conversation.turns.length; i += 2) {
-          resumed.push({
-            id: `resumed-${i}`,
-            query: conversation.turns[i]?.content ?? "",
-            imagePreview: null,
-            imageUrl: null,
-            phase: "done",
-            status: "",
-            reply: conversation.turns[i + 1]?.content ?? "",
-            toolCalled: true,
-            clarification: null,
-            products: [],
-            weakProducts: [],
-            stores: [],
-            furtherStores: [],
-            storesQuery: null,
-            productStores: [],
-            storeServices: [],
-            productsMatchTier: null,
-            storesMatchTier: null,
-            productsMatchQuality: undefined,
-            storesMatchQuality: undefined,
-            externalStoreSuggestions: [],
-            vendorProducts: [],
-            vendorProductsStore: null,
-            buyerRequestOffer: null,
-            buyerRequestOffered: false,
-            contextNote: null,
-            error: null,
-          });
-        }
-        setTurns(resumed);
-      } catch {
-        // Fail open — start a normal fresh conversation instead.
-      }
-    })();
-  }, []);
 
   // One-shot handoff from the homepage's own Velte input (Hero.tsx) and any
   // other "?q=…" link into /chat — read directly off window.location
@@ -1377,7 +1325,7 @@ export function SearchHome() {
   function handleLocationShared(location: BuyerLocation) {
     buyerLocationRef.current = location;
     toast.success("Got your location!");
-    void submitMessage("📍 Shared my location", null, null);
+    void submitMessage("Shared my location", null, null);
   }
 
   const lastTurn = turns[turns.length - 1];
@@ -1520,6 +1468,7 @@ export function SearchHome() {
                   isLatest={i === turns.length - 1}
                   onAnswerClarification={handleClarificationAnswer}
                   onLocationShared={handleLocationShared}
+                  buyerLocation={buyerLocationRef.current ?? undefined}
                   expandedServicesVendorId={expandedServicesVendorId}
                   onToggleServices={toggleServices}
                   onBuyerRequestResolved={(offer) =>

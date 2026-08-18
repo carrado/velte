@@ -2,28 +2,28 @@
 
 import { motion } from "motion/react";
 import Image from "next/image";
-import {
-  FileCheck,
-  Bot,
-  UserCheck,
-  MessageCircle,
-  CreditCard,
-  ShieldAlert,
-  Copyright,
-  Plug,
-  Ban,
-  AlertTriangle,
-  Scale,
-  Landmark,
-  RefreshCw,
-  Mail,
-  CheckCircle2,
-  ScrollText,
-  Search,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
+import {
+  AlertTriangleIcon,
+  BanIcon,
+  BotIcon,
+  CheckCircleIcon,
+  CopyrightIcon,
+  CreditCardIcon,
+  FileCheckIcon,
+  LandmarkIcon,
+  MailIcon,
+  MessageCircleIcon,
+  PlugIcon,
+  RefreshIcon,
+  ScaleIcon,
+  ScrollTextIcon,
+  SearchIcon,
+  ShieldAlertIcon,
+  UserCheckIcon,
+} from "@/components/icons";
+import type { IconComponent } from "@/types/common";
 
 const ORANGE = "rgb(247,107,16)";
 
@@ -31,7 +31,7 @@ type Block = { kind: "p"; text: string } | { kind: "list"; items: string[] };
 
 interface Section {
   id: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   blocks: Block[];
 }
@@ -39,24 +39,24 @@ interface Section {
 const lastUpdated = "August 5, 2026";
 
 // Pillars shown in the "Terms at a glance" strip.
-const pillars: { icon: LucideIcon; title: string; text: string }[] = [
+const pillars: { icon: IconComponent; title: string; text: string }[] = [
   {
-    icon: Search,
+    icon: SearchIcon,
     title: "What Velte does",
     text: "A marketplace connecting buyers to real, nearby vendor listings — by browsing directly or by describing what you need to our AI.",
   },
   {
-    icon: UserCheck,
+    icon: UserCheckIcon,
     title: "Free to search, free to list",
     text: "Buyers search without an account; vendors list their business at no cost.",
   },
   {
-    icon: CreditCard,
+    icon: CreditCardIcon,
     title: "You control your sale",
     text: "Velte isn't a party to the transaction — buyers and vendors deal directly, with Paystack handling any in-app payments.",
   },
   {
-    icon: Landmark,
+    icon: LandmarkIcon,
     title: "Governed by Nigerian law",
     text: "These Terms are governed by the laws of the Federal Republic of Nigeria.",
   },
@@ -65,7 +65,7 @@ const pillars: { icon: LucideIcon; title: string; text: string }[] = [
 const sections: Section[] = [
   {
     id: "acceptance",
-    icon: FileCheck,
+    icon: FileCheckIcon,
     title: "1. Acceptance of Terms",
     blocks: [
       {
@@ -80,7 +80,7 @@ const sections: Section[] = [
   },
   {
     id: "service",
-    icon: Bot,
+    icon: BotIcon,
     title: "2. Description of Service",
     blocks: [
       {
@@ -95,7 +95,7 @@ const sections: Section[] = [
   },
   {
     id: "accounts",
-    icon: UserCheck,
+    icon: UserCheckIcon,
     title: "3. Eligibility & Accounts",
     blocks: [
       {
@@ -114,7 +114,7 @@ const sections: Section[] = [
   },
   {
     id: "buyer-vendor-communication",
-    icon: MessageCircle,
+    icon: MessageCircleIcon,
     title: "4. Buyer–Vendor Communication",
     blocks: [
       {
@@ -133,7 +133,7 @@ const sections: Section[] = [
   },
   {
     id: "fees",
-    icon: CreditCard,
+    icon: CreditCardIcon,
     title: "5. Fees & Payments",
     blocks: [
       {
@@ -156,7 +156,7 @@ const sections: Section[] = [
   },
   {
     id: "acceptable-use",
-    icon: ShieldAlert,
+    icon: ShieldAlertIcon,
     title: "6. Acceptable Use",
     blocks: [
       {
@@ -178,7 +178,7 @@ const sections: Section[] = [
   },
   {
     id: "ip",
-    icon: Copyright,
+    icon: CopyrightIcon,
     title: "7. Intellectual Property",
     blocks: [
       {
@@ -189,7 +189,7 @@ const sections: Section[] = [
   },
   {
     id: "third-party",
-    icon: Plug,
+    icon: PlugIcon,
     title: "8. Third-Party Services",
     blocks: [
       {
@@ -200,7 +200,7 @@ const sections: Section[] = [
   },
   {
     id: "termination",
-    icon: Ban,
+    icon: BanIcon,
     title: "9. Termination",
     blocks: [
       {
@@ -211,7 +211,7 @@ const sections: Section[] = [
   },
   {
     id: "warranties",
-    icon: AlertTriangle,
+    icon: AlertTriangleIcon,
     title: "10. Disclaimer of Warranties",
     blocks: [
       {
@@ -222,7 +222,7 @@ const sections: Section[] = [
   },
   {
     id: "liability",
-    icon: Scale,
+    icon: ScaleIcon,
     title: "11. Limitation of Liability",
     blocks: [
       {
@@ -233,7 +233,7 @@ const sections: Section[] = [
   },
   {
     id: "governing-law",
-    icon: Landmark,
+    icon: LandmarkIcon,
     title: "12. Governing Law",
     blocks: [
       {
@@ -244,7 +244,7 @@ const sections: Section[] = [
   },
   {
     id: "changes",
-    icon: RefreshCw,
+    icon: RefreshIcon,
     title: "13. Changes to These Terms",
     blocks: [
       {
@@ -255,7 +255,7 @@ const sections: Section[] = [
   },
   {
     id: "contact",
-    icon: Mail,
+    icon: MailIcon,
     title: "14. Contact Information",
     blocks: [
       {
@@ -287,7 +287,7 @@ function SectionBlocks({ blocks }: { blocks: Block[] }) {
           <ul key={i} className="space-y-2.5">
             {block.items.map((item, j) => (
               <li key={j} className="flex gap-3 text-gray-500 leading-relaxed">
-                <CheckCircle2
+                <CheckCircleIcon
                   className="w-4 h-4 mt-1 shrink-0"
                   style={{ color: ORANGE }}
                 />
@@ -336,7 +336,7 @@ export default function TermsContent() {
                     color: ORANGE,
                   }}
                 >
-                  <ScrollText className="w-3.5 h-3.5" />
+                  <ScrollTextIcon className="w-3.5 h-3.5" />
                   The agreement between us
                 </span>
 
@@ -360,7 +360,7 @@ export default function TermsContent() {
                       key={chip}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1.5"
                     >
-                      <CheckCircle2
+                      <CheckCircleIcon
                         className="w-3.5 h-3.5"
                         style={{ color: ORANGE }}
                       />
@@ -404,7 +404,7 @@ export default function TermsContent() {
                   transition={{ duration: 0.5, delay: 0.9 }}
                   className="absolute -right-3 top-6 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
                 >
-                  <ScrollText className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <ScrollTextIcon className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                   <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
                     Plain-language terms
                   </span>
@@ -415,7 +415,7 @@ export default function TermsContent() {
                   transition={{ duration: 0.5, delay: 1.3 }}
                   className="absolute -left-3 bottom-8 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
                 >
-                  <Landmark className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <LandmarkIcon className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                   <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
                     Governed by Nigerian law
                   </span>
@@ -473,7 +473,7 @@ export default function TermsContent() {
                     color: ORANGE,
                   }}
                 >
-                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <ShieldAlertIcon className="w-3.5 h-3.5" />
                   Using Velte responsibly
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-bold text-[#023337] mb-4 leading-tight">
@@ -496,7 +496,7 @@ export default function TermsContent() {
                       key={item}
                       className="flex gap-3 text-gray-600 text-sm leading-relaxed"
                     >
-                      <CheckCircle2
+                      <CheckCircleIcon
                         className="w-4 h-4 mt-0.5 shrink-0"
                         style={{ color: ORANGE }}
                       />

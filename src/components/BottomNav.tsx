@@ -3,14 +3,13 @@
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import {
-  LayoutGrid,
-  PlusCircle,
-  Wallet,
-  Store,
-  Settings,
-  MessageSquare,
-} from "lucide-react";
-
+  LayoutGridIcon,
+  MessageSquareIcon,
+  PlusCircleIcon,
+  SettingsIcon,
+  StoreIcon,
+  WalletIcon,
+} from "@/components/icons";
 export default function BottomNav() {
   const pathname = usePathname();
   const { navigate } = useNavigation();
@@ -22,7 +21,7 @@ export default function BottomNav() {
   const items = [
     {
       label: "Listings",
-      icon: <LayoutGrid size={20} />,
+      icon: <LayoutGridIcon size={20} />,
       segment: "products",
       // "Add" owns the products/add route, so keep this tab off there.
       active: subPath.startsWith("products") && subPath !== "products/add",
@@ -30,21 +29,21 @@ export default function BottomNav() {
     },
     {
       label: "Add",
-      icon: <PlusCircle size={20} />,
+      icon: <PlusCircleIcon size={20} />,
       segment: "products/add",
       active: subPath === "products/add",
       id: "add-listing-mobile",
     },
     {
       label: "Wallet",
-      icon: <Wallet size={20} />,
+      icon: <WalletIcon size={20} />,
       segment: "wallet",
       active: subPath.startsWith("wallet"),
       id: "wallet-mobile",
     },
     {
       label: "Store",
-      icon: <Store size={20} />,
+      icon: <StoreIcon size={20} />,
       segment: "store",
       active: subPath.startsWith("store"),
       id: "store-mobile",
@@ -55,14 +54,14 @@ export default function BottomNav() {
       // drawer, this is the vendor's only nav surface), matches the buyer
       // side's own nav using "Requests" too.
       label: "Requests",
-      icon: <MessageSquare size={20} />,
+      icon: <MessageSquareIcon size={20} />,
       segment: "buyer-requests",
       active: subPath.startsWith("buyer-requests"),
       id: "buyer-requests-mobile",
     },
     {
       label: "Settings",
-      icon: <Settings size={20} />,
+      icon: <SettingsIcon size={20} />,
       segment: "settings",
       active: subPath.startsWith("settings"),
       id: "settings-mobile",

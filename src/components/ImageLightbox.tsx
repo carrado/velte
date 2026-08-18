@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { cn } from "@/lib/utils";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+} from "@/components/icons";
 
 /** Full-viewport, black-backdrop large image view — tapping a product
  * card's own photo opens this directly (distinct from "See more", which
@@ -84,7 +88,7 @@ export function ImageLightbox({
         aria-label="Close"
         className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors cursor-pointer"
       >
-        <X size={20} />
+        <CloseIcon size={20} />
       </button>
 
       {hasGallery && (
@@ -118,7 +122,7 @@ export function ImageLightbox({
               aria-label="Previous photo"
               className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
             >
-              <ChevronLeft size={22} strokeWidth={2.5} />
+              <ChevronLeftIcon size={22} strokeWidth={2.5} />
             </button>
             <button
               type="button"
@@ -126,7 +130,7 @@ export function ImageLightbox({
               aria-label="Next photo"
               className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
             >
-              <ChevronRight size={22} strokeWidth={2.5} />
+              <ChevronRightIcon size={22} strokeWidth={2.5} />
             </button>
             <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-1.5">
               {images.map((url, i) => (

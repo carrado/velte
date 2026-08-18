@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Send, MapPin } from "lucide-react";
 import {
   pickAvoiding,
   gettingLocationPhrase,
 } from "@/lib/server/ai/statusPhrases";
 import type { BuyerLocation, Clarification } from "@/types/search";
+import { MapPinIcon, SendIcon } from "@/components/icons";
 
 const LOCATION_PHRASE_ROTATE_MS = 1500;
 // Generous, not the browser API's own short-feeling default — see
@@ -90,7 +90,7 @@ export function ClarificationPrompt({
         title="Send"
         className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:hover:bg-orange-500 text-white transition-colors"
       >
-        <Send size={14} />
+        <SendIcon size={14} />
       </button>
     </form>
   );
@@ -189,9 +189,20 @@ function LocationShareAction({
     setPhase("idle");
   }
 
+  // The pin badge (light-orange chip + orange icon — same MapPinIcon and
+  // treatment as SettingsPage's own location field, see [[custom_icon_system]])
+  // is the one constant across idle/fetching/error, so the row reads as one
+  // widget settling into different states rather than three unrelated layouts.
+  const pinBadge = (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-50">
+      <MapPinIcon size={16} className="text-orange-500" />
+    </span>
+  );
+
   if (phase === "fetching") {
     return (
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
+        {pinBadge}
         {/* Same shimmering-text treatment as the main turn-loading status
             line (see globals.css's .status-shimmer) — one consistent
             "Velte is actively working on this" visual language across the
@@ -208,7 +219,7 @@ function LocationShareAction({
         <button
           type="button"
           onClick={handleCancel}
-          className="shrink-0 text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+          className="shrink-0 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700 cursor-pointer"
         >
           Cancel
         </button>
@@ -218,25 +229,28 @@ function LocationShareAction({
 
   return (
     <div className="space-y-1.5">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2.5">
+        {pinBadge}
         <button
           type="button"
           onClick={handleShare}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors cursor-pointer"
+          className="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-orange-500/25 transition-colors hover:bg-orange-600 cursor-pointer"
         >
-          <MapPin size={14} />
           Share my location
         </button>
+        {/* Secondary, on purpose — a real bordered button (not a bare text
+            link) so it reads as an equally valid second choice, but the
+            neutral gray/white keeps "Share" as the visually primary path. */}
         <button
           type="button"
           onClick={() => onDecline("Search without sharing my location")}
-          className="text-sm text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+          className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 cursor-pointer"
         >
           Search without it
         </button>
       </div>
       {phase === "error" && (
-        <p className="text-xs text-red-500">
+        <p className="pl-[42px] text-xs text-red-500">
           Couldn&apos;t get your location — check your browser/device
           permission, or search without it above.
         </p>

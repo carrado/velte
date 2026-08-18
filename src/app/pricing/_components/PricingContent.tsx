@@ -2,11 +2,11 @@
 
 import { motion } from "motion/react";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import PricingCards from "@/components/landing/PricingCards";
 import type { PricingFaqItem } from "@/types/common";
+import { SparklesIcon } from "@/components/icons";
 
 export default function PricingContent({ faqs }: { faqs: PricingFaqItem[] }) {
   return (
@@ -31,7 +31,7 @@ export default function PricingContent({ faqs }: { faqs: PricingFaqItem[] }) {
               transition={{ duration: 0.6 }}
             >
               <span className="inline-flex items-center gap-2 bg-[rgb(247,107,16)]/[0.1] border border-[rgb(247,107,16)]/[0.2] text-[rgb(247,107,16)] text-xs font-semibold px-3.5 py-1.5 rounded-full mb-6 tracking-wide">
-                <Sparkles className="w-3.5 h-3.5" />
+                <SparklesIcon className="w-3.5 h-3.5" />
                 Pay for results, not seats
               </span>
               <h1 className="text-4xl lg:text-6xl font-bold text-white tracking-tight mb-6 text-balance">

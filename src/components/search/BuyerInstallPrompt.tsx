@@ -3,10 +3,10 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Download, X } from "lucide-react";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { installPromptStore } from "@/lib/installPromptStore";
 import { cn } from "@/lib/utils";
+import { CloseIcon, DownloadIcon } from "@/components/icons";
 
 // Buyer-facing install nudge for /chat — deliberately separate from
 // PushNotificationManager, which is vendor-only (usePushNotifications gates
@@ -110,13 +110,13 @@ export function BuyerInstallPrompt() {
             aria-label="Dismiss"
             className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
-            <X className="h-4 w-4" />
+            <CloseIcon className="h-4 w-4" />
           </button>
 
           <div className="px-5 pb-5 pt-4">
             <div className="mb-3 flex items-center gap-3 pr-6">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 shadow-sm shadow-orange-200">
-                <Download className="h-5 w-5 text-white" />
+                <DownloadIcon className="h-5 w-5 text-white" />
               </div>
               <div>
                 <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-orange-500">
@@ -155,7 +155,7 @@ export function BuyerInstallPrompt() {
                   </>
                 ) : canInstall ? (
                   <>
-                    <Download className="h-3.5 w-3.5" />
+                    <DownloadIcon className="h-3.5 w-3.5" />
                     Install app
                   </>
                 ) : (

@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { MapPin, Package, Wrench } from "lucide-react";
 import { getPublicStore, getSimilarVendors } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
 import { getOptionalUserId } from "@/lib/server/guards";
@@ -17,6 +16,7 @@ import StoreFooter from "./_components/StoreFooter";
 import StoreTabs from "./_components/StoreTabs";
 import SimilarVendors from "./_components/SimilarVendors";
 import { StoreWhatsAppButton } from "./_components/shared";
+import { MapPinIcon, PackageIcon, WrenchIcon } from "@/components/icons";
 
 // Public storefront — server-rendered for SEO and link previews. This is the
 // page the AI hands buyers off to. A real site shell (Navbar with a "Find on
@@ -117,19 +117,19 @@ function IntroCard({
       <ul className="space-y-2.5">
         {store.area && (
           <li className="flex items-center gap-2.5 text-sm text-gray-600">
-            <MapPin size={15} className="text-orange-500 flex-shrink-0" />
+            <MapPinIcon size={15} className="text-orange-500 flex-shrink-0" />
             {store.area}
           </li>
         )}
         {goodsCount > 0 && (
           <li className="flex items-center gap-2.5 text-sm text-gray-600">
-            <Package size={15} className="text-orange-500 flex-shrink-0" />
+            <PackageIcon size={15} className="text-orange-500 flex-shrink-0" />
             {goodsCount} {goodsCount === 1 ? "product" : "products"} listed
           </li>
         )}
         {servicesCount > 0 && (
           <li className="flex items-center gap-2.5 text-sm text-gray-600">
-            <Wrench size={15} className="text-orange-500 flex-shrink-0" />
+            <WrenchIcon size={15} className="text-orange-500 flex-shrink-0" />
             {servicesCount} {servicesCount === 1 ? "service" : "services"}{" "}
             offered
           </li>

@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Store as StoreIcon } from "lucide-react";
-
+import { ArrowRightIcon, StoreIcon } from "@/components/icons";
 // Landing screen for the installed PWA — shown after logout instead of the
 // marketing homepage ("/"), since a home-screen app reopening into a full
 // sales pitch reads as broken. Kept deliberately minimal: logo, one line,
@@ -36,7 +35,7 @@ export default function WelcomePage() {
             className="w-full bg-orange-500 hover:bg-orange-600 cursor-pointer text-white shadow-lg shadow-orange-500/20 gap-2 h-12"
           >
             Find something
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRightIcon className="w-4 h-4" />
           </Button>
         </Link>
 

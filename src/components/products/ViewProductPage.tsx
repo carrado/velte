@@ -7,28 +7,6 @@ import { categoriesApi } from "@/services/products";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useState, useEffect, useCallback } from "react";
 import MuxPlayer from "@mux/mux-player-react";
-import {
-  ArrowLeft,
-  Package,
-  Tag,
-  Calendar,
-  Star,
-  CheckCircle2,
-  XCircle,
-  Layers,
-  Hash,
-  ChevronLeft,
-  ChevronRight,
-  Shield,
-  Info,
-  Clock,
-  Leaf,
-  Flame,
-  ChefHat,
-  Wrench,
-  Ban,
-  PlayCircle,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { computePrice, fmt } from "@/lib/product-price";
 
@@ -49,6 +27,28 @@ import type { Category } from "@/types/product";
 import { isFoodBusiness } from "@/hooks/useBusinessType";
 import { SECTOR_BY_VALUE } from "@/lib/sectors";
 import type { SectorClassification } from "@/types/sectors";
+import {
+  ArrowLeftIcon,
+  BanIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+  ChefHatIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  FlameIcon,
+  HashIcon,
+  InfoIcon,
+  LayersIcon,
+  LeafIcon,
+  PackageIcon,
+  PlayCircleIcon,
+  ShieldIcon,
+  StarIcon,
+  TagIcon,
+  WrenchIcon,
+  XCircleIcon,
+} from "@/components/icons";
 
 // ── Carousel placeholder images (swap for real product images when available) ─
 
@@ -173,7 +173,7 @@ function ProductCarousel({
       {/* Featured badge */}
       {featured && (
         <div className="absolute top-3 left-3 flex items-center gap-1 bg-amber-400 text-white text-dash-caption font-bold px-2.5 py-1 rounded-full shadow-md z-10">
-          <Star size={11} fill="white" />
+          <StarIcon size={11} fill="white" />
           Featured
         </div>
       )}
@@ -186,14 +186,14 @@ function ProductCarousel({
             className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm shadow flex items-center justify-center hover:bg-white transition-colors z-10"
             aria-label="Previous image"
           >
-            <ChevronLeft size={16} className="text-[#023337]" />
+            <ChevronLeftIcon size={16} className="text-[#023337]" />
           </button>
           <button
             onClick={next}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm shadow flex items-center justify-center hover:bg-white transition-colors z-10"
             aria-label="Next image"
           >
-            <ChevronRight size={16} className="text-[#023337]" />
+            <ChevronRightIcon size={16} className="text-[#023337]" />
           </button>
         </>
       )}
@@ -301,7 +301,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center">
-          <XCircle size={28} className="text-red-400" />
+          <XCircleIcon size={28} className="text-red-400" />
         </div>
         <p className="text-dash-heading font-semibold text-gray-500">
           Listing not found
@@ -310,7 +310,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           onClick={() => navigate(`/${userId}/products`)}
           className="flex items-center gap-2 text-dash-body text-orange-500 hover:underline cursor-pointer"
         >
-          <ArrowLeft size={14} />
+          <ArrowLeftIcon size={14} />
           Back to Listings
         </button>
       </div>
@@ -387,7 +387,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
             <div className="bg-red-50 border border-red-100 sm:rounded-2xl overflow-hidden">
               <div className="flex items-start gap-3 px-5 py-4">
                 <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
-                  <Ban size={16} className="text-red-500" />
+                  <BanIcon size={16} className="text-red-500" />
                 </div>
                 <div>
                   <p className="text-dash-body font-bold text-red-700">
@@ -406,7 +406,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           )}
 
           {/* ── Pricing card (with stock badge top-right) ── */}
-          <SectionCard title="Pricing" icon={Tag}>
+          <SectionCard title="Pricing" icon={TagIcon}>
             <div className="flex items-start justify-between gap-3">
               {/* Price area */}
               <div className="flex flex-wrap items-end gap-4">
@@ -444,7 +444,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                   never a trustworthy signal anyway). ── */}
               {isService ? (
                 <div className="flex items-center gap-1.5 text-dash-caption font-bold px-3 py-1.5 rounded-full flex-shrink-0 bg-teal-50 text-teal-700">
-                  <Wrench size={12} />
+                  <WrenchIcon size={12} />
                   Service
                 </div>
               ) : (
@@ -458,9 +458,9 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     )}
                   >
                     {product.isCurrentlyAvailable === false ? (
-                      <XCircle size={12} />
+                      <XCircleIcon size={12} />
                     ) : (
-                      <CheckCircle2 size={12} />
+                      <CheckCircleIcon size={12} />
                     )}
                     {product.isCurrentlyAvailable === false
                       ? "Not Available Today"
@@ -474,7 +474,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           {/* ── Service: its details lead, right after pricing — no stock
               concept exists for a service at all. ── */}
           {isService && hasAttributes && (
-            <SectionCard title="Service Details" icon={Wrench}>
+            <SectionCard title="Service Details" icon={WrenchIcon}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {product.attributes!.map((attr) => (
                   <div
@@ -497,7 +497,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
               real-time availability, daily limit, dietary flags, the
               days/hours it's served, and its modifiers. ── */}
           {hasFoodDetails && (
-            <SectionCard title="Food Details" icon={ChefHat}>
+            <SectionCard title="Food Details" icon={ChefHatIcon}>
               <div className="flex flex-wrap gap-3">
                 {product.isCurrentlyAvailable != null && (
                   <div
@@ -509,9 +509,9 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     )}
                   >
                     {product.isCurrentlyAvailable ? (
-                      <CheckCircle2 size={14} className="text-green-500" />
+                      <CheckCircleIcon size={14} className="text-green-500" />
                     ) : (
-                      <XCircle size={14} className="text-red-500" />
+                      <XCircleIcon size={14} className="text-red-500" />
                     )}
                     <span
                       className={cn(
@@ -529,7 +529,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 )}
                 {product.dailyLimit != null && (
                   <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-2.5">
-                    <Layers size={14} className="text-gray-500" />
+                    <LayersIcon size={14} className="text-gray-500" />
                     <span className="text-dash-body font-semibold text-[#023337]">
                       Daily limit: {product.dailyLimit}
                     </span>
@@ -537,7 +537,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 )}
                 {product.allowPreOrder && (
                   <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
-                    <Clock size={14} className="text-blue-500" />
+                    <ClockIcon size={14} className="text-blue-500" />
                     <span className="text-dash-body font-semibold text-blue-700">
                       Pre-orders accepted
                     </span>
@@ -545,7 +545,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 )}
                 {product.isVeg && (
                   <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3.5 py-2.5">
-                    <Leaf size={14} className="text-green-500" />
+                    <LeafIcon size={14} className="text-green-500" />
                     <span className="text-dash-body font-semibold text-green-700">
                       Vegetarian
                     </span>
@@ -553,7 +553,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 )}
                 {product.isSpicy && (
                   <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">
-                    <Flame size={14} className="text-red-500" />
+                    <FlameIcon size={14} className="text-red-500" />
                     <span className="text-dash-body font-semibold text-red-700">
                       Spicy
                     </span>
@@ -564,7 +564,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           )}
 
           {isFood && product.availability && (
-            <SectionCard title="Availability" icon={Clock}>
+            <SectionCard title="Availability" icon={ClockIcon}>
               <div className="flex flex-wrap gap-2 mb-2">
                 {product.availability.days.map((day) => (
                   <span
@@ -583,7 +583,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           )}
 
           {hasModifiers && (
-            <SectionCard title="Modifiers" icon={Hash}>
+            <SectionCard title="Modifiers" icon={HashIcon}>
               <div className="space-y-3">
                 {product.modifiers!.map((group) => (
                   <div
@@ -632,7 +632,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
               food-specific fields above) — a food listing CAN carry these
               too, same generic name/value shape as a retail product's. ── */}
           {isFood && hasAttributes && (
-            <SectionCard title="Attributes" icon={Hash}>
+            <SectionCard title="Attributes" icon={HashIcon}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {product.attributes!.map((attr) => (
                   <div
@@ -655,7 +655,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
               rendered theirs above; stock is no longer tracked/shown here
               at all (see the badge above too — same reasoning). ── */}
           {!isService && !isFood && hasAttributes && (
-            <SectionCard title="Attributes" icon={Hash}>
+            <SectionCard title="Attributes" icon={HashIcon}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {product.attributes!.map((attr) => (
                   <div
@@ -675,7 +675,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           )}
 
           {product.videoUrl && (
-            <SectionCard title="Video" icon={PlayCircle}>
+            <SectionCard title="Video" icon={PlayCircleIcon}>
               <div className="rounded-xl overflow-hidden border border-gray-100 bg-black">
                 <MuxPlayer
                   src={product.videoUrl}
@@ -688,11 +688,11 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           )}
 
           {/* ── Details — common to every kind. ── */}
-          <SectionCard title="Details" icon={Info}>
+          <SectionCard title="Details" icon={InfoIcon}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Calendar size={14} className="text-gray-400" />
+                  <CalendarIcon size={14} className="text-gray-400" />
                 </div>
                 <div>
                   <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
@@ -707,7 +707,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
               {categoryDisplay && (
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Package size={14} className="text-gray-400" />
+                    <PackageIcon size={14} className="text-gray-400" />
                   </div>
                   <div>
                     <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
@@ -722,7 +722,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
 
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Star size={14} className="text-gray-400" />
+                  <StarIcon size={14} className="text-gray-400" />
                 </div>
                 <div>
                   <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
@@ -742,7 +742,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
               {product.manufacturingDate && (
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Clock size={14} className="text-gray-400" />
+                    <ClockIcon size={14} className="text-gray-400" />
                   </div>
                   <div>
                     <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
@@ -758,7 +758,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
               {product.expirationDate && (
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Shield size={14} className="text-orange-500" />
+                    <ShieldIcon size={14} className="text-orange-500" />
                   </div>
                   <div>
                     <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
@@ -777,14 +777,14 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           </SectionCard>
 
           {hasTags && (
-            <SectionCard title="Tags" icon={Tag}>
+            <SectionCard title="Tags" icon={TagIcon}>
               <div className="flex flex-wrap gap-2">
                 {product.tags!.map((tag) => (
                   <span
                     key={tag}
                     className="inline-flex items-center gap-1 px-3 py-1 bg-orange-50 text-orange-600 border border-orange-100 rounded-full text-dash-caption font-semibold"
                   >
-                    <Tag size={10} />
+                    <TagIcon size={10} />
                     {tag}
                   </span>
                 ))}

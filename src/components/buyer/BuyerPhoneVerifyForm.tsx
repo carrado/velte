@@ -2,31 +2,29 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Phone, RefreshCw, ShieldCheck } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { buyerApi } from "@/lib/buyer-api-client";
 import { useBuyerStore } from "@/store/buyerStore";
 import type { Buyer } from "@/types/buyer";
+import {
+  LoaderIcon,
+  PhoneIcon,
+  RefreshIcon,
+  ShieldCheckIcon,
+} from "@/components/icons";
 
-/* The ONE buyer identity form in the app — phone + OTP, nothing else. Every
-   place that needs to know who a buyer is (the chat's createBuyerRequest
-   handoff, the standalone /buyer/auth page, the save-gate) renders this,
-   not a bespoke form of its own. There's deliberately no name/email/
-   password step here: those are optional upgrades a buyer can add later
-   from Profile, never a precondition for using the product (see the
-   2026-08-16 "why do buyers have to sign up" decision — the full-page
-   BuyerSignupForm that used to live at /auth/signup?type=buyer is retired;
-   this is what replaced it everywhere).
+/* The ONE buyer identity form in the app — phone + OTP, nothing else, ever
+   (2026-08-18: "just phone and OTP verification, nothing buyers again on
+   the system"). Currently only rendered by BuyerRequestOfferWidget (the
+   chat's createBuyerRequest handoff), "compact" variant.
 
-   Two visual variants, same logic underneath:
-   - "card"    — full-size Input/Label (matches the login/signup pages' own
-                 form styling), used on the standalone /buyer/auth page.
-   - "compact" — smaller raw inputs sized to sit inside a chat bubble, used
-                 by BuyerRequestOfferWidget so the phone ask still reads as
-                 part of the conversation, not a form that interrupted it. */
+   Two visual variants, same logic underneath — "card" (full-size Input/
+   Label, matching the login/signup pages' own form styling) is kept for
+   any future full-page use, but has no live caller today. "compact" is
+   smaller raw inputs sized to sit inside a chat bubble, so the phone ask
+   still reads as part of the conversation, not a form that interrupted it. */
 export function BuyerPhoneVerifyForm({
   promptLabel,
   onVerified,
@@ -100,12 +98,12 @@ export function BuyerPhoneVerifyForm({
       >
         {compact ? (
           <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-            <Phone size={12} className="text-orange-400 shrink-0" />
+            <PhoneIcon size={12} className="text-orange-400 shrink-0" />
             {promptLabel}
           </label>
         ) : (
           <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
-            <Phone className="w-3.5 h-3.5 text-orange-400" />
+            <PhoneIcon className="w-3.5 h-3.5 text-orange-400" />
             {promptLabel}
           </Label>
         )}
@@ -126,7 +124,7 @@ export function BuyerPhoneVerifyForm({
               className="shrink-0 h-10 px-4 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer"
             >
               {sending ? (
-                <Loader2 size={14} className="animate-spin" />
+                <LoaderIcon size={14} className="animate-spin" />
               ) : (
                 "Continue"
               )}
@@ -166,12 +164,12 @@ export function BuyerPhoneVerifyForm({
     >
       {compact ? (
         <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-          <ShieldCheck size={12} className="text-orange-400 shrink-0" />
+          <ShieldCheckIcon size={12} className="text-orange-400 shrink-0" />
           Code sent to {phone} — enter it below
         </label>
       ) : (
         <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
-          <ShieldCheck className="w-3.5 h-3.5 text-orange-400" />
+          <ShieldCheckIcon className="w-3.5 h-3.5 text-orange-400" />
           Code sent to {phone}
         </Label>
       )}
@@ -193,7 +191,7 @@ export function BuyerPhoneVerifyForm({
             className="shrink-0 h-10 px-4 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer"
           >
             {verifying ? (
-              <Loader2 size={14} className="animate-spin" />
+              <LoaderIcon size={14} className="animate-spin" />
             ) : (
               "Verify"
             )}
@@ -234,7 +232,7 @@ export function BuyerPhoneVerifyForm({
             "Sending..."
           ) : (
             <>
-              Resend code <RefreshCw className="w-3 h-3" />
+              Resend code <RefreshIcon className="w-3 h-3" />
             </>
           )}
         </button>

@@ -3,47 +3,42 @@
 import Image from "next/image";
 import { motion } from "motion/react";
 import Link from "next/link";
-import {
-  Database,
-  MagnifyingGlass,
-  Storefront,
-  MapPin,
-  ArrowRight,
-  ArrowUpRight,
-  ShieldCheck,
-  SquaresFour,
-  CheckCircle,
-} from "@phosphor-icons/react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
-import { AskVeluxButton } from "@/components/AskVeluxButton";
 import ShineSweep from "@/components/ShineSweep";
+import {
+  ArrowRightIcon,
+  ArrowUpRightIcon,
+  CheckCircleIcon,
+  DatabaseIcon,
+  MapPinIcon,
+  SearchIcon,
+  ShieldCheckIcon,
+  StoreIcon,
+} from "@/components/icons";
 
-// Redesigned 2026-08-16 — three real fixes, not just a visual pass:
+// Redesigned 2026-08-17 (second pass — see the 2026-08-16 history below for
+// the content fixes, still all in place) — this page's visual identity
+// changed to differentiate it from the other four relaunched pages this
+// session (How It Works/Blog/FAQ/Careers, each deliberately distinct — see
+// their own file comments). About's own signature is the real photo in
+// "Our Story": the hero dropped the dot-grid backdrop + orbiting glow blobs
+// (FAQ keeps that combination, so it doesn't read as copied) for a plainer,
+// quieter frame that lets the photo section carry the page. The closing CTA
+// dropped the spinning conic-gradient ring for the same reason — that stays
+// FAQ's signature move alone now — in favor of a warm static gradient panel.
 //
+// 2026-08-16 history:
 // 1. Both CTAs that used to point straight at /auth/signup now go to /join
 //    (the unified buyer/business chooser, built 2026-08-14) — every other
 //    surface on the site routes that path through /join already; this page
 //    was the one holdout still reopening the "which button do I click"
 //    ambiguity /join exists to remove.
-//
 // 2. "Built for both sides" shrank from two full bullet-list cards with
 //    their own CTAs down to a slim two-column band that links out to
-//    /how-it-works instead of restating it — once that page shipped
-//    (2026-08-16), this section's old form duplicated it almost line for
-//    line. This version leans into what About is actually for (why this
-//    matters) and hands the procedural detail (what happens, in order) to
-//    the page built specifically for that.
-//
-// 3. Icons swapped to Phosphor (this page is a substantial redesign this
-//    session, same reasoning as the other pages that got the swap — see
-//    MobileMenu.tsx's own comment) and animation is more consistent
-//    end-to-end: Our Story used to run its own bespoke x-slide transitions
-//    outside the shared stagger/fadeUp system every other section uses;
-//    it's on that shared system now too (its distinctive photo
-//    tilt/float/hover treatment is untouched — that was already good, it
-//    just needed to sit inside the same reveal rhythm as everything else).
+//    /how-it-works instead of restating it.
+// 3. Icons swapped to the custom set — see [[custom_icon_system]].
 //
 // No fabricated numbers anywhere on this page — same rule the marketplace
 // pages hold to (see MarketplaceTabs's own comments): nothing here claims a
@@ -59,25 +54,25 @@ const storyPhoto = {
 
 const values = [
   {
-    icon: Database,
+    icon: DatabaseIcon,
     title: "Real Data Only",
     description:
       "Our AI never invents a vendor, price, or stock level — every result comes straight from the database.",
   },
   {
-    icon: MagnifyingGlass,
+    icon: SearchIcon,
     title: "Buyer‑First",
     description:
       "Browse real listings directly, or describe what you need in your own words or a photo — either way, we do the matching, not you.",
   },
   {
-    icon: Storefront,
+    icon: StoreIcon,
     title: "Seller Empowerment",
     description:
       "Any real seller is discoverable — no listing fee or ad budget required.",
   },
   {
-    icon: MapPin,
+    icon: MapPinIcon,
     title: "Proximity & Trust",
     description:
       "The nearest genuine match wins — not whoever paid for placement.",
@@ -89,7 +84,7 @@ const values = [
 const sides = [
   {
     audience: "For buyers",
-    icon: MagnifyingGlass,
+    icon: SearchIcon,
     points: [
       "Browse real listings, or describe what you need",
       "Matched by meaning, proximity and trust — never invented",
@@ -98,7 +93,7 @@ const sides = [
   },
   {
     audience: "For sellers",
-    icon: Storefront,
+    icon: StoreIcon,
     points: [
       "List free, always — no fee or ad budget required",
       "Found by real demand, matched nearby",
@@ -122,23 +117,9 @@ export default function AboutContent() {
     <>
       <Navbar />
       <main className="bg-[#F1F5F9] min-h-screen pt-20 sm:pt-24 pb-20">
-        {/* Hero */}
+        {/* Hero — plain, no grid backdrop or glow blobs (that combination
+            is FAQ's signature); the headline and badges carry this one. */}
         <section className="relative overflow-hidden">
-          <div
-            className="absolute inset-0 opacity-[0.04]"
-            style={{
-              backgroundImage: `linear-gradient(rgba(249,115,22,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,0.5) 1px, transparent 1px)`,
-              backgroundSize: "64px 64px",
-              maskImage:
-                "radial-gradient(ellipse 70% 60% at 50% 20%, black, transparent)",
-            }}
-          />
-          {/* Soft glows — same treatment Hero.tsx's own homepage composer
-              uses, so the brand's "AI section" feel is consistent, not a
-              one-off effect invented for this page. */}
-          <div className="absolute top-10 left-1/4 w-[420px] h-[420px] bg-orange-400/[0.08] rounded-full blur-[100px] pointer-events-none" />
-          <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] bg-orange-400/[0.06] rounded-full blur-[80px] pointer-events-none" />
-
           <div className="relative max-w-3xl mx-auto px-5 sm:px-8 text-center">
             <motion.div initial="hidden" animate="show" variants={stagger}>
               <motion.h1
@@ -177,7 +158,7 @@ export default function AboutContent() {
                     transition={{ delay: 0.5 + i * 0.08, duration: 0.35 }}
                     className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-[#023337] text-xs font-medium px-3 py-1.5 rounded-full shadow-sm"
                   >
-                    <ShieldCheck className="w-3 h-3 text-orange-500" />
+                    <ShieldCheckIcon className="w-3 h-3 text-orange-500" />
                     {badge}
                   </motion.span>
                 ))}
@@ -269,7 +250,7 @@ export default function AboutContent() {
                 transition={{ delay: 0.35, duration: 0.5 }}
                 className="absolute -left-4 -bottom-4 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                <ShieldCheckIcon className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                 <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
                   Matched, not invented
                 </span>
@@ -314,7 +295,7 @@ export default function AboutContent() {
                   <ul className="space-y-2.5">
                     {points.map((point) => (
                       <li key={point} className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                        <CheckCircleIcon className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
                         <span className="text-sm text-gray-500 leading-relaxed">
                           {point}
                         </span>
@@ -334,7 +315,7 @@ export default function AboutContent() {
                 className="inline-flex items-center gap-1.5 text-orange-600 font-semibold text-sm hover:text-orange-700 transition-colors"
               >
                 See the full flow, step by step
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRightIcon className="w-3.5 h-3.5" />
               </Link>
             </motion.div>
           </motion.div>
@@ -395,16 +376,22 @@ export default function AboutContent() {
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="relative rounded-3xl p-[1px] overflow-hidden"
+            className="relative rounded-3xl overflow-hidden"
           >
-            <div
-              className="absolute -inset-[60%] animate-spin-slow opacity-70"
-              style={{
-                background:
-                  "conic-gradient(from 0deg, transparent 0%, rgba(249,115,22,0.5) 12%, transparent 24%)",
-              }}
+            {/* Static warm mesh, not a spinning ring — that's FAQ's
+                signature closing move, this page's own is the photo above,
+                so the closer stays quiet by comparison. */}
+            <motion.div
+              animate={{ x: [0, 24, 0], y: [0, -16, 0] }}
+              transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute -top-10 -left-10 w-72 h-72 bg-orange-300/20 rounded-full blur-[90px] pointer-events-none"
             />
-            <div className="relative bg-gradient-to-br from-orange-500/[0.08] to-[#F1F5F9] rounded-3xl p-12 text-center">
+            <motion.div
+              animate={{ x: [0, -20, 0], y: [0, 18, 0] }}
+              transition={{ duration: 13, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute -bottom-10 -right-10 w-72 h-72 bg-orange-400/15 rounded-full blur-[90px] pointer-events-none"
+            />
+            <div className="relative bg-white/60 rounded-3xl p-12 text-center">
               <h3 className="text-3xl font-bold text-[#023337] mb-4 text-balance">
                 Looking for something, or have something to sell?
               </h3>
@@ -413,21 +400,22 @@ export default function AboutContent() {
                 buyers can find you.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                {/* Was href="/" + scrollToMarketplace, scrolling to a
-                    homepage #marketplace section — that section
-                    (MarketplacePreview) was removed from page.tsx during
-                    the AI-agent pivot and isn't rendered anywhere anymore,
-                    so the scroll silently did nothing. Points straight at
-                    the real destination now, same fix as FaqContent.tsx's
-                    own "Browse Products" CTA. */}
-                <Link href="/marketplace">
+                {/* Was "Browse Products" → /marketplace — that path isn't
+                    promoted anywhere on the site anymore (AI search at
+                    /chat replaced it, see Footer.tsx's own comment on why
+                    /marketplace stopped being linked from navigation); this
+                    button now goes straight to the thing that's actually
+                    live. AskVeluxButton's separate "full" chip that used to
+                    sit below this row is retired here too — a second link
+                    to the same /chat destination right underneath a
+                    primary button pointing there already was redundant. */}
+                <Link href="/chat">
                   <Button
                     size="lg"
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   >
-                    <SquaresFour className="w-4 h-4" />
-                    Browse Products
-                    <ArrowRight className="w-4 h-4" />
+                    Find something now
+                    <ArrowRightIcon className="w-4 h-4" />
                   </Button>
                 </Link>
                 {/* → /auth/signup directly — /join is just a redirect
@@ -441,15 +429,9 @@ export default function AboutContent() {
                     className="text-gray-700 cursor-pointer hover:bg-gray-100 border-gray-300 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98] gap-2"
                   >
                     List your business
-                    <ArrowUpRight className="w-4 h-4" />
+                    <ArrowUpRightIcon className="w-4 h-4" />
                   </Button>
                 </Link>
-              </div>
-              <div className="flex justify-center mt-5">
-                <AskVeluxButton
-                  label="Ask Velte"
-                  subtext="Velte's AI shopping assistant"
-                />
               </div>
             </div>
           </motion.div>

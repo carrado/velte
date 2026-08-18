@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { MapPin, Store as StoreIcon } from "lucide-react";
-
+import { MapPinIcon, StoreIcon } from "@/components/icons";
 export interface StoreFooterProps {
   name: string;
   handle: string;
@@ -29,7 +28,7 @@ export default function StoreFooter({
             </div>
             {area && (
               <p className="flex items-center gap-1.5 text-sm text-gray-500 mt-2">
-                <MapPin size={13} className="text-orange-500" />
+                <MapPinIcon size={13} className="text-orange-500" />
                 {area}
               </p>
             )}

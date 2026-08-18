@@ -5,6 +5,10 @@ import { cn } from "@/lib/utils";
 
 export type FaqTabKey = "all" | "buyer" | "vendor";
 
+// Underline indicator, not a filled sliding pill — that pill-spring
+// mechanism belongs to How It Works' buyer/seller toggle now (see that
+// page's own file comment); FAQ needed its own distinct interaction once
+// this page actually got redesigned instead of just being left alone.
 export default function FaqTabs({
   active,
   onChange,
@@ -21,7 +25,7 @@ export default function FaqTabs({
   ];
 
   return (
-    <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white border border-gray-200 shadow-sm">
+    <div className="inline-flex items-center gap-6 border-b border-gray-200">
       {tabs.map((tab) => {
         const isActive = active === tab.key;
         return (
@@ -30,30 +34,28 @@ export default function FaqTabs({
             type="button"
             onClick={() => onChange(tab.key)}
             className={cn(
-              "relative cursor-pointer rounded-full px-4 sm:px-5 py-2 text-xs sm:text-sm font-semibold transition-colors duration-200 whitespace-nowrap",
-              isActive ? "text-white" : "text-gray-500 hover:text-[#023337]",
+              "relative cursor-pointer pb-3 text-sm font-semibold transition-colors duration-200 whitespace-nowrap flex items-center gap-1.5",
+              isActive ? "text-[#023337]" : "text-gray-400 hover:text-gray-600",
             )}
           >
+            {tab.label}
+            <span
+              className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded-full transition-colors duration-200",
+                isActive
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-gray-100 text-gray-400",
+              )}
+            >
+              {counts[tab.key]}
+            </span>
             {isActive && (
               <motion.span
-                layoutId="faq-tab-pill"
-                transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                className="absolute inset-0 rounded-full bg-orange-500 shadow-md shadow-orange-500/30"
+                layoutId="faq-tab-underline"
+                transition={{ type: "spring", stiffness: 450, damping: 34 }}
+                className="absolute left-0 right-0 -bottom-px h-[2.5px] bg-orange-500 rounded-full"
               />
             )}
-            <span className="relative flex items-center gap-1.5">
-              {tab.label}
-              <span
-                className={cn(
-                  "text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-                  isActive
-                    ? "bg-white/20 text-white"
-                    : "bg-gray-100 text-gray-400",
-                )}
-              >
-                {counts[tab.key]}
-              </span>
-            </span>
           </button>
         );
       })}

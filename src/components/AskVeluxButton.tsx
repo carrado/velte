@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ArrowRightIcon } from "@/components/icons";
 
 interface AskVeluxButtonProps {
   /** "compact" — an inline pill (avatar + always-visible short label,
@@ -97,7 +97,7 @@ export function AskVeluxButton({
           </span>
         )}
       </span>
-      <ArrowRight className="w-4 h-4 text-gray-400 shrink-0" />
+      <ArrowRightIcon className="w-4 h-4 text-gray-400 shrink-0" />
     </Link>
   );
 }

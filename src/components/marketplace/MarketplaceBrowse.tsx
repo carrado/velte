@@ -1,10 +1,10 @@
-import { MagnifyingGlass } from "@phosphor-icons/react";
 import { MarketplaceCard } from "@/components/landing/MarketplacePreview";
 import { AskVeluxCard } from "./AskVeluxCard";
 import type { SortOrder } from "./SortMenu";
 import type { ListingKind } from "./KindToggle";
 import type { PriceRange } from "./PriceRangeMenu";
 import type { MarketplaceBrowseItem } from "@/types/store";
+import { SearchIcon } from "@/components/icons";
 
 function matchesSearch(item: MarketplaceBrowseItem, query: string): boolean {
   if (!query.trim()) return true;
@@ -115,7 +115,7 @@ export function MarketplaceBrowse({
     <div>
       {hasActiveFilter && filtered.length === 0 && (
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <MagnifyingGlass size={15} className="shrink-0" />
+          <SearchIcon size={15} className="shrink-0" />
           Nothing matches these filters — try Velte instead.
         </div>
       )}

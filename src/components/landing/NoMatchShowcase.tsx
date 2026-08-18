@@ -2,8 +2,7 @@
 
 import Image from "next/image";
 import { motion } from "motion/react";
-import { CheckCircle2, MessageCircle } from "lucide-react";
-
+import { CheckCircleIcon, MessageCircleIcon } from "@/components/icons";
 const stagger = {
   hidden: {},
   show: { transition: { staggerChildren: 0.12 } },
@@ -96,7 +95,10 @@ export function NoMatchShowcase() {
             />
             <div className="flex-1 min-w-0 bg-[#F8FAFC] rounded-2xl rounded-tl-md border border-gray-100 p-3.5">
               <div className="flex items-center gap-1.5 mb-1.5">
-                <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+                <CheckCircleIcon
+                  size={14}
+                  className="text-green-600 shrink-0"
+                />
                 <p className="text-[13px] font-semibold text-gray-800">
                   Good news — ABC Catering can help.
                 </p>
@@ -105,7 +107,7 @@ export function NoMatchShowcase() {
                 They confirmed availability for your date and budget.
               </p>
               <span className="inline-flex items-center gap-1.5 bg-green-500 text-white text-xs font-semibold px-3.5 py-2 rounded-full">
-                <MessageCircle size={12} />
+                <MessageCircleIcon size={12} />
                 Chat with ABC Catering
               </span>
             </div>

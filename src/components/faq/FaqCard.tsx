@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus } from "lucide-react";
 import type { FaqItem } from "@/types/common";
 import { cn } from "@/lib/utils";
+import { PlusIcon } from "@/components/icons";
 
 export default function FaqCard({
   faq,
@@ -74,7 +74,7 @@ export default function FaqCard({
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="grid place-items-center w-7 h-7 rounded-full shrink-0"
         >
-          <Plus
+          <PlusIcon
             className={cn(
               "w-4 h-4 transition-colors duration-200",
               open ? "text-white" : "text-orange-500",

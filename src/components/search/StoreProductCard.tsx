@@ -1,4 +1,3 @@
-import { Store as StoreIcon } from "lucide-react";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
@@ -8,6 +7,7 @@ import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import type { StoreProductItem } from "@/types/search";
+import { StoreIcon } from "@/components/icons";
 
 // One item from getVendorProductsTool — a SPECIFIC, already-identified
 // store's own catalog, shown under a section header naming that store

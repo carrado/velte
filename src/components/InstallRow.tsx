@@ -1,29 +1,36 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import {
-  Download,
-  Zap,
-  Bell,
-  Rocket,
-  Share,
-  MoreVertical,
-  Menu as MenuIcon,
-  Copy,
-} from "lucide-react";
 import { toast } from "sonner";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { installPromptStore } from "@/lib/installPromptStore";
 import { getInstallHint } from "@/lib/deviceDetection";
 import { cn } from "@/lib/utils";
+import {
+  BellIcon,
+  CopyIcon,
+  DownloadIcon,
+  MenuIcon,
+  MoreVerticalIcon,
+  RocketIcon,
+  ShareIcon,
+  ZapIcon,
+} from "@/components/icons";
 
 const BENEFITS = [
-  { icon: Rocket, text: "One-tap access — no browser, no searching for a tab" },
-  { icon: Bell, text: "Real-time alerts the moment something needs you" },
-  { icon: Zap, text: "Faster, right from your home screen" },
+  {
+    icon: RocketIcon,
+    text: "One-tap access — no browser, no searching for a tab",
+  },
+  { icon: BellIcon, text: "Real-time alerts the moment something needs you" },
+  { icon: ZapIcon, text: "Faster, right from your home screen" },
 ];
 
-const GUIDE_ICONS = { share: Share, dots: MoreVertical, lines: MenuIcon };
+const GUIDE_ICONS = {
+  share: ShareIcon,
+  dots: MoreVerticalIcon,
+  lines: MenuIcon,
+};
 
 /* A permanent settings-page card — NOT the dismissible install banner
  * (PushNotificationManager, vendor) or the dismissible /chat popup
@@ -139,7 +146,7 @@ export function InstallRow() {
     >
       <div className="flex items-center gap-3 mb-3.5">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shrink-0 shadow-sm shadow-orange-200">
-          <Download size={17} className="text-white" />
+          <DownloadIcon size={17} className="text-white" />
         </div>
         <div className="min-w-0">
           <p className="text-dash-body font-bold text-gray-900">
@@ -187,7 +194,7 @@ export function InstallRow() {
           "Installing…"
         ) : (
           <>
-            {copyLinkOnly ? <Copy size={15} /> : <Download size={15} />}
+            {copyLinkOnly ? <CopyIcon size={15} /> : <DownloadIcon size={15} />}
             {ctaLabel}
           </>
         )}

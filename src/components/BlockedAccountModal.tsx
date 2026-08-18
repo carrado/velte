@@ -1,9 +1,9 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { ShieldAlert } from "lucide-react";
 import { useBlockedStore } from "@/store/blockedStore";
 import { useUserStore } from "@/store/userStore";
+import { ShieldAlertIcon } from "@/components/icons";
 
 // Mounted once at the root layout — reads its own state, so no page needs to
 // wire this up. Fires whenever api-client.ts's request() sees a 423 from
@@ -33,7 +33,7 @@ export default function BlockedAccountModal() {
       <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
         <div className="px-6 py-5 flex flex-col items-center text-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
-            <ShieldAlert className="h-5 w-5 text-red-500" />
+            <ShieldAlertIcon className="h-5 w-5 text-red-500" />
           </div>
           <h3 className="text-dash-heading font-semibold text-[#111827]">
             Account blocked

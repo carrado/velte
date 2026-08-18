@@ -4,10 +4,11 @@
    /auth/login — firing it for a buyer's 401 would be wrong on both counts:
    it would wipe a vendor session that might legitimately be active
    alongside a buyer one in the same browser (buyer_auth_token is a
-   separate cookie specifically so the two can coexist — see
-   buyerSession.ts), and it would send the buyer to the wrong login page.
-   This client just throws ApiError and leaves handling entirely to the
-   caller (e.g. redirect to /buyer/auth, not /auth/login). */
+   separate cookie specifically so the two can coexist), and there's no
+   buyer login page to send them to anyway — a buyer isn't an account, just
+   a one-time phone verification (see Buyer.model.js's own comment). This
+   client just throws ApiError and leaves handling entirely to the caller —
+   in practice that just means re-showing the phone/OTP capture inline. */
 
 import { ApiError } from "@/lib/api-client";
 

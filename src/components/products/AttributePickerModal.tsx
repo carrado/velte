@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Search, Check, Plus } from "lucide-react";
 import type { AttributePickerModalProps } from "@/types/product";
+import { CheckIcon, CloseIcon, PlusIcon, SearchIcon } from "@/components/icons";
 
 /* Scrollable "fill what applies" picker: every preset renders as a row with a
    value input seeded by a realistic example. No selection step — anything the
@@ -96,7 +96,7 @@ export default function AttributePickerModal({
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 cursor-pointer"
             >
-              <X size={18} />
+              <CloseIcon size={18} />
             </button>
           </div>
           {subtitle && (
@@ -105,7 +105,7 @@ export default function AttributePickerModal({
             </p>
           )}
           <div className="relative mt-3">
-            <Search
+            <SearchIcon
               size={14}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
             />
@@ -142,7 +142,7 @@ export default function AttributePickerModal({
                       </span>
                       {alreadyAdded ? (
                         <span className="flex items-center gap-1.5 text-dash-caption text-green-600">
-                          <Check size={13} />
+                          <CheckIcon size={13} />
                           Added
                         </span>
                       ) : (
@@ -188,7 +188,7 @@ export default function AttributePickerModal({
                     className="hover:text-red-600 cursor-pointer"
                     aria-label={`Remove ${c.name}`}
                   >
-                    <X size={11} />
+                    <CloseIcon size={11} />
                   </button>
                 </span>
               ))}
@@ -215,7 +215,7 @@ export default function AttributePickerModal({
               aria-label="Add custom detail"
               className="w-9 h-9 shrink-0 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center cursor-pointer"
             >
-              <Plus size={16} />
+              <PlusIcon size={16} />
             </button>
           </div>
         </div>

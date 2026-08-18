@@ -3,17 +3,31 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
-import { ArrowRight, LayoutGrid } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
-import { AskVeluxButton } from "@/components/AskVeluxButton";
 import { faqs } from "@/lib/faqs";
 import FaqCard from "@/components/faq/FaqCard";
 import FaqTabs, { type FaqTabKey } from "@/components/faq/FaqTabs";
 import FaqCountUp from "@/components/faq/FaqCountUp";
 import FaqHeroVisual from "@/components/faq/FaqHeroVisual";
+import { ArrowRightIcon, SearchIcon, SearchXIcon } from "@/components/icons";
 
+// 2026-08-17: first pass at this session's About/How It Works/Blog/FAQ/
+// Careers redesign left this page's implementation untouched (it was
+// already the richest of the five — word-by-word 3D hero, FaqCountUp,
+// FaqHeroVisual, tabs, conic-spin CTA — so the other four changed to stop
+// overlapping with it). That wasn't actually what was asked for, though —
+// "redesign all five" meant this one too. Second pass: kept the hero
+// headline animation, dot-grid/glow backdrop, count-up stat, and
+// conic-spin CTA (still nothing else on the site uses that combination),
+// but added a real new capability — live text search across all 20
+// questions, not just the two category tabs — and rebuilt the two
+// subcomponents that WERE quietly duplicating other pages: FaqTabs' pill
+// toggle (now How It Works' signature — see that file) is an underline
+// indicator here instead, and FaqHeroVisual's tilted-photo treatment (now
+// About's signature) is a floating FAQ-card-stack mockup previewing this
+// page's own content instead of borrowed photography.
 const headline = "Questions? We've got answers.";
 
 const wordContainer = {
@@ -39,11 +53,19 @@ const counts: Record<FaqTabKey, number> = {
 
 export default function FaqContent() {
   const [tab, setTab] = useState<FaqTabKey>("all");
+  const [query, setQuery] = useState("");
 
-  const filtered = useMemo(
-    () => (tab === "all" ? faqs : faqs.filter((faq) => faq.category === tab)),
-    [tab],
-  );
+  const filtered = useMemo(() => {
+    const byTab =
+      tab === "all" ? faqs : faqs.filter((faq) => faq.category === tab);
+    const q = query.trim().toLowerCase();
+    if (!q) return byTab;
+    return byTab.filter(
+      (faq) =>
+        faq.question.toLowerCase().includes(q) ||
+        faq.answer.toLowerCase().includes(q),
+    );
+  }, [tab, query]);
 
   return (
     <>
@@ -125,6 +147,22 @@ export default function FaqContent() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+                className="relative mb-5 max-w-sm mx-auto lg:mx-0"
+              >
+                <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search a question…"
+                  className="w-full h-11 pl-10 pr-4 rounded-full bg-white border border-gray-200 text-sm text-[#023337] placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                />
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.55 }}
                 className="flex justify-center lg:justify-start"
               >
@@ -144,18 +182,36 @@ export default function FaqContent() {
 
         {/* FAQ list */}
         <section className="max-w-3xl mx-auto px-5 sm:px-8 mt-4">
-          <motion.div layout className="grid gap-3">
-            <AnimatePresence mode="popLayout">
-              {filtered.map((faq, i) => (
-                <FaqCard
-                  key={`${faq.category}-${faq.question}`}
-                  faq={faq}
-                  index={i}
-                  defaultOpen={i === 0}
-                />
-              ))}
-            </AnimatePresence>
-          </motion.div>
+          {filtered.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center text-center py-16"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center mb-4">
+                <SearchXIcon className="w-5 h-5 text-orange-500" />
+              </div>
+              <p className="text-[#023337] font-semibold mb-1">
+                No matches for &ldquo;{query}&rdquo;
+              </p>
+              <p className="text-gray-400 text-sm">
+                Try a different word, or ask Velte directly below.
+              </p>
+            </motion.div>
+          ) : (
+            <motion.div layout className="grid gap-3">
+              <AnimatePresence mode="popLayout">
+                {filtered.map((faq, i) => (
+                  <FaqCard
+                    key={`${faq.category}-${faq.question}`}
+                    faq={faq}
+                    index={i}
+                    defaultOpen={i === 0 && !query}
+                  />
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )}
         </section>
 
         {/* CTA */}
@@ -179,24 +235,24 @@ export default function FaqContent() {
                 Still have a question?
               </h3>
               <p className="text-gray-500 mb-6 max-w-xl mx-auto">
-                Browse real listings as a buyer, list your business, or reach
-                out directly — we&apos;re happy to help.
+                Describe what you&apos;re looking for, list your business, or
+                reach out directly — we&apos;re happy to help.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                {/* Was href="/" + scrollToMarketplace, scrolling to a
-                    homepage #marketplace section — that section
-                    (MarketplacePreview) was removed from page.tsx during
-                    the AI-agent pivot and isn't rendered anywhere anymore,
-                    so the scroll silently did nothing. Points straight at
-                    the real destination now. */}
-                <Link href="/marketplace">
+                {/* Was "Browse Products" → /marketplace, and a separate
+                    AskVeluxButton chip below this row pointing at the same
+                    /chat destination — that path isn't promoted anywhere on
+                    the site anymore (see Footer.tsx's own comment on why
+                    /marketplace stopped being linked from navigation), and
+                    the duplicate link was redundant once this button
+                    pointed at /chat directly instead. */}
+                <Link href="/chat">
                   <Button
                     size="lg"
                     className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
                   >
-                    <LayoutGrid className="w-4 h-4" />
-                    Browse Products
-                    <ArrowRight className="w-4 h-4" />
+                    Ask Velte
+                    <ArrowRightIcon className="w-4 h-4" />
                   </Button>
                 </Link>
                 <Link href="/contact">
@@ -208,12 +264,6 @@ export default function FaqContent() {
                     Contact us
                   </Button>
                 </Link>
-              </div>
-              <div className="flex justify-center mt-5">
-                <AskVeluxButton
-                  label="Ask Velte"
-                  subtext="Velte's AI shopping assistant"
-                />
               </div>
             </div>
           </motion.div>

@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
-
+import { SparklesIcon } from "@/components/icons";
 // Shared between the Listings and Vendors tabs (MarketplaceBrowse /
 // VendorsGrid) — sits once, as the last cell of whichever grid it's in.
 // `self-start` opts out of CSS Grid's default `align-items: stretch`, which
@@ -24,7 +23,7 @@ export function AskVeluxCard({ subtext }: { subtext: string }) {
         className="rounded-full ring-4 ring-orange-50"
       />
       <p className="text-sm font-semibold text-gray-800 leading-snug flex items-center gap-1.5">
-        <Sparkles size={13} className="text-orange-500 shrink-0" />
+        <SparklesIcon size={13} className="text-orange-500 shrink-0" />
         Still looking?
       </p>
       <p className="text-xs text-gray-500 leading-relaxed">{subtext}</p>

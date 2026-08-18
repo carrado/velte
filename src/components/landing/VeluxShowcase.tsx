@@ -4,18 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
-// Icons from Phosphor (2026-08-16, swapped from lucide-react for this
-// session's pages only — see MobileMenu.tsx's comment). SignalHigh/Wifi's
-// closest Phosphor equivalents are CellSignalFull/WifiHigh.
-import {
-  ArrowRight,
-  BatteryFull,
-  Camera,
-  CellSignalFull,
-  ShieldCheck,
-  WifiHigh,
-} from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import {
+  ArrowRightIcon,
+  BatteryIcon,
+  CameraIcon,
+  ShieldCheckIcon,
+  SignalIcon,
+  WifiIcon,
+} from "@/components/icons";
 
 // A real iPhone 14 Pro Max screen recording of Velte in use — 2026-08-15.
 // Uploaded to Cloudinary as .mkv (per the source file); Cloudinary
@@ -175,7 +172,7 @@ export function VeluxShowcase() {
                 className="inline-flex items-center gap-1.5 border border-orange-200 bg-orange-50 hover:border-orange-300 hover:bg-orange-100 text-orange-600 font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
               >
                 Try Velte yourself
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRightIcon className="w-3.5 h-3.5" />
               </Link>
             </motion.div>
           </div>
@@ -212,9 +209,9 @@ export function VeluxShowcase() {
                 <div className="flex items-center justify-between px-6 pt-3.5 pb-1 text-[11px] font-semibold text-[#023337]">
                   <span>9:41</span>
                   <div className="flex items-center gap-1 text-[#023337]">
-                    <CellSignalFull size={12} />
-                    <WifiHigh size={12} />
-                    <BatteryFull size={14} />
+                    <SignalIcon size={12} />
+                    <WifiIcon size={12} />
+                    <BatteryIcon size={14} />
                   </div>
                 </div>
 
@@ -240,7 +237,7 @@ export function VeluxShowcase() {
                   <div className="flex justify-end mb-3">
                     <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-100 rounded-2xl rounded-br-md px-2.5 py-1.5">
                       <div className="w-7 h-7 rounded-lg bg-orange-200/50 flex items-center justify-center shrink-0">
-                        <Camera size={12} className="text-orange-600" />
+                        <CameraIcon size={12} className="text-orange-600" />
                       </div>
                       <p className="text-[10.5px] text-[#023337] font-medium">
                         [photo attached]
@@ -275,7 +272,7 @@ export function VeluxShowcase() {
                                 <span className="text-[9px] text-gray-400 truncate">
                                   {r.store}
                                 </span>
-                                <ShieldCheck
+                                <ShieldCheckIcon
                                   size={8}
                                   className="text-orange-500 shrink-0"
                                 />
@@ -332,7 +329,7 @@ export function VeluxShowcase() {
               className="inline-flex items-center gap-2 border border-orange-200 bg-orange-50 hover:border-orange-300 hover:bg-orange-100 text-orange-600 font-semibold text-base px-7 py-3.5 rounded-lg transition-colors"
             >
               Try Velte yourself
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRightIcon className="w-4 h-4" />
             </Link>
           </motion.div>
         </motion.div>

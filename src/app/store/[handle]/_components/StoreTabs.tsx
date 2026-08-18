@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { reportLead } from "@/lib/reportLead";
 import { buildWhatsappLink } from "@/lib/whatsapp";
@@ -9,6 +8,7 @@ import type { PublicStoreTab, StoreTabsProps } from "@/types/store";
 import { OfferingCard } from "./shared";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
+import { MessageCircleIcon } from "@/components/icons";
 
 // Compact segmented control (Products / Services) plus a two-column body
 // (persistent Intro sidebar + the active panel). Only ever two tabs now —
@@ -44,7 +44,7 @@ export default function StoreTabs({
           ) : whatsappHref ? (
             <>
               <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-50 flex items-center justify-center mb-4">
-                <MessageCircle size={22} className="text-orange-500" />
+                <MessageCircleIcon size={22} className="text-orange-500" />
               </div>
               <p className="text-base font-semibold text-gray-800">
                 Looking for something specific?

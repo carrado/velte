@@ -3,15 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
-// Icons from Phosphor (2026-08-16, swapped from lucide-react for this
-// session's pages only — see MobileMenu.tsx's own comment). BadgeCheck and
-// Store have no exact match; SealCheck and Storefront are their closest
-// Phosphor equivalents.
-import {
-  ArrowRight,
-  SealCheck,
-  Storefront as StoreIcon,
-} from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
@@ -19,6 +10,7 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import { reportLead } from "@/lib/reportLead";
 import type { VendorPreviewItem } from "@/types/store";
+import { ArrowRightIcon, BadgeCheckIcon, StoreIcon } from "@/components/icons";
 
 const stagger = {
   hidden: {},
@@ -161,7 +153,7 @@ export function VendorCard({ item }: { item: VendorPreviewItem }) {
           <p className="font-bold text-[#023337] text-[15px] truncate">
             {item.name}
           </p>
-          <SealCheck
+          <BadgeCheckIcon
             size={15}
             className="text-orange-500 shrink-0 fill-orange-500/15"
           />
@@ -292,7 +284,7 @@ export function VendorsPreview({ items }: { items: VendorPreviewItem[] }) {
             className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-orange-200 bg-orange-50 text-orange-600 font-semibold text-sm hover:border-orange-300 hover:bg-orange-100 transition-colors"
           >
             Explore all businesses
-            <ArrowRight size={14} />
+            <ArrowRightIcon size={14} />
           </Link>
         </motion.div>
       </div>

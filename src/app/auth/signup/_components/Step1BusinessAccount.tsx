@@ -3,21 +3,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  User,
-  Building2,
-  MapPin,
-  AtSign,
-  Mail,
-  Lock,
-  Info,
-  Eye,
-  EyeOff,
-  Phone,
-  LocateFixed,
-  Loader2,
-  Gift,
-} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -32,6 +17,21 @@ import { NIGERIA_STATES } from "@/lib/states";
 import { SIGNUP_FIELD_SCHEMAS, passwordStrength } from "../schema";
 import type { SignupFormApi } from "../schema";
 import { FieldError } from "./shared";
+import {
+  AtSignIcon,
+  BuildingIcon,
+  EyeIcon,
+  EyeOffIcon,
+  GiftIcon,
+  InfoIcon,
+  LoaderIcon,
+  LocateFixedIcon,
+  LockIcon,
+  MailIcon,
+  MapPinIcon,
+  PhoneIcon,
+  UserIcon,
+} from "@/components/icons";
 
 function PasswordStrengthMeter({ password }: { password: string }) {
   const strength = passwordStrength(password);
@@ -83,7 +83,7 @@ function UsernameInput({
   return (
     <div>
       <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-        <AtSign className="w-3.5 h-3.5 text-orange-400" />
+        <AtSignIcon className="w-3.5 h-3.5 text-orange-400" />
         Username
       </Label>
       <div className="relative">
@@ -99,7 +99,7 @@ function UsernameInput({
         />
       </div>
       <div className="flex items-center gap-1 mt-1">
-        <Info className="w-3 h-3 text-black/40" />
+        <InfoIcon className="w-3 h-3 text-black/40" />
         <p className="text-black/40 text-xs">
           Must start with a letter; only lowercase letters, numbers, and
           underscores allowed.
@@ -209,7 +209,7 @@ export default function Step1BusinessAccount({
           {(field) => (
             <div>
               <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                <User className="w-3.5 h-3.5 text-orange-400" />
+                <UserIcon className="w-3.5 h-3.5 text-orange-400" />
                 Full Name
               </Label>
               <Input
@@ -236,7 +236,7 @@ export default function Step1BusinessAccount({
           {(field) => (
             <div>
               <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                <Building2 className="w-3.5 h-3.5 text-orange-400" />
+                <BuildingIcon className="w-3.5 h-3.5 text-orange-400" />
                 Business Name
               </Label>
               <Input
@@ -265,7 +265,7 @@ export default function Step1BusinessAccount({
         {(field) => (
           <div>
             <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-              <Phone className="w-3.5 h-3.5 text-orange-400" />
+              <PhoneIcon className="w-3.5 h-3.5 text-orange-400" />
               Business Phone Number
             </Label>
             <Input
@@ -279,7 +279,7 @@ export default function Step1BusinessAccount({
               className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
             />
             <div className="flex items-center gap-1 mt-1">
-              <Info className="w-3 h-3 text-black/40 shrink-0" />
+              <InfoIcon className="w-3 h-3 text-black/40 shrink-0" />
               <p className="text-black/40 text-xs">
                 This should be your WhatsApp Business number — buyers will be
                 sent here to chat.
@@ -303,7 +303,7 @@ export default function Step1BusinessAccount({
         {(field) => (
           <div>
             <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-              <Mail className="w-3.5 h-3.5 text-orange-400" />
+              <MailIcon className="w-3.5 h-3.5 text-orange-400" />
               Email
             </Label>
             <Input
@@ -332,7 +332,7 @@ export default function Step1BusinessAccount({
         {(field) => (
           <div>
             <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-              <MapPin className="w-3.5 h-3.5 text-orange-400" />
+              <MapPinIcon className="w-3.5 h-3.5 text-orange-400" />
               State
             </Label>
             <Select
@@ -370,7 +370,7 @@ export default function Step1BusinessAccount({
         {(field) => (
           <div>
             <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-              <MapPin className="w-3.5 h-3.5 text-orange-400" />
+              <MapPinIcon className="w-3.5 h-3.5 text-orange-400" />
               Business Address
             </Label>
             <Input
@@ -388,9 +388,9 @@ export default function Step1BusinessAccount({
                 className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-600 disabled:opacity-60 cursor-pointer"
               >
                 {locating || reverseGeocodeMutation.isPending ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <LoaderIcon className="w-3 h-3 animate-spin" />
                 ) : (
-                  <LocateFixed className="w-3 h-3" />
+                  <LocateFixedIcon className="w-3 h-3" />
                 )}
                 {locating
                   ? "Locating…"
@@ -433,7 +433,7 @@ export default function Step1BusinessAccount({
         {(field) => (
           <div>
             <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-              <Gift className="w-3.5 h-3.5 text-orange-400" />
+              <GiftIcon className="w-3.5 h-3.5 text-orange-400" />
               Referral Code{" "}
               <span className="text-black/35 font-normal">(optional)</span>
             </Label>
@@ -446,7 +446,7 @@ export default function Step1BusinessAccount({
               className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 uppercase disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <div className="flex items-center gap-1 mt-1">
-              <Info className="w-3 h-3 text-black/40 shrink-0" />
+              <InfoIcon className="w-3 h-3 text-black/40 shrink-0" />
               <p className="text-black/40 text-xs">
                 {referralLocked
                   ? "Applied from your invite link."
@@ -471,7 +471,7 @@ export default function Step1BusinessAccount({
           {(field) => (
             <div>
               <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                <Lock className="w-3.5 h-3.5 text-orange-400" />
+                <LockIcon className="w-3.5 h-3.5 text-orange-400" />
                 Password
               </Label>
               <div className="relative">
@@ -490,9 +490,9 @@ export default function Step1BusinessAccount({
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none cursor-pointer"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOffIcon className="h-4 w-4" />
                   ) : (
-                    <Eye className="h-4 w-4" />
+                    <EyeIcon className="h-4 w-4" />
                   )}
                 </button>
               </div>
@@ -516,7 +516,7 @@ export default function Step1BusinessAccount({
           {(field) => (
             <div>
               <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                <Lock className="w-3.5 h-3.5 text-orange-400" />
+                <LockIcon className="w-3.5 h-3.5 text-orange-400" />
                 Confirm Password
               </Label>
               <div className="relative">
@@ -535,9 +535,9 @@ export default function Step1BusinessAccount({
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none cursor-pointer"
                 >
                   {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOffIcon className="h-4 w-4" />
                   ) : (
-                    <Eye className="h-4 w-4" />
+                    <EyeIcon className="h-4 w-4" />
                   )}
                 </button>
               </div>

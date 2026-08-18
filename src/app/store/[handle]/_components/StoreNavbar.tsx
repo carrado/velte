@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LayoutGrid } from "lucide-react";
-
+import { SparkleIcon } from "@/components/icons";
 export default function StoreNavbar() {
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
@@ -18,15 +17,18 @@ export default function StoreNavbar() {
         </Link>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Takes a buyer off this one storefront and into the full
-              catalog — the /marketplace browse page, not the "/" homepage's
-              capped teaser section. */}
+          {/* Was a "Marketplace" link to /marketplace's browse page — that
+              path isn't promoted anywhere on the site anymore (AI search
+              at /chat replaced it, see Footer.tsx's own comment). Takes a
+              buyer off this one storefront and into that search instead,
+              same destination every other "find something else" link on
+              the site now points to. */}
           <Link
-            href="/marketplace"
+            href="/chat"
             className="inline-flex items-center gap-1.5 h-9 sm:h-auto px-3 sm:py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 text-sm font-semibold transition-colors whitespace-nowrap"
           >
-            <LayoutGrid size={15} className="text-orange-500" />
-            Marketplace
+            <SparkleIcon size={15} className="text-orange-500" />
+            Ask Velte
           </Link>
 
           <Link

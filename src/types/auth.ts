@@ -1,5 +1,4 @@
 import type { User } from "@/types/user";
-import type { Buyer } from "@/types/buyer";
 
 export interface FieldErrorProps {
   message: string | undefined;
@@ -9,9 +8,11 @@ export interface WizardProgressProps {
   step: 1 | 2;
 }
 
-// The unified login endpoint's response shape (POST /api/auth/login) —
-// one login screen for both account types, so the caller has to branch on
-// `accountType` to know which store to populate and where to route.
-export type LoginResult =
-  | { accountType: "vendor"; user: User }
-  | { accountType: "buyer"; buyer: Buyer };
+// POST /api/auth/login's response shape. Vendor-only (2026-08-18) — buyers
+// never log in at all, see auth.js's login and Buyer.model.js's own
+// comments. `accountType` is kept as a literal rather than dropped outright
+// so callers that still branch on it don't need a second, unrelated change.
+export interface LoginResult {
+  accountType: "vendor";
+  user: User;
+}

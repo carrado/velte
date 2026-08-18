@@ -1,8 +1,12 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Package, Wrench, Store, HelpCircle } from "lucide-react";
-
+import {
+  HelpCircleIcon,
+  PackageIcon,
+  StoreIcon,
+  WrenchIcon,
+} from "@/components/icons";
 const stagger = {
   hidden: {},
   show: { transition: { staggerChildren: 0.06 } },
@@ -21,10 +25,10 @@ const fadeUp = {
 // four-item row, not four cards, since none of these need more than a
 // label to land the point.
 const scope = [
-  { icon: Package, label: "Products" },
-  { icon: Wrench, label: "Services" },
-  { icon: Store, label: "Businesses" },
-  { icon: HelpCircle, label: "Anything else" },
+  { icon: PackageIcon, label: "Products" },
+  { icon: WrenchIcon, label: "Services" },
+  { icon: StoreIcon, label: "Businesses" },
+  { icon: HelpCircleIcon, label: "Anything else" },
 ];
 
 export function AskAnythingScope() {
@@ -53,7 +57,7 @@ export function AskAnythingScope() {
                 variants={fadeUp}
                 className="inline-flex items-center gap-2 bg-[#F1F5F9] rounded-full px-4 py-2"
               >
-                <Icon size={14} className="text-orange-500 shrink-0" />
+                <Icon size={17} className="text-orange-500 shrink-0" />
                 <span className="text-sm font-semibold text-gray-700">
                   {label}
                 </span>

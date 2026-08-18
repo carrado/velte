@@ -9,17 +9,6 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import {
-  ArrowRight,
-  Eye,
-  EyeOff,
-  Lock,
-  MessageSquarePlus,
-  ShieldCheck,
-  Sparkles,
-  UserRound,
-} from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,28 +16,30 @@ import { BuyerAuthShell } from "@/components/buyer/BuyerAuthShell";
 import { ApiError } from "@/lib/api-client";
 import { usersApi } from "@/services/users";
 import type { AuthPanelContent } from "@/types/common";
+import {
+  ArrowRightIcon,
+  EyeIcon,
+  EyeOffIcon,
+  LockIcon,
+  ShieldCheckIcon,
+  SparklesIcon,
+  UserRoundIcon,
+} from "@/components/icons";
 
-/* Unified login (2026-08-15) — ONE screen for both account types. The
-   backend (auth.js's login) tries the vendor collection first, then falls
-   back to Buyer, and tells us which one matched via `accountType` — this
-   page just branches on that to route correctly afterward. Replaces the
-   separate vendor /auth/login and buyer /buyer/auth/login; both old URLs
-   now redirect here. */
+/* Vendor-only login. Used to be unified with a Buyer branch (2026-08-15);
+   that's gone again (2026-08-18) — buyers never log in at all, see
+   Buyer.model.js's own comment ("just phone and OTP verification, nothing
+   buyers again on the system"). */
 
 const LOGIN_PANEL: AuthPanelContent = {
-  headline: "One account. Everything Velte.",
-  subtitle:
-    "Whether you're finding something or selling it, it's the same login — Velte knows which one you are.",
+  headline: "Welcome back.",
+  subtitle: "Sign in to manage your store, orders, and wallet.",
   features: [
     {
-      icon: MessageSquarePlus,
-      text: "Buyers: post requests, chat vendors direct",
+      icon: SparklesIcon,
+      text: "Get discovered, manage orders, get paid",
     },
-    {
-      icon: Sparkles,
-      text: "Vendors: get discovered, manage orders, get paid",
-    },
-    { icon: ShieldCheck, text: "Your data stays private, always" },
+    { icon: ShieldCheckIcon, text: "Your data stays private, always" },
   ],
 };
 
@@ -67,14 +58,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Set by proxy.ts when it bounces an unauthenticated vendor visit to a
-  // protected route here. Buyer-facing 401s (post a request, save an item)
-  // used to land here too via a /buyer/auth redirect shim, back when this
-  // was the buyer login as well — as of 2026-08-16 those go straight to the
-  // real buyer identity screen at /buyer/auth instead (see that page's own
-  // comment), so `redirect`/`reason` on THIS page only ever come from a
-  // vendor bounce now. Still read, still passed through to login, just no
-  // longer branches the "Sign up" link — there's no buyer-flavored signup
-  // to bias toward anymore (/auth/signup is vendor-only, see that page).
+  // protected route here.
   const redirectTo = searchParams.get("redirect");
 
   const [showPassword, setShowPassword] = useState(false);
@@ -84,17 +68,13 @@ function LoginForm() {
       usersApi.login(data),
     onSuccess: (result) => {
       toast.success("Welcome back!");
-      if (result.accountType === "vendor") {
-        const dest =
-          redirectTo && redirectTo.startsWith(`/${result.user.id}/`)
-            ? redirectTo
-            : `/${result.user.id}/wallet`;
-        // .replace(), not .push() — otherwise the login form stays one
-        // back-press away from the dashboard.
-        router.replace(dest);
-      } else {
-        router.replace(redirectTo || "/buyer/requests");
-      }
+      const dest =
+        redirectTo && redirectTo.startsWith(`/${result.user.id}/`)
+          ? redirectTo
+          : `/${result.user.id}/wallet`;
+      // .replace(), not .push() — otherwise the login form stays one
+      // back-press away from the dashboard.
+      router.replace(dest);
     },
     onError: (error: unknown, variables) => {
       const message =
@@ -181,7 +161,7 @@ function LoginForm() {
             {(field) => (
               <div>
                 <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
-                  <UserRound className="w-3.5 h-3.5 text-orange-400" />
+                  <UserRoundIcon className="w-3.5 h-3.5 text-orange-400" />
                   Email or username
                 </Label>
                 <Input
@@ -210,7 +190,7 @@ function LoginForm() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <Label className="text-gray-600 text-sm flex items-center gap-2">
-                    <Lock className="w-3.5 h-3.5 text-orange-400" />
+                    <LockIcon className="w-3.5 h-3.5 text-orange-400" />
                     Password
                   </Label>
                   <Link
@@ -240,9 +220,9 @@ function LoginForm() {
                     }
                   >
                     {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
+                      <EyeOffIcon className="w-4 h-4" />
                     ) : (
-                      <Eye className="w-4 h-4" />
+                      <EyeIcon className="w-4 h-4" />
                     )}
                   </button>
                 </div>
@@ -260,7 +240,9 @@ function LoginForm() {
                 className="w-full bg-orange-500 hover:bg-orange-400 cursor-pointer text-white font-semibold shadow-lg shadow-orange-500/20 gap-2"
               >
                 {loginMutation.isPending ? "Signing in..." : "Sign in"}
-                {!loginMutation.isPending && <ArrowRight className="w-4 h-4" />}
+                {!loginMutation.isPending && (
+                  <ArrowRightIcon className="w-4 h-4" />
+                )}
               </Button>
             )}
           </form.Subscribe>

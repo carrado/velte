@@ -1,8 +1,8 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
 import type { LogoutModalProps } from "@/types/common";
+import { CloseIcon } from "@/components/icons";
 
 export default function LogoutModal({
   isOpen,
@@ -26,7 +26,7 @@ export default function LogoutModal({
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <X size={20} />
+            <CloseIcon size={20} />
           </button>
         </div>
 

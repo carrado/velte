@@ -2,26 +2,26 @@
 
 import { motion } from "motion/react";
 import Image from "next/image";
-import {
-  Shield,
-  Database,
-  Share2,
-  Clock,
-  Lock,
-  UserCheck,
-  Globe,
-  Baby,
-  RefreshCw,
-  Mail,
-  CheckCircle2,
-  Search,
-  EyeOff,
-  MapPin,
-  ShieldCheck,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
+import {
+  BabyIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  DatabaseIcon,
+  EyeOffIcon,
+  GlobeIcon,
+  LockIcon,
+  MailIcon,
+  MapPinIcon,
+  RefreshIcon,
+  SearchIcon,
+  Share2Icon,
+  ShieldCheckIcon,
+  ShieldIcon,
+  UserCheckIcon,
+} from "@/components/icons";
+import type { IconComponent } from "@/types/common";
 
 const ORANGE = "rgb(247,107,16)";
 
@@ -29,7 +29,7 @@ type Block = { kind: "p"; text: string } | { kind: "list"; items: string[] };
 
 interface Section {
   id: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   blocks: Block[];
 }
@@ -37,24 +37,24 @@ interface Section {
 const lastUpdated = "August 5, 2026";
 
 // Pillars shown in the "Privacy at a glance" strip.
-const pillars: { icon: LucideIcon; title: string; text: string }[] = [
+const pillars: { icon: IconComponent; title: string; text: string }[] = [
   {
-    icon: EyeOff,
+    icon: EyeOffIcon,
     title: "Anonymous by design",
     text: "Searching doesn't require an account — we don't build a profile or history tied to who you are.",
   },
   {
-    icon: Database,
+    icon: DatabaseIcon,
     title: "Real data only",
     text: "Our AI never invents a vendor, price, or stock level — every result comes straight from the database.",
   },
   {
-    icon: MapPin,
+    icon: MapPinIcon,
     title: "Location used only for matching",
     text: "Your approximate location is used only to find nearby vendors — never sold or used for ads.",
   },
   {
-    icon: UserCheck,
+    icon: UserCheckIcon,
     title: "Vendors stay in control",
     text: "Edit, unpublish, or delete your store and products at any time from your dashboard.",
   },
@@ -63,7 +63,7 @@ const pillars: { icon: LucideIcon; title: string; text: string }[] = [
 const sections: Section[] = [
   {
     id: "introduction",
-    icon: Shield,
+    icon: ShieldIcon,
     title: "1. Introduction",
     blocks: [
       {
@@ -78,7 +78,7 @@ const sections: Section[] = [
   },
   {
     id: "how-search-works",
-    icon: Search,
+    icon: SearchIcon,
     title: "2. How Buyer Search Works",
     blocks: [
       {
@@ -101,7 +101,7 @@ const sections: Section[] = [
   },
   {
     id: "information-we-collect",
-    icon: Database,
+    icon: DatabaseIcon,
     title: "3. Information We Collect",
     blocks: [
       {
@@ -134,7 +134,7 @@ const sections: Section[] = [
   },
   {
     id: "how-we-use",
-    icon: CheckCircle2,
+    icon: CheckCircleIcon,
     title: "4. How We Use Your Information",
     blocks: [
       {
@@ -151,7 +151,7 @@ const sections: Section[] = [
   },
   {
     id: "sharing",
-    icon: Share2,
+    icon: Share2Icon,
     title: "5. Sharing of Information",
     blocks: [
       {
@@ -170,7 +170,7 @@ const sections: Section[] = [
   },
   {
     id: "retention",
-    icon: Clock,
+    icon: ClockIcon,
     title: "6. Data Retention",
     blocks: [
       {
@@ -181,7 +181,7 @@ const sections: Section[] = [
   },
   {
     id: "security",
-    icon: Lock,
+    icon: LockIcon,
     title: "7. Data Security",
     blocks: [
       {
@@ -192,7 +192,7 @@ const sections: Section[] = [
   },
   {
     id: "your-rights",
-    icon: UserCheck,
+    icon: UserCheckIcon,
     title: "8. Your Rights and Choices",
     blocks: [
       {
@@ -207,7 +207,7 @@ const sections: Section[] = [
   },
   {
     id: "international",
-    icon: Globe,
+    icon: GlobeIcon,
     title: "9. International Data Transfers",
     blocks: [
       {
@@ -218,7 +218,7 @@ const sections: Section[] = [
   },
   {
     id: "children",
-    icon: Baby,
+    icon: BabyIcon,
     title: "10. Children's Privacy",
     blocks: [
       {
@@ -229,7 +229,7 @@ const sections: Section[] = [
   },
   {
     id: "changes",
-    icon: RefreshCw,
+    icon: RefreshIcon,
     title: "11. Changes to This Policy",
     blocks: [
       {
@@ -240,7 +240,7 @@ const sections: Section[] = [
   },
   {
     id: "contact",
-    icon: Mail,
+    icon: MailIcon,
     title: "12. Contact Us",
     blocks: [
       {
@@ -272,7 +272,7 @@ function SectionBlocks({ blocks }: { blocks: Block[] }) {
           <ul key={i} className="space-y-2.5">
             {block.items.map((item, j) => (
               <li key={j} className="flex gap-3 text-gray-500 leading-relaxed">
-                <CheckCircle2
+                <CheckCircleIcon
                   className="w-4 h-4 mt-1 shrink-0"
                   style={{ color: ORANGE }}
                 />
@@ -321,7 +321,7 @@ export default function PrivacyContent() {
                     color: ORANGE,
                   }}
                 >
-                  <Shield className="w-3.5 h-3.5" />
+                  <ShieldIcon className="w-3.5 h-3.5" />
                   Your data, protected
                 </span>
 
@@ -344,7 +344,7 @@ export default function PrivacyContent() {
                       key={chip}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1.5"
                     >
-                      <CheckCircle2
+                      <CheckCircleIcon
                         className="w-3.5 h-3.5"
                         style={{ color: ORANGE }}
                       />
@@ -388,7 +388,7 @@ export default function PrivacyContent() {
                   transition={{ duration: 0.5, delay: 0.9 }}
                   className="absolute -right-3 top-6 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
                 >
-                  <Lock className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <LockIcon className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                   <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
                     Encrypted &amp; secure
                   </span>
@@ -399,7 +399,7 @@ export default function PrivacyContent() {
                   transition={{ duration: 0.5, delay: 1.3 }}
                   className="absolute -left-3 bottom-8 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
                 >
-                  <EyeOff className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <EyeOffIcon className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                   <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
                     No account needed
                   </span>
@@ -457,7 +457,7 @@ export default function PrivacyContent() {
                     color: ORANGE,
                   }}
                 >
-                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <ShieldCheckIcon className="w-3.5 h-3.5" />
                   Built for real matches
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-bold text-[#023337] mb-4 leading-tight">
@@ -480,7 +480,7 @@ export default function PrivacyContent() {
                       key={item}
                       className="flex gap-3 text-gray-600 text-sm leading-relaxed"
                     >
-                      <CheckCircle2
+                      <CheckCircleIcon
                         className="w-4 h-4 mt-0.5 shrink-0"
                         style={{ color: ORANGE }}
                       />

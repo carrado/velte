@@ -1,8 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { CheckCircle2, XCircle } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
+import { CheckCircleIcon, XCircleIcon } from "@/components/icons";
 
 // Same photo as the homepage's own About page (AboutContent's storyPhoto) —
 // already vetted for this site, and directly on-theme: a real vendor
@@ -153,7 +153,7 @@ export default function FindTrustedVendorsContent() {
           {/* Red flags */}
           <section className="rounded-2xl border border-red-100 bg-red-50/40 p-6 sm:p-7">
             <div className="flex items-center gap-2 mb-3.5">
-              <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+              <XCircleIcon className="w-5 h-5 text-red-500 shrink-0" />
               <h2 className="text-lg font-bold text-[#023337]">
                 Red flags worth walking away from
               </h2>
@@ -174,7 +174,7 @@ export default function FindTrustedVendorsContent() {
           {/* How Velte reduces the risk */}
           <section className="rounded-2xl border border-orange-200 bg-orange-50 p-6 sm:p-7">
             <div className="flex items-center gap-2 mb-3.5">
-              <CheckCircle2 className="w-5 h-5 text-orange-600 shrink-0" />
+              <CheckCircleIcon className="w-5 h-5 text-orange-600 shrink-0" />
               <h2 className="text-lg font-bold text-[#023337]">
                 How Velte reduces the risk before it starts
               </h2>

@@ -45,17 +45,12 @@ const publicRegardlessOfAuth = [
   "/chat",
   "/marketplace",
   "/updates",
-  // Buyer login/signup — its own SEPARATE auth system (buyer_auth_token,
-  // verified by requireBuyerAuth in the BFF layer), so this middleware
-  // (which only ever knows about the vendor's auth_token) must never gate
-  // it as if it were an ungated vendor dashboard route below. A logged-in
-  // vendor visiting it is also intentional — same reasoning as
-  // /chat/marketplace above. Narrowed to just /buyer/auth (2026-08-17,
-  // buyer-dashboard removal) — the rest of the old buyer-facing area
-  // (Home/Discover/Requests/Saved/Profile) is gone; its Requests/Profile
-  // equivalents now live at /chat/requests and /chat/profile, already
-  // covered by the /chat entry above.
-  "/buyer/auth",
+  // No /buyer/auth entry anymore (2026-08-18) — there's no buyer-facing
+  // page tree left at all. A buyer's only touchpoint is the inline
+  // phone+OTP capture inside /chat itself (already covered by the /chat
+  // entry above), verified via its own separate buyer_auth_token cookie
+  // (requireBuyerAuth in the BFF layer) — this middleware never needs to
+  // know about it.
 ];
 
 // Marketing/onboarding pages — meant for a prospective or logged-out

@@ -1,8 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { ArrowRight, Check, X } from "lucide-react";
-
+import { ArrowRightIcon, CheckIcon, CloseIcon } from "@/components/icons";
 const stagger = {
   hidden: {},
   show: { transition: { staggerChildren: 0.1 } },
@@ -71,7 +70,10 @@ export function MarketplaceComparison() {
             <div className="space-y-3">
               {traditionalSteps.map((step) => (
                 <div key={step} className="flex items-start gap-2.5">
-                  <X size={14} className="text-white/25 shrink-0 mt-0.5" />
+                  <CloseIcon
+                    size={14}
+                    className="text-white/25 shrink-0 mt-0.5"
+                  />
                   <span className="text-[13px] text-white/50 leading-snug">
                     {step}
                   </span>
@@ -86,12 +88,12 @@ export function MarketplaceComparison() {
           >
             <p className="text-orange-300 text-xs font-semibold uppercase tracking-wide mb-4 flex items-center gap-1.5">
               Velte
-              <ArrowRight size={11} />
+              <ArrowRightIcon size={11} />
             </p>
             <div className="space-y-3">
               {velteSteps.map((step) => (
                 <div key={step} className="flex items-start gap-2.5">
-                  <Check
+                  <CheckIcon
                     size={14}
                     className="text-orange-400 shrink-0 mt-0.5"
                   />

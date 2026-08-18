@@ -3,20 +3,20 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  Bell,
-  BellOff,
-  BatteryWarning,
-  Download,
-  X,
-  CheckCircle2,
-} from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { installPromptStore } from "@/lib/installPromptStore";
 import { isTranssionDevice } from "@/lib/deviceDetection";
+import {
+  BatteryWarningIcon,
+  BellIcon,
+  BellOffIcon,
+  CheckCircleIcon,
+  CloseIcon,
+  DownloadIcon,
+} from "@/components/icons";
 
 function useInstallPrompt() {
   // The captured beforeinstallprompt lives in installPromptStore (filled by
@@ -230,7 +230,7 @@ export default function PushNotificationManager() {
                 aria-label="Dismiss"
                 className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >
-                <X className="h-4 w-4" />
+                <CloseIcon className="h-4 w-4" />
               </button>
 
               <div className="px-5 pb-5 pt-4">
@@ -238,13 +238,13 @@ export default function PushNotificationManager() {
                 <div className="mb-4 flex items-center gap-3 pr-6">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 shadow-sm shadow-orange-200">
                     {showingBatteryContent ? (
-                      <BatteryWarning className="h-5 w-5 text-white" />
+                      <BatteryWarningIcon className="h-5 w-5 text-white" />
                     ) : showInstallInfo ? (
-                      <Download className="h-5 w-5 text-white" />
+                      <DownloadIcon className="h-5 w-5 text-white" />
                     ) : showAlertsInfo ? (
-                      <BellOff className="h-5 w-5 text-white" />
+                      <BellOffIcon className="h-5 w-5 text-white" />
                     ) : (
-                      <Bell className="h-5 w-5 text-white" />
+                      <BellIcon className="h-5 w-5 text-white" />
                     )}
                   </div>
                   <div>
@@ -292,9 +292,9 @@ export default function PushNotificationManager() {
                         className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-600"
                       >
                         {showInstallInfo ? (
-                          <CheckCircle2 className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+                          <CheckCircleIcon className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
                         ) : (
-                          <BellOff className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                          <BellOffIcon className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
                         )}
                         {benefit}
                       </li>
@@ -321,11 +321,11 @@ export default function PushNotificationManager() {
                   !showAlertsInfo && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
-                        <Download className="h-3 w-3" />
+                        <DownloadIcon className="h-3 w-3" />
                         Install app
                       </span>
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100">
-                        <Bell className="h-3 w-3" />
+                        <BellIcon className="h-3 w-3" />
                         Push notifications
                       </span>
                     </div>
@@ -362,7 +362,7 @@ export default function PushNotificationManager() {
                     ) : showInstallBanner ? (
                       canInstall ? (
                         <>
-                          <Download className="h-3.5 w-3.5" />
+                          <DownloadIcon className="h-3.5 w-3.5" />
                           Install app
                         </>
                       ) : (
@@ -370,7 +370,7 @@ export default function PushNotificationManager() {
                       )
                     ) : (
                       <>
-                        <Bell className="h-3.5 w-3.5" />
+                        <BellIcon className="h-3.5 w-3.5" />
                         Enable alerts
                       </>
                     )}
@@ -415,7 +415,7 @@ export function PushNotificationToggle() {
   if (!isSupported) {
     return (
       <div className="flex items-center gap-2.5 text-sm text-slate-400">
-        <BellOff className="h-4 w-4 shrink-0" />
+        <BellOffIcon className="h-4 w-4 shrink-0" />
         <span>Push notifications are not supported in this browser.</span>
       </div>
     );
@@ -424,7 +424,7 @@ export function PushNotificationToggle() {
   if (permission === "denied") {
     return (
       <div className="flex items-center gap-2.5 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 ring-1 ring-slate-100">
-        <BellOff className="h-4 w-4 shrink-0 text-slate-400" />
+        <BellOffIcon className="h-4 w-4 shrink-0 text-slate-400" />
         <span>
           Notifications are blocked.{" "}
           <span className="font-medium text-slate-700">
@@ -443,7 +443,7 @@ export function PushNotificationToggle() {
           isSubscribed ? "bg-orange-50" : "bg-slate-100",
         )}
       >
-        <Bell
+        <BellIcon
           className={cn(
             "h-4 w-4 transition-colors",
             isSubscribed ? "text-orange-500" : "text-slate-400",

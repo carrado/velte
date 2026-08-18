@@ -22,30 +22,6 @@ import type { SectorClassification } from "@/types/sectors";
 import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import AttributePickerModal from "./AttributePickerModal";
-import {
-  Save,
-  ChevronDown,
-  Calendar,
-  RefreshCcw,
-  ImageIcon,
-  X,
-  Trash2,
-  Plus,
-  ChevronUp,
-  Upload,
-  Package,
-  ChefHat,
-  Tag,
-  Layers,
-  BarChart3,
-  CheckCircle2,
-  ArrowLeft,
-  ArrowRight,
-  Loader2,
-  Sparkle,
-  Info,
-  Video as VideoIcon,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   ProductModifier,
@@ -70,6 +46,30 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS } from "@/lib/video-limits";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  BarChartIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+  ChefHatIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CloseIcon,
+  ImageIcon,
+  InfoIcon,
+  LayersIcon,
+  LoaderIcon,
+  PackageIcon,
+  PlusIcon,
+  RefreshIcon,
+  SaveIcon,
+  SparkleIcon,
+  TagIcon,
+  TrashIcon,
+  UploadIcon,
+  VideoIcon,
+} from "@/components/icons";
 
 /** Best-effort read of a video file's duration via a throwaway <video>
  * element — never blocks the upload on it. Some real devices/codecs (the
@@ -389,11 +389,11 @@ function PublishProgressModal({
           )}
         >
           {done ? (
-            <CheckCircle2 size={32} className="text-green-500" />
+            <CheckCircleIcon size={32} className="text-green-500" />
           ) : isEditMode ? (
-            <Save size={32} className="text-orange-500 animate-pulse" />
+            <SaveIcon size={32} className="text-orange-500 animate-pulse" />
           ) : (
-            <Upload size={32} className="text-orange-500 animate-bounce" />
+            <UploadIcon size={32} className="text-orange-500 animate-bounce" />
           )}
         </div>
 
@@ -516,7 +516,7 @@ function PhaseBlock({
               className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-bold px-6 h-10 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
-              <ArrowRight size={15} />
+              <ArrowRightIcon size={15} />
             </button>
           )}
         </div>
@@ -1470,7 +1470,7 @@ export default function AddProductPage({
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
         <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center">
-          <Package size={28} className="text-gray-300" />
+          <PackageIcon size={28} className="text-gray-300" />
         </div>
         <div>
           <p className="text-dash-heading font-bold text-[#023337]">
@@ -1484,7 +1484,7 @@ export default function AddProductPage({
           onClick={() => navigate(`/${userId}/products`)}
           className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-md transition-colors cursor-pointer"
         >
-          <ArrowLeft size={15} />
+          <ArrowLeftIcon size={15} />
           Back to Products
         </button>
       </div>
@@ -1651,7 +1651,7 @@ export default function AddProductPage({
               has to be picked before Type/Basics can make sense. */}
           {wizard && sectors.length > 1 && (
             <PhaseBlock {...phaseProps("sector")}>
-              <FormSection title="Sector" icon={Tag}>
+              <FormSection title="Sector" icon={TagIcon}>
                 <div>
                   <FieldLabel required>
                     Which of your sectors is this listing for?
@@ -1697,7 +1697,7 @@ export default function AddProductPage({
               locked after creation either way). */}
           {showKindToggle && (
             <PhaseBlock {...phaseProps("type")}>
-              <FormSection title="Listing Type" icon={Package}>
+              <FormSection title="Listing Type" icon={PackageIcon}>
                 <div>
                   <FieldLabel required>What are you listing?</FieldLabel>
                   <div className="grid grid-cols-2 gap-2">
@@ -1752,7 +1752,7 @@ export default function AddProductPage({
           <PhaseBlock {...phaseProps("basics")}>
             <FormSection
               title="Basic Details"
-              icon={isFood ? ChefHat : Package}
+              icon={isFood ? ChefHatIcon : PackageIcon}
             >
               <div>
                 <FieldLabel required>
@@ -1822,9 +1822,9 @@ export default function AddProductPage({
                     className="flex items-center gap-1 text-dash-caption font-medium text-orange-500 hover:text-orange-600 disabled:opacity-60 cursor-pointer shrink-0"
                   >
                     {generateDescriptionMutation.isPending ? (
-                      <Loader2 size={12} className="animate-spin" />
+                      <LoaderIcon size={12} className="animate-spin" />
                     ) : (
-                      <Sparkle size={12} className="fill-orange-500" />
+                      <SparkleIcon size={12} className="fill-orange-500" />
                     )}
                     {generateDescriptionMutation.isPending
                       ? "Generating…"
@@ -1869,7 +1869,7 @@ export default function AddProductPage({
 
           {/* Pricing */}
           <PhaseBlock {...phaseProps("pricing")}>
-            <FormSection title="Pricing" icon={BarChart3}>
+            <FormSection title="Pricing" icon={BarChartIcon}>
               {/* Quote on request — services can skip an upfront price */}
               {isService && (
                 <div className="flex items-center justify-between">
@@ -1928,7 +1928,7 @@ export default function AddProductPage({
                         className="h-full pl-3 pr-8 text-dash-body bg-transparent border-l border-gray-200 flex items-center gap-1.5 cursor-pointer text-gray-600 font-medium"
                       >
                         {currSymbol}
-                        <ChevronDown size={13} className="text-gray-400" />
+                        <ChevronDownIcon size={13} className="text-gray-400" />
                       </button>
                       {currencyPopoverOpen && (
                         <div
@@ -1975,7 +1975,7 @@ export default function AddProductPage({
                       onClick={() => handleRangeToggle(true)}
                       className="flex items-center gap-1.5 text-dash-caption font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
                     >
-                      <Plus size={12} />
+                      <PlusIcon size={12} />
                       Add a price range instead of one price
                     </button>
                   ) : (
@@ -2059,7 +2059,7 @@ export default function AddProductPage({
               this (no expiry semantics). Stock is no longer tracked at all. */}
           {!isFood && !isService && (
             <PhaseBlock {...phaseProps("inventory")}>
-              <FormSection title="Additional Details" icon={Layers}>
+              <FormSection title="Additional Details" icon={LayersIcon}>
                 {(isHealth || isElectronics) && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {isHealth && (
@@ -2076,7 +2076,7 @@ export default function AddProductPage({
                             }
                             className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
                           />
-                          <Calendar
+                          <CalendarIcon
                             size={16}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer"
                             onClick={() => openDatePicker(manufacturingDateRef)}
@@ -2097,7 +2097,7 @@ export default function AddProductPage({
                           onChange={(e) => setExpirationDate(e.target.value)}
                           className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
                         />
-                        <Calendar
+                        <CalendarIcon
                           size={16}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer"
                           onClick={() => openDatePicker(expirationDateRef)}
@@ -2212,7 +2212,7 @@ export default function AddProductPage({
                             }}
                             className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                           >
-                            <RefreshCcw size={12} /> Replace
+                            <RefreshIcon size={12} /> Replace
                           </button>
                           <button
                             onClick={(e) => {
@@ -2221,7 +2221,7 @@ export default function AddProductPage({
                             }}
                             className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                           >
-                            <Trash2 size={12} /> Clear
+                            <TrashIcon size={12} /> Clear
                           </button>
                         </>
                       )}
@@ -2255,7 +2255,7 @@ export default function AddProductPage({
                             onClick={() => removeThumbnail(i)}
                             className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                           >
-                            <X size={11} />
+                            <CloseIcon size={11} />
                           </button>
                         </div>
                       ))}
@@ -2275,7 +2275,7 @@ export default function AddProductPage({
                     onClick={clearVideo}
                     className="absolute top-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                   >
-                    <Trash2 size={12} /> Remove
+                    <TrashIcon size={12} /> Remove
                   </button>
                 </div>
               ) : (
@@ -2302,7 +2302,7 @@ export default function AddProductPage({
                     videoStatus === "processing" ? (
                       <div className="flex flex-col items-center gap-3 w-full px-10">
                         <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                          <Loader2
+                          <LoaderIcon
                             size={20}
                             className="text-orange-500 animate-spin"
                           />
@@ -2382,7 +2382,7 @@ export default function AddProductPage({
                 title={
                   isService ? "Tags & Service Details" : "Tags & Attributes"
                 }
-                icon={Tag}
+                icon={TagIcon}
               >
                 <div>
                   <FieldLabel optional>Tags</FieldLabel>
@@ -2431,7 +2431,7 @@ export default function AddProductPage({
                             }
                             className="hover:text-red-600 cursor-pointer"
                           >
-                            <X size={12} />
+                            <CloseIcon size={12} />
                           </button>
                         </span>
                       ))}
@@ -2491,7 +2491,7 @@ export default function AddProductPage({
                           </FieldLabel>
                         </div>
                         <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-md px-3 py-2.5 mb-2">
-                          <Info
+                          <InfoIcon
                             size={15}
                             className="shrink-0 text-blue-500 mt-0.5"
                           />
@@ -2530,7 +2530,7 @@ export default function AddProductPage({
                         onClick={() => setPresetPickerOpen(true)}
                         className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-orange-300 bg-orange-50/60 hover:bg-orange-50 text-orange-600 text-dash-body font-medium rounded-md transition-colors cursor-pointer"
                       >
-                        <Plus size={14} />
+                        <PlusIcon size={14} />
                         {isService
                           ? "Quick add — pick from common service details"
                           : "Quick add — pick from common attributes"}
@@ -2558,7 +2558,7 @@ export default function AddProductPage({
                                 }
                                 className="text-red-400 hover:text-red-600 cursor-pointer"
                               >
-                                <X size={15} />
+                                <CloseIcon size={15} />
                               </button>
                             </div>
                           ))}
@@ -2574,7 +2574,7 @@ export default function AddProductPage({
           {/* Availability — food only */}
           {isFood && (
             <PhaseBlock {...phaseProps("availability")}>
-              <FormSection title="Availability" icon={Calendar}>
+              <FormSection title="Availability" icon={CalendarIcon}>
                 {/* Currently available toggle */}
                 <div className="flex items-center justify-between">
                   <div>
@@ -2597,13 +2597,13 @@ export default function AddProductPage({
           {/* Customer Choices & Extras — food only */}
           {isFood && (
             <PhaseBlock {...phaseProps("choices")}>
-              <FormSection title="Customer Choices & Extras" icon={Layers}>
+              <FormSection title="Customer Choices & Extras" icon={LayersIcon}>
                 {/* Default state: reads as safely skippable — most listings
                     have no modifiers, so this shouldn't require parsing the
                     builder UI below just to confirm there's nothing to do. */}
                 {modifiers.length === 0 && !choicesExpanded && (
                   <div className="flex items-start gap-3 p-4 bg-gray-50 border border-gray-100 rounded-md">
-                    <CheckCircle2
+                    <CheckCircleIcon
                       size={18}
                       className="text-green-500 mt-0.5 flex-shrink-0"
                     />
@@ -2621,7 +2621,7 @@ export default function AddProductPage({
                         onClick={() => setChoicesExpanded(true)}
                         className="mt-2.5 flex items-center gap-1.5 text-dash-caption font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
                       >
-                        <Plus size={12} />
+                        <PlusIcon size={12} />
                         This listing has choices to add
                       </button>
                     </div>
@@ -2668,12 +2668,12 @@ export default function AddProductPage({
                               )}
                             >
                               {alreadyAdded ? (
-                                <CheckCircle2
+                                <CheckCircleIcon
                                   size={12}
                                   className="text-green-500"
                                 />
                               ) : (
-                                <Plus size={12} />
+                                <PlusIcon size={12} />
                               )}
                               {tpl.name}
                             </button>
@@ -2725,12 +2725,12 @@ export default function AddProductPage({
                                   {group.options.length !== 1 ? "s" : ""}
                                 </span>
                                 {expandedGroupId === group.id ? (
-                                  <ChevronUp
+                                  <ChevronUpIcon
                                     size={13}
                                     className="text-gray-400"
                                   />
                                 ) : (
-                                  <ChevronDown
+                                  <ChevronDownIcon
                                     size={13}
                                     className="text-gray-400"
                                   />
@@ -2746,7 +2746,7 @@ export default function AddProductPage({
                                   }}
                                   className="text-red-400 hover:text-red-600 p-0.5 cursor-pointer"
                                 >
-                                  <X size={13} />
+                                  <CloseIcon size={13} />
                                 </button>
                               </div>
                             </button>
@@ -2834,7 +2834,7 @@ export default function AddProductPage({
                                       }
                                       className="text-red-400 hover:text-red-600 cursor-pointer flex-shrink-0"
                                     >
-                                      <X size={13} />
+                                      <CloseIcon size={13} />
                                     </button>
                                   </div>
                                 ))}
@@ -2869,7 +2869,7 @@ export default function AddProductPage({
                                     disabled={!optionName.trim()}
                                     className="w-9 h-9 bg-orange-500 text-white rounded-lg flex items-center justify-center hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex-shrink-0"
                                   >
-                                    <Plus size={14} />
+                                    <PlusIcon size={14} />
                                   </button>
                                 </div>
                               </div>

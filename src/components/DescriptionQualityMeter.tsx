@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   descriptionQuality,
   DESCRIPTION_QUALITY_COPY,
   type DescriptionQuality,
 } from "@/lib/description-quality";
+import { LoaderIcon } from "@/components/icons";
 
 // How long to wait after the vendor stops typing before spending an LLM
 // call on it — a quality check on every keystroke would be both wasteful
@@ -95,7 +95,9 @@ export function DescriptionQualityMeter({
           <div className="h-full w-2/5 bg-gray-300 animate-pulse" />
         </div>
         <p className="text-dash-caption text-gray-400 flex items-center gap-1">
-          {checking && <Loader2 size={10} className="animate-spin shrink-0" />}
+          {checking && (
+            <LoaderIcon size={10} className="animate-spin shrink-0" />
+          )}
           {checking
             ? "Checking your description…"
             : "We'll check your description in a moment…"}

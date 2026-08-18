@@ -1,25 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  CheckCircle2,
-  Building2,
-  Phone,
-  Mail,
-  User,
-  UserCog,
-  Lock,
-  Camera,
-  RefreshCw,
-  Shield,
-  KeyRound,
-  MapPin,
-  LocateFixed,
-  LogOut,
-  MessageSquare,
-  Send,
-  Bell,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -42,6 +23,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { UserLocation } from "@/types/user";
+import {
+  BellIcon,
+  BuildingIcon,
+  CameraIcon,
+  CheckCircleIcon,
+  KeyRoundIcon,
+  LocateFixedIcon,
+  LockIcon,
+  LogOutIcon,
+  MailIcon,
+  MapPinIcon,
+  MessageSquareIcon,
+  PhoneIcon,
+  RefreshIcon,
+  SendIcon,
+  ShieldIcon,
+  UserCogIcon,
+  UserIcon,
+} from "@/components/icons";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -178,12 +178,12 @@ function InlineSaveButton({
       >
         {loading ? (
           <>
-            <RefreshCw size={13} className="animate-spin" />
+            <RefreshIcon size={13} className="animate-spin" />
             Saving…
           </>
         ) : (
           <>
-            <CheckCircle2 size={14} />
+            <CheckCircleIcon size={14} />
             {label}
           </>
         )}
@@ -474,7 +474,7 @@ function AccountSettingsPanel() {
       {/* Profile */}
       <SectionCard
         id="profile-section"
-        icon={UserCog}
+        icon={UserCogIcon}
         title="Profile Information"
         description="Your personal and business details"
       >
@@ -489,11 +489,11 @@ function AccountSettingsPanel() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <User size={26} className="text-orange-400" />
+                <UserIcon size={26} className="text-orange-400" />
               )}
               {avatarUploading && (
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <RefreshCw size={14} className="text-white animate-spin" />
+                  <RefreshIcon size={14} className="text-white animate-spin" />
                 </div>
               )}
             </div>
@@ -503,7 +503,7 @@ function AccountSettingsPanel() {
               disabled={avatarUploading}
               className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange-500 rounded-lg flex items-center justify-center cursor-pointer hover:bg-orange-600 transition-colors disabled:opacity-60"
             >
-              <Camera size={11} className="text-white" />
+              <CameraIcon size={11} className="text-white" />
             </button>
           </div>
           <input
@@ -537,7 +537,7 @@ function AccountSettingsPanel() {
             value={profile.fullName}
             onChange={(v) => setProfile((p) => ({ ...p, fullName: v }))}
             placeholder="John Doe"
-            icon={User}
+            icon={UserIcon}
             name="fullName"
             autoComplete="name"
           />
@@ -546,7 +546,7 @@ function AccountSettingsPanel() {
             value={profile.businessName}
             onChange={(v) => setProfile((p) => ({ ...p, businessName: v }))}
             placeholder="My Store Ltd"
-            icon={Building2}
+            icon={BuildingIcon}
             name="businessName"
             autoComplete="organization"
           />
@@ -555,7 +555,7 @@ function AccountSettingsPanel() {
             value={profile.email}
             onChange={(v) => setProfile((p) => ({ ...p, email: v }))}
             placeholder="you@business.com"
-            icon={Mail}
+            icon={MailIcon}
             type="email"
             name="email"
             autoComplete="email"
@@ -565,7 +565,7 @@ function AccountSettingsPanel() {
             value={profile.phone}
             onChange={(v) => setProfile((p) => ({ ...p, phone: v }))}
             placeholder="+234 800 000 0000"
-            icon={Phone}
+            icon={PhoneIcon}
             name="phone"
             autoComplete="tel"
           />
@@ -602,7 +602,7 @@ function AccountSettingsPanel() {
           value={profile.area}
           onChange={(v) => setProfile((p) => ({ ...p, area: v }))}
           placeholder="e.g. 12 Allen Avenue, Ikeja, Lagos"
-          icon={MapPin}
+          icon={MapPinIcon}
           disabled={addressLocked}
           name="velte-business-address"
           autoComplete="off"
@@ -615,7 +615,7 @@ function AccountSettingsPanel() {
 
         <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3.5 py-3">
           <div className="flex items-center gap-2 min-w-0">
-            <LocateFixed size={14} className="text-gray-400 shrink-0" />
+            <LocateFixedIcon size={14} className="text-gray-400 shrink-0" />
             <p className="text-dash-secondary text-gray-600 truncate">
               {profile.location
                 ? `Location set — ${profile.location.lat.toFixed(4)}, ${profile.location.lng.toFixed(4)}`
@@ -649,7 +649,7 @@ function AccountSettingsPanel() {
 
       {/* Password */}
       <SectionCard
-        icon={Lock}
+        icon={LockIcon}
         title="Change Password"
         description="Update your account password"
       >
@@ -662,7 +662,7 @@ function AccountSettingsPanel() {
                 setPasswords((p) => ({ ...p, currentPassword: v }))
               }
               placeholder="Enter current password"
-              icon={Shield}
+              icon={ShieldIcon}
               type="password"
               name="currentPassword"
               // "new-password" (not "current-password") is deliberate — it's
@@ -680,7 +680,7 @@ function AccountSettingsPanel() {
                   setPasswords((p) => ({ ...p, newPassword: v }))
                 }
                 placeholder="Min. 8 characters"
-                icon={Lock}
+                icon={LockIcon}
                 type="password"
                 name="newPassword"
                 autoComplete="new-password"
@@ -692,7 +692,7 @@ function AccountSettingsPanel() {
                   setPasswords((p) => ({ ...p, confirmPassword: v }))
                 }
                 placeholder="Repeat new password"
-                icon={Lock}
+                icon={LockIcon}
                 type="password"
                 name="confirmNewPassword"
                 autoComplete="new-password"
@@ -740,7 +740,10 @@ function AccountSettingsPanel() {
         ) : (
           <div className="space-y-4">
             <div className="flex items-start gap-2.5 p-3.5 bg-blue-50 border border-blue-200 rounded-xl">
-              <Mail size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
+              <MailIcon
+                size={13}
+                className="text-blue-500 flex-shrink-0 mt-0.5"
+              />
               <p className="text-dash-secondary text-blue-700 leading-relaxed">
                 A 6-digit verification code was sent to your email and phone.
                 Enter it below to confirm the password change.
@@ -752,7 +755,7 @@ function AccountSettingsPanel() {
                 Verification Code
               </label>
               <div className="relative">
-                <KeyRound
+                <KeyRoundIcon
                   size={14}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                 />
@@ -787,12 +790,12 @@ function AccountSettingsPanel() {
               >
                 {confirmMutation.isPending ? (
                   <>
-                    <RefreshCw size={13} className="animate-spin" />
+                    <RefreshIcon size={13} className="animate-spin" />
                     Confirming…
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 size={14} />
+                    <CheckCircleIcon size={14} />
                     Confirm Change
                   </>
                 )}
@@ -869,13 +872,13 @@ function FeedbackSection() {
 
   return (
     <SectionCard
-      icon={MessageSquare}
+      icon={MessageSquareIcon}
       title="Send Feedback"
       description="Bugs, ideas, or anything not working the way you'd expect"
     >
       {submitted ? (
         <div className="flex items-center gap-2 text-dash-body text-green-700 bg-green-50 rounded-xl px-4 py-3">
-          <CheckCircle2 size={16} />
+          <CheckCircleIcon size={16} />
           Thanks — got it. We read every one of these.
         </div>
       ) : (
@@ -895,12 +898,12 @@ function FeedbackSection() {
             >
               {submitting ? (
                 <>
-                  <RefreshCw size={13} className="animate-spin" />
+                  <RefreshIcon size={13} className="animate-spin" />
                   Sending…
                 </>
               ) : (
                 <>
-                  <Send size={13} />
+                  <SendIcon size={13} />
                   Send Feedback
                 </>
               )}
@@ -949,7 +952,7 @@ function LogoutSection() {
           onClick={() => setShowModal(true)}
           className="flex items-center gap-2 px-4 py-2 text-dash-body font-medium text-red-500 border border-red-200 rounded-xl hover:bg-red-50 transition-colors cursor-pointer whitespace-nowrap"
         >
-          <LogOut size={15} />
+          <LogOutIcon size={15} />
           Log Out
         </button>
       </div>
@@ -985,7 +988,7 @@ export default function SettingsPage() {
       </div>
 
       <SectionCard
-        icon={Bell}
+        icon={BellIcon}
         title="Notifications"
         description="Push alerts for new leads, messages, and orders."
       >

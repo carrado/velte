@@ -1,18 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import {
-  Bell,
-  Check,
-  CreditCard,
-  Package,
-  ShoppingCart,
-  Wallet,
-  Gift,
-  MessageCircle,
-  MoreHorizontal,
-  Trash2,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { useNavigation } from "@/components/NavigationProgressContext";
@@ -23,6 +11,19 @@ import {
   deleteNotification,
 } from "@/services/notifications";
 import type { AppNotification, NotificationType } from "@/types/notification";
+import {
+  BellIcon,
+  BellIllustration,
+  CheckIcon,
+  CreditCardIcon,
+  GiftIcon,
+  MessageCircleIcon,
+  MoreHorizontalIcon,
+  PackageIcon,
+  ShoppingCartIcon,
+  TrashIcon,
+  WalletIcon,
+} from "@/components/icons";
 
 function formatDate(iso: string): string {
   const date = new Date(iso);
@@ -41,13 +42,21 @@ const TYPE_CONFIG: Record<
   NotificationType,
   { icon: React.ElementType; bg: string; color: string }
 > = {
-  order: { icon: ShoppingCart, bg: "bg-blue-100", color: "text-blue-600" },
-  product: { icon: Package, bg: "bg-orange-100", color: "text-orange-600" },
-  payment: { icon: CreditCard, bg: "bg-green-100", color: "text-green-600" },
-  wallet: { icon: Wallet, bg: "bg-amber-100", color: "text-amber-600" },
-  referral: { icon: Gift, bg: "bg-orange-100", color: "text-orange-600" },
-  lead: { icon: MessageCircle, bg: "bg-green-100", color: "text-green-600" },
-  system: { icon: Bell, bg: "bg-gray-100", color: "text-gray-500" },
+  order: { icon: ShoppingCartIcon, bg: "bg-blue-100", color: "text-blue-600" },
+  product: { icon: PackageIcon, bg: "bg-orange-100", color: "text-orange-600" },
+  payment: {
+    icon: CreditCardIcon,
+    bg: "bg-green-100",
+    color: "text-green-600",
+  },
+  wallet: { icon: WalletIcon, bg: "bg-amber-100", color: "text-amber-600" },
+  referral: { icon: GiftIcon, bg: "bg-orange-100", color: "text-orange-600" },
+  lead: {
+    icon: MessageCircleIcon,
+    bg: "bg-green-100",
+    color: "text-green-600",
+  },
+  system: { icon: BellIcon, bg: "bg-gray-100", color: "text-gray-500" },
 };
 
 function NotificationItem({
@@ -140,7 +149,7 @@ function NotificationItem({
         aria-label="Notification actions"
         className="flex-shrink-0 mt-0.5 p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
       >
-        <MoreHorizontal size={16} />
+        <MoreHorizontalIcon size={16} />
       </button>
       <AnchoredPopover
         open={menuOpen}
@@ -154,7 +163,7 @@ function NotificationItem({
             onClick={handleMarkAsRead}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
           >
-            <Check size={14} className="text-green-500" />
+            <CheckIcon size={14} className="text-green-500" />
             Mark as read
           </button>
         )}
@@ -162,7 +171,7 @@ function NotificationItem({
           onClick={handleDelete}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
         >
-          <Trash2 size={14} className="text-red-400" />
+          <TrashIcon size={14} className="text-red-400" />
           Delete
         </button>
       </AnchoredPopover>
@@ -200,8 +209,8 @@ export function NotificationList({
           className,
         )}
       >
-        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-          <Bell size={20} className="text-gray-400" />
+        <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center mb-3">
+          <BellIllustration size={26} />
         </div>
         <p className="text-sm font-semibold text-gray-500">No notifications</p>
         <p className="text-xs text-gray-400 mt-1">You&apos;re all caught up!</p>

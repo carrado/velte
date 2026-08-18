@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Bell } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -9,6 +8,7 @@ import {
 } from "@/components/ui/popover";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { NotificationList } from "./NotificationList";
+import { BellIcon } from "@/components/icons";
 
 export function NotificationDropdown() {
   const [open, setOpen] = useState(false);
@@ -28,7 +28,7 @@ export function NotificationDropdown() {
         className="relative text-[#6B7280] hover:text-[#111827] cursor-pointer focus:outline-none"
         aria-label="Open notifications"
       >
-        <Bell size={20} />
+        <BellIcon size={20} />
         {hasUnread && (
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
         )}

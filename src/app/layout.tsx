@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -11,10 +12,15 @@ import MetaPixel from "@/components/MetaPixel";
 import BlockedAccountModal from "@/components/BlockedAccountModal";
 import { ScrollToTopButton } from "@/components/ScrollToTopButton";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
+// Swapped from Inter 2026-08-17 — matching buvvo.ng's own choice. The
+// `geist` package (Vercel's own, self-hosted — no Google Fonts network
+// request) exports pre-built next/font objects, each already wired to its
+// own fixed CSS variable (--font-geist-sans / --font-geist-mono — not
+// configurable via a `variable:` option the way the old Inter() call took
+// one), so globals.css's @theme block points --font-sans/--font-mono at
+// those instead of declaring its own. --font-mono previously just
+// hardcoded the literal string "Geist Mono" as a fallback stack — it was
+// never actually loaded until now.
 
 // iOS launch images (apple-touch-startup-image). iOS ignores the manifest for its
 // splash, so each device size needs its own image + media query. Filenames match
@@ -208,7 +214,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans antialiased", inter.variable)}>
+    <html
+      lang="en"
+      className={cn(
+        "font-sans antialiased",
+        GeistSans.variable,
+        GeistMono.variable,
+      )}
+    >
       <body>
         <MetaPixel />
         {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (

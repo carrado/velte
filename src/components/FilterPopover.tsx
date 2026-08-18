@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Filter } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -11,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import AnchoredPopover from "./AnchoredPopover";
 import type { FilterField } from "@/types/common";
+import { FilterIcon } from "@/components/icons";
 
 interface FilterPopoverProps {
   values: Record<string, string>;
@@ -46,7 +46,7 @@ export default function FilterPopover({
         }}
         className="p-2 border border-[#d1d5db] rounded bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
       >
-        <Filter size={18} className="text-[#6a717f]" />
+        <FilterIcon size={18} className="text-[#6a717f]" />
       </button>
       <AnchoredPopover
         open={open}

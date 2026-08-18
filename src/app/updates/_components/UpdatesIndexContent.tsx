@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { updates } from "@/lib/updates";
+import { ArrowRightIcon } from "@/components/icons";
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", {
@@ -51,7 +51,7 @@ export default function UpdatesIndexContent() {
                     {entry.dek}
                   </p>
                 </div>
-                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 transition-colors shrink-0" />
+                <ArrowRightIcon className="w-4 h-4 text-gray-300 group-hover:text-orange-500 transition-colors shrink-0" />
               </Link>
             ))}
           </div>

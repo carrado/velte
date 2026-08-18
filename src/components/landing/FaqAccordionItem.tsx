@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus } from "lucide-react";
 import type { FaqItem } from "@/types/common";
 import { cn } from "@/lib/utils";
+import { PlusIcon } from "@/components/icons";
 
 export default function FaqAccordionItem({
   faq,
@@ -33,7 +33,7 @@ export default function FaqAccordionItem({
         <span className="text-[#023337] font-semibold text-[15px]">
           {faq.question}
         </span>
-        <Plus
+        <PlusIcon
           className={cn(
             "w-4 h-4 text-orange-500 shrink-0 transition-transform duration-200",
             open && "rotate-45",

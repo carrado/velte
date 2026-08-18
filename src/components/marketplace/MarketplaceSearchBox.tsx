@@ -1,6 +1,6 @@
 "use client";
 
-import { MagnifyingGlass, X } from "@phosphor-icons/react";
+import { CloseIcon, SearchIcon } from "@/components/icons";
 
 // Client-side filter, not a new search backend — this narrows what's
 // already been fetched (name for listings, business name for vendors), it
@@ -19,7 +19,7 @@ export function MarketplaceSearchBox({
 }) {
   return (
     <div className="relative flex-1 sm:max-w-xs">
-      <MagnifyingGlass
+      <SearchIcon
         size={16}
         className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
       />
@@ -37,7 +37,7 @@ export function MarketplaceSearchBox({
           aria-label="Clear search"
           className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
         >
-          <X size={13} />
+          <CloseIcon size={13} />
         </button>
       )}
     </div>

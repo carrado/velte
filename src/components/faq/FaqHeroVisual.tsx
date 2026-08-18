@@ -1,123 +1,100 @@
 "use client";
 
-import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
-import ShineSweep from "@/components/ShineSweep";
 import type { FaqTabKey } from "./FaqTabs";
-import type { FaqSectionImage } from "@/types/common";
+import { PlusIcon } from "@/components/icons";
 
-// Photo credits — Unsplash's license doesn't require attribution, kept here
-// for maintainability.
-const buyerImage: FaqSectionImage = {
-  src: "https://images.unsplash.com/photo-1751276651723-3b9b000ce37d",
-  alt: "Woman looking into a storefront in Lagos, Nigeria",
-  credit: "Michael Umoh (unsplash.com/photos/o1reZpaQ7NM)",
-};
-const vendorImage: FaqSectionImage = {
-  src: "https://images.unsplash.com/photo-1761370571873-5d869310d731",
-  alt: "Woman inside her clothing store, Abuja, Nigeria",
-  credit: "Muhammad-Taha Ibrahim (unsplash.com/photos/zoWuHiPJYHc)",
-};
-
-const captions: Record<
-  Exclude<FaqTabKey, "all">,
-  { title: string; sub: string }
-> = {
+// Real questions from src/lib/faqs.ts, not invented copy for the mockup.
+const preview: Record<Exclude<FaqTabKey, "all">, { q: string; a: string }> = {
   buyer: {
-    title: "Real vendors, real stores",
-    sub: "Every result on Velte comes from an actual business nearby",
+    q: "What is Velte?",
+    a: "An AI shopping agent — describe what you need and it searches real vendor inventory nearby to find it.",
   },
   vendor: {
-    title: "Get discovered nearby",
-    sub: "Buyers matched to your store by meaning, distance & trust",
+    q: "How do I get discovered by buyers?",
+    a: "List your business and buyers searching nearby are matched to you automatically — no ads, no bidding.",
   },
 };
+
+// Redesigned 2026-08-17 — was two tilted Unsplash photos with a float +
+// ShineSweep treatment, which is the exact recipe About's "Our Story"
+// section uses for its own real photo (see that page's file comment about
+// owning the photo-led identity). This page's visual now previews its own
+// content instead — a small stack of mock FAQ cards, same rounded-2xl/
+// accent-bar/ghost-number grammar as the real FaqCard list below, so the
+// hero reads as "here's a taste of what you're about to scroll through"
+// rather than borrowing another page's signature move.
+function MockCard({
+  q,
+  a,
+  className,
+  delay = 0,
+}: {
+  q: string;
+  a: string;
+  className?: string;
+  delay?: number;
+}) {
+  return (
+    <motion.div
+      animate={{ y: [0, -10, 0] }}
+      transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut", delay }}
+      className={`absolute w-[280px] rounded-2xl bg-white border border-gray-200 shadow-xl shadow-gray-300/40 p-5 ${className ?? ""}`}
+    >
+      <span
+        aria-hidden
+        className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl bg-gradient-to-b from-orange-400 to-orange-600"
+      />
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <p className="font-semibold text-[#023337] text-sm leading-snug">{q}</p>
+        <span className="grid place-items-center w-6 h-6 rounded-full bg-orange-500 shrink-0">
+          <PlusIcon className="w-3.5 h-3.5 text-white rotate-45" />
+        </span>
+      </div>
+      <p className="text-gray-400 text-xs leading-relaxed line-clamp-2">{a}</p>
+    </motion.div>
+  );
+}
 
 export default function FaqHeroVisual({ tab }: { tab: FaqTabKey }) {
   return (
     <div className="relative h-64 sm:h-80 lg:h-[420px] mt-2 lg:mt-0">
       <AnimatePresence mode="wait">
-        {tab === "all" ? (
+        {tab === "vendor" ? (
           <motion.div
-            key="all"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
+            key="vendor"
+            initial={{ opacity: 0, scale: 0.94 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.94 }}
+            transition={{ duration: 0.35 }}
             className="absolute inset-0"
           >
-            <motion.div
-              animate={{ y: [0, -12, 0] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute top-0 left-0 w-[68%] aspect-[4/5] rounded-3xl overflow-hidden shadow-xl shadow-gray-400/30 -rotate-3"
-            >
-              <Image
-                src={buyerImage.src}
-                alt={buyerImage.alt}
-                fill
-                sizes="(min-width: 1024px) 340px, 60vw"
-                quality={90}
-                priority
-                className="object-cover"
-              />
-              <ShineSweep />
-            </motion.div>
-
-            <motion.div
-              animate={{ y: [0, 14, 0] }}
-              transition={{
-                duration: 7,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.6,
-              }}
-              className="absolute bottom-0 right-0 w-[58%] aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl shadow-gray-400/40 rotate-3 border-4 border-[#F1F5F9]"
-            >
-              <Image
-                src={vendorImage.src}
-                alt={vendorImage.alt}
-                fill
-                sizes="(min-width: 1024px) 300px, 50vw"
-                quality={90}
-                className="object-cover"
-              />
-              <ShineSweep />
-            </motion.div>
+            <MockCard
+              {...preview.vendor}
+              className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rotate-2"
+              delay={0.3}
+            />
           </motion.div>
         ) : (
           <motion.div
-            key={tab}
-            initial={{ opacity: 0, x: 30, scale: 0.96 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -30, scale: 0.96 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
+            key={tab === "buyer" ? "buyer" : "all"}
+            initial={{ opacity: 0, scale: 0.94 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.94 }}
+            transition={{ duration: 0.35 }}
             className="absolute inset-0"
           >
-            <motion.div
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-              className="relative w-full h-full rounded-3xl overflow-hidden shadow-xl shadow-gray-400/30"
-            >
-              <Image
-                src={tab === "buyer" ? buyerImage.src : vendorImage.src}
-                alt={tab === "buyer" ? buyerImage.alt : vendorImage.alt}
-                fill
-                sizes="420px"
-                quality={90}
-                priority
-                className="object-cover"
+            <MockCard
+              {...preview.buyer}
+              className="left-[8%] top-[18%] -rotate-3"
+            />
+            {tab === "all" && (
+              <MockCard
+                {...preview.vendor}
+                className="right-[4%] bottom-[12%] rotate-2"
+                delay={0.5}
               />
-              <ShineSweep />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0" />
-              <div className="absolute bottom-0 left-0 right-0 p-5">
-                <p className="text-white text-sm font-semibold">
-                  {captions[tab].title}
-                </p>
-                <p className="text-white/70 text-xs mt-0.5">
-                  {captions[tab].sub}
-                </p>
-              </div>
-            </motion.div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

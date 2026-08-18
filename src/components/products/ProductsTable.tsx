@@ -8,17 +8,17 @@ import type { CategoryProduct } from "@/types/product";
 import ProductActionsPopover from "./ProductActionsPopover";
 import { useNavigation } from "../NavigationProgressContext";
 import {
-  Star,
-  Package,
-  Plus,
-  SearchX,
-  Edit2,
-  DollarSign,
-  MessageCircle,
-  Trash2,
-  Ban,
-} from "lucide-react";
-
+  BanIcon,
+  DollarSignIcon,
+  EditIcon,
+  MessageCircleIcon,
+  PackageIcon,
+  PackageIllustration,
+  PlusIcon,
+  SearchXIllustration,
+  StarIcon,
+  TrashIcon,
+} from "@/components/icons";
 // Small, local, and deliberately coarse — a card caption, not a precise
 // audit timestamp, so a handful of thresholds is enough (same spirit as
 // product-price.ts's fmt()). Returns null on anything unparseable so the
@@ -59,7 +59,7 @@ function SuspendedOverlay({
       }}
       className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-1.5 bg-black/70 text-white cursor-pointer"
     >
-      <Ban size={20} />
+      <BanIcon size={20} />
       <span className="text-dash-body font-bold">Suspended</span>
       <span className="text-dash-caption underline underline-offset-2">
         See why
@@ -109,7 +109,7 @@ function ProductCard({
             <span className="font-black text-4xl leading-none">
               {product.name.charAt(0)}
             </span>
-            <Package size={14} className="text-white/70" />
+            <PackageIcon size={14} className="text-white/70" />
           </div>
         )}
 
@@ -139,7 +139,7 @@ function ProductCard({
           ) : null}
           {product.featured && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-amber-400 text-white">
-              <Star size={9} className="fill-white text-white" />
+              <StarIcon size={9} className="fill-white text-white" />
               Featured
             </span>
           )}
@@ -230,7 +230,7 @@ function ProductRow({
         <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0">
           {product.isSuspended && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70">
-              <Ban size={16} className="text-white" />
+              <BanIcon size={16} className="text-white" />
             </div>
           )}
           {product.mainImageUrl ? (
@@ -280,7 +280,7 @@ function ProductRow({
             <div className="flex items-center gap-1.5 flex-wrap mt-1">
               {product.isSuspended && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-red-50 text-red-700">
-                  <Ban size={9} />
+                  <BanIcon size={9} />
                   Suspended — tap to see why
                 </span>
               )}
@@ -304,7 +304,10 @@ function ProductRow({
               ) : null}
               {product.featured && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-amber-50 text-amber-700">
-                  <Star size={9} className="fill-amber-500 text-amber-500" />
+                  <StarIcon
+                    size={9}
+                    className="fill-amber-500 text-amber-500"
+                  />
                   Featured
                 </span>
               )}
@@ -318,14 +321,14 @@ function ProductRow({
           onClick={() => navigate(`/${userId}/products/${product.id}/edit`)}
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-caption font-medium text-gray-600 active:bg-gray-50 transition-colors cursor-pointer"
         >
-          <Edit2 size={14} className="text-blue-500" />
+          <EditIcon size={14} className="text-blue-500" />
           Edit
         </button>
         <button
           onClick={onChangePrice}
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-caption font-medium text-gray-600 active:bg-gray-50 transition-colors cursor-pointer"
         >
-          <DollarSign size={14} className="text-gray-500" />
+          <DollarSignIcon size={14} className="text-gray-500" />
           {pricing.quoteOnRequest ? "Set Price" : "Price"}
         </button>
         {showQuoteAction && (
@@ -333,7 +336,7 @@ function ProductRow({
             onClick={onSwitchToQuote}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-caption font-medium text-gray-600 active:bg-gray-50 transition-colors cursor-pointer"
           >
-            <MessageCircle size={14} className="text-teal-500" />
+            <MessageCircleIcon size={14} className="text-teal-500" />
             Quote
           </button>
         )}
@@ -342,7 +345,7 @@ function ProductRow({
           aria-label={`Delete ${noun}`}
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-caption font-medium text-red-500 active:bg-red-50 transition-colors cursor-pointer"
         >
-          <Trash2 size={14} className="text-red-400" />
+          <TrashIcon size={14} className="text-red-400" />
           Delete
         </button>
       </div>
@@ -359,11 +362,15 @@ function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+      {/* bg-orange-50, not gray — same orange-tinted language as
+          BuyerEmptyState/InstallRow now use for empty states, just a
+          chip rather than a full bordered card since this already sits
+          inside ProductsPage's own white card. */}
+      <div className="w-14 h-14 rounded-2xl bg-orange-50 flex items-center justify-center">
         {hasActiveSearch ? (
-          <SearchX size={24} className="text-gray-300" />
+          <SearchXIllustration size={28} />
         ) : (
-          <Package size={24} className="text-gray-300" />
+          <PackageIllustration size={28} />
         )}
       </div>
       <div>
@@ -383,7 +390,7 @@ function EmptyState({
           onClick={onAddListing}
           className="mt-1 flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-dash-caption font-semibold rounded-lg transition-colors cursor-pointer"
         >
-          <Plus size={14} />
+          <PlusIcon size={14} />
           Add your first listing
         </button>
       )}

@@ -5,20 +5,20 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
-import {
-  Wallet,
-  PlusCircle,
-  List,
-  Settings,
-  Gift,
-  Store,
-  MessageSquare,
-} from "lucide-react";
 import { getInitial } from "@/lib/initials";
 import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira } from "@/lib/utils";
 import type { NavItem, NavSection } from "@/types/common";
+import {
+  GiftIcon,
+  ListIcon,
+  MessageSquareIcon,
+  PlusCircleIcon,
+  SettingsIcon,
+  StoreIcon,
+  WalletIcon,
+} from "@/components/icons";
 
 // Matches the backend's hourly wallet-low notification cron
 // (walletLowBalance.job.js's own LOW_BALANCE_KOBO) and the wallet page's own
@@ -66,13 +66,13 @@ export default function Sidebar() {
       items: [
         {
           label: "Add Listing",
-          icon: <PlusCircle size={16} />,
+          icon: <PlusCircleIcon size={16} />,
           href: "products/add",
           id: "add-listing-nav",
         },
         {
           label: "View Listings",
-          icon: <List size={16} />,
+          icon: <ListIcon size={16} />,
           href: "products/",
           id: "my-listings-nav",
         },
@@ -83,13 +83,13 @@ export default function Sidebar() {
       items: [
         {
           label: "My Store",
-          icon: <Store size={16} />,
+          icon: <StoreIcon size={16} />,
           href: "store",
           id: "store-nav",
         },
         {
           label: "Buyer Requests",
-          icon: <MessageSquare size={16} />,
+          icon: <MessageSquareIcon size={16} />,
           href: "buyer-requests",
           id: "buyer-requests-nav",
         },
@@ -100,19 +100,19 @@ export default function Sidebar() {
       items: [
         {
           label: "Wallet",
-          icon: <Wallet size={16} />,
+          icon: <WalletIcon size={16} />,
           href: "wallet",
           id: "wallet-nav",
         },
         {
           label: "Referrals",
-          icon: <Gift size={16} />,
+          icon: <GiftIcon size={16} />,
           href: "referrals",
           id: "referrals-nav",
         },
         {
           label: "Settings",
-          icon: <Settings size={16} />,
+          icon: <SettingsIcon size={16} />,
           href: "settings",
           id: "settings-nav",
         },

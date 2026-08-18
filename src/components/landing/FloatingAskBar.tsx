@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowRight } from "@phosphor-icons/react";
 import { goAskVelte } from "@/lib/askVelte";
+import { ArrowRightIcon } from "@/components/icons";
 
 // "Make the AI input persistent" — a compact composer that appears once the
 // visitor scrolls past Hero's own (much bigger) one, so a conversation can
@@ -60,7 +60,7 @@ export function FloatingAskBar() {
               aria-label="Ask Velte"
               className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 text-white transition-colors cursor-pointer"
             >
-              <ArrowRight size={15} />
+              <ArrowRightIcon size={18} />
             </button>
           </form>
         </motion.div>

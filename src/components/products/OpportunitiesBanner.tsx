@@ -2,11 +2,10 @@
 
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Sparkles, ArrowRight } from "lucide-react";
-
 import { api } from "@/lib/api-client";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import type { BuyerRequest } from "@/types/buyerRequest";
+import { ArrowRightIcon, SparklesIcon } from "@/components/icons";
 
 /* The scoped version of "Velte Demand" (2026-08-15) — per the earlier
    critique of building a full demand-analytics feature at 25-vendor scale,
@@ -31,7 +30,7 @@ export function OpportunitiesBanner() {
   });
 
   const requests = data?.requests ?? [];
-  const unresponded = requests.filter((r) => !r.alreadyResponded);
+  const unresponded = requests.filter((r) => !r.myDecision);
   if (unresponded.length === 0) return null;
 
   return (
@@ -41,7 +40,7 @@ export function OpportunitiesBanner() {
       className="w-full flex items-center gap-3 bg-gradient-to-r from-orange-50 to-orange-50/40 border border-orange-100 rounded-2xl px-4 sm:px-5 py-3.5 text-left hover:border-orange-200 transition-colors cursor-pointer"
     >
       <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center shrink-0">
-        <Sparkles size={16} className="text-white" />
+        <SparklesIcon size={16} className="text-white" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-dash-body font-semibold text-[#023337]">
@@ -57,7 +56,7 @@ export function OpportunitiesBanner() {
             : "People near you are looking for what you sell."}
         </p>
       </div>
-      <ArrowRight size={16} className="text-orange-500 shrink-0" />
+      <ArrowRightIcon size={16} className="text-orange-500 shrink-0" />
     </button>
   );
 }
