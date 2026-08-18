@@ -3,32 +3,27 @@
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "motion/react";
-import { Store, TrendingUp, Wallet } from "lucide-react";
-
 import { BuyerAuthShell } from "@/components/buyer/BuyerAuthShell";
 import type { AuthPanelContent } from "@/types/common";
 import VendorSignupForm from "./_components/VendorSignupForm";
+import { StoreIcon, TrendingUpIcon, WalletIcon } from "@/components/icons";
 
-/* Vendor-only signup (2026-08-15 unified this with a Buyer/Vendor toggle;
-   2026-08-16 removed the Buyer side again — see the "why do buyers have to
-   sign up" decision). A buyer's account is just a verified phone number,
-   created inline the moment it's actually needed (BuyerPhoneVerifyForm, at
-   /buyer/auth) — there's no separate buyer form to toggle to here anymore,
-   so this page went back to being what /auth/signup always was before the
-   brief unification: the vendor registration wizard
-   (Step1BusinessAccount/Step2SectorDescription), unchanged. /join still
-   redirects here with no type param (see that page's own comment); the old
-   /buyer/auth/signup shim now redirects to /buyer/auth instead. */
+/* Vendor-only signup. A buyer isn't an account at all (2026-08-18) — just a
+   one-time verified phone number, collected inline mid-conversation the
+   moment it's actually needed (BuyerPhoneVerifyForm, inside /chat) — there's
+   no buyer form to toggle to here. This page is the vendor registration
+   wizard (Step1BusinessAccount/Step2SectorDescription). /join still
+   redirects here (see that page's own comment). */
 
 const VENDOR_PANEL: AuthPanelContent = {
   headline: "Get discovered by buyers who are already looking.",
   subtitle:
     "List your business once — Velte matches you against real buyer demand by meaning, proximity and trust, not just a search box.",
   features: [
-    { icon: TrendingUp, text: "Real buyer demand, not cold outreach" },
-    { icon: Store, text: "A storefront buyers can trust at a glance" },
+    { icon: TrendingUpIcon, text: "Real buyer demand, not cold outreach" },
+    { icon: StoreIcon, text: "A storefront buyers can trust at a glance" },
     {
-      icon: Wallet,
+      icon: WalletIcon,
       text: "Paid straight to your bank — funds never sit with us",
     },
   ],

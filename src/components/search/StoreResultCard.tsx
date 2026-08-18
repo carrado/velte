@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { MapPin, Store as StoreIcon, Wrench } from "lucide-react";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -10,6 +9,7 @@ import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import type { StoreMatch } from "@/types/search";
+import { MapPinIcon, StoreIcon, WrenchIcon } from "@/components/icons";
 
 // Prefix "phone repair shop" → "a phone repair shop", "electronics store" →
 // "an electronics store" — a light grammar touch for the WhatsApp message
@@ -157,7 +157,7 @@ export function StoreResultCard({
           }}
           className="w-fit flex items-center gap-1.5 text-[12px] font-semibold text-orange-600 hover:text-orange-700 underline underline-offset-2 pt-2 mt-0.5 border-t border-gray-100"
         >
-          <Wrench size={12} className="shrink-0" />
+          <WrenchIcon size={12} className="shrink-0" />
           {matchingServicesOpen
             ? "Hide matching service" + (matchingServicesCount === 1 ? "" : "s")
             : `View matching service${matchingServicesCount === 1 ? "" : "s"} (${matchingServicesCount})`}
@@ -165,7 +165,7 @@ export function StoreResultCard({
       )}
 
       <div className="flex items-center gap-1.5 text-xs text-gray-500">
-        <MapPin size={13} className="shrink-0" />
+        <MapPinIcon size={13} className="shrink-0" />
         <span className="truncate">
           {match.area ??
             match.state ??

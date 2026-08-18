@@ -1,4 +1,5 @@
 import type { LeadSource } from "@/types/common";
+import { generateUUID } from "@/lib/uuid";
 
 // Anonymous, per-browser buyer id — never tied to an account, just enough
 // for the backend to recognize "the same buyer clicked again" and apply the
@@ -13,7 +14,7 @@ function getBuyerId(): string | null {
   try {
     let id = localStorage.getItem(BUYER_ID_KEY);
     if (!id) {
-      id = crypto.randomUUID();
+      id = generateUUID();
       localStorage.setItem(BUYER_ID_KEY, id);
     }
     return id;

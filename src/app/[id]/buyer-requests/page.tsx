@@ -3,16 +3,21 @@
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Clock, MapPin } from "lucide-react";
-
 import { api } from "@/lib/api-client";
 import { timeAgo } from "@/lib/timeAgo";
 import type { BuyerRequest } from "@/types/buyerRequest";
+import {
+  CheckCircleIcon,
+  ClockIcon,
+  MapPinIcon,
+  XCircleIcon,
+} from "@/components/icons";
 
-/* Spec §16-17: vendor's own view of requests THEY were matched to (server
-   already filtered — see vendorBuyerRequests.controller.js's
-   listMatchedRequests — "do not expose every irrelevant request to every
-   vendor"), not a general feed. */
+/* Vendor's own view of requests THEY were matched to (server already
+   filtered — see vendorBuyerRequests.controller.js's listMatchedRequests —
+   "do not expose every irrelevant request to every vendor"), not a general
+   feed. Each card links to the full detail page, where Accept/Decline
+   actually happens (see [requestId]/page.tsx). */
 export default function VendorBuyerRequestsPage() {
   const params = useParams<{ id: string }>();
 
@@ -54,9 +59,14 @@ export default function VendorBuyerRequestsPage() {
                 <span className="text-xs font-semibold text-orange-500">
                   🔥 Buyer Request
                 </span>
-                {request.alreadyResponded && (
-                  <span className="text-xs text-gray-400 shrink-0">
-                    Responded
+                {request.myDecision === "accepted" && (
+                  <span className="inline-flex items-center gap-1 text-xs text-green-600 shrink-0">
+                    <CheckCircleIcon size={12} /> Accepted
+                  </span>
+                )}
+                {request.myDecision === "declined" && (
+                  <span className="inline-flex items-center gap-1 text-xs text-gray-400 shrink-0">
+                    <XCircleIcon size={12} /> Declined
                   </span>
                 )}
               </div>
@@ -64,14 +74,12 @@ export default function VendorBuyerRequestsPage() {
                 {request.description}
               </p>
               <div className="flex items-center gap-4 text-gray-400 text-xs">
-                {(request.area || request.state) && (
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />{" "}
-                    {request.area || request.state}
-                  </span>
-                )}
                 <span className="inline-flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> {timeAgo(request.createdAt)}
+                  <MapPinIcon className="w-3 h-3" />{" "}
+                  {request.location ? "Near you" : "N/A"}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <ClockIcon className="w-3 h-3" /> {timeAgo(request.createdAt)}
                 </span>
               </div>
             </Link>

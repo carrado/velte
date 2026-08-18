@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, ArrowRight, Key, AlertCircle, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
@@ -16,6 +15,14 @@ import { api } from "@/lib/api-client";
 import Image from "next/image";
 import { passwordSchema } from "@/lib/password-utils";
 import { PasswordStrengthMeter } from "@/components/passwordStrengthMeter";
+import {
+  AlertCircleIcon,
+  ArrowRightIcon,
+  EyeIcon,
+  EyeOffIcon,
+  KeyIcon,
+  LockIcon,
+} from "@/components/icons";
 
 // Shared FieldError component (can be moved to a shared file later)
 function FieldError({ message }: { message: string | undefined }) {
@@ -70,7 +77,7 @@ function ResetPasswordForm() {
         className="relative w-full max-w-[440px]"
       >
         <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <AlertCircleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">
             Invalid Request
           </h1>
@@ -81,7 +88,7 @@ function ResetPasswordForm() {
           <Link href="/auth/forgot-password">
             <Button className="w-full bg-orange-500 hover:bg-orange-400 text-white font-semibold shadow-lg shadow-orange-500/20 gap-2">
               Request new link
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRightIcon className="w-4 h-4" />
             </Button>
           </Link>
         </div>
@@ -139,7 +146,7 @@ function ResetPasswordForm() {
             {(field) => (
               <div>
                 <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                  <Key className="w-3.5 h-3.5 text-orange-400" />
+                  <KeyIcon className="w-3.5 h-3.5 text-orange-400" />
                   One-Time Password (OTP)
                 </Label>
                 <Input
@@ -170,7 +177,7 @@ function ResetPasswordForm() {
             {(field) => (
               <div>
                 <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                  <Lock className="w-3.5 h-3.5 text-orange-400" />
+                  <LockIcon className="w-3.5 h-3.5 text-orange-400" />
                   New Password
                 </Label>
                 <div className="relative">
@@ -188,9 +195,9 @@ function ResetPasswordForm() {
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none"
                   >
                     {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
+                      <EyeOffIcon className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-4 w-4" />
+                      <EyeIcon className="h-4 w-4" />
                     )}
                   </button>
                 </div>
@@ -219,7 +226,7 @@ function ResetPasswordForm() {
             {(field) => (
               <div>
                 <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                  <Lock className="w-3.5 h-3.5 text-orange-400" />
+                  <LockIcon className="w-3.5 h-3.5 text-orange-400" />
                   Confirm Password
                 </Label>
                 <div className="relative">
@@ -237,9 +244,9 @@ function ResetPasswordForm() {
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none"
                   >
                     {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4" />
+                      <EyeOffIcon className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-4 w-4" />
+                      <EyeIcon className="h-4 w-4" />
                     )}
                   </button>
                 </div>
@@ -267,7 +274,7 @@ function ResetPasswordForm() {
                   ? "Updating..."
                   : "Update password"}
                 {!isSubmitting && !resetMutation.isPending && (
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRightIcon className="w-4 h-4" />
                 )}
               </Button>
             )}

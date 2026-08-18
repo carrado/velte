@@ -1,14 +1,13 @@
 "use client";
-
-import {
-  Wallet as WalletIcon,
-  Plus,
-  Settings2,
-  CreditCard,
-} from "lucide-react";
 import { formatNaira } from "@/lib/utils";
 import { useCountUp } from "@/hooks/useCountUp";
 import type { Wallet } from "@/types/wallet";
+import {
+  CreditCardIcon,
+  PlusIcon,
+  Settings2Icon,
+  WalletIcon,
+} from "@/components/icons";
 
 export default function WalletHero({
   wallet,
@@ -51,7 +50,7 @@ export default function WalletHero({
           <div className="flex flex-wrap gap-2">
             {hasCard && (
               <span className="flex items-center gap-1.5 bg-white/70 backdrop-blur border border-gray-100 shadow-sm rounded-full px-3 py-1 text-dash-caption text-gray-500">
-                <CreditCard size={12} />
+                <CreditCardIcon size={12} />
                 •••• {wallet?.autoRecharge.last4 ?? "····"}
               </span>
             )}
@@ -76,7 +75,7 @@ export default function WalletHero({
               onClick={onTopUp}
               className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
             >
-              <Plus size={16} />
+              <PlusIcon size={16} />
               Top Up
             </button>
           )}
@@ -84,7 +83,7 @@ export default function WalletHero({
             onClick={onManageFunding}
             className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
           >
-            <Settings2 size={16} />
+            <Settings2Icon size={16} />
             Manage Funding
           </button>
         </div>

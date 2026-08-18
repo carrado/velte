@@ -1,7 +1,6 @@
 // services/users.ts
 import { api } from "@/lib/api-client";
 import { useUserStore } from "@/store/userStore";
-import { useBuyerStore } from "@/store/buyerStore";
 import type { User } from "@/types/user";
 import type { LoginResult } from "@/types/auth";
 
@@ -16,17 +15,11 @@ export const usersApi = {
     return api.post("/api/auth/register", data);
   },
 
-  // POST (login) – unified 2026-08-15: one endpoint for both account
-  // types, `{ identifier, password }`. Populates whichever store matches
-  // `accountType` — the caller (the unified /auth/login page) branches on
-  // the same field to decide where to route afterward.
+  // POST (login) – vendor-only, `{ identifier, password }`. Buyers never
+  // log in (see LoginResult's own comment).
   login: async (data: { identifier: string; password: string }) => {
     const result = await api.post<LoginResult>("/api/auth/login", data);
-    if (result.accountType === "vendor") {
-      useUserStore.getState().setUser(result.user);
-    } else {
-      useBuyerStore.getState().setBuyer(result.buyer);
-    }
+    useUserStore.getState().setUser(result.user);
     return result;
   },
 

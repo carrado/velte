@@ -1,8 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { MapPin, X } from "lucide-react";
-
+import { CloseIcon, MapPinIcon } from "@/components/icons";
 // Shown once per page load whenever the browser's own geolocation
 // permission is still undecided ("prompt") — explains what the location is
 // actually used for BEFORE the native browser prompt fires, instead of that
@@ -32,12 +31,12 @@ export function LocationPermissionModal({
           aria-label="Dismiss"
           className="absolute right-3 top-3 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
         >
-          <X size={16} />
+          <CloseIcon size={16} />
         </button>
 
         <div className="px-6 pb-6 pt-8 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50">
-            <MapPin size={22} className="text-orange-500" />
+            <MapPinIcon size={22} className="text-orange-500" />
           </div>
           <h3 className="mt-4 text-base font-semibold text-[#023337]">
             Find vendors near you

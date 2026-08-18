@@ -2,18 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Wallet as WalletIcon,
-  Plus,
-  Settings2,
-  AlertTriangle,
-  Target,
-  Zap,
-  ArrowDownLeft,
-  CreditCard,
-  Gift,
-  ChevronRight,
-} from "lucide-react";
 import { useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { walletApi } from "@/services/wallet";
@@ -24,6 +12,18 @@ import TopUpModal from "./TopUpModal";
 import FundingMethodModal from "./FundingMethodModal";
 import LeadGenerationCard from "./LeadGenerationCard";
 import SpendHistoryTable from "./SpendHistoryTable";
+import {
+  AlertTriangleIcon,
+  ArrowDownLeftIcon,
+  ChevronRightIcon,
+  CreditCardIcon,
+  GiftIcon,
+  PlusIcon,
+  Settings2Icon,
+  TargetIcon,
+  WalletIcon,
+  ZapIcon,
+} from "@/components/icons";
 
 // Below this, a lead charge could fail outright — nudge the vendor to top up
 // before that happens rather than after. Purely a UI hint; the actual
@@ -82,7 +82,7 @@ export default function WalletPage() {
       sub: statsLoading
         ? ""
         : `${formatNaira(stats?.monthSpentKobo ?? 0)} this month`,
-      icon: Target,
+      icon: TargetIcon,
       iconClass: "bg-orange-50 text-orange-500",
     },
     {
@@ -90,7 +90,7 @@ export default function WalletPage() {
       label: "Leads Received",
       value: statsLoading ? "—" : String(stats?.totalLeads ?? 0),
       sub: statsLoading ? "" : `${stats?.monthLeads ?? 0} this month`,
-      icon: Zap,
+      icon: ZapIcon,
       iconClass: "bg-teal-50 text-teal-600",
     },
     {
@@ -100,7 +100,7 @@ export default function WalletPage() {
       sub: statsLoading
         ? ""
         : `${stats?.topupsCount ?? 0} top-up${(stats?.topupsCount ?? 0) === 1 ? "" : "s"}`,
-      icon: ArrowDownLeft,
+      icon: ArrowDownLeftIcon,
       iconClass: "bg-green-50 text-green-600",
     },
   ];
@@ -109,7 +109,10 @@ export default function WalletPage() {
     <div className="flex flex-col gap-5">
       {(isEmpty || isLow) && (
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-none sm:rounded-xl px-4 py-3">
-          <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+          <AlertTriangleIcon
+            size={16}
+            className="text-amber-600 mt-0.5 shrink-0"
+          />
           <div className="flex-1">
             <p className="text-dash-body font-semibold text-amber-800">
               {isEmpty
@@ -147,7 +150,7 @@ export default function WalletPage() {
             <div className="flex flex-wrap gap-2">
               {hasCard && (
                 <span className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-full px-3 py-1 text-dash-caption text-gray-500">
-                  <CreditCard size={12} />
+                  <CreditCardIcon size={12} />
                   •••• {wallet?.autoRecharge.last4 ?? "····"}
                 </span>
               )}
@@ -174,7 +177,7 @@ export default function WalletPage() {
                 onClick={() => setTopUpOpen(true)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
               >
-                <Plus size={16} />
+                <PlusIcon size={16} />
                 Top Up
               </button>
             )}
@@ -182,7 +185,7 @@ export default function WalletPage() {
               onClick={() => setFundingOpen(true)}
               className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
             >
-              <Settings2 size={16} />
+              <Settings2Icon size={16} />
               Manage Funding
             </button>
           </div>
@@ -201,7 +204,7 @@ export default function WalletPage() {
         className="lg:hidden flex items-center gap-3 rounded-none sm:rounded-2xl bg-white border border-gray-100 shadow-sm p-4 sm:p-5 text-left hover:bg-gray-50 transition-colors cursor-pointer"
       >
         <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
-          <Gift size={16} className="text-orange-500" />
+          <GiftIcon size={16} className="text-orange-500" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-dash-body font-semibold text-gray-900">
@@ -217,7 +220,7 @@ export default function WalletPage() {
             clickable. */}
         <span className="flex items-center gap-1 shrink-0 px-3 py-1.5 bg-orange-500 text-white text-dash-caption font-semibold rounded-lg">
           View
-          <ChevronRight size={13} />
+          <ChevronRightIcon size={13} />
         </span>
       </button>
 

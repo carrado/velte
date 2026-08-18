@@ -3,7 +3,6 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { usePathname } from "next/navigation";
-import { Bell, LogOut } from "lucide-react";
 import { AskVeluxButton } from "@/components/AskVeluxButton";
 import { useUserStore } from "@/store/userStore";
 import { useMutation } from "@tanstack/react-query";
@@ -20,6 +19,7 @@ import { useNavigation } from "@/components/NavigationProgressContext";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
+import { BellIcon, LogOutIcon } from "@/components/icons";
 
 export default function Header({ title }: HeaderProps) {
   const userDetails = useUserStore((state) => state.user);
@@ -85,7 +85,7 @@ export default function Header({ title }: HeaderProps) {
           onClick={() => navigate(`/${userId}/notifications`)}
           aria-label="Notifications"
         >
-          <Bell size={20} />
+          <BellIcon size={20} />
           {hasUnread && (
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
           )}
@@ -140,7 +140,7 @@ export default function Header({ title }: HeaderProps) {
                 disabled={logoutMutation.isPending}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 text-dash-body text-red-500 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-60"
               >
-                <LogOut size={15} />
+                <LogOutIcon size={15} />
                 <span>
                   {logoutMutation.isPending ? "Logging out…" : "Logout"}
                 </span>

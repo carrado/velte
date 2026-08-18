@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
-import { CheckCircle2 } from "lucide-react";
-
 import { buyerApi } from "@/lib/buyer-api-client";
 import { BuyerPhoneVerifyForm } from "@/components/buyer/BuyerPhoneVerifyForm";
-import type { BuyerRequestOffer } from "@/types/search";
+import type { BuyerLocation, BuyerRequestOffer } from "@/types/search";
+import { CheckCircleIcon } from "@/components/icons";
 
 /* Renders createBuyerRequestTool's outcome (see BuyerRequestOffer's own
    comment) — the AI-agent replacement for the old standalone "Post a
@@ -28,10 +26,16 @@ import type { BuyerRequestOffer } from "@/types/search";
 export function BuyerRequestOfferWidget({
   offer,
   imageUrl,
+  location,
   onResolved,
 }: {
   offer: BuyerRequestOffer;
   imageUrl: string | null;
+  /** The buyer's device location, if they granted it earlier this session —
+   *  used only for THIS request, never saved anywhere (see createRequest's
+   *  own comment). Omitted entirely when not granted, so the vendor sees
+   *  "N/A" rather than a guess. */
+  location?: BuyerLocation;
   onResolved: (offer: BuyerRequestOffer) => void;
 }) {
   const [creating, setCreating] = useState(false);
@@ -55,17 +59,12 @@ export function BuyerRequestOfferWidget({
       // so it keeps its bg/border, just sized to the same width as
       // everything else in the thread instead of a bespoke one.
       <div className="flex items-start gap-2.5 bg-green-50 border border-green-100 rounded-2xl px-4 py-3">
-        <CheckCircle2 size={17} className="text-green-600 shrink-0 mt-0.5" />
+        <CheckCircleIcon size={17} className="text-green-600 shrink-0 mt-0.5" />
         <div className="text-sm text-green-800">
           <p className="font-medium">Request sent.</p>
           <p className="text-green-700/80">
-            I&apos;ll let you know the moment a business responds.{" "}
-            <Link
-              href={`/chat/requests/${offer.requestId}`}
-              className="underline font-medium"
-            >
-              View request
-            </Link>
+            You&apos;ll get an SMS confirming this, and any interested vendor
+            will message you directly on WhatsApp.
           </p>
         </div>
       </div>
@@ -101,6 +100,11 @@ export function BuyerRequestOfferWidget({
   }
 
   async function handleVerified() {
+    // Only ever reachable from the JSX below, which only renders once
+    // `offer.status` has fallen through to "needs_identity" — but that
+    // narrowing doesn't persist into this separate function, so re-check
+    // explicitly rather than fight TypeScript with a cast.
+    if (offer.status !== "needs_identity") return;
     setCreating(true);
     try {
       const { created, request } = await buyerApi.post<{
@@ -108,7 +112,9 @@ export function BuyerRequestOfferWidget({
         request: { id: string } | null;
       }>("/api/buyer-requests", {
         description: offer.description,
+        name: offer.buyerName,
         imageUrl: imageUrl ?? null,
+        ...(location && { location }),
       });
       if (!created || !request) {
         setSelfResolvedNoMatch(true);
@@ -133,7 +139,7 @@ export function BuyerRequestOfferWidget({
       <fieldset disabled={creating} className="contents">
         <BuyerPhoneVerifyForm
           variant="compact"
-          promptLabel="What's your number so I can let you know when someone responds?"
+          promptLabel="What's your WhatsApp number? That's how a vendor will reach you."
           onVerified={handleVerified}
         />
       </fieldset>

@@ -1,6 +1,6 @@
-import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WhatsAppButtonProps } from "@/types/common";
+import { MessageCircleIcon } from "@/components/icons";
 
 // Shared across the public store page and the Velte search results
 // (build-order step d) — promoted here from a page-local component once a
@@ -21,7 +21,7 @@ export function WhatsAppButton({
         className,
       )}
     >
-      <MessageCircle size={17} />
+      <MessageCircleIcon size={17} />
       {label}
     </a>
   );

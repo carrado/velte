@@ -3,13 +3,10 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import Link from "next/link";
-// Icons from Phosphor (2026-08-16, swapped from lucide-react for this
-// session's pages only — see MobileMenu.tsx's comment). Menu (hamburger)
-// has no exact match; List is its closest Phosphor equivalent.
-import { List, X } from "@phosphor-icons/react";
 import { Button } from "../ui/button";
 import { MobileMenu } from "@/components/landing/MobileMenu";
 import Image from "next/image";
+import { CloseIcon, ListIcon } from "@/components/icons";
 
 // Simplified 2026-08-15 (full homepage redesign) to Logo … How it works |
 // Businesses | Sign in — down from Logo | Ask Velux | Sign In | Join Velte.
@@ -39,7 +36,18 @@ import Image from "next/image";
 // AskVeluxButton is still used in the buyer/vendor dashboard chrome, and
 // MobileMenu's drawer still carries its own Sign in / Join Velte links for
 // anyone who opens it.
-export default function Navbar() {
+export default function Navbar({
+  forceOpaque = false,
+}: {
+  // Careers is the one page whose hero sits on a full dark bg-[#023337]
+  // panel from y=0 (see CareersContent's own comment) — this Navbar's
+  // default transparent-until-scrolled state assumes light page content
+  // showing through behind it, so its dark gray-600 text/dark logo went
+  // near-illegible against dark content at the top of that one page.
+  // Skips the transparent phase entirely there rather than teaching this
+  // shared header to theme itself per-page.
+  forceOpaque?: boolean;
+} = {}) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -49,13 +57,15 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const opaque = forceOpaque || scrolled;
+
   return (
     <motion.header
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
+        opaque
           ? "bg-white/90 backdrop-blur-xl border-b border-gray-200"
           : "bg-transparent"
       }`}
@@ -104,7 +114,7 @@ export default function Navbar() {
               aria-expanded={menuOpen}
               className="sm:hidden w-10 h-10 -mr-1.5 flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
             >
-              {menuOpen ? <X size={22} /> : <List size={22} />}
+              {menuOpen ? <CloseIcon size={22} /> : <ListIcon size={22} />}
             </button>
           </div>
         </div>

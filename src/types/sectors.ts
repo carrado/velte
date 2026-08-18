@@ -9,7 +9,11 @@
  *                 menu, not a stocked shelf.
  */
 export type SectorClassification =
-  "retail" | "food" | "service" | "both" | "food_both";
+  | "retail"
+  | "food"
+  | "service"
+  | "both"
+  | "food_both";
 
 /**
  * Optional per-sector tailoring of the Add-Offering wizard. Tailors content

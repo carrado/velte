@@ -1,18 +1,18 @@
 "use client";
 
 import type { ProductActionsPopoverProps } from "@/types/product";
-import {
-  DollarSign,
-  Edit2,
-  MessageCircle,
-  MoreHorizontal,
-  Trash2,
-  Eye,
-} from "lucide-react";
 import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useNavigation } from "../NavigationProgressContext";
 import AnchoredPopover from "../AnchoredPopover";
+import {
+  DollarSignIcon,
+  EditIcon,
+  EyeIcon,
+  MessageCircleIcon,
+  MoreHorizontalIcon,
+  TrashIcon,
+} from "@/components/icons";
 
 export default function ProductActionsPopover({
   product,
@@ -36,7 +36,7 @@ export default function ProductActionsPopover({
         onClick={() => setPopoverOpen(!popoverOpen)}
         className="p-1.5 rounded-md text-gray-500 hover:text-gray-700 bg-white/90 hover:bg-white backdrop-blur-sm transition-colors cursor-pointer"
       >
-        <MoreHorizontal size={16} />
+        <MoreHorizontalIcon size={16} />
       </button>
       <AnchoredPopover
         open={popoverOpen}
@@ -52,7 +52,7 @@ export default function ProductActionsPopover({
           }}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
         >
-          <Eye size={14} className="text-orange-500" />
+          <EyeIcon size={14} className="text-orange-500" />
           View {noun}
         </button>
         <button
@@ -62,7 +62,7 @@ export default function ProductActionsPopover({
           }}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
         >
-          <Edit2 size={14} className="text-blue-500" />
+          <EditIcon size={14} className="text-blue-500" />
           Edit {noun}
         </button>
         <button
@@ -72,7 +72,7 @@ export default function ProductActionsPopover({
           }}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
         >
-          <DollarSign size={14} className="text-gray-500" />
+          <DollarSignIcon size={14} className="text-gray-500" />
           {product.quoteOnRequest ? "Set Price" : "Change Price"}
         </button>
         {product.kind === "service" && !product.quoteOnRequest && (
@@ -83,7 +83,7 @@ export default function ProductActionsPopover({
             }}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
           >
-            <MessageCircle size={14} className="text-teal-500" />
+            <MessageCircleIcon size={14} className="text-teal-500" />
             Switch to Quote
           </button>
         )}
@@ -94,7 +94,7 @@ export default function ProductActionsPopover({
           }}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
         >
-          <Trash2 size={14} className="text-red-400" />
+          <TrashIcon size={14} className="text-red-400" />
           Delete
         </button>
       </AnchoredPopover>

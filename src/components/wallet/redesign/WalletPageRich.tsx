@@ -9,7 +9,6 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Gift, ChevronRight } from "lucide-react";
 import { useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { walletApi } from "@/services/wallet";
@@ -21,6 +20,11 @@ import SpendHistoryTable from "@/components/wallet/SpendHistoryTable";
 import WalletHero from "./WalletHero";
 import WalletStatCards from "./WalletStatCards";
 import WalletSpendChart from "./WalletSpendChart";
+import {
+  AlertTriangleIcon,
+  ChevronRightIcon,
+  GiftIcon,
+} from "@/components/icons";
 
 // Matches WalletPage's own constant / the backend's LOW_BALANCE_KOBO.
 const LOW_BALANCE_KOBO = 100_000; // ₦1,000
@@ -66,7 +70,10 @@ export default function WalletPageRich() {
     <div className="flex flex-col gap-5">
       {(isEmpty || isLow) && (
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-none sm:rounded-xl px-4 py-3">
-          <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+          <AlertTriangleIcon
+            size={16}
+            className="text-amber-600 mt-0.5 shrink-0"
+          />
           <div className="flex-1">
             <p className="text-dash-body font-semibold text-amber-800">
               {isEmpty
@@ -102,7 +109,7 @@ export default function WalletPageRich() {
         className="lg:hidden flex items-center gap-3 rounded-none sm:rounded-2xl bg-white border border-gray-100 shadow-sm p-4 sm:p-5 text-left hover:bg-gray-50 transition-colors cursor-pointer"
       >
         <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
-          <Gift size={16} className="text-orange-500" />
+          <GiftIcon size={16} className="text-orange-500" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-dash-body font-semibold text-gray-900">
@@ -114,7 +121,7 @@ export default function WalletPageRich() {
         </div>
         <span className="flex items-center gap-1 shrink-0 px-3 py-1.5 bg-orange-500 text-white text-dash-caption font-semibold rounded-lg">
           View
-          <ChevronRight size={13} />
+          <ChevronRightIcon size={13} />
         </span>
       </button>
 

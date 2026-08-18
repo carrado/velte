@@ -1,5 +1,5 @@
-import { MapPin, Store as StoreIcon, ExternalLink } from "lucide-react";
 import type { NearbyBusiness } from "@/types/search";
+import { ExternalLinkIcon, MapPinIcon, StoreIcon } from "@/components/icons";
 
 // A real nearby business from Google Places (searchStores Tier 5) — no
 // Velte relationship, so deliberately NOT styled like VendorResultCard/
@@ -28,7 +28,7 @@ export function ExternalBusinessCard({ match }: { match: NearbyBusiness }) {
       </div>
 
       <div className="flex items-start gap-1.5 text-xs text-gray-500">
-        <MapPin size={13} className="shrink-0 mt-0.5" />
+        <MapPinIcon size={13} className="shrink-0 mt-0.5" />
         <span>
           {match.address} · {match.distanceKm}km away
         </span>
@@ -41,7 +41,7 @@ export function ExternalBusinessCard({ match }: { match: NearbyBusiness }) {
         className="flex items-center justify-center gap-1.5 w-full h-11 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-semibold transition-colors"
       >
         View on Google Maps
-        <ExternalLink size={14} />
+        <ExternalLinkIcon size={14} />
       </a>
     </div>
   );

@@ -89,12 +89,9 @@ self.addEventListener("pushsubscriptionchange", (event) => {
   // Re-subscribing here needs no user gesture and no auth prompt; the POSTs
   // below ride whatever same-origin auth cookies already exist.
   //
-  // Fires at BOTH /api/push/subscribe (vendor) and /api/buyer-push/subscribe
-  // (buyer) — this service worker is shared across the whole origin, so a
-  // device could hold a vendor session, a buyer session, or both at once,
-  // and there's no way to tell which one this subscription belonged to.
-  // Each endpoint 401s harmlessly if that session type isn't active here;
-  // Promise.allSettled means one failing never blocks the other.
+  // Vendor push only — buyers have no push subscriptions of their own
+  // (2026-08-18). /api/push/subscribe 401s harmlessly if no vendor session
+  // is active on this device.
   event.waitUntil(
     (async () => {
       try {
@@ -118,18 +115,11 @@ self.addEventListener("pushsubscriptionchange", (event) => {
           });
         }
         const body = JSON.stringify({ subscription: sub.toJSON() });
-        await Promise.allSettled([
-          fetch("/api/push/subscribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body,
-          }),
-          fetch("/api/buyer-push/subscribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body,
-          }),
-        ]);
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
       } catch (err) {
         // Best-effort — the app-load self-heal retries on next open.
       }

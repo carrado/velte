@@ -1,13 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  Images,
-  MessageCircle,
-  Package,
-  Store as StoreIcon,
-  Wrench,
-} from "lucide-react";
 import { fmt } from "@/lib/product-price";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
@@ -21,6 +14,13 @@ import type {
   PublicStoreProduct,
   PublicStoreProductProps,
 } from "@/types/store";
+import {
+  ImagesIcon,
+  MessageCircleIcon,
+  PackageIcon,
+  StoreIcon,
+  WrenchIcon,
+} from "@/components/icons";
 
 // "use client" so the server page (page.tsx) can still import/render these
 // across the server/client boundary while StoreWhatsAppButton attaches a
@@ -143,7 +143,7 @@ export function OfferingCard({
   isOwn,
 }: PublicStoreProductProps) {
   const isService = product.kind === "service";
-  const KindIcon = isService ? Wrench : Package;
+  const KindIcon = isService ? WrenchIcon : PackageIcon;
   const [detailOpen, setDetailOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [descOverflows, setDescOverflows] = useState(false);
@@ -186,7 +186,7 @@ export function OfferingCard({
         </span>
         {images.length > 1 && (
           <span className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm text-white text-[11px] font-semibold rounded-full">
-            <Images size={11} />
+            <ImagesIcon size={11} />
             {images.length}
           </span>
         )}
@@ -225,7 +225,7 @@ export function OfferingCard({
               onClick={() => reportLead(vendorId, product.id, "browse")}
               className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[12px] sm:text-[13px] font-semibold rounded-lg transition-colors w-full sm:w-auto shrink-0"
             >
-              <MessageCircle size={13} />
+              <MessageCircleIcon size={13} />
               Enquire
             </a>
           )}

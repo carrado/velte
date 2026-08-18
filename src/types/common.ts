@@ -1,4 +1,18 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
+
+/** Shared prop contract for every component in `src/components/icons/` —
+ *  mirrors lucide-react's own icon API (`size`, `strokeWidth`, plus any
+ *  native `<svg>` prop) so swapping an import is a drop-in replacement at
+ *  every call site. See [[custom_icon_system]]. */
+export interface IconProps extends SVGProps<SVGSVGElement> {
+  size?: number | string;
+  strokeWidth?: number | string;
+}
+
+/** A component reference from `src/components/icons/` — the type for any
+ *  prop that stores an icon component to render later (e.g. `icon: MapPinIcon`),
+ *  replacing lucide-react's `LucideIcon` type. */
+export type IconComponent = ComponentType<IconProps>;
 
 /** Which buyer-facing surface produced a WhatsApp lead click — 'browse' (the
  *  "/" homepage marketplace grid, or the public /store/[handle] page; a
@@ -110,10 +124,10 @@ export interface PricingFaqItem {
 /** BuyerAuthShell's left marketing panel content — overridable per page
  *  since the shell is now shared by the unified login AND signup (buyer
  *  and vendor branches alike), not just the buyer-only screens it started
- *  as. `icon` takes a component reference (e.g. from lucide-react),
+ *  as. `icon` takes a component reference (from `src/components/icons/`),
  *  matching NavItem's own `icon` convention elsewhere in this file. */
 export interface AuthPanelFeature {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: IconComponent;
   text: string;
 }
 

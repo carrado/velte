@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp } from "lucide-react";
 import {
   Area,
   CartesianGrid,
@@ -18,6 +17,7 @@ import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira, cn } from "@/lib/utils";
 import type { WalletMonthlySpendPoint } from "@/types/wallet";
+import { TrendingUpIcon } from "@/components/icons";
 
 const SPEND_COLOR = "#f97316";
 const LEADS_COLOR = "#0d9488";
@@ -86,7 +86,7 @@ export default function WalletSpendChart() {
         <div>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center">
-              <TrendingUp size={13} className="text-orange-500" />
+              <TrendingUpIcon size={13} className="text-orange-500" />
             </div>
             <h2 className="text-dash-heading font-semibold text-gray-900">
               Spend &amp; Leads Trend
@@ -194,7 +194,7 @@ export default function WalletSpendChart() {
       ) : (
         <div className="h-64 flex flex-col items-center justify-center text-center gap-2">
           <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
-            <TrendingUp size={17} className="text-orange-500" />
+            <TrendingUpIcon size={17} className="text-orange-500" />
           </div>
           <p className="text-dash-body font-semibold text-gray-700">
             No leads yet

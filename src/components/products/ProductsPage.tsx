@@ -9,7 +9,6 @@ import {
   useMutation,
   keepPreviousData,
 } from "@tanstack/react-query";
-import { DollarSign, Plus, Search, X } from "lucide-react";
 import { categoriesApi } from "@/services/products";
 import { queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
@@ -26,6 +25,12 @@ import { OpportunitiesBanner } from "./OpportunitiesBanner";
 import { Pagination } from "../Pagination";
 import { useNavigation } from "../NavigationProgressContext";
 import { Input } from "../ui/input";
+import {
+  CloseIcon,
+  DollarSignIcon,
+  PlusIcon,
+  SearchIcon,
+} from "@/components/icons";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -63,7 +68,7 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-              <DollarSign size={16} className="text-orange-600" />
+              <DollarSignIcon size={16} className="text-orange-600" />
             </div>
             <h2 className="text-dash-heading font-semibold text-[#023337]">
               {isQuote ? "Set Price" : "Change Price"}
@@ -73,7 +78,7 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 cursor-pointer"
           >
-            <X size={18} />
+            <CloseIcon size={18} />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
@@ -261,7 +266,7 @@ export default function ProductsPage() {
           onClick={() => navigate(`/${userId}/products/add`)}
           className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
         >
-          <Plus size={16} />
+          <PlusIcon size={16} />
           Add Listing
         </button>
       </div>
@@ -271,7 +276,7 @@ export default function ProductsPage() {
         {/* Toolbar — search is the only tool here now. */}
         <div className="px-4 pt-4 pb-4 sm:px-5 border-b border-gray-100">
           <div className="relative">
-            <Search
+            <SearchIcon
               size={16}
               className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
             />

@@ -8,13 +8,17 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ShieldCheck, ArrowRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import Image from "next/image";
 import { usersApi } from "@/services/users";
+import {
+  ArrowRightIcon,
+  RefreshIcon,
+  ShieldCheckIcon,
+} from "@/components/icons";
 
 const verifySchema = z.object({
   code: z
@@ -128,7 +132,7 @@ function VerifyForm() {
             {(field) => (
               <div>
                 <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-                  <ShieldCheck className="w-3.5 h-3.5 text-orange-400" />
+                  <ShieldCheckIcon className="w-3.5 h-3.5 text-orange-400" />
                   Verification Code
                 </Label>
                 <Input
@@ -167,7 +171,7 @@ function VerifyForm() {
                   ? "Verifying..."
                   : "Verify account"}
                 {!isSubmitting && !verifyMutation.isPending && (
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRightIcon className="w-4 h-4" />
                 )}
               </Button>
             )}
@@ -187,7 +191,7 @@ function VerifyForm() {
                 <>Sending...</>
               ) : (
                 <>
-                  Resend <RefreshCw className="w-3 h-3" />
+                  Resend <RefreshIcon className="w-3 h-3" />
                 </>
               )}
             </button>

@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CaretDown, Tag } from "@phosphor-icons/react";
 import AnchoredPopover from "@/components/AnchoredPopover";
 import { cn } from "@/lib/utils";
+import { ChevronDownIcon, TagIcon } from "@/components/icons";
 
 export interface PriceRange {
   min: number | null;
@@ -58,12 +58,12 @@ export function PriceRangeMenu({
             : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
         )}
       >
-        <Tag
+        <TagIcon
           size={14}
           className={active ? "text-orange-500" : "text-gray-400"}
         />
         Price
-        <CaretDown
+        <ChevronDownIcon
           size={12}
           className={cn(
             "transition-transform",

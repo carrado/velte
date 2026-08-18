@@ -1,8 +1,12 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { MapPin, MessageSquarePlus, ShieldCheck } from "lucide-react";
 import type { AuthPanelContent } from "@/types/common";
+import {
+  MapPinIcon,
+  MessageSquarePlusIcon,
+  ShieldCheckIcon,
+} from "@/components/icons";
 
 // Shared two-column shell — originally the buyer-only auth screens' look,
 // now (2026-08-15 login/signup unification) the shell for the ONE login
@@ -32,11 +36,11 @@ const DEFAULT_PANEL: AuthPanelContent = {
     "Velte matches your request against real vendors near you — no scrolling through irrelevant listings.",
   features: [
     {
-      icon: MessageSquarePlus,
+      icon: MessageSquarePlusIcon,
       text: "Post what you need, vendors who have it respond",
     },
-    { icon: MapPin, text: "Matched by what's actually near you" },
-    { icon: ShieldCheck, text: "No spam — you pick who to chat with" },
+    { icon: MapPinIcon, text: "Matched by what's actually near you" },
+    { icon: ShieldCheckIcon, text: "No spam — you pick who to chat with" },
   ],
 };
 

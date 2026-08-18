@@ -1,5 +1,5 @@
-// Shared by usePushNotifications (vendor) and useBuyerPushNotifications
-// (buyer) — same conversion either side needs to hand a VAPID public key to
+// Used by usePushNotifications (vendor push — buyers have no push
+// notifications of their own) — converts a VAPID public key for
 // PushManager.subscribe's applicationServerKey, which requires a raw
 // ArrayBuffer, not the base64url string the key ships as.
 export function urlBase64ToUint8Array(base64String: string): ArrayBuffer {

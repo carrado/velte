@@ -1,9 +1,8 @@
 "use client";
-
-import { Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ShareButtonProps } from "@/types/common";
+import { Share2Icon } from "@/components/icons";
 
 // One-tap share for storefronts (growth loop: vendors/buyers reshare a
 // storefront link, pulling new buyers into the whole network, not just that
@@ -49,7 +48,7 @@ export function ShareButton({
         className,
       )}
     >
-      <Share2 size={13} />
+      <Share2Icon size={13} />
       {label}
     </button>
   );

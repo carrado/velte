@@ -1,10 +1,9 @@
 "use client";
-
-import { Target, Zap, Gauge } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { formatNaira } from "@/lib/utils";
 import { useCountUp } from "@/hooks/useCountUp";
 import type { WalletStats } from "@/types/wallet";
+import { GaugeIcon, TargetIcon, ZapIcon } from "@/components/icons";
 
 function MiniSparkline({
   data,
@@ -134,7 +133,7 @@ export default function WalletStatCards({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <StatCard
-        icon={Target}
+        icon={TargetIcon}
         iconClass="bg-orange-50 text-orange-500"
         label="Spent on Leads"
         value={totalSpent}
@@ -145,7 +144,7 @@ export default function WalletStatCards({
         }
       />
       <StatCard
-        icon={Zap}
+        icon={ZapIcon}
         iconClass="bg-teal-50 text-teal-600"
         label="Leads Received"
         value={totalLeads}
@@ -155,7 +154,7 @@ export default function WalletStatCards({
         }
       />
       <StatCard
-        icon={Gauge}
+        icon={GaugeIcon}
         iconClass="bg-green-50 text-green-600"
         label="Funds Utilized"
         value={utilizationPct}

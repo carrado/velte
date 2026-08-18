@@ -2,14 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Package,
-  Store as StoreIcon,
-  Wrench,
-  X,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmt } from "@/lib/product-price";
 import { ProtectedImage } from "@/components/ProtectedImage";
@@ -17,6 +9,14 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { DetailSheet } from "@/components/DetailSheet";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  PackageIcon,
+  StoreIcon,
+  WrenchIcon,
+} from "@/components/icons";
 
 // Generic enough to back a product OR a service from any buyer-facing
 // listing surface (public store page, homepage marketplace preview, search
@@ -81,7 +81,7 @@ export function ListingDetailModal({
   priceInKobo?: boolean;
 }) {
   const isService = item.kind === "service";
-  const KindIcon = isService ? Wrench : Package;
+  const KindIcon = isService ? WrenchIcon : PackageIcon;
   const symbol = item.currency === "USD" ? "$" : "₦";
   const price = priceInKobo ? item.price / 100 : item.price;
   const priceMax =
@@ -181,7 +181,7 @@ export function ListingDetailModal({
                 aria-label="Previous photo"
                 className="absolute left-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white"
               >
-                <ChevronLeft size={15} />
+                <ChevronLeftIcon size={15} />
               </button>
               <button
                 type="button"
@@ -189,7 +189,7 @@ export function ListingDetailModal({
                 aria-label="Next photo"
                 className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white"
               >
-                <ChevronRight size={15} />
+                <ChevronRightIcon size={15} />
               </button>
               <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1">
                 {item.images.map((url, i) => (
@@ -216,7 +216,7 @@ export function ListingDetailModal({
           aria-label="Close"
           className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95"
         >
-          <X size={20} strokeWidth={2.5} />
+          <CloseIcon size={20} strokeWidth={2.5} />
         </button>
         <span className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm text-white text-[11px] font-semibold rounded-full">
           <KindIcon size={11} />

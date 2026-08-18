@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownLeft, ArrowUpRight, Calendar } from "lucide-react";
 import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira, cn } from "@/lib/utils";
@@ -12,6 +11,11 @@ import { Pagination } from "@/components/Pagination";
 import MobileCard from "@/components/MobileCard";
 import type { ColumnDef } from "@/types/common";
 import type { WalletTransactionItem } from "@/types/wallet";
+import {
+  ArrowDownLeftIcon,
+  ArrowUpRightIcon,
+  CalendarIcon,
+} from "@/components/icons";
 
 type SpendFilters = { startDate: string; endDate: string };
 
@@ -78,7 +82,7 @@ function DateRangeFilter({
         }}
         className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer text-dash-caption font-medium text-gray-600"
       >
-        <Calendar size={14} className="text-gray-400" />
+        <CalendarIcon size={14} className="text-gray-400" />
         {label}
       </button>
       <AnchoredPopover
@@ -149,9 +153,9 @@ function AmountCell({ item }: { item: WalletTransactionItem }) {
       )}
     >
       {isCredit ? (
-        <ArrowDownLeft size={13} />
+        <ArrowDownLeftIcon size={13} />
       ) : (
-        <ArrowUpRight size={13} className="text-red-500" />
+        <ArrowUpRightIcon size={13} className="text-red-500" />
       )}
       {isCredit ? "+" : "-"}
       {formatNaira(item.amountKobo)}

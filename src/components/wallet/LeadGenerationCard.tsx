@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Zap } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -17,6 +16,7 @@ import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira, cn } from "@/lib/utils";
 import type { WalletMonthlySpendPoint } from "@/types/wallet";
+import { ZapIcon } from "@/components/icons";
 
 // orange-600 rather than the orange-500 UI accent — the bars need ≥3:1
 // contrast against the white card (validated), the buttons don't.
@@ -145,7 +145,7 @@ export default function LeadGenerationCard() {
       ) : (
         <div className="h-56 flex flex-col items-center justify-center text-center gap-2">
           <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
-            <Zap size={17} className="text-orange-500" />
+            <ZapIcon size={17} className="text-orange-500" />
           </div>
           <p className="text-dash-body font-semibold text-gray-700">
             No leads yet

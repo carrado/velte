@@ -1,12 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-// The real WhatsApp brand mark, not a generic chat-bubble glyph (lucide has
-// no brand icons at all — this is the one place on the landing page that
-// needed one, so it's the one place pulling WhatsappLogo in specifically,
-// rather than changing the shared WhatsAppButton used elsewhere in the app,
-// which was out of scope here).
-import { WhatsappLogo } from "@phosphor-icons/react";
+import { WhatsAppIcon } from "@/components/icons";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 14 },
@@ -27,7 +22,7 @@ export function WhatsAppHighlight() {
         className="max-w-2xl mx-auto px-5 sm:px-8 text-center"
       >
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-green-500 mb-4">
-          <WhatsappLogo size={24} weight="fill" className="text-white" />
+          <WhatsAppIcon size={24} className="text-white" />
         </div>
         <h2 className="text-xl sm:text-2xl font-bold text-[#023337] tracking-tight mb-2 text-balance">
           Chat directly on WhatsApp

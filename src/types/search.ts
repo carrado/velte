@@ -156,8 +156,11 @@ export type BuyerRequestOffer =
   // No buyer session exists yet — nothing was created. The frontend renders
   // an inline phone+OTP capture (see BuyerRequestIdentityCapture) and, once
   // verified, creates the request itself via a plain POST /buyer-requests —
-  // no second AI turn needed for that part.
-  | { status: "needs_identity"; description: string }
+  // no second AI turn needed for that part. `buyerName` is already known by
+  // this point (the model only calls createBuyerRequest once it's asked for
+  // and gotten a name — see systemPrompt.ts) and is carried through so that
+  // later POST can send it along with the now-verified phone.
+  | { status: "needs_identity"; description: string; buyerName: string }
   // A buyer session already existed — the tool created the request
   // immediately, server-side, same turn.
   | { status: "created"; requestId: string; description: string }

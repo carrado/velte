@@ -3,10 +3,8 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-// Icons from Phosphor (2026-08-16, swapped from lucide-react for this
-// session's pages only — see MobileMenu.tsx's comment on the trade-off).
-import { ArrowRight, Camera } from "@phosphor-icons/react";
 import { goAskVelte } from "@/lib/askVelte";
+import { ArrowRightIcon, CameraIcon } from "@/components/icons";
 
 const stagger = {
   hidden: {},
@@ -129,7 +127,7 @@ export default function Hero() {
               />
               <div className="flex items-center justify-between px-4 sm:px-5 pb-4 pt-1">
                 <span className="hidden sm:flex items-center gap-1.5 pl-2 text-xs text-gray-400">
-                  <Camera size={14} />
+                  <CameraIcon size={14} />
                   Photos work too, once you&apos;re in
                 </span>
                 <button
@@ -137,7 +135,7 @@ export default function Hero() {
                   className="ml-auto shrink-0 inline-flex items-center gap-1.5 pl-4 pr-3.5 h-10 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors cursor-pointer"
                 >
                   Ask
-                  <ArrowRight size={15} />
+                  <ArrowRightIcon size={18} />
                 </button>
               </div>
             </div>

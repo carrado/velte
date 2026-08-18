@@ -6,10 +6,14 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-sans);
+  /* --font-geist-sans/-mono come from layout.tsx's GeistSans.variable /
+     GeistMono.variable (the `geist` package — see its own comment there).
+     --font-mono used to just hardcode the literal string "Geist Mono" as a
+     fallback stack without ever actually loading it; now it does. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono:
-    "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
   --font-serif:
     "Noto Serif", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 

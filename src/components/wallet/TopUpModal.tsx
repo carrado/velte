@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { X, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { walletApi, LEAD_COST_KOBO } from "@/services/wallet";
+import { CloseIcon, LoaderIcon, ShieldCheckIcon } from "@/components/icons";
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000];
 const MIN_TOPUP_NAIRA = 1000;
@@ -61,7 +61,7 @@ export default function TopUpModal({
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 cursor-pointer"
           >
-            <X size={18} />
+            <CloseIcon size={18} />
           </button>
         </div>
 
@@ -116,7 +116,10 @@ export default function TopUpModal({
           </p>
 
           <div className="flex items-start gap-2 text-dash-caption text-gray-400">
-            <ShieldCheck size={14} className="text-green-500 mt-0.5 shrink-0" />
+            <ShieldCheckIcon
+              size={14}
+              className="text-green-500 mt-0.5 shrink-0"
+            />
             <p>
               Your card details are handled securely by Paystack — they never
               touch or get stored on our servers. See our{" "}
@@ -143,7 +146,7 @@ export default function TopUpModal({
               disabled={!isValid || submitting}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 text-dash-body font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {submitting && <Loader2 size={14} className="animate-spin" />}
+              {submitting && <LoaderIcon size={14} className="animate-spin" />}
               Continue to Paystack
             </button>
           </div>

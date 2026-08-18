@@ -2,9 +2,9 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { walletApi } from "@/services/wallet";
 import { usersApi } from "@/services/users";
+import { CheckCircleIcon, LoaderIcon, XCircleIcon } from "@/components/icons";
 
 // Paystack redirects here after hosted checkout for wallet top-ups (see
 // initializeTopup's callback_url). Verifies the reference, then bounces the
@@ -61,7 +61,7 @@ function PaymentCallbackContent() {
       <div className="w-full max-w-md rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 p-8 text-center">
         {state === "verifying" && (
           <>
-            <Loader2
+            <LoaderIcon
               size={32}
               className="mx-auto animate-spin text-orange-500"
             />
@@ -75,7 +75,7 @@ function PaymentCallbackContent() {
         )}
         {state === "success" && (
           <>
-            <CheckCircle2 size={32} className="mx-auto text-green-500" />
+            <CheckCircleIcon size={32} className="mx-auto text-green-500" />
             <h1 className="mt-3 text-lg font-semibold text-gray-900">
               Wallet topped up
             </h1>
@@ -86,7 +86,7 @@ function PaymentCallbackContent() {
         )}
         {state === "failed" && (
           <>
-            <XCircle size={32} className="mx-auto text-red-500" />
+            <XCircleIcon size={32} className="mx-auto text-red-500" />
             <h1 className="mt-3 text-lg font-semibold text-gray-900">
               Payment not confirmed
             </h1>
@@ -103,7 +103,7 @@ export default function PaymentCallbackPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <Loader2 size={32} className="animate-spin text-orange-500" />
+          <LoaderIcon size={32} className="animate-spin text-orange-500" />
         </div>
       }
     >

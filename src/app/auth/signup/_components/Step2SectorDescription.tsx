@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Briefcase, FileText, Sparkles, Loader2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DescriptionQualityMeter } from "@/components/DescriptionQualityMeter";
@@ -12,6 +11,12 @@ import type { SignupFormApi } from "../schema";
 import { FieldError } from "./shared";
 import SectorPicker from "./SectorPicker";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
+import {
+  BriefcaseIcon,
+  FileTextIcon,
+  LoaderIcon,
+  SparklesIcon,
+} from "@/components/icons";
 
 const MAX_DESCRIPTION = 600;
 
@@ -41,7 +46,7 @@ function DescriptionField({
   return (
     <div>
       <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
-        <FileText className="w-3.5 h-3.5 text-orange-400" />
+        <FileTextIcon className="w-3.5 h-3.5 text-orange-400" />
         Describe your business
       </Label>
       <textarea
@@ -67,9 +72,9 @@ function DescriptionField({
           className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-600 disabled:opacity-60 cursor-pointer"
         >
           {isGenerating ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
+            <LoaderIcon className="w-3 h-3 animate-spin" />
           ) : (
-            <Sparkles className="w-3 h-3" />
+            <SparklesIcon className="w-3 h-3" />
           )}
           {isGenerating ? "Generating…" : "Ask AI to generate"}
         </button>
@@ -148,7 +153,7 @@ export default function Step2SectorDescription({
         {(field) => (
           <div>
             <Label className="text-black/70 text-sm mb-3 flex items-center gap-2">
-              <Briefcase className="w-3.5 h-3.5 text-orange-400" />
+              <BriefcaseIcon className="w-3.5 h-3.5 text-orange-400" />
               Business Sectors
             </Label>
             <SectorPicker

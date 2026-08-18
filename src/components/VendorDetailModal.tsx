@@ -1,13 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { BadgeCheck, MapPin, Store as StoreIcon, X } from "lucide-react";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { SlidingCover } from "@/components/landing/VendorsPreview";
 import { DetailSheet } from "@/components/DetailSheet";
+import {
+  BadgeCheckIcon,
+  CloseIcon,
+  MapPinIcon,
+  StoreIcon,
+} from "@/components/icons";
 
 // A vendor/store match — distinct from ListingDetailModal (a specific
 // product/service listing): no price/attributes, but a fuller profile
@@ -89,7 +94,7 @@ export function VendorDetailModal({
           aria-label="Close"
           className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95"
         >
-          <X size={20} strokeWidth={2.5} />
+          <CloseIcon size={20} strokeWidth={2.5} />
         </button>
       </div>
 
@@ -114,7 +119,7 @@ export function VendorDetailModal({
           <p className="font-bold text-[#023337] text-base truncate">
             {item.name}
           </p>
-          <BadgeCheck
+          <BadgeCheckIcon
             size={16}
             className="text-orange-500 shrink-0 fill-orange-500/15"
           />
@@ -123,7 +128,7 @@ export function VendorDetailModal({
 
         {(item.area || item.state || item.distanceKm != null) && (
           <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-2.5">
-            <MapPin size={13} className="shrink-0" />
+            <MapPinIcon size={13} className="shrink-0" />
             <span className="truncate">
               {item.area ?? item.state ?? "Nigeria"}
               {item.distanceKm != null && ` · ${item.distanceKm}km away`}

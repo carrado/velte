@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { toast } from "sonner";
 import { SECTOR_TAXONOMY, SECTOR_BY_VALUE } from "@/lib/sectors";
 import { cn } from "@/lib/utils";
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+} from "@/components/icons";
 
 export const MAX_SECTORS = 5;
 
@@ -54,7 +59,7 @@ export default function SectorMultiSelect({
           aria-label="Previous category"
           className="w-7 h-7 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-500 hover:text-orange-600 hover:border-orange-300 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0"
         >
-          <ChevronLeft size={14} />
+          <ChevronLeftIcon size={14} />
         </button>
 
         <div className="text-center min-w-0">
@@ -73,7 +78,7 @@ export default function SectorMultiSelect({
           aria-label="Next category"
           className="w-7 h-7 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-500 hover:text-orange-600 hover:border-orange-300 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0"
         >
-          <ChevronRight size={14} />
+          <ChevronRightIcon size={14} />
         </button>
       </div>
 
@@ -103,7 +108,7 @@ export default function SectorMultiSelect({
                     : "border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-600",
                 )}
               >
-                {isSelected && <Check size={12} />}
+                {isSelected && <CheckIcon size={12} />}
                 {leaf.label}
               </button>
             );
@@ -127,7 +132,7 @@ export default function SectorMultiSelect({
                 className="flex items-center gap-1 pl-3 pr-2 py-1 text-dash-secondary font-medium rounded-full bg-orange-500 text-white cursor-pointer"
               >
                 {leaf.label}
-                <X size={12} />
+                <CloseIcon size={12} />
               </button>
             );
           })}

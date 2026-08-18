@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
 // Generic horizontal carousel for a row of result cards (products, stores,
 // external suggestions, …) — replaces the old CSS grid wherever a section
@@ -101,7 +101,7 @@ export function CardCarousel<T>({
           aria-label="Scroll left"
           className="flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/3 sm:-translate-x-1/2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeftIcon size={16} />
         </button>
       )}
       {canScrollRight && (
@@ -111,7 +111,7 @@ export function CardCarousel<T>({
           aria-label="Scroll right"
           className="flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/3 sm:translate-x-1/2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
-          <ChevronRight size={16} />
+          <ChevronRightIcon size={16} />
         </button>
       )}
     </div>

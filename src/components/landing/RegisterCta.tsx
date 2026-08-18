@@ -2,15 +2,12 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-// Icons from Phosphor (2026-08-16, swapped from lucide-react for this
-// session's pages only — see MobileMenu.tsx's comment). MessageSquarePlus
-// has no exact match; ChatCircleText is its closest Phosphor equivalent.
 import {
-  ArrowRight,
-  ChatCircleText,
-  Storefront,
-  Wallet,
-} from "@phosphor-icons/react";
+  ArrowRightIcon,
+  MessageCircleIcon,
+  StoreIcon,
+  WalletIcon,
+} from "@/components/icons";
 
 const stagger = {
   hidden: {},
@@ -37,12 +34,12 @@ const fadeUp = {
 // navbar's bare "Join" button aside) that actually makes the case to a
 // vendor for why they'd list — not just where to click.
 const sellerKeeps = [
-  { icon: ChatCircleText, label: "Buyer requests" },
-  { icon: Storefront, label: "Your own storefront" },
+  { icon: MessageCircleIcon, label: "Buyer requests" },
+  { icon: StoreIcon, label: "Your own storefront" },
   // "Wallet & leads" read as jargon to a first-time visitor (2026-08-14
   // copy pass) — "leads" meant nothing without dashboard context. "Buyer
   // leads & wallet" leads with the word that actually explains the value.
-  { icon: Wallet, label: "Buyer leads & wallet" },
+  { icon: WalletIcon, label: "Buyer leads & wallet" },
 ];
 
 function KeepList({
@@ -104,7 +101,7 @@ export function RegisterCta() {
               className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-[15px] font-semibold shadow-lg shadow-orange-500/20 transition-colors"
             >
               List your business
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRightIcon className="w-4 h-4" />
             </Link>
           </motion.div>
 

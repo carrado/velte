@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,7 @@ import type { SignupForm } from "../schema";
 import WizardProgress from "./WizardProgress";
 import Step1BusinessAccount from "./Step1BusinessAccount";
 import Step2SectorDescription from "./Step2SectorDescription";
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "@/components/icons";
 
 /* /auth/signup's only form again (2026-08-16 — the Buyer/Vendor toggle it
    briefly shared the page with is gone, see that page's own comment). Was
@@ -212,7 +212,7 @@ export default function VendorSignupForm() {
               className="w-full bg-orange-500 hover:bg-orange-400 cursor-pointer text-white font-semibold shadow-lg shadow-orange-500/20 gap-2"
             >
               Continue
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRightIcon className="w-4 h-4" />
             </Button>
           ) : (
             <div className="flex items-center gap-3">
@@ -226,7 +226,7 @@ export default function VendorSignupForm() {
                 }}
                 className="cursor-pointer border-gray-200 text-gray-600 hover:bg-gray-50 gap-2"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeftIcon className="w-4 h-4" />
                 Back
               </Button>
               <form.Subscribe
@@ -254,7 +254,7 @@ export default function VendorSignupForm() {
                       ? "Creating account..."
                       : "Create account"}
                     {!isSubmitting && !signupMutation.isPending && (
-                      <Check className="w-4 h-4" />
+                      <CheckIcon className="w-4 h-4" />
                     )}
                   </Button>
                 )}

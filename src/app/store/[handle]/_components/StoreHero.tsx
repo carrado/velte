@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStoreHeroTheme } from "@/lib/sectorHeroThemes";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { ShareButton } from "@/components/ShareButton";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  MapPinIcon,
+} from "@/components/icons";
 
 const AUTOPLAY_MS = 4500;
 
@@ -96,11 +100,7 @@ export default function StoreHero({
             theme.gradient,
           )}
         >
-          <ThemeIcon
-            size={130}
-            strokeWidth={1}
-            className="text-white/25 -rotate-6"
-          />
+          <ThemeIcon size={130} className="opacity-20 -rotate-6" />
         </div>
       )}
 
@@ -115,14 +115,14 @@ export default function StoreHero({
             aria-label="Previous photo"
             className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm hover:bg-white/25 flex items-center justify-center transition-colors z-10"
           >
-            <ChevronLeft size={18} className="text-white" />
+            <ChevronLeftIcon size={18} className="text-white" />
           </button>
           <button
             onClick={next}
             aria-label="Next photo"
             className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm hover:bg-white/25 flex items-center justify-center transition-colors z-10"
           >
-            <ChevronRight size={18} className="text-white" />
+            <ChevronRightIcon size={18} className="text-white" />
           </button>
           <div className="absolute top-4 sm:top-5 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
             {gallery.map((_, i) => (
@@ -174,7 +174,7 @@ export default function StoreHero({
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs sm:text-sm text-white/85">
                 {area && (
                   <span className="flex items-center gap-1">
-                    <MapPin size={13} />
+                    <MapPinIcon size={13} />
                     {area}
                   </span>
                 )}

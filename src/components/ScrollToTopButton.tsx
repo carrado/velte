@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUp } from "lucide-react";
-
+import { ArrowUpIcon } from "@/components/icons";
 // Vendor dashboard routes are "/<mongo-objectid>/..." (see CLAUDE.md's own
 // "src/app/[id]/ — protected dashboard scoped to a user ID" note) — there's
 // no other static prefix to match against, since the id itself is dynamic.
@@ -51,7 +50,7 @@ export function ScrollToTopButton() {
             bottom: "calc(env(safe-area-inset-bottom) + 1.25rem)",
           }}
         >
-          <ArrowUp size={20} />
+          <ArrowUpIcon size={20} />
         </motion.button>
       )}
     </AnimatePresence>

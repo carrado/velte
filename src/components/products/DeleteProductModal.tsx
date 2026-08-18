@@ -1,7 +1,6 @@
 import { createPortal } from "react-dom";
 import type { DeleteProductModalProps } from "@/types/product";
-import { AlertTriangle, Loader2, X } from "lucide-react";
-
+import { AlertTriangleIcon, CloseIcon, LoaderIcon } from "@/components/icons";
 export default function DeleteProductModal({
   open,
   product,
@@ -29,7 +28,7 @@ export default function DeleteProductModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle size={16} className="text-red-600" />
+              <AlertTriangleIcon size={16} className="text-red-600" />
             </div>
             <h2 className="text-dash-heading font-semibold text-[#023337]">
               Delete Listing
@@ -40,7 +39,7 @@ export default function DeleteProductModal({
             disabled={isDeleting}
             className="text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <X size={18} />
+            <CloseIcon size={18} />
           </button>
         </div>
         <div className="px-6 py-5 space-y-4">
@@ -67,7 +66,7 @@ export default function DeleteProductModal({
               disabled={!canDelete || isDeleting}
               className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-dash-body font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isDeleting && <Loader2 size={15} className="animate-spin" />}
+              {isDeleting && <LoaderIcon size={15} className="animate-spin" />}
               {isDeleting ? "Deleting…" : "Delete"}
             </button>
           </div>

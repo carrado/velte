@@ -1,9 +1,8 @@
 "use client";
-
-import { ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRef, useState } from "react";
 import AnchoredPopover from "./AnchoredPopover";
+import { ArrowUpDownIcon } from "@/components/icons";
 
 interface SortMenuProps<T extends string = string> {
   currentSort: T;
@@ -26,7 +25,7 @@ export default function SortMenu<T extends string = string>({
         onClick={() => setOpen((o) => !o)}
         className="p-2 border border-[#d1d5db] rounded bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
       >
-        <ArrowUpDown size={18} className="text-[#6a717f]" />
+        <ArrowUpDownIcon size={18} className="text-[#6a717f]" />
       </button>
       <AnchoredPopover
         open={open}

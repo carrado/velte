@@ -2,23 +2,23 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Gift,
-  Copy,
-  Share2,
-  Check,
-  Users,
-  Clock,
-  Wallet as WalletIcon,
-  UserPlus,
-  MailCheck,
-  PartyPopper,
-} from "lucide-react";
 import { toast } from "sonner";
 import { fetchMyReferrals } from "@/services/referrals";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira } from "@/lib/utils";
 import type { ReferralListItem } from "@/types/referral";
+import {
+  CheckIcon,
+  ClockIcon,
+  CopyIcon,
+  GiftIcon,
+  MailCheckIcon,
+  PartyPopperIcon,
+  Share2Icon,
+  UserPlusIcon,
+  UsersIcon,
+  WalletIcon,
+} from "@/components/icons";
 
 const REFERRAL_BONUS_NAIRA = "₦1,000";
 
@@ -39,14 +39,14 @@ function StatusBadge({ status }: { status: ReferralListItem["status"] }) {
   if (status === "credited") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-dash-caption font-semibold text-green-700">
-        <Check size={11} />
+        <CheckIcon size={11} />
         Credited
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-dash-caption font-semibold text-amber-700">
-      <Clock size={11} />
+      <ClockIcon size={11} />
       Pending
     </span>
   );
@@ -54,17 +54,17 @@ function StatusBadge({ status }: { status: ReferralListItem["status"] }) {
 
 const HOW_IT_WORKS = [
   {
-    icon: Share2,
+    icon: Share2Icon,
     title: "Share your code",
     body: "Send your link or code to another vendor — WhatsApp, SMS, wherever.",
   },
   {
-    icon: MailCheck,
+    icon: MailCheckIcon,
     title: "They sign up, verify & list",
     body: "They create a Velte account with your code, confirm their email, and post at least 4 products or services.",
   },
   {
-    icon: PartyPopper,
+    icon: PartyPopperIcon,
     title: `You earn ${REFERRAL_BONUS_NAIRA}`,
     body: "Once they've verified and listed 4+ real offerings, the bonus lands straight in your wallet.",
   },
@@ -119,14 +119,14 @@ export default function ReferralPage() {
       key: "total",
       label: "Total Referred",
       value: isLoading ? "—" : String(stats?.totalReferred ?? 0),
-      icon: Users,
+      icon: UsersIcon,
       iconClass: "bg-orange-50 text-orange-500",
     },
     {
       key: "pending",
       label: "Pending",
       value: isLoading ? "—" : String(stats?.pending ?? 0),
-      icon: Clock,
+      icon: ClockIcon,
       iconClass: "bg-amber-50 text-amber-600",
     },
     {
@@ -147,7 +147,7 @@ export default function ReferralPage() {
         <div className="relative">
           <div className="flex items-center gap-2 text-gray-400 mb-4">
             <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center">
-              <Gift size={15} className="text-orange-500" />
+              <GiftIcon size={15} className="text-orange-500" />
             </div>
             <span className="text-dash-body">
               Refer a vendor, earn {REFERRAL_BONUS_NAIRA}
@@ -171,7 +171,7 @@ export default function ReferralPage() {
                 disabled={isLoading}
                 className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-white border border-orange-200 rounded-lg text-dash-caption font-semibold text-orange-600 hover:bg-orange-50 transition-colors cursor-pointer disabled:opacity-50"
               >
-                {copiedCode ? <Check size={13} /> : <Copy size={13} />}
+                {copiedCode ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
                 {copiedCode ? "Copied" : "Copy"}
               </button>
             </div>
@@ -190,7 +190,7 @@ export default function ReferralPage() {
                 disabled={isLoading}
                 className="flex items-center gap-1.5 px-3.5 py-2.5 text-dash-secondary font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
               >
-                {copiedLink ? <Check size={13} /> : <Copy size={13} />}
+                {copiedLink ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
                 Copy link
               </button>
               <button
@@ -198,7 +198,7 @@ export default function ReferralPage() {
                 disabled={isLoading}
                 className="flex items-center gap-1.5 px-3.5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-secondary font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-50"
               >
-                <Share2 size={13} />
+                <Share2Icon size={13} />
                 Share
               </button>
             </div>
@@ -267,7 +267,7 @@ export default function ReferralPage() {
         ) : referrals.length === 0 ? (
           <div className="py-10 flex flex-col items-center justify-center text-center gap-2">
             <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
-              <UserPlus size={17} className="text-orange-500" />
+              <UserPlusIcon size={17} className="text-orange-500" />
             </div>
             <p className="text-dash-body font-semibold text-gray-700">
               No referrals yet

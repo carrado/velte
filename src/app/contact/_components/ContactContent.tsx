@@ -6,8 +6,13 @@ import { toast } from "sonner";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, MapPin, CheckCircle2 } from "lucide-react";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
+import {
+  CheckCircleIcon,
+  MailIcon,
+  MapPinIcon,
+  PhoneIcon,
+} from "@/components/icons";
 
 // Posts straight to Web3Forms — same third-party form service the vendor
 // waitlist and the dashboard's Settings > Send Feedback both already use.
@@ -101,7 +106,7 @@ export default function ContactContent() {
               </h2>
               {submitted ? (
                 <div className="flex items-center gap-2 text-[#023337] bg-green-50 rounded-lg px-4 py-4">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                  <CheckCircleIcon className="w-5 h-5 text-green-600 shrink-0" />
                   Thanks — your message is in. We&apos;ll get back to you soon.
                 </div>
               ) : (
@@ -165,7 +170,7 @@ export default function ContactContent() {
                 </h2>
                 <div className="space-y-4">
                   <div className="flex items-start gap-4">
-                    <Mail className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+                    <MailIcon className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-gray-400 text-sm">Email</p>
                       <a
@@ -177,7 +182,7 @@ export default function ContactContent() {
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
-                    <Phone className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+                    <PhoneIcon className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-gray-400 text-sm">Phone</p>
                       <a
@@ -189,7 +194,7 @@ export default function ContactContent() {
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
-                    <MapPin className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+                    <MapPinIcon className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-gray-400 text-sm">Headquarters</p>
                       <p className="text-[#023337]">

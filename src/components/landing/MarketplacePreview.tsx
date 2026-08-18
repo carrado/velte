@@ -3,18 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
-// Icons from Phosphor (2026-08-16, swapped from lucide-react for this
-// session's pages only — see MobileMenu.tsx's own comment). BadgeCheck,
-// LayoutGrid and Store have no exact match; SealCheck, SquaresFour and
-// Storefront are their closest Phosphor equivalents.
-import {
-  Images,
-  Package,
-  SealCheck,
-  SquaresFour,
-  Storefront as StoreIcon,
-  Wrench,
-} from "@phosphor-icons/react";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
@@ -26,6 +14,14 @@ import { buildWhatsappLink } from "@/lib/whatsapp";
 import { reportLead } from "@/lib/reportLead";
 import { MARKETPLACE_SCROLL_FLAG } from "@/lib/scrollToMarketplace";
 import type { MarketplacePreviewItem } from "@/types/store";
+import {
+  BadgeCheckIcon,
+  ImagesIcon,
+  LayoutGridIcon,
+  PackageIcon,
+  StoreIcon,
+  WrenchIcon,
+} from "@/components/icons";
 
 const stagger = {
   hidden: {},
@@ -70,7 +66,7 @@ export function MarketplaceCard({
   const priceMax = item.priceMax != null ? item.priceMax / 100 : null;
   const isRange = priceMax != null && priceMax > price;
   const isService = item.kind === "service";
-  const KindIcon = isService ? Wrench : Package;
+  const KindIcon = isService ? WrenchIcon : PackageIcon;
 
   const chatHref = buildWhatsappLink(
     item.whatsapp,
@@ -133,7 +129,7 @@ export function MarketplaceCard({
         )}
         {images.length > 1 && (
           <span className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold rounded-full">
-            <Images size={10} />
+            <ImagesIcon size={10} />
             {images.length}
           </span>
         )}
@@ -196,7 +192,7 @@ export function MarketplaceCard({
           <span className="text-xs font-bold text-gray-700 truncate min-w-0">
             {item.storeName}
           </span>
-          <SealCheck
+          <BadgeCheckIcon
             size={13}
             className="text-orange-500 shrink-0 fill-orange-500/15"
           />
@@ -348,7 +344,7 @@ export function MarketplacePreview({
             className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-orange-200 bg-orange-50 text-orange-600 font-semibold text-sm hover:border-orange-300 hover:bg-orange-100 transition-colors"
           >
             Explore the marketplace
-            <SquaresFour size={14} />
+            <LayoutGridIcon size={14} />
           </Link>
         </motion.div>
       </div>

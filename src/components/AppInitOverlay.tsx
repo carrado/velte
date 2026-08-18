@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { RefreshCw, ServerCrash, WifiOff } from "lucide-react";
-
+import { RefreshIcon, ServerCrashIcon, WifiOffIcon } from "@/components/icons";
 interface AppInitOverlayProps {
   status: "loading" | "error-network" | "error-server";
 }
@@ -44,9 +43,9 @@ export default function AppInitOverlay({ status }: AppInitOverlayProps) {
           <div className="mt-9 flex max-w-xs flex-col items-center gap-4 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
               {status === "error-network" ? (
-                <WifiOff className="h-5 w-5 text-red-500" />
+                <WifiOffIcon className="h-5 w-5 text-red-500" />
               ) : (
-                <ServerCrash className="h-5 w-5 text-red-500" />
+                <ServerCrashIcon className="h-5 w-5 text-red-500" />
               )}
             </div>
             <div className="space-y-1">
@@ -65,7 +64,7 @@ export default function AppInitOverlay({ status }: AppInitOverlayProps) {
               onClick={() => window.location.reload()}
               className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-600"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RefreshIcon className="h-3.5 w-3.5" />
               Retry
             </button>
           </div>
