@@ -496,26 +496,35 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   const clarifyInput = clarifyCall?.input as
     | {
         question: string;
-        kind: "choice" | "text" | "location";
+        kind: "choice" | "text" | "location" | "name";
         options?: string[];
       }
     | undefined;
   // Downgrades a malformed "choice" (missing/too-few options) to "text"
   // server-side, so the frontend's discriminated Clarification type never
-  // has to re-validate what the model actually sent. "location" passes
-  // through as-is — it never has options to validate in the first place.
+  // has to re-validate what the model actually sent. "location" and "name"
+  // both pass through as-is — neither ever has options to validate in the
+  // first place. "name" specifically must NOT fall into the "text" branch
+  // below (it used to, before this kind existed) — SearchHome.tsx routes
+  // "name" through the composer's own dedicated single-line input, same
+  // treatment phone/OTP already get, instead of ClarificationPrompt's
+  // separate inline text box (found live — see that component's own
+  // comment on why a bare "text" kind was the wrong shape for this one
+  // specific question).
   const clarifyCandidate: Clarification | null = !clarifyInput
     ? null
     : clarifyInput.kind === "location"
       ? { kind: "location", question: clarifyInput.question }
-      : clarifyInput.kind === "choice" &&
-          (clarifyInput.options?.length ?? 0) >= 2
-        ? {
-            kind: "choice",
-            question: clarifyInput.question,
-            options: clarifyInput.options!,
-          }
-        : { kind: "text", question: clarifyInput.question };
+      : clarifyInput.kind === "name"
+        ? { kind: "name", question: clarifyInput.question }
+        : clarifyInput.kind === "choice" &&
+            (clarifyInput.options?.length ?? 0) >= 2
+          ? {
+              kind: "choice",
+              question: clarifyInput.question,
+              options: clarifyInput.options!,
+            }
+          : { kind: "text", question: clarifyInput.question };
 
   // .findLast, not .find: a fallback model (Groq) occasionally calls a tool
   // more than once for one turn — the last call is what its final reply is

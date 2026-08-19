@@ -52,6 +52,7 @@ import {
   MapPinIcon,
   PhoneIcon,
   ShieldCheckIcon,
+  UserIcon,
 } from "@/components/icons";
 // Composer icons only (upload spinner, remove-photo, camera, send) are
 // lucide-react, not the custom set — reverted 2026-08-17 per explicit
@@ -1182,14 +1183,19 @@ function ConversationTurnView({
               question still shows the results AND this widget, rather than
               one silently suppressing the other. Only actionable (rendered
               at all) while this is still the latest turn — once answered,
-              a new turn is appended and this one's isLatest flips false. */}
-              {turn.clarification && isLatest && (
-                <ClarificationPrompt
-                  clarification={turn.clarification}
-                  onAnswer={onAnswerClarification}
-                  onLocationShared={onLocationShared}
-                />
-              )}
+              a new turn is appended and this one's isLatest flips false.
+              "name" excluded — same reasoning as "needs_identity" below:
+              SearchHome.tsx's own composer takes that one over entirely
+              (see nameCapture's own comment), never this inline widget. */}
+              {turn.clarification &&
+                turn.clarification.kind !== "name" &&
+                isLatest && (
+                  <ClarificationPrompt
+                    clarification={turn.clarification}
+                    onAnswer={onAnswerClarification}
+                    onLocationShared={onLocationShared}
+                  />
+                )}
               {/* "needs_identity" excluded — SearchHome.tsx's own composer
                   (see IdentityCapture) takes over the phone/OTP exchange
                   entirely now, narrated as ordinary follow-up turns
@@ -1328,6 +1334,83 @@ export function SearchHome() {
   // leftover text in either box.
   const [identityValue, setIdentityValue] = useState("");
   const [identitySubmitting, setIdentitySubmitting] = useState(false);
+  // Seconds left before "Resend code" is tappable again — 0 means it's
+  // live. SMS delivery has a real, sometimes-lagging round trip to the
+  // buyer's phone that has nothing to do with how fast our own
+  // request-otp call returns (that resolves the instant the backend hands
+  // it to the SMS provider, not once the text actually lands). Without a
+  // cooldown, a buyer staring at a code that hasn't arrived yet just taps
+  // "Resend" — which fires a genuine second send, invalidates the first
+  // code, and restarts the same wait, often more than once. The cooldown
+  // gives the real-world SMS lag room to resolve before that's even an
+  // option. Ticked down by resendCooldownIntervalRef below.
+  const RESEND_OTP_COOLDOWN_SECONDS = 45;
+  const [resendSecondsLeft, setResendSecondsLeft] = useState(0);
+  const resendCooldownIntervalRef = useRef<ReturnType<
+    typeof setInterval
+  > | null>(null);
+  useEffect(() => {
+    return () => {
+      if (resendCooldownIntervalRef.current) {
+        clearInterval(resendCooldownIntervalRef.current);
+      }
+    };
+  }, []);
+  function startResendCooldown() {
+    if (resendCooldownIntervalRef.current) {
+      clearInterval(resendCooldownIntervalRef.current);
+    }
+    setResendSecondsLeft(RESEND_OTP_COOLDOWN_SECONDS);
+    resendCooldownIntervalRef.current = setInterval(() => {
+      setResendSecondsLeft((cur) => {
+        if (cur <= 1) {
+          if (resendCooldownIntervalRef.current) {
+            clearInterval(resendCooldownIntervalRef.current);
+            resendCooldownIntervalRef.current = null;
+          }
+          return 0;
+        }
+        return cur - 1;
+      });
+    }, 1000);
+  }
+
+  // Drives the composer's own name-capture mode — the createBuyerRequest
+  // agreement flow's own "what's your name?" ask (systemPrompt.ts), given
+  // its own `kind: "name"` clarification specifically so this can take it
+  // over (see Clarification's own comment). Found live: this used to be a
+  // plain `kind: "text"` clarification, which rendered ClarificationPrompt's
+  // generic inline text box — a SEPARATE input floating above the composer,
+  // right before the very next step (phone/OTP) already swaps that SAME
+  // composer into its own dedicated input. Non-null the instant a turn's
+  // `clarification` arrives as `kind: "name"` (see runSearchIntoTurn's
+  // onFinal below); cleared the moment the buyer submits (handleNameSubmit
+  // sends it as their next real message, same mechanism
+  // handleClarificationAnswer already uses, then reverts the composer to
+  // the ordinary textarea immediately after — there's no multi-step
+  // progression here like phone→OTP, just the one value).
+  const [nameCapture, setNameCapture] = useState<{ question: string } | null>(
+    null,
+  );
+  const [nameValue, setNameValue] = useState("");
+  const [nameSubmitting, setNameSubmitting] = useState(false);
+  async function handleNameSubmit() {
+    if (!nameCapture || nameSubmitting) return;
+    const value = nameValue.trim();
+    if (!value) return;
+    setNameCapture(null);
+    setNameValue("");
+    setNameSubmitting(true);
+    try {
+      // Exactly the same path a clarification answer typed into
+      // ClarificationPrompt's own inline widget already goes through — the
+      // buyer's name is just their next ordinary message, nothing routes
+      // this any differently once it leaves the composer.
+      await submitMessage(value, null, null);
+    } finally {
+      setNameSubmitting(false);
+    }
+  }
 
   // Tracks the still-pending half of a dual-intent turn (see route.ts's
   // own comment on where this branches off the normal single-item flow) —
@@ -1349,25 +1432,90 @@ export function SearchHome() {
     started: boolean;
   } | null>(null);
 
-  // The floating top-pill's own live text (see the JSX render below, near
+  // The floating top-pill's own live state (see the JSX render below, near
   // the top of this component's return — styled after the landing page's
   // own FloatingAskBar, just anchored to the top instead of the bottom) —
-  // null hides it entirely. Set to a static "Checking on X…" line the
-  // moment a dual-intent turn's final event arrives (item B is known
-  // about, even though its real search hasn't started), then swapped for
-  // a dynamically CYCLING scanningVendorsPhrase pick once item B's fetch
-  // actually begins (see startItemB). Deliberately a floating overlay, not
-  // an in-flow bar or an inline per-turn caption — per explicit request: a
-  // buyer scrolling through item A's own results should never be
-  // auto-scrolled to, or otherwise interrupted by, item B quietly starting
-  // up underneath.
-  const [backgroundStatus, setBackgroundStatus] = useState<string | null>(null);
+  // null hides it entirely. Deliberately a floating overlay, not an in-flow
+  // bar or an inline per-turn caption — per explicit request: a buyer
+  // scrolling through item A's own results should never be auto-scrolled
+  // to, or otherwise interrupted by, item B quietly starting up underneath.
+  //
+  // Three states, per explicit design:
+  // - "working": item B is still being fetched — a cycling status line,
+  //   same shimmer treatment every other in-progress line in this app
+  //   uses. Not clickable — there's no turn yet to jump to.
+  // - "pending": item B resolved into something that needs the buyer's own
+  //   action (an "offer" — see resolveBackgroundItem — the same Yes/No
+  //   reach-out exchange a normal offer gets). Clickable; names the item
+  //   and flags it as a pending message to answer.
+  // - "resolved": item B resolved into a terminal result needing no action
+  //   (results, or a real dead end — always Google Places-backed, never a
+  //   silent nothing, see resolveSearchItem.ts). Clickable; names the item
+  //   and says it's done.
+  // "pending"/"resolved" both carry the turnId resolveBackgroundItem just
+  // appended, so this can be scrolled to (scrollToTurn) and its own
+  // on-screen-ness tracked (itemBTurnIdToWatch/itemBTurnVisible below) —
+  // per explicit request, the bar for either of THOSE two states must only
+  // show while that turn is actually off-screen; the instant the buyer
+  // scrolls it into view, the bar disappears on its own, since there's
+  // nothing left to flag once it's already visible.
+  type BackgroundBarState =
+    | { kind: "working"; text: string }
+    | { kind: "pending"; turnId: string; label: string }
+    | { kind: "resolved"; turnId: string; label: string };
+  const [backgroundBar, setBackgroundBar] = useState<BackgroundBarState | null>(
+    null,
+  );
   const backgroundStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
   const backgroundCycleRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
+
+  // DOM nodes for each rendered turn, keyed by turn id — populated by the
+  // wrapper div's ref callback in the turns list below (registerTurnEl).
+  // The only current use is item B's own turn once it's resolved: scrolling
+  // to it (scrollToTurn) and observing whether it's actually on screen
+  // (itemBTurnVisible's own effect) — nothing else needs a turn's raw DOM
+  // node, so this stays a plain ref map rather than per-turn component
+  // state.
+  const turnElRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  function registerTurnEl(id: string, el: HTMLDivElement | null) {
+    if (el) turnElRef.current.set(id, el);
+    else turnElRef.current.delete(id);
+  }
+  function scrollToTurn(turnId: string) {
+    turnElRef.current
+      .get(turnId)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // Whether item B's own turn (backgroundBar's turnId, once it's "pending"
+  // or "resolved") is currently visible on screen — drives whether the
+  // floating bar shows for those two states (see backgroundBar's own
+  // comment). Derived to a plain id (not the whole backgroundBar object) so
+  // the observer effect below only re-runs when the WATCHED TURN actually
+  // changes, not on every "working"-phase cycling-text tick.
+  const itemBTurnIdToWatch =
+    backgroundBar && backgroundBar.kind !== "working"
+      ? backgroundBar.turnId
+      : null;
+  const [itemBTurnVisible, setItemBTurnVisible] = useState(false);
+  useEffect(() => {
+    if (!itemBTurnIdToWatch) {
+      setItemBTurnVisible(false);
+      return;
+    }
+    const el = turnElRef.current.get(itemBTurnIdToWatch);
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setItemBTurnVisible(entry.isIntersecting),
+      { threshold: 0.15 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [itemBTurnIdToWatch]);
 
   // Clears any in-flight delayed-start timer/cycling interval — called
   // whenever the pending pair concludes (resolveBackgroundItem) or a
@@ -1412,13 +1560,20 @@ export function SearchHome() {
     const pending = pendingItemBRef.current;
     if (!pending || pending.started) return;
     pending.started = true;
-    setBackgroundStatus(pickAvoiding(scanningVendorsPhrase(pending.label), []));
+    setBackgroundBar({
+      kind: "working",
+      text: pickAvoiding(scanningVendorsPhrase(pending.label), []),
+    });
     backgroundCycleRef.current = setInterval(() => {
-      setBackgroundStatus((current) =>
-        pickAvoiding(
-          scanningVendorsPhrase(pending.label),
-          current ? [current] : [],
-        ),
+      setBackgroundBar((current) =>
+        current?.kind === "working"
+          ? {
+              kind: "working",
+              text: pickAvoiding(scanningVendorsPhrase(pending.label), [
+                current.text,
+              ]),
+            }
+          : current,
       );
     }, 2500);
     void resolveBackgroundItem(pending.item);
@@ -1461,11 +1616,18 @@ export function SearchHome() {
     }
 
     clearBackgroundTimers();
-    setBackgroundStatus(null);
+    // Captured before nulling pendingItemBRef — still needed below to label
+    // the "pending"/"resolved" bar state this resolves into (see
+    // backgroundBar's own comment). `turnId` is generated up front, not
+    // inline in `base`, specifically so it can ALSO be handed to
+    // setBackgroundBar — the bar needs the exact same id the turn below
+    // gets appended under, to scroll to/observe it.
+    const label = pendingItemBRef.current?.label ?? "";
+    const turnId = generateUUID();
     pendingItemBRef.current = null;
 
     const base = {
-      id: generateUUID(),
+      id: turnId,
       query: "",
       imagePreview: null,
       imageUrl: null,
@@ -1504,6 +1666,10 @@ export function SearchHome() {
           buyerRequestOffered: false,
         },
       ]);
+      // A genuine failure still resolves item B's own lifecycle — no
+      // further action the buyer can take on it, so this is "resolved" not
+      // "pending", same as a normal empty result.
+      setBackgroundBar({ kind: "resolved", turnId, label });
       return;
     }
 
@@ -1533,6 +1699,8 @@ export function SearchHome() {
           awaitingBuyerRequestReply: true,
         },
       ]);
+      // Needs the buyer's own Yes/No — see backgroundBar's own comment.
+      setBackgroundBar({ kind: "pending", turnId, label });
       return;
     }
 
@@ -1554,6 +1722,7 @@ export function SearchHome() {
           buyerRequestOffered: false,
         },
       ]);
+      setBackgroundBar({ kind: "resolved", turnId, label });
       return;
     }
 
@@ -1575,10 +1744,16 @@ export function SearchHome() {
           buyerRequestOffered: false,
         },
       ]);
+      setBackgroundBar({ kind: "resolved", turnId, label });
       return;
     }
 
-    // outcome.status === "nothing"
+    // outcome.status === "nothing" — resolveSearchItem always attempts the
+    // cross-index check + Google Places before ever landing here, so this
+    // still carries externalSuggestions whenever any exist; never a silent
+    // dead end (see that file's own comment). Still "resolved", not
+    // "pending" — there's nothing the buyer owes a reply to, just results
+    // (possibly Google Places ones) to look at whenever they scroll down.
     setTurns((prev) => [
       ...prev,
       {
@@ -1596,6 +1771,7 @@ export function SearchHome() {
         buyerRequestOffered: false,
       },
     ]);
+    setBackgroundBar({ kind: "resolved", turnId, label });
   }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1797,6 +1973,15 @@ export function SearchHome() {
             });
             setIdentityValue("");
           }
+          // The composer's own name-capture mode (see nameCapture's own
+          // comment) — same trigger shape as identityCapture just above,
+          // just keyed off the clarification kind instead of the offer
+          // status, since the name-ask arrives as its own turn BEFORE any
+          // buyerRequestOffer exists at all.
+          if (event.clarification?.kind === "name") {
+            setNameCapture({ question: event.clarification.question });
+            setNameValue("");
+          }
           // Item A (this turn, just shown above) is done; item B
           // (event.backgroundItem) is registered as pending but does NOT
           // start yet — see pendingItemBRef's own comment. If item A
@@ -1814,9 +1999,10 @@ export function SearchHome() {
               label,
               started: false,
             };
-            setBackgroundStatus(
-              `Also checking on "${label}" in the background…`,
-            );
+            setBackgroundBar({
+              kind: "working",
+              text: `Also checking on "${label}" in the background…`,
+            });
             if (!event.buyerRequestOffered) {
               scheduleItemBStart();
             }
@@ -1864,15 +2050,25 @@ export function SearchHome() {
   // Silent best-effort attempt at the buyer's location — never shows a
   // prompt/spinner itself, only succeeds if permission was already granted
   // (an earlier visit, or the browser/OS remembers it), so it can resolve
-  // near-instantly with no visible interruption. A short timeout on
-  // purpose, unlike LocationShareAction's own generous one (which waits out
-  // a real native permission dialog) — there's no dialog to wait for here;
-  // if this hasn't resolved quickly, permission genuinely isn't granted and
-  // submitWithLocationGate should just ask instead of stalling the buyer's
-  // first message. `navigator.permissions` isn't universally supported
-  // (notably Safari) — treated as "don't know," same as "not granted",
-  // rather than blocking on a feature-detect that can't be relied on.
-  const SILENT_GEOLOCATION_TIMEOUT_MS = 4000;
+  // near-instantly with no visible interruption. There's no native dialog to
+  // wait for here (permission is already confirmed granted below before this
+  // ever calls getCurrentPosition), but that does NOT mean the fix itself is
+  // instant — a real GPS/network fix routinely takes longer than a few
+  // seconds (cold GPS start, indoors, weak signal), and a too-short timeout
+  // here just means a buyer who genuinely has location on gets asked anyway.
+  // Found live: this used to be 4000ms with no maximumAge, which forced a
+  // brand-new fresh fix on every single search and frequently timed out
+  // before one arrived — silently falling through to the ask despite
+  // permission being "granted", i.e. exactly the "always asks even with
+  // geolocation on" bug. `maximumAge` lets the browser hand back a fix it
+  // already has cached instead of always re-acquiring one — the buyer's
+  // location barely moves between messages in one search session, so a
+  // slightly stale cached fix is fine and typically resolves near-instantly.
+  // `navigator.permissions` isn't universally supported (notably Safari) —
+  // treated as "don't know," same as "not granted", rather than blocking on
+  // a feature-detect that can't be relied on.
+  const SILENT_GEOLOCATION_TIMEOUT_MS = 8000;
+  const SILENT_GEOLOCATION_MAX_AGE_MS = 5 * 60 * 1000;
   async function trySilentGeolocation(): Promise<BuyerLocation | null> {
     if (typeof navigator === "undefined" || !navigator.geolocation) return null;
     try {
@@ -1893,7 +2089,10 @@ export function SearchHome() {
             lng: position.coords.longitude,
           }),
         () => resolve(null),
-        { timeout: SILENT_GEOLOCATION_TIMEOUT_MS },
+        {
+          timeout: SILENT_GEOLOCATION_TIMEOUT_MS,
+          maximumAge: SILENT_GEOLOCATION_MAX_AGE_MS,
+        },
       );
     });
   }
@@ -2034,6 +2233,15 @@ export function SearchHome() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // The composer's own name-capture mode (see nameCapture's own comment)
+    // hijacks the SAME form/submit button too, checked first — a name ask
+    // always comes strictly before the phone/OTP step it leads into, so
+    // the two never overlap in practice, but checking name first keeps the
+    // ordering explicit rather than relying on that.
+    if (nameCapture) {
+      await handleNameSubmit();
+      return;
+    }
     // The composer's own identity-capture mode (see IdentityCapture's own
     // comment) hijacks the SAME form/submit button, not a separate one —
     // routed here instead of trySubmit while it's active.
@@ -2156,6 +2364,7 @@ export function SearchHome() {
         setIdentityCapture((cur) =>
           cur ? { ...cur, step: "otp", phone: value } : cur,
         );
+        startResendCooldown();
       } catch (err) {
         updateTurn(turnId, {
           phase: "done",
@@ -2280,6 +2489,7 @@ export function SearchHome() {
         phase: "done",
         reply: `Code sent to ${phone} — enter it below.`,
       });
+      startResendCooldown();
     } catch (err) {
       updateTurn(turnId, {
         phase: "done",
@@ -2294,6 +2504,13 @@ export function SearchHome() {
       cur ? { ...cur, step: "phone", phone: "" } : cur,
     );
     setIdentityValue("");
+    // A different number hasn't been sent anything yet — the cooldown
+    // belongs to the OLD number's in-flight code, not this one.
+    if (resendCooldownIntervalRef.current) {
+      clearInterval(resendCooldownIntervalRef.current);
+      resendCooldownIntervalRef.current = null;
+    }
+    setResendSecondsLeft(0);
   }
 
   const lastTurn = turns[turns.length - 1];
@@ -2338,7 +2555,41 @@ export function SearchHome() {
         </div>
       )}
 
-      {identityCapture ? (
+      {nameCapture ? (
+        // The composer's own name-capture mode (see nameCapture's own
+        // comment) — same single-line-swap treatment as identityCapture
+        // just below, just one value with no multi-step progression.
+        // Reverts to the ordinary textarea the instant it's submitted
+        // (handleNameSubmit clears nameCapture before sending it on).
+        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
+          <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
+            <UserIcon size={12} className="text-orange-400 shrink-0" />
+            What&apos;s your name?
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={nameValue}
+              onChange={(e) => setNameValue(e.target.value)}
+              disabled={nameSubmitting}
+              placeholder="Your name"
+              className="flex-1 min-w-0 h-10 bg-transparent outline-none text-base text-gray-900 placeholder:text-gray-400 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={nameSubmitting || !nameValue.trim()}
+              title="Continue"
+              className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
+            >
+              {nameSubmitting ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <ArrowUp size={18} />
+              )}
+            </button>
+          </div>
+        </div>
+      ) : identityCapture ? (
         // The composer's own phone/OTP identity-capture mode (see
         // IdentityCapture's own comment) — the free-text textarea below is
         // swapped for a dedicated single-line input for exactly this one
@@ -2403,10 +2654,12 @@ export function SearchHome() {
               <button
                 type="button"
                 onClick={() => void handleResendOtp()}
-                disabled={identitySubmitting}
+                disabled={identitySubmitting || resendSecondsLeft > 0}
                 className="text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50 cursor-pointer"
               >
-                Resend code
+                {resendSecondsLeft > 0
+                  ? `Resend code in ${resendSecondsLeft}s`
+                  : "Resend code"}
               </button>
               <button
                 type="button"
@@ -2489,26 +2742,76 @@ export function SearchHome() {
           so it floats above whatever the buyer is scrolled to, and never
           touches `turns` itself — it can't trigger the auto-scroll-on-
           new-turn effect, and a buyer reading item A's results never gets
-          nudged anywhere while this appears/updates underneath them. Text
-          uses the exact same `.status-shimmer` treatment (globals.css)
-          every other in-progress status line in this app already uses —
-          not a separate pulsing-dot design of its own. */}
+          nudged anywhere while this appears/updates underneath them.
+          "working" text uses the exact same `.status-shimmer` treatment
+          (globals.css) every other in-progress status line in this app
+          already uses — not a separate pulsing-dot design of its own.
+          "pending"/"resolved" only render at all while their own turn is
+          off screen (itemBTurnVisible, tracked above) — per explicit
+          request, this is a "you're missing something" flag, not a
+          persistent banner, so it has nothing left to say once that turn
+          is actually in view. The outer wrapper stays pointer-events-none
+          (it spans the full width, most of which is empty) — only the pill
+          itself re-enables pointer-events, and only once it's actually
+          clickable. */}
       <AnimatePresence>
-        {backgroundStatus && (
-          <motion.div
-            initial={{ y: -40, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -40, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-            className="absolute inset-x-0 top-0 z-20 px-4 pt-3 pointer-events-none"
-          >
-            <div className="max-w-lg mx-auto bg-white/95 backdrop-blur-md rounded-full border-2 border-gray-100 shadow-2xl shadow-gray-400/20 px-5 h-12 flex items-center">
-              <span className="status-shimmer truncate text-sm font-medium min-w-0">
-                {backgroundStatus}
-              </span>
-            </div>
-          </motion.div>
-        )}
+        {backgroundBar &&
+          (backgroundBar.kind === "working" || !itemBTurnVisible) && (
+            <motion.div
+              initial={{ y: -40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -40, opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="absolute inset-x-0 top-0 z-20 px-4 pt-3 pointer-events-none"
+            >
+              <div
+                onClick={
+                  backgroundBar.kind !== "working"
+                    ? () => scrollToTurn(backgroundBar.turnId)
+                    : undefined
+                }
+                onKeyDown={
+                  backgroundBar.kind !== "working"
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          scrollToTurn(backgroundBar.turnId);
+                        }
+                      }
+                    : undefined
+                }
+                role={backgroundBar.kind !== "working" ? "button" : undefined}
+                tabIndex={backgroundBar.kind !== "working" ? 0 : undefined}
+                className={cn(
+                  "max-w-lg mx-auto bg-white/95 backdrop-blur-md rounded-full border-2 border-gray-100 shadow-2xl shadow-gray-400/20 px-5 h-12 flex items-center gap-2",
+                  backgroundBar.kind !== "working" &&
+                    "pointer-events-auto cursor-pointer hover:bg-white hover:border-orange-200 transition-colors",
+                )}
+              >
+                {backgroundBar.kind === "working" ? (
+                  <span className="status-shimmer truncate text-sm font-medium min-w-0">
+                    {backgroundBar.text}
+                  </span>
+                ) : (
+                  <>
+                    <span
+                      className={cn(
+                        "w-2 h-2 rounded-full shrink-0",
+                        backgroundBar.kind === "pending"
+                          ? "bg-orange-500 animate-pulse"
+                          : "bg-emerald-500",
+                      )}
+                    />
+                    <span className="truncate text-sm font-medium min-w-0 text-[#023337]">
+                      {backgroundBar.kind === "pending"
+                        ? `"${backgroundBar.label}" — 1 pending message`
+                        : `"${backgroundBar.label}" resolved`}
+                    </span>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
       </AnimatePresence>
 
       {!collapsed ? (
@@ -2543,15 +2846,22 @@ export function SearchHome() {
           <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-6">
             <div className="max-w-3xl lg:max-w-4xl mx-auto space-y-8">
               {turns.map((turn, i) => (
-                <ConversationTurnView
-                  key={turn.id}
-                  turn={turn}
-                  isLatest={i === turns.length - 1}
-                  onAnswerClarification={handleClarificationAnswer}
-                  onLocationShared={handleLocationShared}
-                  expandedServicesVendorId={expandedServicesVendorId}
-                  onToggleServices={toggleServices}
-                />
+                // Wrapper div only exists to give registerTurnEl a real DOM
+                // node per turn (see turnElRef's own comment) — a plain
+                // block element, so it doesn't disturb the space-y-8
+                // rhythm between turns (each wrapper is just one more
+                // sibling in that flow, same as ConversationTurnView's own
+                // root div was on its own before this).
+                <div key={turn.id} ref={(el) => registerTurnEl(turn.id, el)}>
+                  <ConversationTurnView
+                    turn={turn}
+                    isLatest={i === turns.length - 1}
+                    onAnswerClarification={handleClarificationAnswer}
+                    onLocationShared={handleLocationShared}
+                    expandedServicesVendorId={expandedServicesVendorId}
+                    onToggleServices={toggleServices}
+                  />
+                </div>
               ))}
               <div ref={bottomRef} />
             </div>

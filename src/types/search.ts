@@ -225,7 +225,16 @@ export type Clarification =
   // model-supplied text. See systemPrompt.ts's location rule for when this
   // fires: neither a named place nor a known device location exists for a
   // search that needs one.
-  | { kind: "location"; question: string };
+  | { kind: "location"; question: string }
+  // The createBuyerRequest agreement flow's own name-ask (systemPrompt.ts) —
+  // found live asking this as a plain "text" clarification rendered its own
+  // separate inline input (ClarificationPrompt), floating apart from the
+  // main composer, right before the phone/OTP identity-capture step swaps
+  // that SAME composer into a dedicated input of its own. This kind exists
+  // so SearchHome.tsx can give the name ask that identical composer-swap
+  // treatment instead — no options, same shape as "text" otherwise, just a
+  // distinct discriminant so the frontend can tell the two apart.
+  | { kind: "name"; question: string };
 
 // Build-order step d — /api/search streams a sequence of these as
 // newline-delimited JSON: zero or more "status" events while the model +
