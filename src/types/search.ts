@@ -32,6 +32,23 @@ export type MatchQuality = "direct" | "similar" | undefined;
 export interface SearchHistoryTurn {
   role: "user" | "assistant";
   content: string;
+  // True for an assistant turn that's either a reach-out offer itself
+  // (mirrors that turn's own buyerRequestOffered) OR the follow-up
+  // name-ask that can come right after one (route.ts's own deterministic
+  // short-circuit — see buildAgreementOnlySystemPrompt) — both are
+  // moments where the buyer's VERY NEXT message should be routed through
+  // that same short-circuit (route.ts's own isAnsweringOffer check),
+  // never treated as a fresh request. Set directly by SearchHome.tsx from
+  // structured client state (mirrors SearchStreamEvent's own matching
+  // field on the final event), never guessed from the text itself — found
+  // live: without this, a plain "yes" fell through as a fresh search
+  // instead of proceeding toward createBuyerRequest, and even once that
+  // was fixed for "yes" alone, the FOLLOW-UP name reply (plain free text,
+  // never matching any canned agreement phrase) still fell through the
+  // same way — this field is what makes BOTH steps of that one exchange
+  // reliable, not just the first. Omitted (or false/undefined) for every
+  // other turn, including a user-role one.
+  awaitingBuyerRequestReply?: boolean;
 }
 
 export interface SearchRequestBody {
@@ -153,10 +170,11 @@ export interface StoreProductItem {
 // summary of what the buyer needs, same text a human would have typed into
 // the old manual form.
 export type BuyerRequestOffer =
-  // No buyer session exists yet — nothing was created. The frontend renders
-  // an inline phone+OTP capture (see BuyerRequestIdentityCapture) and, once
-  // verified, creates the request itself via a plain POST /buyer-requests —
-  // no second AI turn needed for that part. `buyerName` is already known by
+  // No buyer session exists yet — nothing was created. SearchHome.tsx's own
+  // composer (2026-08-19 redesign — see its own IdentityCapture, below)
+  // swaps into a phone/OTP identity-capture mode and, once verified,
+  // creates the request itself via a plain POST /buyer-requests — no
+  // second AI turn needed for that part. `buyerName` is already known by
   // this point (the model only calls createBuyerRequest once it's asked for
   // and gotten a name — see systemPrompt.ts) and is carried through so that
   // later POST can send it along with the now-verified phone.
@@ -172,6 +190,26 @@ export type BuyerRequestOffer =
   // out" confirmation.
   | { status: "no_match"; description: string }
   | { status: "error"; description: string };
+
+// Drives SearchHome.tsx's own composer-based phone/OTP identity-capture
+// flow (2026-08-19 redesign, replacing BuyerRequestOfferWidget's old
+// inline BuyerPhoneVerifyForm card) — per explicit request, no separate
+// form widget floating alongside the normal composer: the composer ITSELF
+// swaps from the free-text textarea to a single-line phone/OTP input
+// while this is set, and the buyer's own submitted value (phone, then the
+// code) appends as an ordinary chat turn, same as any other message, with
+// the usual shimmering status line narrating each step (sending the code,
+// checking it, creating the request) — never a silent background POST.
+// `offer` is the triggering `needs_identity` outcome (carries
+// `description`/`buyerName` through unchanged to the eventual POST
+// /buyer-requests); `imageUrl` is read once off the ORIGIN turn's own
+// image, if any.
+export interface IdentityCapture {
+  offer: Extract<BuyerRequestOffer, { status: "needs_identity" }>;
+  imageUrl: string | null;
+  step: "phone" | "otp";
+  phone: string;
+}
 
 // A structured clarifying question from askClarifyingQuestionTool — the
 // model's own `reply` text for the turn IS the question itself; this just
@@ -197,6 +235,14 @@ export type Clarification =
 // business (or the model asked a clarifying question instead of searching).
 export type SearchStreamEvent =
   | { type: "status"; text: string }
+  // A complete, standalone chat bubble arriving mid-turn, BEFORE the final
+  // event — used only by route.ts's unified dead-end handler, to close the
+  // loop on the search that just ran ("Couldn't find that directly on
+  // Velte.") while status events keep narrating a second, wider vendor
+  // scan underneath it. Unlike `status` (an ephemeral, overwritten ticker
+  // line), each `reply` is kept and rendered as its own permanent bubble —
+  // see SearchHome.tsx's `interimReplies`.
+  | { type: "reply"; text: string }
   | {
       type: "final";
       reply: string;
@@ -299,5 +345,77 @@ export type SearchStreamEvent =
       // buyer declines the offer on a later turn (a fresh search, this
       // flag false that time — see systemPrompt.ts's own rule).
       buyerRequestOffered: boolean;
+      // Non-null only on a genuine DUAL-intent turn (the buyer named a
+      // specific item AND a separate kind of business, e.g. "fix my laptop
+      // screen, and also a plumber") — see route.ts's own comment on where
+      // this branches off the normal single-item flow entirely. Item A
+      // (the product-side term, by convention) is resolved to completion
+      // and shown normally, this same turn, via the fields above — nothing
+      // is held back. This field is what SearchHome.tsx should fetch next,
+      // via POST /api/search/resolve-item, for item B (the store-side
+      // term) — but WHEN that fetch actually starts is entirely
+      // SearchHome.tsx's own call, not this turn's: only once item A's own
+      // flow concludes (including its own reach-out-offer exchange, if it
+      // has one), per explicit design — see SearchHome.tsx's own comment
+      // on the background-item top bar. No LLM involved in resolving it —
+      // the term was already extracted on this same turn, only the search
+      // itself is still pending.
+      backgroundItem: BackgroundSearchItem | null;
+      // True whenever the buyer's VERY NEXT message should be routed
+      // through route.ts's deterministic agreement short-circuit instead
+      // of treated as a fresh request — mirrors `buyerRequestOffered`
+      // whenever that's true (a reach-out offer was just made, on either
+      // the ordinary single-item path or either side of a dual-intent
+      // pair), and is ALSO true on its own for one more turn when this
+      // turn is the short-circuit's own follow-up name-ask (buyerRequestOffered
+      // is false there — no offer was made THIS turn — but the buyer's
+      // reply is still that same exchange, just its second half). See
+      // SearchHistoryTurn's own matching field, which SearchHome.tsx
+      // copies this into for the next call's `history`.
+      awaitingBuyerRequestReply: boolean;
     }
   | { type: "error"; message: string };
+
+// One named intent from a buyer's turn — either a specific PRODUCT/service
+// or a kind of BUSINESS/vendor, the same distinction searchProducts/
+// searchStores already make, packaged as one value so a single item can be
+// resolved on its own (see resolveSearchItem.ts, server-only — this type
+// itself lives here, not there, specifically so it stays safe to import
+// into a client component like SearchHome.tsx without dragging that
+// file's server-only search calls into the client bundle).
+export type SearchItemInput =
+  | { type: "product"; product: string; attributes?: string[] }
+  | { type: "store"; businessType: string };
+
+// The full outcome of resolving one item (see resolveSearchItem.ts) — a
+// confirmed find, an unconfirmed one worth a reach-out offer, or genuinely
+// nothing. `text` on "offer"/"nothing" is already a complete sentence.
+export type SearchItemOutcome =
+  | {
+      status: "products";
+      products: VendorMatch[];
+      matchTier: MatchTier;
+      matchQuality: MatchQuality;
+    }
+  | {
+      status: "stores";
+      stores: StoreMatch[];
+      furtherStores: StoreMatch[];
+      matchTier: MatchTier;
+      matchQuality: MatchQuality;
+      storesQuery: string;
+    }
+  | { status: "offer"; text: string }
+  | { status: "nothing"; text: string; externalSuggestions: NearbyBusiness[] };
+
+// What SearchHome.tsx sends to POST /api/search/resolve-item to resolve
+// item B independently, in the background — the exact term(s) the model
+// already extracted for it on the main turn, nothing left to interpret.
+export type BackgroundSearchItem =
+  | {
+      type: "product";
+      product: string;
+      attributes?: string[];
+      location?: string;
+    }
+  | { type: "store"; businessType: string; location?: string };

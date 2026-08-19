@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { backendData } from "@/lib/server/backend";
+import { backendData, BackendError } from "@/lib/server/backend";
 import { sendingRequestPhrase } from "@/lib/server/ai/statusPhrases";
 import type { BuyerLocation, BuyerRequestOffer } from "@/types/search";
 
@@ -83,6 +83,20 @@ export function createBuyerRequestTool(
         }
         return { status: "created", description, requestId: request.id };
       } catch (err) {
+        // A 401 here specifically means the buyer's own JWT cookie is
+        // still cryptographically valid (unexpired, correctly signed —
+        // that's all getOptionalBuyerAuth checks, client-side, no DB hit)
+        // but the backend's own DB lookup for that buyerId came back
+        // empty — found live: an account that existed when the cookie was
+        // issued but no longer does (a dev DB reset is the common cause,
+        // but a real account genuinely being removed would hit the same
+        // path). Treating this as a plain "error" dead-ended the buyer
+        // with "something went wrong, try again" — reusing `needs_identity`
+        // instead re-shows the phone/OTP capture, which is the ACTUAL
+        // fix: verifying again issues a fresh, valid session.
+        if (err instanceof BackendError && err.status === 401) {
+          return { status: "needs_identity", description, buyerName };
+        }
         console.error("[createBuyerRequest] failed:", err);
         return { status: "error", description };
       }

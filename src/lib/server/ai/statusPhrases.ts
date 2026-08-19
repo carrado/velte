@@ -65,14 +65,79 @@ const ACKNOWLEDGEMENT_REPLIES = new Set([
   "that works",
   "perfect",
   "great",
+  // The literal, hardcoded button text for the buyerRequestOffered Yes/No
+  // pair (see SearchHome.tsx's ConversationTurnView) — a buyer never types
+  // these themselves, clicking the button sends this exact string. Added
+  // specifically so route.ts's dual-intent guard (isAcknowledgementReply)
+  // can tell "answering an existing offer" apart from "naming two new
+  // things" — found live: without this, "Yes, find someone" wasn't
+  // recognized as an acknowledgement at all (not an exact match against
+  // the bare "yes"/"go ahead" entries above), so nothing distinguished it
+  // from a fresh request.
+  "yes, find someone",
+  "no thanks, that's okay",
 ]);
 
-function isAcknowledgementReply(text: string): boolean {
+export function isAcknowledgementReply(text: string): boolean {
   const normalized = text
     .trim()
     .toLowerCase()
     .replace(/[.!?]+$/, "");
   return ACKNOWLEDGEMENT_REPLIES.has(normalized);
+}
+
+// Narrower than isAcknowledgementReply above (which deliberately mixes
+// agreement AND decline together — it only ever needed to know "is this a
+// bare acknowledgement at all," for quote-suppression purposes) — these two
+// specifically distinguish which direction, for route.ts's own deterministic
+// "the buyer just agreed to a prior reach-out offer" short-circuit (see
+// systemPrompt.ts's buildAgreementOnlySystemPrompt). Exact-match against
+// the same canned button strings and the common short replies, same
+// normalization as isAcknowledgementReply.
+const OFFER_AGREEMENT_REPLIES = new Set([
+  "yes",
+  "yeah",
+  "yep",
+  "yup",
+  "sure",
+  "ok",
+  "okay",
+  "please",
+  "please do",
+  "alright",
+  "fine",
+  "cool",
+  "go ahead",
+  "sounds good",
+  "that works",
+  "perfect",
+  "great",
+  "yes, find someone",
+  "yes please",
+]);
+const OFFER_DECLINE_REPLIES = new Set([
+  "no",
+  "nope",
+  "nah",
+  "no thanks",
+  "not interested",
+  "never mind",
+  "no thanks, that's okay",
+]);
+
+function normalizeReply(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/, "");
+}
+
+export function isOfferAgreementReply(text: string): boolean {
+  return OFFER_AGREEMENT_REPLIES.has(normalizeReply(text));
+}
+
+export function isOfferDeclineReply(text: string): boolean {
+  return OFFER_DECLINE_REPLIES.has(normalizeReply(text));
 }
 
 // `text` is the buyer's own raw message (undefined for a bare photo with no
@@ -428,6 +493,136 @@ export function gettingLocationPhrase(): string[] {
     "Zeroing in on your location…",
     "Just a moment — locating you…",
   ];
+}
+
+// Also client-side only, same reasoning as gettingLocationPhrase above —
+// SearchHome.tsx's own phone/OTP identity-capture flow (2026-08-19
+// redesign: the buyer types their number/code straight into the composer,
+// same as any other message, instead of a separate inline form widget)
+// rotates these via pickAvoiding while its own REST calls
+// (request-otp/verify-otp/POST buyer-requests) are in flight, so each
+// step reads as Velte actively working, same shimmering-status language
+// as every other in-progress moment in this app.
+export function sendingOtpPhrase(): string[] {
+  return [
+    "Sending your verification code…",
+    "Texting you a code now…",
+    "Getting a code sent to your number…",
+    "One moment — sending your code…",
+    "Sending that code your way…",
+  ];
+}
+
+export function checkingOtpPhrase(): string[] {
+  return [
+    "Checking your code…",
+    "Verifying that code…",
+    "Confirming your code…",
+    "One moment — checking that…",
+    "Making sure that code matches…",
+  ];
+}
+
+export function creatingRequestPhrase(): string[] {
+  return [
+    "Creating your request…",
+    "Sending this out to businesses now…",
+    "Putting your request together…",
+    "Almost there — sending this out…",
+    "Getting this in front of businesses now…",
+  ];
+}
+
+// The unified "genuine Velte dead end" reveal (see route.ts's own comment
+// on the block that uses these) — three stages, each with its own voice:
+// an immediate closing-the-loop BUBBLE on the search that just ran, a
+// STATUS line narrating a second, wider vendor scan (by sector/store
+// description, not by listing) now starting, then a final bubble reporting
+// what that scan decided. All three are code-authored on purpose, same
+// reliability reasoning as noMatchRequestPhrase below — this used to be the
+// model's own job (write the offer, decide the wording) and drifted in
+// practice (sometimes skipping the offer, sometimes narrating Google Places
+// before it should); a plain phrase pool can't drift.
+
+// `what` is the product/businessType term actually searched — same
+// snippet() truncation as understandingRequestPhrase/searchingPhrase above,
+// so a long buyer message doesn't blow out the bubble.
+export function notFoundDirectlyPhrase(what: string): string[] {
+  const w = snippet(what, 60);
+  return [
+    `Couldn't find "${w}" listed directly on Velte.`,
+    `No direct listing for "${w}" on Velte just yet.`,
+    `Nothing under "${w}" as an actual listing on Velte.`,
+    `"${w}" isn't listed directly on Velte right now.`,
+    `Came up empty for "${w}" as a direct listing.`,
+    `No exact listing for "${w}" on Velte at the moment.`,
+  ];
+}
+
+export function scanningVendorsPhrase(what: string): string[] {
+  const w = snippet(what, 60);
+  return [
+    `Widening the search — checking vendors whose sector fits "${w}"…`,
+    `Scanning businesses that might be able to help with "${w}"…`,
+    `Checking vendor profiles for anyone related to "${w}"…`,
+    `Looking a bit further — vendors whose store fits "${w}"…`,
+    `Casting a wider net for businesses that handle "${w}"…`,
+    `Checking who else might be able to help with "${w}"…`,
+    `One more look — scanning for vendors related to "${w}"…`,
+  ];
+}
+
+export function foundPossibleVendorPhrase(what: string): string[] {
+  const w = snippet(what, 60);
+  return [
+    `No direct listing, but I found a business whose sector fits "${w}" — want me to reach out to them on your behalf?`,
+    `Nothing listed exactly, but a vendor nearby looks like a fit for "${w}" — want me to check with them?`,
+    `Found a business that might handle "${w}", even without a direct listing — should I reach out for you?`,
+    `Not listed directly, but there's a vendor whose store fits "${w}" — want me to get in touch with them?`,
+    `A real business turned up that might carry "${w}" — want me to reach out and ask?`,
+  ];
+}
+
+export function noVendorEvenBySectorPhrase(hasNearby: boolean): string[] {
+  return hasNearby
+    ? [
+        "No vendor on Velte fits this, even by sector — but here's what's actually nearby.",
+        "Nothing on Velte matches this one, even broadly — here's what turned up close by though.",
+        "Couldn't find a Velte vendor for this at all — a few real options nearby did turn up.",
+        "No match on Velte, even a loose one — here's what's around you instead.",
+      ]
+    : [
+        "Nothing on Velte fits this, even by sector, and nothing nearby either.",
+        "No vendor on Velte for this, and no nearby alternative came up either.",
+        "Couldn't find a match on Velte or anything nearby for this one.",
+        "No results here — nothing on Velte, and nothing close by either.",
+      ];
+}
+
+// BuyerRequestOfferWidget's own "no vendor to notify" message (see that
+// file's comment) — a FINAL statement after actually trying, not an
+// in-progress status line like the pool above it, so it gets its own voice:
+// past tense, closing a loop rather than narrating one. `hasNearby` mirrors
+// noVendorMatchPhrase's own hasExternal split — true once /api/buyer-
+// requests/nearby's fallback search turns up real Google Places results to
+// show below this text, false when that also came back empty.
+export function noMatchRequestPhrase(hasNearby: boolean): string[] {
+  return hasNearby
+    ? [
+        "Couldn't find a Velte vendor to send that to, but here's what's actually nearby.",
+        "No Velte vendor for this one — here's what turned up close by instead.",
+        "Nobody on Velte to reach out to for that yet, but a few real options nearby did turn up.",
+        "That didn't reach anyone on Velte, but here's what's around you.",
+        "No luck finding a Velte vendor for this — here's what's nearby though.",
+        "Couldn't get this to a Velte vendor, but found a few nearby options worth a look.",
+      ]
+    : [
+        "Couldn't find any businesses to reach out to for that just now — new vendors join often, so it's worth trying again later.",
+        "No vendor was available to send that to this time — worth checking back later as more join Velte.",
+        "Nobody matched for that one right now — try again another time, new vendors sign up often.",
+        "That didn't reach anyone this time — Velte's vendor list is growing, so it may be worth another try later.",
+        "No match to send that to just now — check back later, new businesses join Velte all the time.",
+      ];
 }
 
 // Sole status line for getVendorProductsTool — a plain lookup by handle
