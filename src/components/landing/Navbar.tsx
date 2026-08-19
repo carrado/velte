@@ -83,10 +83,15 @@ export default function Navbar({
             />
           </Link>
 
-          {/* Mobile: logo + hamburger only — no Ask Velux/Join Velte
-              competing for the same 360-430px row anymore (see this file's
-              own top comment). MobileMenu.tsx carries the full set of links
-              (including Sign in / Join Velte) once opened. */}
+          {/* Mobile: logo + Sign in + hamburger — no Ask Velux/Join Velte
+              competing for the same 360-430px row (see this file's own top
+              comment). Sign in moved back into this row 2026-08-19 (was
+              "hidden sm:block" like the rest, MobileMenu.tsx carried its own
+              copy at the drawer's bottom) per explicit request to surface it
+              before the hamburger rather than behind it — the drawer's own
+              Sign in row was dropped in the same move so there's exactly one
+              place to tap it, not two. Join Velte stays hamburger-only:
+              still the drawer's primary CTA, not this row's job. */}
           <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
             <Link
               href="/how-it-works"
@@ -94,10 +99,10 @@ export default function Navbar({
             >
               How it works
             </Link>
-            <Link href="/auth/login" className="hidden sm:block">
+            <Link href="/auth/login">
               <Button
                 variant="ghost"
-                className="text-gray-600 cursor-pointer hover:text-gray-900 hover:bg-gray-100 text-sm px-4"
+                className="text-gray-600 cursor-pointer hover:text-gray-900 hover:bg-gray-100 text-sm px-3 sm:px-4"
               >
                 Sign in
               </Button>

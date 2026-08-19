@@ -60,6 +60,19 @@ import {
 // "Ask Velte" uses Velte's own avatar image (same file as the /chat page's
 // assistant avatar) instead of an icon — same reasoning as HowItWorksSteps'
 // "Velte understands" step: this is Velte itself, not an abstract concept.
+//
+// 2026-08-18 structure pass, modeled on a reference site's mobile drawer
+// (buvvo.ng) at the user's request — structure only, not its palette: that
+// reference is a dark-green panel top to bottom, but [[feedback_app_palette]]
+// already settled #023337 as text-only, never a surface, so this stays the
+// light orange-50 panel from the 2026-08-17 pass. What carried over: bigger
+// rounded-2xl icon badges with no shadow (color/size carries the separation
+// instead of elevation), bolder row text, and a vertical "thread" line that
+// threads each open section's rows together (AccordionSection renders it
+// once, generically, behind every row — see its own comment). A promo card
+// spotlighting Ask Velte (mirroring the reference's own promo-inside-a-
+// section move) was tried in this same pass and then explicitly removed —
+// don't re-add it without asking again.
 const exploreItems: {
   icon?: typeof RouteIcon;
   image?: string;
@@ -136,7 +149,7 @@ function AccordionSection({
         aria-expanded={open}
         className="w-full flex items-center justify-between py-4 text-left cursor-pointer"
       >
-        <span className="text-[15px] font-bold text-[#023337]">{label}</span>
+        <span className="text-base font-bold text-[#023337]">{label}</span>
         <motion.span whileTap={{ scale: 0.85 }}>
           <ChevronDownIcon
             size={16}
@@ -153,7 +166,21 @@ function AccordionSection({
             transition={{ duration: 0.25, ease: "easeInOut" }}
             className="overflow-hidden"
           >
-            <div className="pb-4">{children}</div>
+            {/* The "thread" — a single vertical line run behind every row
+                in the section, so open rows read as one connected list
+                instead of loose stacked cards. It's positioned once here
+                (left-7 = row's px-2 inset + half of the icon badges' w-10),
+                not per-section, so every accordion gets it for free. Plain
+                CSS stacking would paint this absolutely-positioned line
+                over the row content below it regardless of DOM order, so
+                each opaque cover (icon badge, promo card) carries its own
+                `relative z-10` to sit above it — that's what makes the line
+                look like it threads *through* the icons rather than over
+                them. */}
+            <div className="relative pb-4">
+              <div className="absolute left-7 top-0 bottom-0 w-px bg-orange-200" />
+              {children}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -179,9 +206,7 @@ function NavRow({
         onClick={onNavigate}
         className={cn(
           "flex items-center gap-3 py-2.5 -mx-1 px-2 rounded-xl transition-colors",
-          active
-            ? "bg-white shadow-sm shadow-orange-200/60"
-            : "hover:bg-white/60",
+          active ? "bg-white" : "hover:bg-white/60",
         )}
       >
         {children}
@@ -250,7 +275,7 @@ export function MobileMenu({
                 type="button"
                 onClick={onClose}
                 aria-label="Close menu"
-                className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-orange-100/60 hover:text-gray-700 transition-colors cursor-pointer"
+                className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-orange-100/60 hover:text-gray-700 transition-colors cursor-pointer"
               >
                 <CloseIcon size={18} />
               </motion.button>
@@ -276,13 +301,13 @@ export function MobileMenu({
                         onNavigate={onClose}
                         active={pathname === href}
                       >
-                        <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shrink-0 overflow-hidden shadow-sm shadow-orange-200/60">
+                        <div className="relative z-10 w-10 h-10 rounded-2xl bg-white flex items-center justify-center shrink-0 overflow-hidden">
                           {image ? (
                             <Image
                               src={image}
                               alt="Velte"
-                              width={36}
-                              height={36}
+                              width={40}
+                              height={40}
                               className="w-full h-full object-cover"
                             />
                           ) : (
@@ -292,7 +317,7 @@ export function MobileMenu({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-[#023337]">
+                          <p className="text-sm font-semibold text-[#023337]">
                             {title}
                           </p>
                           <p className="text-[12px] text-gray-400 truncate">
@@ -323,10 +348,10 @@ export function MobileMenu({
                       onNavigate={onClose}
                       active={pathname === href}
                     >
-                      <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm shadow-orange-200/60">
+                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-white flex items-center justify-center shrink-0">
                         <Icon size={18} className="text-orange-500" />
                       </div>
-                      <span className="text-sm font-medium text-[#023337]">
+                      <span className="text-sm font-semibold text-[#023337]">
                         {title}
                       </span>
                     </NavRow>
@@ -352,10 +377,10 @@ export function MobileMenu({
                       onNavigate={onClose}
                       active={pathname === href}
                     >
-                      <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm shadow-orange-200/60">
+                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-white flex items-center justify-center shrink-0">
                         <Icon size={18} className="text-orange-500" />
                       </div>
-                      <span className="text-sm font-medium text-[#023337]">
+                      <span className="text-sm font-semibold text-[#023337]">
                         {title}
                       </span>
                     </NavRow>
@@ -364,18 +389,12 @@ export function MobileMenu({
               </AccordionSection>
             </div>
 
-            {/* Sign in / Join Velte — a deliberate primary/secondary CTA
-                pair, not "one button + one random nav item." */}
-            <div className="p-5 border-t border-orange-100 shrink-0 space-y-2.5">
-              <motion.div whileTap={{ scale: 0.97 }}>
-                <Link
-                  href="/auth/login"
-                  onClick={onClose}
-                  className="h-12 flex items-center justify-center rounded-full border border-orange-200 bg-white hover:bg-orange-50 text-[#023337] text-[14px] font-semibold transition-colors"
-                >
-                  Sign in
-                </Link>
-              </motion.div>
+            {/* Join Velte — the drawer's one bottom CTA. Sign in used to
+                pair with it here but moved into Navbar's own mobile row
+                2026-08-19 (before the hamburger button, always visible now
+                instead of drawer-only) per explicit request — dropped from
+                here so there's exactly one place to tap it, not two. */}
+            <div className="p-5 border-t border-orange-100 shrink-0">
               <motion.div whileTap={{ scale: 0.97 }}>
                 <Link
                   href="/auth/signup"

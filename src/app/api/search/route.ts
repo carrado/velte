@@ -12,22 +12,37 @@ import {
   searchStoresCore,
 } from "@/lib/server/ai/searchStoresTool";
 import { getVendorProductsTool } from "@/lib/server/ai/getVendorProductsTool";
+import {
+  resolveSearchItem,
+  type SearchItemInput,
+} from "@/lib/server/ai/resolveSearchItem";
 import { askClarifyingQuestionTool } from "@/lib/server/ai/askClarifyingQuestionTool";
 import { createBuyerRequestTool } from "@/lib/server/ai/createBuyerRequestTool";
 import { offerBuyerRequestTool } from "@/lib/server/ai/offerBuyerRequestTool";
 import {
   understandingRequestPhrase,
   pickAvoiding,
+  notFoundDirectlyPhrase,
+  scanningVendorsPhrase,
+  foundPossibleVendorPhrase,
+  noVendorEvenBySectorPhrase,
+  isAcknowledgementReply,
+  isOfferDeclineReply,
 } from "@/lib/server/ai/statusPhrases";
-import { buildSystemPrompt } from "@/lib/server/ai/systemPrompt";
+import {
+  buildSystemPrompt,
+  buildAgreementOnlySystemPrompt,
+} from "@/lib/server/ai/systemPrompt";
 import { getSectorClarifiers } from "@/lib/server/ai/sectorClarifiers";
 import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
 import type {
+  BackgroundSearchItem,
   BuyerRequestOffer,
   Clarification,
   MatchQuality,
   MatchTier,
   NearbyBusiness,
+  SearchHistoryTurn,
   SearchRequestBody,
   SearchStreamEvent,
   StoreMatch,
@@ -131,6 +146,30 @@ function sanitizeReply(text: string): string {
     return "Found some options for you — take a look below and reach out using the chat button.";
   }
   return cleaned;
+}
+
+// Code-authored reply text for the agreement short-circuit's own
+// createBuyerRequest call (see that block's own comment) — NOT left to the
+// model's own follow-up text generation. Found live: forcing a second step
+// with toolChoice:"required" (so the model could write a natural reply
+// after its tool call) made it call askClarifyingQuestion a SECOND time
+// instead of just writing text — the buyer would have seen both a text
+// clarification prompt AND the BuyerRequestOfferWidget's own phone/OTP
+// capture at once. Capping the retry at exactly one step (stepCountIs(1))
+// avoids that entirely, at the cost of building this text here instead of
+// letting the model phrase it — same phrasing systemPrompt.ts's own
+// examples already use for each status, just picked deterministically.
+function buyerRequestStatusReply(offer: BuyerRequestOffer): string {
+  switch (offer.status) {
+    case "created":
+      return "I've reached out to a few businesses about this — if anyone's interested, they'll message you directly on WhatsApp. You'll also get an SMS confirming this went out.";
+    case "needs_identity":
+      return "To reach out on your behalf, I'll just need your WhatsApp number — make sure it's one vendors can actually reach you on there, since that's how they'll get back to you.";
+    case "no_match":
+      return "Couldn't find anyone on Velte to contact for this right now.";
+    case "error":
+      return "Something went wrong sending that — let me know and I'll try again.";
+  }
 }
 
 // A buyer asking "where can I find this" (photo or text) wants both the item
@@ -266,6 +305,71 @@ function relevanceScore(query: string, candidateText: string): number {
   let hits = 0;
   for (const t of queryTokens) if (candidateTokens.has(t)) hits++;
   return hits / queryTokens.size;
+}
+
+// Distinguishes a genuine dual-intent turn (the buyer named TWO separate
+// things — "fix my laptop screen, and also a plumber") from the ordinary
+// mandatory single-item cascade (systemPrompt.ts's own rule: a zero-result
+// searchProducts call MUST also try searchStores, using the model's own
+// paraphrased businessType for the SAME item — "power bank" → "electronics
+// store"). Both shapes produce a turn with both productCall AND storeCall
+// present, so tool-call shape alone can't tell them apart — reuses this
+// file's own tokenize() (already built for getMatchingServicesForStores) to
+// check word overlap instead: a paraphrase of the same item shares real
+// vocabulary with it ("power bank" / "power bank retailer" — real overlap);
+// two actually different things typically don't ("laptop screen repair" /
+// "plumber" — none). Deliberately a cheap heuristic, not a model
+// self-report — a wrong call here only costs one extra background search on
+// route.ts's own dime, never something the buyer pays for or notices as
+// broken.
+const DUAL_INTENT_MAX_OVERLAP = 0.34;
+function isGenuineDualIntent(productTerm: string, storeTerm: string): boolean {
+  const productTokens = new Set(tokenize(productTerm));
+  const storeTokens = new Set(tokenize(storeTerm));
+  if (!productTokens.size || !storeTokens.size) return false;
+  let shared = 0;
+  for (const t of productTokens) if (storeTokens.has(t)) shared++;
+  const overlapRatio = shared / Math.min(productTokens.size, storeTokens.size);
+  return overlapRatio < DUAL_INTENT_MAX_OVERLAP;
+}
+
+// Found live (2026-08-19): a genuinely two-part original message ("fix my
+// laptop... and I need a plumber as well") correctly triggers the
+// dual-intent branch above when sent FRESH, but on a CONTENT-FREE
+// continuation turn — the buyer's actual message this turn is just
+// "Shared my location" or a bare "yes", carrying no text of its own, so
+// the model has to reconstruct the original need entirely from `history`
+// — it reliably resolves only ONE of the two needs (verified via direct
+// curl: called searchStores("plumber") alone, dropping the laptop half
+// completely, even though the SAME two-part text sent as a fresh message
+// calls both tools correctly). `retryDualIntentReminder` below is the
+// fix; these two helpers are what decide whether it's even worth trying —
+// firing an extra LLM call on every ordinary single-item continuation
+// (the overwhelming majority) would be pure waste.
+//
+// Deliberately a cheap text heuristic, not an LLM classification — same
+// tolerance as messageNamesAPlace (SearchHome.tsx): good enough to catch
+// the common "X and I also need Y" phrasing this was found on, not a claim
+// of exhaustive NLP-grade coverage. A false positive here only costs one
+// extra background retry (never shown to the buyer as broken); a false
+// negative just leaves today's known gap unfixed for that one phrasing.
+const DUAL_INTENT_TEXT_PATTERN =
+  /\b(?:and (?:i(?:'m| am)? )?(?:also )?need|also need|as well|and also|plus (?:a|an|i)\b|also (?:want|looking for|need))\b/i;
+function lastSubstantiveUserMessage(
+  history: SearchHistoryTurn[],
+): string | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const turn = history[i];
+    if (turn.role !== "user") continue;
+    const trimmed = turn.content.trim();
+    // Skip content-free continuations themselves — "Shared my location" is
+    // SearchHome.tsx's own literal stand-in text (see handleLocationShared),
+    // never something with a real need of its own to check.
+    if (isAcknowledgementReply(trimmed) || trimmed === "Shared my location")
+      continue;
+    return turn.content;
+  }
+  return null;
 }
 
 const MAX_MATCHING_SERVICES_PER_STORE = 3;
@@ -666,6 +770,107 @@ export async function POST(req: Request) {
           ? ["openai"]
           : ["openai", "groq"];
 
+        // Deterministic short-circuit — don't trust the model to reliably
+        // recognize "the buyer just agreed to my own earlier reach-out
+        // offer" from plain history text alone, even when that text is
+        // clean and unambiguous. Verified live, TWICE: a plain "yes" could
+        // still make the model re-search from scratch instead of moving
+        // toward createBuyerRequest — the same "don't trust the model,
+        // verify/force it" class of gap the location-only retries further
+        // down already exist to guard against, just for the agreement step
+        // instead of the location-ask step. Second time: even after
+        // forcing the "yes" step to correctly ask for a name, the buyer's
+        // FOLLOW-UP reply giving their actual name (plain free text, never
+        // matching any canned agreement phrase — `isOfferAgreementReply`
+        // alone can't catch it) fell through the same way, running a
+        // second, unrelated search as a side effect alongside the (correct)
+        // createBuyerRequest call. `awaitingBuyerRequestReply`
+        // (SearchHistoryTurn's own field, mirrored straight from the
+        // previous turn's own structured state — see that type's own
+        // comment) is what makes BOTH steps reliable: true for the OFFER
+        // turn itself AND for this short-circuit's own name-ask turn, so
+        // the buyer's next message — "yes," or later their actual name —
+        // both correctly route back through here rather than only the
+        // first one. No regex-guessing an offer from wording, which would
+        // misfire on any coincidentally similar assistant reply. Skips the
+        // ENTIRE normal pipeline below (including the first ordinary
+        // callLLM call) — there is nothing to search here, only a name to
+        // ask for or a request to create. Still requires
+        // `!isOfferDeclineReply` — a decline belongs to the ORDINARY
+        // pipeline's own already-correct decline handling (re-search,
+        // reveal Places), not this one.
+        const lastHistoryTurn = body?.history?.at(-1);
+        const isAnsweringOffer =
+          lastHistoryTurn?.role === "assistant" &&
+          lastHistoryTurn.awaitingBuyerRequestReply === true &&
+          !isOfferDeclineReply(message);
+
+        if (isAnsweringOffer) {
+          // stepCountIs(1), not 2 — capped at EXACTLY one tool call on
+          // purpose (see buyerRequestStatusReply's own comment): letting
+          // the model take a second step to write its own natural-language
+          // reply, combined with toolChoice:"required", made it call
+          // askClarifyingQuestion a second time instead of just writing
+          // text — a genuine, confusing double-prompt bug found live. The
+          // reply is built from the ONE tool's own result instead.
+          const agreementResult = await callLLM(
+            {
+              system: buildAgreementOnlySystemPrompt(message),
+              messages,
+              tools: {
+                askClarifyingQuestion: askClarifyingQuestionTool(),
+                createBuyerRequest: searchTools.createBuyerRequest,
+              },
+              toolChoice: "required",
+              stopWhen: stepCountIs(1),
+            },
+            providerOrder,
+          );
+          const agreementOutcome = extractOutcome(agreementResult);
+          const agreementReply = agreementOutcome.clarification
+            ? agreementOutcome.clarification.question
+            : agreementOutcome.buyerRequestOffer
+              ? buyerRequestStatusReply(agreementOutcome.buyerRequestOffer)
+              : sanitizeReply(agreementResult.text) ||
+                "Sorry, something went wrong there — let me know and I'll try again.";
+
+          controller.enqueue(
+            encodeEvent({
+              type: "final",
+              reply: agreementReply,
+              toolCalled: false,
+              clarification: agreementOutcome.clarification,
+              products: [],
+              weakProducts: [],
+              stores: [],
+              furtherStores: [],
+              storesQuery: null,
+              productStores: [],
+              storeServices: [],
+              productsMatchTier: null,
+              storesMatchTier: null,
+              productsMatchQuality: undefined,
+              storesMatchQuality: undefined,
+              externalStoreSuggestions: [],
+              vendorProducts: [],
+              vendorProductsStore: null,
+              buyerRequestOffer: agreementOutcome.buyerRequestOffer,
+              buyerRequestOffered: false,
+              backgroundItem: null,
+              // True only for the intermediate name-ask (still an open
+              // exchange, the buyer's next reply needs routing back here
+              // too) — false once createBuyerRequest actually resolved
+              // (created/needs_identity/no_match/error are all terminal
+              // for THIS mechanism; needs_identity hands off to
+              // BuyerRequestOfferWidget's own phone/OTP flow instead,
+              // which never goes through another /api/search round-trip).
+              awaitingBuyerRequestReply:
+                agreementOutcome.clarification !== null,
+            }),
+          );
+          return;
+        }
+
         let result = await callLLM(
           {
             system,
@@ -756,21 +961,93 @@ export async function POST(req: Request) {
           (looksLikeLocationClarify || looksLikeBareLocationAsk) &&
           !outcome.hasUsefulResults
         ) {
-          // Marks which path produced a given turn's result — the model
-          // asking correctly the first time vs. this retry silently catching
-          // a spurious ask are indistinguishable to the buyer, but not
-          // distinguishing them here would make gpt-4o-mini's location-
-          // asking reliability impossible to track over time.
-          console.warn(
-            looksLikeLocationClarify
-              ? "[search] discarded a spurious location clarify (buyer location already known) — retrying without askClarifyingQuestion"
-              : "[search] discarded a bare-text location ask with no tool call (buyer location already known) — retrying without askClarifyingQuestion",
-          );
-          result = await callLLM(
-            { system, messages, tools: searchTools, stopWhen: stepCountIs(4) },
-            providerOrder,
-          );
-          outcome = extractOutcome(result);
+          // Found live (2026-08-19, a real dual-intent turn: "fix my laptop
+          // ... and I need a plumber"): re-calling the model here used to be
+          // unconditional, which silently DISCARDS every tool call the
+          // first attempt already made — fine when nothing was searched at
+          // all (the model asked instead of searching), but a genuine data
+          // loss when a real search (or two, on a dual-intent turn) already
+          // ran and just came back empty. Verified via curl: the first
+          // attempt correctly called BOTH searchProducts("laptop repair
+          // shop") and searchStores("plumber"), alongside a spurious
+          // location clarify; the retry call — same messages, same
+          // history — only reproduced searchStores, and productCall
+          // silently vanished from `outcome`, along with half the buyer's
+          // actual request. `looksLikeBareLocationAsk` already only fires
+          // when NEITHER tool was called (see its own guard), so THIS
+          // branch only ever needs the LLM retry for `looksLikeLocationClarify`
+          // with no co-called search at all — whenever a real search
+          // already ran (productCall or storeCall present), there's
+          // nothing to re-derive: just drop the spurious clarify in place
+          // and let the rest of the pipeline (cross-check/dead-end
+          // handler/dual-intent branch) run on the outcome exactly as the
+          // model already, correctly, produced it.
+          if (outcome.productCall || outcome.storeCall) {
+            console.warn(
+              "[search] discarded a spurious location clarify alongside a real (empty) search — keeping the existing search outcome, no retry",
+            );
+            outcome = {
+              ...outcome,
+              clarification: null,
+              clarifyCandidate: null,
+            };
+          } else {
+            // Marks which path produced a given turn's result — the model
+            // asking correctly the first time vs. this retry silently
+            // catching a spurious ask are indistinguishable to the buyer,
+            // but not distinguishing them here would make gpt-4o-mini's
+            // location-asking reliability impossible to track over time.
+            console.warn(
+              looksLikeLocationClarify
+                ? "[search] discarded a spurious location clarify (buyer location already known), no search ran — retrying without askClarifyingQuestion"
+                : "[search] discarded a bare-text location ask with no tool call (buyer location already known) — retrying without askClarifyingQuestion",
+            );
+            result = await callLLM(
+              {
+                system,
+                messages,
+                tools: searchTools,
+                stopWhen: stepCountIs(4),
+              },
+              providerOrder,
+            );
+            outcome = extractOutcome(result);
+
+            // Found live (2026-08-19): merely removing askClarifyingQuestion
+            // from the tool set isn't always enough — a plain-text reply is
+            // still available regardless of the tool set, and gpt-4o-mini
+            // reproduced the EXACT SAME bare-text "please share your
+            // location" ask on this retry too, three times in a row via
+            // direct curl, buyerLocation known the whole time. Since a
+            // buyer's actual message this turn IS a real search request
+            // (that's what got us into this branch at all), forcing the
+            // choice — not just narrowing the options — is what actually
+            // leaves the model no way to just talk instead of searching.
+            // Scoped to only the two search tools (not the full
+            // `searchTools`, which also has createBuyerRequest/
+            // offerBuyerRequest/getVendorProducts) — nothing else is a
+            // sane forced choice for a turn that's asking for something to
+            // search for in the first place.
+            if (!outcome.productCall && !outcome.storeCall) {
+              console.warn(
+                "[search] still no search tool call after the first retry — forcing one via toolChoice",
+              );
+              result = await callLLM(
+                {
+                  system,
+                  messages,
+                  tools: {
+                    searchProducts: searchTools.searchProducts,
+                    searchStores: searchTools.searchStores,
+                  },
+                  toolChoice: "required",
+                  stopWhen: stepCountIs(4),
+                },
+                providerOrder,
+              );
+              outcome = extractOutcome(result);
+            }
+          }
         }
 
         // Mirror of the gap above, opposite direction and a NEW failure mode
@@ -835,40 +1112,230 @@ export async function POST(req: Request) {
             await retryLocationOnly());
         }
 
-        // Case (4) above — a real search DID run, without ever asking for
-        // location first. Only steps in when it turned out to be worth
-        // nothing: a useful nationwide result is still a genuinely useful
-        // answer (don't discard it just to force a process technicality).
-        // Deliberately NOT exempting a dual-intent turn (both tools
-        // called) the way the tool-choice decision's own prose exemption
-        // does — both calls are ALSO populated by the ordinary MANDATORY
-        // zero-result cascade (searchProducts empty → searchStores next,
-        // see that rule below) for a perfectly ordinary single-item query,
-        // and nothing about the tool-call shape here distinguishes that
-        // from a real "buyer named two things" turn. Found live: this
-        // exemption silently let a plain single-item dead end through
-        // uncaught. Worst case for a genuine dual-intent dead end is one
-        // extra location offer before falling through to the same outcome
-        // — not a regression. `location` absent on BOTH calls' own input is
-        // what distinguishes "never had a signal" from "buyer named a
-        // place, tool used it correctly" — reusing whichever one the model
-        // actually made rather than re-deciding product-vs-store here.
-        const searchedNationwideWithoutAsking =
-          !body?.buyerLocation &&
-          !alreadyAskedLocationThisConversation &&
-          !outcome.hasUsefulResults &&
-          [outcome.productCall, outcome.storeCall].some(
-            (call) =>
-              call &&
-              !(call.input as { location?: string } | undefined)?.location,
-          );
+        // See DUAL_INTENT_TEXT_PATTERN's own comment for the bug this
+        // catches: a content-free continuation turn (buyer just shared
+        // their location, or gave a bare acknowledgement) whose ORIGINAL
+        // substantive message — sitting in `history`, not this turn's own
+        // `message` — plausibly named two distinct needs, but the model
+        // only called ONE of searchProducts/searchStores this turn,
+        // silently dropping the other. Only worth an extra LLM round trip
+        // when both conditions hold: exactly one search tool fired (never
+        // retries a genuine single-item turn, the overwhelming majority),
+        // AND the text heuristic actually flags something. The retry swaps
+        // in a single-purpose reminder ON TOP of the real system prompt
+        // (not a full replacement, unlike retryLocationOnly — this turn
+        // still needs every other rule, just one extra nudge) and keeps
+        // its own result only if it actually produced BOTH calls this
+        // time; otherwise the original single-tool outcome stands
+        // unchanged rather than looping further.
+        const onlyOneSearchToolCalled =
+          Boolean(outcome.productCall) !== Boolean(outcome.storeCall);
+        if (onlyOneSearchToolCalled && !outcome.clarification) {
+          const priorText = lastSubstantiveUserMessage(body?.history ?? []);
+          if (priorText && DUAL_INTENT_TEXT_PATTERN.test(priorText)) {
+            console.warn(
+              "[search] only one search tool ran on a content-free continuation turn, and the original message looks dual-intent — retrying with an explicit dual-need reminder",
+            );
+            const dualReminderSystem = `${system}\n\nIMPORTANT: the buyer's most recent substantive message, earlier in this conversation, was: "${priorText}". If that message names MORE THAN ONE distinct thing they need (e.g. a specific item AND a separate kind of business), you MUST call BOTH searchProducts and searchStores this turn — one for each need — not just one. Do not drop either need.`;
+            const retryResult = await callLLM(
+              {
+                system: dualReminderSystem,
+                messages,
+                tools: searchTools,
+                stopWhen: stepCountIs(4),
+              },
+              providerOrder,
+            );
+            const retryOutcome = extractOutcome(retryResult);
+            if (retryOutcome.productCall && retryOutcome.storeCall) {
+              result = retryResult;
+              outcome = retryOutcome;
+            }
+          }
+        }
 
-        if (searchedNationwideWithoutAsking) {
-          console.warn(
-            "[search] searched nationwide with no location signal and found nothing — retrying with a location-only system prompt",
-          );
-          ({ retryResult: result, retryOutcome: outcome } =
-            await retryLocationOnly());
+        // Genuine dual-intent turn (the buyer named a specific item AND a
+        // separate kind of business — see isGenuineDualIntent's own
+        // comment for how this is told apart from the ordinary mandatory
+        // single-item cascade, which also produces both calls). Per
+        // explicit request (2026-08-20 redesign, replacing an earlier
+        // "hold item A back, reveal both together" design): item A (the
+        // product-side term, by convention) is resolved to completion
+        // right here and shown IMMEDIATELY, in the exact same shape a
+        // normal single-item turn would use — no holding. Item B (the
+        // store-side term) is deferred entirely to a background fetch the
+        // client makes on its own (`backgroundItem`, resolved via POST
+        // /api/search/resolve-item — see that route's own comment), but
+        // SearchHome.tsx is what decides WHEN that fetch actually starts:
+        // not immediately — only once item A's own flow (including a full
+        // multi-turn reach-out-offer exchange, if item A needs one)
+        // concludes, per explicit design ("item B doesn't initiate until
+        // item A is done... I don't want the app to scroll the user to
+        // where it's happening... display like a top bar"). This file's
+        // only job is to hand over item A's real outcome now and item B's
+        // still-unresolved spec for later — nothing here waits on item B.
+        //
+        // Neither item reuses the rest of this handler's own pipeline
+        // below (the asymmetric cross-check, the unified dead-end
+        // handler) — resolveSearchItem already does the equivalent
+        // cross-check internally for whichever ONE item it's given. The
+        // final result assembly (productStores/storeServices enrichment,
+        // the event shape itself) IS deliberately mirrored from the normal
+        // pipeline's own tail below, just built from itemAOutcome instead
+        // of `outcome`. Ends with an early `return` — nothing below this
+        // block runs for this turn.
+        //
+        // `!isAcknowledgementReply(message)` guard — found live: a buyer
+        // clicking "Yes, find someone" to answer item A's own offer can
+        // still make the model call BOTH searchProducts and searchStores
+        // again (its own reasoning, not something this file controls),
+        // which re-triggered this ENTIRE branch on what should have been a
+        // plain agreement turn — item A got offered a SECOND time instead
+        // of the buyer's "yes" ever reaching createBuyerRequest. A short
+        // acknowledgement reply is never a fresh dual-intent request, no
+        // matter what the model itself decided to call this turn — let it
+        // fall through to the ordinary pipeline below instead, same as any
+        // other agreement turn.
+        if (
+          outcome.productCall &&
+          outcome.storeCall &&
+          !outcome.clarification &&
+          !isAcknowledgementReply(message)
+        ) {
+          const dualProductInput = outcome.productCall.input as {
+            product?: string;
+            attributes?: string[];
+            location?: string;
+          };
+          const dualStoreInput = outcome.storeCall.input as {
+            businessType?: string;
+            location?: string;
+          };
+
+          if (
+            dualProductInput.product &&
+            dualStoreInput.businessType &&
+            isGenuineDualIntent(
+              dualProductInput.product,
+              dualStoreInput.businessType,
+            )
+          ) {
+            // `||`, not `??` — found live: a call's own `location` field can
+            // come back as an empty string rather than omitted entirely,
+            // which `??` treats as "present" (only nullish counts), silently
+            // passing "" through as if the buyer had named an empty place.
+            const dualLocation =
+              dualProductInput.location || dualStoreInput.location || undefined;
+            const itemA: SearchItemInput = {
+              type: "product",
+              product: dualProductInput.product,
+              attributes: dualProductInput.attributes,
+            };
+            const itemAOutcome = await resolveSearchItem(
+              itemA,
+              dualLocation,
+              body?.buyerLocation,
+              push,
+            );
+            const storeTerm = dualStoreInput.businessType;
+
+            const backgroundItem: BackgroundSearchItem = {
+              type: "store",
+              businessType: storeTerm,
+              location: dualLocation,
+            };
+
+            // Mirrors the normal single-item pipeline's own final-event
+            // shape (see the tail of this handler below), just sourced
+            // from itemAOutcome instead of `outcome` — item A is shown
+            // exactly like any ordinary turn, nothing held back.
+            let dualReply: string;
+            let dualProducts: VendorMatch[] = [];
+            let dualProductsMatchTier: MatchTier = null;
+            let dualProductsMatchQuality: MatchQuality = undefined;
+            let dualStores: StoreMatch[] = [];
+            let dualFurtherStores: StoreMatch[] = [];
+            let dualStoresMatchTier: MatchTier = null;
+            let dualStoresMatchQuality: MatchQuality = undefined;
+            let dualStoresQuery: string | null = null;
+            let dualExternalSuggestions: NearbyBusiness[] = [];
+            let dualBuyerRequestOffered = false;
+
+            if (itemAOutcome.status === "products") {
+              dualReply =
+                "Found a real match on Velte for that — take a look below.";
+              dualProducts = itemAOutcome.products;
+              dualProductsMatchTier = itemAOutcome.matchTier;
+              dualProductsMatchQuality = itemAOutcome.matchQuality;
+            } else if (itemAOutcome.status === "stores") {
+              // Unreachable in practice — itemA is always a "product"-type
+              // SearchItemInput (see below), and resolveSearchItem only
+              // ever returns "stores" for a "store"-type one. Handled
+              // anyway since the type doesn't encode that narrowing, with
+              // the same plain confirmed-match wording as "products" above
+              // (a real cross-index LISTING, not the unconfirmed sector-only
+              // "offer" case right below it — see resolveSearchItem's own
+              // comment on that distinction).
+              dualReply =
+                "Found a real match on Velte for that — take a look below.";
+              dualStores = itemAOutcome.stores;
+              dualFurtherStores = itemAOutcome.furtherStores;
+              dualStoresMatchTier = itemAOutcome.matchTier;
+              dualStoresMatchQuality = itemAOutcome.matchQuality;
+              dualStoresQuery = itemAOutcome.storesQuery;
+            } else if (itemAOutcome.status === "offer") {
+              dualReply = itemAOutcome.text;
+              dualBuyerRequestOffered = true;
+            } else {
+              dualReply = itemAOutcome.text;
+              dualExternalSuggestions = itemAOutcome.externalSuggestions;
+            }
+
+            const dualProductKindResults = dualProducts.filter(
+              (p) => p.kind !== "service",
+            );
+            const dualProductStores = dualProductKindResults.length
+              ? await getVendorStoresForProducts(dualProductKindResults)
+              : [];
+            const dualStoreServices =
+              dualStores.length || dualFurtherStores.length
+                ? await getMatchingServicesForStores(
+                    [...dualStores, ...dualFurtherStores],
+                    dualStoresQuery,
+                  )
+                : [];
+
+            controller.enqueue(
+              encodeEvent({
+                type: "final",
+                reply: dualReply,
+                toolCalled: true,
+                clarification: null,
+                products: dualProducts,
+                weakProducts: [],
+                stores: dualStores,
+                furtherStores: dualFurtherStores,
+                storesQuery: dualStoresQuery,
+                productStores: dualProductStores,
+                storeServices: dualStoreServices,
+                productsMatchTier: dualProductsMatchTier,
+                storesMatchTier: dualStoresMatchTier,
+                productsMatchQuality: dualProductsMatchQuality,
+                storesMatchQuality: dualStoresMatchQuality,
+                externalStoreSuggestions: dualExternalSuggestions,
+                vendorProducts: [],
+                vendorProductsStore: null,
+                buyerRequestOffer: null,
+                buyerRequestOffered: dualBuyerRequestOffered,
+                backgroundItem,
+                // Mirrors dualBuyerRequestOffered — item A's own offer, if
+                // this is one, needs the SAME agreement short-circuit as
+                // any other offer (see that block's own comment).
+                awaitingBuyerRequestReply: dualBuyerRequestOffered,
+              }),
+            );
+            return;
+          }
         }
 
         // Deterministic cross-check — don't trust the model to reliably call
@@ -950,10 +1417,19 @@ export async function POST(req: Request) {
               },
               { buyerLocation: body?.buyerLocation, push },
             );
-            if (
-              "results" in fallback &&
-              (fallback.results.length || fallback.externalSuggestions.length)
-            ) {
+            // Only a REAL result (an actual sector/description match, not
+            // just Places) counts as a find worth showing here — a sector
+            // tag alone doesn't confirm this vendor carries the specific
+            // product the buyer named (that's what separates a store-level
+            // match from a real product/service LISTING, which the mirror
+            // branch above treats as a genuine find for exactly that
+            // reason). Zero real results — whether or not Places turned up
+            // something — falls through unchanged into the unified dead-end
+            // handler below, same as the ordinary double-empty case: no
+            // special-casing here anymore (see that block's own comment for
+            // why — this used to leak Google Places without ever offering a
+            // reach-out, a bug logged as "Issue A").
+            if ("results" in fallback && fallback.results.length) {
               outcome = {
                 ...outcome,
                 stores: fallback.results,
@@ -961,22 +1437,228 @@ export async function POST(req: Request) {
                 storesMatchTier: fallback.matchTier,
                 storesMatchQuality: fallback.matchQuality,
                 storesQuery: businessType,
-                externalStoreSuggestions: Array.from(
-                  new Map(
-                    [
-                      ...outcome.externalStoreSuggestions,
-                      ...fallback.externalSuggestions,
-                    ].map((b) => [b.placeId, b]),
-                  ).values(),
-                ),
                 clarification: null,
               };
-              if (fallback.results.length) {
-                replyOverride =
-                  "Found a real vendor on Velte for that — take a look below.";
-              }
+              replyOverride =
+                "Found a real vendor on Velte for that — take a look below.";
             }
           }
+        }
+
+        // Unified "genuine Velte dead end" handler — covers both the
+        // ordinary double-empty case (systemPrompt.ts's own mandate for
+        // this, now trimmed to a single short closing line — see that
+        // file's comment on why) and the asymmetric cross-check fallback
+        // just above, whenever it still found nothing real. Fully
+        // deterministic/code-authored on purpose, no second LLM call: this
+        // used to be entirely the model's own job (decide it's a dead end,
+        // write the offer, hold back Google Places) and drifted in
+        // practice — sometimes skipping the offer outright (see "Issue A"
+        // in the cross-check block above), sometimes narrating Places
+        // before it should. A plain phrase pool (statusPhrases.ts) can't
+        // drift the way a model call can.
+        //
+        // Three visible stages per explicit request, not one combined
+        // message: (1) a `reply` event — its own chat bubble — closing the
+        // loop on the search that just ran; (2) a `status` event narrating
+        // a second look now starting; (3) that look actually happening —
+        // see the CROSS-CHECK comment below for what it does and why.
+        if (
+          !outcome.clarification &&
+          outcome.products.length === 0 &&
+          outcome.stores.length === 0 &&
+          outcome.vendorProducts.length === 0 &&
+          (outcome.productCall || outcome.storeCall)
+        ) {
+          const deadEndProductInput = outcome.productCall?.input as
+            | { product?: string; attributes?: string[]; location?: string }
+            | undefined;
+          const deadEndStoreInput = outcome.storeCall?.input as
+            | { businessType?: string; location?: string }
+            | undefined;
+          const productTerm = deadEndProductInput?.product
+            ? [
+                deadEndProductInput.product,
+                ...(deadEndProductInput.attributes ?? []),
+              ].join(" ")
+            : null;
+          const storeTerm = deadEndStoreInput?.businessType ?? null;
+          const scanTerm = productTerm ?? storeTerm ?? "that";
+          const scanLocation =
+            deadEndProductInput?.location ?? deadEndStoreInput?.location;
+
+          controller.enqueue(
+            encodeEvent({
+              type: "reply",
+              text: pickAvoiding(notFoundDirectlyPhrase(scanTerm), []),
+            }),
+          );
+          push(scanningVendorsPhrase(scanTerm));
+          const scanStartedAt = Date.now();
+
+          // CROSS-CHECK: try each term against the OTHER index than it was
+          // originally searched on — a product name against STORE sectors/
+          // descriptions (catches a vendor whose profile fits even without
+          // a matching listing), and a business-type term against PRODUCT
+          // listings (catches a vendor with a specific listing for the
+          // separately-named service, even though their store-level sector
+          // tag didn't say so). Radius stays at the ordinary default —
+          // widening it does nothing real (every tier already cascades to
+          // nationwide in one call regardless of the radius passed in, see
+          // retrieval.service.js) — the actual new information here is the
+          // cross combination, not a bigger number.
+          //
+          // Only worth running when BOTH tools were called this turn.
+          // When only one was, the asymmetric cross-check block just above
+          // this one already tried that exact cross combination while
+          // recovering from the model skipping the other tool — repeating
+          // it here would just be the identical search again. "Both
+          // called" happens two ways: a real dual-intent turn ("a phone
+          // repair shop that also sells chargers"), or the ordinary
+          // mandatory cascade for a single item (searchProducts empty →
+          // the model's own paraphrased businessType for searchStores) —
+          // either way, neither term has been tried against the OTHER
+          // index yet, so both are worth a shot.
+          const bothToolsCalled = Boolean(
+            outcome.productCall && outcome.storeCall,
+          );
+          const storeScan =
+            productTerm && bothToolsCalled
+              ? await searchStoresCore(
+                  {
+                    businessType: productTerm,
+                    location: scanLocation,
+                  },
+                  { buyerLocation: body?.buyerLocation, push },
+                )
+              : null;
+          const productScan =
+            storeTerm && bothToolsCalled
+              ? await searchProductsCore(
+                  { product: storeTerm, location: scanLocation },
+                  { buyerLocation: body?.buyerLocation, push },
+                )
+              : null;
+          const storeScanResult =
+            storeScan && "results" in storeScan ? storeScan : null;
+          const productScanResult =
+            productScan && "results" in productScan ? productScan : null;
+
+          // Found live (2026-08-19): a fast scan can resolve in well under a
+          // second, which just flashes the "widening the search…" status
+          // line for a frame before Bubble 2 replaces it — too quick to
+          // actually read, defeating the point of a visible second stage.
+          // Padding up to a minimum floor (never slowing down an already-
+          // slow scan, only topping up a fast one) keeps this readable
+          // without making the ordinary case feel sluggish. Applies even
+          // when neither cross-check above actually ran (bothToolsCalled
+          // false) — the bubble/status sequence should feel consistent
+          // either way, not skip straight to a resolution just because
+          // there was nothing new left to check.
+          const MIN_SCAN_DISPLAY_MS = 3000;
+          const scanElapsedMs = Date.now() - scanStartedAt;
+          if (scanElapsedMs < MIN_SCAN_DISPLAY_MS) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, MIN_SCAN_DISPLAY_MS - scanElapsedMs),
+            );
+          }
+
+          if (productScanResult && productScanResult.results.length) {
+            // A real product/service LISTING for the separately-named
+            // half of a dual-intent turn — same confidence tier as the
+            // "Found a real match" cross-check above (a vendor's own
+            // deliberate listing, not just a sector tag), so it gets the
+            // same plain "found it" treatment, not the lower-confidence
+            // reach-out offer below.
+            outcome = {
+              ...outcome,
+              products: productScanResult.results,
+              productsMatchTier: productScanResult.matchTier,
+              productsMatchQuality: productScanResult.matchQuality,
+            };
+            replyOverride =
+              "Found a real match on Velte for that — take a look below.";
+          } else if (storeScanResult && storeScanResult.results.length) {
+            outcome = { ...outcome, buyerRequestOffered: true };
+            replyOverride = pickAvoiding(
+              foundPossibleVendorPhrase(scanTerm),
+              [],
+            );
+          } else {
+            const mergedExternal = Array.from(
+              new Map(
+                [
+                  ...outcome.externalStoreSuggestions,
+                  ...(storeScanResult?.externalSuggestions ?? []),
+                  ...(productScanResult?.externalSuggestions ?? []),
+                ].map((b) => [b.placeId, b]),
+              ).values(),
+            );
+            outcome = {
+              ...outcome,
+              externalStoreSuggestions: mergedExternal,
+              // Explicit false, not left as whatever extraction produced —
+              // this scan is the authoritative last word on whether a
+              // reach-out offer happened, overriding even a spurious
+              // offerBuyerRequestTool call the model made despite
+              // systemPrompt.ts now telling it not to (the same
+              // non-compliance class this whole handler exists to guard
+              // against — see this block's own top comment).
+              buyerRequestOffered: false,
+            };
+            replyOverride = pickAvoiding(
+              noVendorEvenBySectorPhrase(mergedExternal.length > 0),
+              [],
+            );
+          }
+        }
+
+        // A real search DID run, nationwide, without ever asking for
+        // location first. Moved to here (2026-08-19, was BEFORE the cross-
+        // check/dead-end handler above) after finding live: the dead-end
+        // handler's own cross-check can genuinely find a real vendor (e.g.
+        // a computer-repair store matching "fix my laptop screen" by
+        // sector, missed by the original searches) — firing this location
+        // retry on the ORIGINAL pre-cross-check outcome discarded that real
+        // find every time, unconditionally, before it ever had a chance to
+        // run. Now gated on the FINAL outcome instead: only fires if
+        // everything — the original searches AND the cross-check AND
+        // Google Places — still came up with nothing at all. "A real find
+        // isn't thrown away for a location question that could've been
+        // asked after trying to help" was the explicit ask; this is that,
+        // literally — try everything first, ask last, only if still
+        // needed. `replyOverride` is reset to null when this fires: it may
+        // already hold the dead-end handler's own "nothing found" text,
+        // which would otherwise wrongly win over the location question in
+        // the final reply below.
+        const stillGenuinelyNothing =
+          !outcome.clarification &&
+          outcome.products.length === 0 &&
+          outcome.stores.length === 0 &&
+          outcome.vendorProducts.length === 0 &&
+          !outcome.buyerRequestOffered &&
+          outcome.externalStoreSuggestions.length === 0;
+        const anyCallHadNamedLocation = [
+          outcome.productCall,
+          outcome.storeCall,
+        ].some(
+          (call) =>
+            call && (call.input as { location?: string } | undefined)?.location,
+        );
+        const searchedNationwideWithoutAsking =
+          !body?.buyerLocation &&
+          !anyCallHadNamedLocation &&
+          !alreadyAskedLocationThisConversation &&
+          stillGenuinelyNothing &&
+          Boolean(outcome.productCall || outcome.storeCall);
+
+        if (searchedNationwideWithoutAsking) {
+          console.warn(
+            "[search] still nothing after the dead-end cross-check, with no location signal — retrying with a location-only system prompt",
+          );
+          ({ retryResult: result, retryOutcome: outcome } =
+            await retryLocationOnly());
+          replyOverride = null;
         }
 
         const {
@@ -1070,6 +1752,17 @@ export async function POST(req: Request) {
             vendorProductsStore,
             buyerRequestOffer,
             buyerRequestOffered,
+            // Null on this, the ordinary single-item path — only the
+            // dual-intent branch further up this file (its own early
+            // `return`) ever populates this.
+            backgroundItem: null,
+            // Mirrors buyerRequestOffered — covers the rare case where the
+            // model itself still calls offerBuyerRequestTool directly
+            // (still a registered tool, even though systemPrompt.ts no
+            // longer instructs the double-empty case to reach for it — see
+            // that file's own comment) — same agreement short-circuit
+            // applies regardless of which code path produced the offer.
+            awaitingBuyerRequestReply: buyerRequestOffered,
           }),
         );
 

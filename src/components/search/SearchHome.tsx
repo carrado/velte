@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { generateUUID } from "@/lib/uuid";
 import { runSearchStream } from "@/lib/searchStream";
@@ -19,19 +20,39 @@ import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
+import { buyerApi } from "@/lib/buyer-api-client";
+import { useBuyerStore } from "@/store/buyerStore";
+import type { Buyer } from "@/types/buyer";
+import {
+  pickAvoiding,
+  gettingLocationPhrase,
+  scanningVendorsPhrase,
+  sendingOtpPhrase,
+  checkingOtpPhrase,
+  creatingRequestPhrase,
+  noMatchRequestPhrase,
+} from "@/lib/server/ai/statusPhrases";
 import type {
+  BackgroundSearchItem,
   BuyerLocation,
   BuyerRequestOffer,
   Clarification,
+  IdentityCapture,
   MatchQuality,
   MatchTier,
   NearbyBusiness,
   SearchHistoryTurn,
+  SearchItemOutcome,
   StoreMatch,
   StoreProductItem,
   VendorMatch,
 } from "@/types/search";
-import { CompassIcon, MapPinIcon } from "@/components/icons";
+import {
+  CompassIcon,
+  MapPinIcon,
+  PhoneIcon,
+  ShieldCheckIcon,
+} from "@/components/icons";
 // Composer icons only (upload spinner, remove-photo, camera, send) are
 // lucide-react, not the custom set — reverted 2026-08-17 per explicit
 // request, scoped to just this textarea; every other icon on this page
@@ -54,6 +75,177 @@ const RECENT_STATUS_MEMORY = 8;
 // existing light-surface token, so it reads as "a message from Velte" set
 // against the plain white chat background, not a competing card style.
 const AI_MESSAGE_BUBBLE_CLASS = "bg-slate-100 rounded-2xl px-4 py-3 max-w-md";
+
+// submitWithLocationGate's own ask, when silently getting the buyer's
+// location fails/isn't granted — client-authored (not the model's own
+// phrasing) since this fires before any search or AI call even happens;
+// same "varied wording, same meaning" convention as the server-side phrase
+// pools in statusPhrases.ts, reusing that file's own pickAvoiding.
+const LOCATION_GATE_ASK_PHRASES = [
+  "Before I start — could you share your location? It just helps me find vendors actually near you.",
+  "Quick thing first — sharing your location helps me match you with vendors nearby.",
+  "One thing before I search — your location helps me find businesses close to you.",
+  "Mind sharing your location first? It's only to find vendors near you, never to track you.",
+];
+
+// Found live: the gate used to fire even when the buyer's OWN message
+// already named a place ("...in Lekki") — it only ever checked device
+// geolocation, never the text itself, so it asked for something already
+// given. A plain substring list, not an LLM call — the whole point of the
+// gate is to decide BEFORE any AI work starts, so a round trip just to
+// check this would defeat it. Not exhaustive (no LGA/ward-level list would
+// be), just states + FCT + the major cities/well-known Lagos-Abuja areas a
+// buyer is actually likely to type — good enough to catch the common case
+// this was found on, not a claim of covering every Nigerian place name.
+// Deliberately permissive about false positives (a coincidental match
+// skips the ask) over false negatives (missing a real place still just
+// falls through to the ordinary ask, not a hard failure).
+const NIGERIAN_PLACE_NAMES = [
+  "lagos",
+  "abuja",
+  "kano",
+  "ibadan",
+  "enugu",
+  "port harcourt",
+  "kaduna",
+  "benin city",
+  "warri",
+  "aba",
+  "onitsha",
+  "abeokuta",
+  "jos",
+  "ilorin",
+  "owerri",
+  "uyo",
+  "calabar",
+  "asaba",
+  "akure",
+  "abakaliki",
+  "makurdi",
+  "yola",
+  "sokoto",
+  "maiduguri",
+  "bauchi",
+  "gombe",
+  "minna",
+  "lokoja",
+  "lafia",
+  "awka",
+  "umuahia",
+  "yenagoa",
+  "ado ekiti",
+  "osogbo",
+  "abia",
+  "adamawa",
+  "akwa ibom",
+  "anambra",
+  "bayelsa",
+  "benue",
+  "borno",
+  "cross river",
+  "delta",
+  "ebonyi",
+  "edo",
+  "ekiti",
+  "imo",
+  "jigawa",
+  "katsina",
+  "kebbi",
+  "kogi",
+  "kwara",
+  "nasarawa",
+  "niger state",
+  "ogun",
+  "ondo",
+  "osun",
+  "oyo",
+  "plateau",
+  "rivers",
+  "taraba",
+  "yobe",
+  "zamfara",
+  "fct",
+  "ikeja",
+  "yaba",
+  "lekki",
+  "ajah",
+  "surulere",
+  "victoria island",
+  "ikoyi",
+  "wuse",
+  "garki",
+  "maitama",
+  "gwarinpa",
+];
+function messageNamesAPlace(message: string): boolean {
+  return NIGERIAN_PLACE_NAMES.some((place) =>
+    new RegExp(`\\b${place.replace(/\s+/g, "\\s+")}\\b`, "i").test(message),
+  );
+}
+
+// A plain display term for a pending background item — purely for the
+// "Checking on X in the background…" top bar (see pendingItemBRef/
+// BackgroundStatusBar below). Deliberately NEVER fed back into the AI's
+// own reply text/history — see route.ts's own comment on why that
+// specifically caused a real bug (the model misreading a combined
+// sentence's LAST-mentioned item as what the buyer's "yes" was agreeing
+// to, instead of the actual offered one).
+function backgroundItemLabel(item: BackgroundSearchItem): string {
+  return item.type === "product"
+    ? [item.product, ...(item.attributes ?? [])].join(" ")
+    : item.businessType;
+}
+
+// A fresh, empty turn ready to show a buyer's message right away, before
+// anything about it is actually known yet — `status` is the only thing
+// that varies per call site (submitMessage's own "Understanding your
+// request…"/"Looking at your photo…", or submitWithLocationGate's own
+// gettingLocationPhrase pick while it resolves silent geolocation first).
+// Pulled out specifically so the buyer's own message bubble can appear
+// INSTANTLY on send, before any async work (a search, a geolocation check)
+// has even started — found live: submitWithLocationGate used to await
+// silent geolocation BEFORE appending anything at all, which left the
+// whole screen blank (not even the buyer's own typed message showing) for
+// up to several seconds on a slow/no GPS fix.
+function createLoadingTurn(
+  id: string,
+  query: string,
+  imagePreview: string | null,
+  imageUrl: string | null,
+  status: string,
+): ConversationTurn {
+  return {
+    id,
+    query,
+    imagePreview,
+    imageUrl,
+    phase: "loading",
+    status,
+    reply: "",
+    toolCalled: false,
+    clarification: null,
+    products: [],
+    weakProducts: [],
+    stores: [],
+    furtherStores: [],
+    storesQuery: null,
+    productStores: [],
+    storeServices: [],
+    productsMatchTier: null,
+    storesMatchTier: null,
+    productsMatchQuality: undefined,
+    storesMatchQuality: undefined,
+    externalStoreSuggestions: [],
+    vendorProducts: [],
+    vendorProductsStore: null,
+    buyerRequestOffer: null,
+    buyerRequestOffered: false,
+    interimReplies: [],
+    awaitingBuyerRequestReply: false,
+    contextNote: null,
+    error: null,
+  };
+}
 
 function productsNoun(products: VendorMatch[]): string {
   const hasProduct = products.some((p) => p.kind !== "service");
@@ -424,6 +616,21 @@ interface ConversationTurn {
   // first, Google Places only surfaces if the buyer declines on a later
   // turn (that turn re-searches with this false again).
   buyerRequestOffered: boolean;
+  // Standalone bubbles that arrived mid-turn, before the final event (see
+  // SearchStreamEvent's own "reply" comment) — route.ts's unified dead-end
+  // handler uses this to close the loop on the search that just ran while
+  // it keeps working on a second, wider vendor scan underneath. Rendered in
+  // order, above `status`/the final content, and kept even once the turn
+  // reaches "done" (unlike `status`, which is overwritten on every new
+  // status event and discarded once the turn completes).
+  interimReplies: string[];
+  // Mirrors SearchStreamEvent's own field of the same name — true whenever
+  // the buyer's next message should route through route.ts's deterministic
+  // agreement short-circuit (an offer just made, or this turn IS that
+  // short-circuit's own follow-up name-ask). Copied verbatim into the next
+  // call's `history` (see submitMessage's own history-building code) —
+  // that's the whole mechanism, nothing else reads this client-side.
+  awaitingBuyerRequestReply: boolean;
   // A machine-only breadcrumb (e.g. store handles just found) appended to
   // this turn's text in `history` so a LATER turn's model call can resolve
   // "what do they sell" back to a specific store — never rendered to the
@@ -437,8 +644,6 @@ function ConversationTurnView({
   isLatest,
   onAnswerClarification,
   onLocationShared,
-  onBuyerRequestResolved,
-  buyerLocation,
   expandedServicesVendorId,
   onToggleServices,
 }: {
@@ -446,12 +651,6 @@ function ConversationTurnView({
   isLatest: boolean;
   onAnswerClarification: (text: string) => void;
   onLocationShared: (location: BuyerLocation) => void;
-  onBuyerRequestResolved: (offer: BuyerRequestOffer) => void;
-  // The buyer's device location, if granted earlier this session — passed
-  // straight through to BuyerRequestOfferWidget below so a request created
-  // from THIS turn can use it (see that widget's own comment). Lives in
-  // SearchHome's own ref, not this component's state.
-  buyerLocation: BuyerLocation | undefined;
   // Which store's "matching services" panel is open, if any, across the
   // WHOLE conversation, not just this turn — lifted up to SearchHome (see
   // its own comment) so opening one on any turn closes whichever was open
@@ -481,30 +680,38 @@ function ConversationTurnView({
       {/* The buyer's own message — right-aligned, shaded with the app's
           accent color, like a chat bubble. The AI's response below sits in
           its own row with an avatar, plain text/cards rather than a bubble —
-          same structure as ChatGPT's thread. */}
-      <div className="flex justify-end">
-        <div className="max-w-[85%] sm:max-w-[75%] bg-orange-100/70 rounded-3xl px-4 py-2.5 flex items-start gap-2.5">
-          {turn.imagePreview && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={turn.imagePreview}
-              alt="Search photo"
-              className="w-14 h-14 rounded-lg object-cover shrink-0 border border-orange-200"
-            />
-          )}
-          {turn.query && (
-            <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed flex items-center gap-1.5">
-              {/* Same MapPinIcon Settings' own location field uses (see
-                  [[custom_icon_system]]) — was a literal 📍 emoji character
-                  baked into the submitted text before this. */}
-              {turn.query === "Shared my location" && (
-                <MapPinIcon size={16} className="text-orange-600 shrink-0" />
-              )}
-              {turn.query}
-            </p>
-          )}
+          same structure as ChatGPT's thread. Only rendered when there's
+          actually something to show — found live: item B's own synthetic
+          follow-up turn (resolveBackgroundItem, no buyer message at all,
+          `query`/`imagePreview` both empty) still rendered this whole row,
+          an empty rounded pill with padding but no content, which read as a
+          blank "ghost" bubble flashing before the AI's own results appeared
+          underneath it. */}
+      {(turn.query || turn.imagePreview) && (
+        <div className="flex justify-end">
+          <div className="max-w-[85%] sm:max-w-[75%] bg-orange-100/70 rounded-3xl px-4 py-2.5 flex items-start gap-2.5">
+            {turn.imagePreview && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={turn.imagePreview}
+                alt="Search photo"
+                className="w-14 h-14 rounded-lg object-cover shrink-0 border border-orange-200"
+              />
+            )}
+            {turn.query && (
+              <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed flex items-center gap-1.5">
+                {/* Same MapPinIcon Settings' own location field uses (see
+                    [[custom_icon_system]]) — was a literal 📍 emoji character
+                    baked into the submitted text before this. */}
+                {turn.query === "Shared my location" && (
+                  <MapPinIcon size={16} className="text-orange-600 shrink-0" />
+                )}
+                {turn.query}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex items-start gap-3">
         {/* Velte's own avatar — same image for the status/"thinking" phase
@@ -516,6 +723,23 @@ function ConversationTurnView({
           className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shrink-0"
         />
         <div className="flex-1 min-w-0 pt-0.5">
+          {/* Standalone bubbles that arrived mid-turn (route.ts's unified
+              dead-end handler — see interimReplies' own comment). Rendered
+              regardless of phase: while still "loading" they sit above the
+              status shimmer (the turn keeps visibly working underneath
+              them), and they persist once "done" too, above the final
+              reply/results — a real part of the conversation, not a
+              transient status line. */}
+          {turn.interimReplies.length > 0 && (
+            <div className="space-y-3 mb-3">
+              {turn.interimReplies.map((text, i) => (
+                <div key={i} className={AI_MESSAGE_BUBBLE_CLASS}>
+                  <FormattedReply text={text} />
+                </div>
+              ))}
+            </div>
+          )}
+
           {turn.phase === "loading" && (
             <div className="min-w-0">
               <span className="status-shimmer block truncate text-[15px] font-medium">
@@ -848,8 +1072,17 @@ function ConversationTurnView({
                 // buyer sees first. They only render once a later turn
                 // re-searches with the offer declined (buyerRequestOffered
                 // false again that time).
+                //
+                // 2026-08-19: `reply` now wrapped in the same
+                // AI_MESSAGE_BUBBLE_CLASS every other pure-text reply gets —
+                // this was a bare fragment before, the one place in this
+                // whole chain a plain-text reply didn't get bubble
+                // treatment (BuyerRequestOfferWidget's own no_match message
+                // had the identical gap — see that file's matching fix).
                 <>
-                  <FormattedReply text={turn.reply} />
+                  <div className={AI_MESSAGE_BUBBLE_CLASS}>
+                    <FormattedReply text={turn.reply} />
+                  </div>
                   {turn.externalStoreSuggestions.length > 1 ? (
                     <CardCarousel
                       items={turn.externalStoreSuggestions}
@@ -957,14 +1190,18 @@ function ConversationTurnView({
                   onLocationShared={onLocationShared}
                 />
               )}
-              {turn.buyerRequestOffer && isLatest && (
-                <BuyerRequestOfferWidget
-                  offer={turn.buyerRequestOffer}
-                  imageUrl={turn.imageUrl}
-                  location={buyerLocation}
-                  onResolved={onBuyerRequestResolved}
-                />
-              )}
+              {/* "needs_identity" excluded — SearchHome.tsx's own composer
+                  (see IdentityCapture) takes over the phone/OTP exchange
+                  entirely now, narrated as ordinary follow-up turns
+                  instead of an inline form widget here. This only ever
+                  renders the "created" confirmation card now — see that
+                  component's own comment for why "no_match"/"error" have
+                  nothing left to render here either. */}
+              {turn.buyerRequestOffer &&
+                turn.buyerRequestOffer.status !== "needs_identity" &&
+                isLatest && (
+                  <BuyerRequestOfferWidget offer={turn.buyerRequestOffer} />
+                )}
             </div>
           )}
         </div>
@@ -1043,17 +1280,323 @@ export function SearchHome() {
     prevTurnCountRef.current = turns.length;
   }, [turns.length]);
 
-  // Set once the buyer actually shares their location via a "location"
-  // clarification (see handleLocationShared) — never requested up front on
-  // page load (the OLD permission-gated LocationPermissionModal +
-  // getBuyerLocationOnce, both removed 2026-08, see git history), only when
-  // the AI itself decides a specific search genuinely needs it (see
-  // systemPrompt.ts's location rule). A plain ref, not state: it's read
-  // fresh inside submitMessage on every call once set, so every later
-  // search this session reuses it automatically without re-rendering
-  // anything or asking again — same "device location known" treatment the
-  // backend already gives a real device location (resolveBuyerCoords.ts).
+  // Set once the buyer's location is known — either shared via a "location"
+  // clarification (see handleLocationShared) or resolved silently up front
+  // (see trySilentGeolocation/submitWithLocationGate below). A plain ref,
+  // not state: it's read fresh inside submitMessage on every call once set,
+  // so every later search this session reuses it automatically without
+  // re-rendering anything or asking again — same "device location known"
+  // treatment the backend already gives a real device location
+  // (resolveBuyerCoords.ts).
+  //
+  // 2026-08-19: location is now checked BEFORE the first search of a
+  // session even starts, not left to the AI to notice mid-search and ask
+  // about (see submitWithLocationGate) — an explicit reversal of an earlier
+  // decision that deliberately never asked up front (the OLD permission-
+  // gated LocationPermissionModal + getBuyerLocationOnce, removed 2026-08,
+  // see git history) in favor of the AI deciding case-by-case. That
+  // case-by-case approach turned out unreliable in practice (the model
+  // sometimes searched nationwide first and asked only as an afterthought,
+  // or skipped asking entirely) — per explicit request, location is now a
+  // deterministic, code-enforced gate again: silently used if permission is
+  // already granted, asked for immediately otherwise, before any search
+  // work begins.
   const buyerLocationRef = useRef<BuyerLocation | null>(null);
+  // True once the buyer has explicitly declined to share location THIS
+  // session (via the gate below, or an ordinary in-conversation location
+  // clarification) — combined with buyerLocationRef being non-null, this is
+  // what submitWithLocationGate checks to know location has already been
+  // resolved one way or the other, so it never asks twice.
+  const locationDeclinedRef = useRef(false);
+
+  // Drives the composer's own phone/OTP identity-capture mode (2026-08-19
+  // redesign, replacing BuyerRequestOfferWidget's old inline
+  // BuyerPhoneVerifyForm card) — per explicit request: no separate form
+  // widget floating alongside the normal composer; instead the composer
+  // ITSELF swaps from the free-text textarea to a single-line phone/OTP
+  // input while this is non-null, and swaps back once it resolves. Set the
+  // moment a turn's `buyerRequestOffer` arrives as `needs_identity` (see
+  // runSearchIntoTurn's onFinal), cleared once the request is actually
+  // created (or genuinely fails) — see handleIdentitySubmit. `imageUrl` is
+  // read once, off the ORIGIN turn's own image, and carried through
+  // unchanged for the eventual POST /api/buyer-requests call.
+  const [identityCapture, setIdentityCapture] =
+    useState<IdentityCapture | null>(null);
+  // The composer-turned-input's own live text while identityCapture is
+  // active — a separate piece of state from `query` (the ordinary
+  // composer's own text) so switching back afterward never leaves stray
+  // leftover text in either box.
+  const [identityValue, setIdentityValue] = useState("");
+  const [identitySubmitting, setIdentitySubmitting] = useState(false);
+
+  // Tracks the still-pending half of a dual-intent turn (see route.ts's
+  // own comment on where this branches off the normal single-item flow) —
+  // item B's exact spec, a plain display label for it, and whether its
+  // real background fetch has actually started yet. Per explicit design
+  // (2026-08-20 redesign, replacing an earlier "hold both, reveal
+  // together" version): item A always shows its own results/offer
+  // immediately, on its own turn — item B never even STARTS until item
+  // A's own flow fully concludes (its own reach-out-offer exchange, if it
+  // has one, all the way to a terminal status or a decline — see
+  // scheduleItemBStart's own call sites). At most one of these is ever
+  // live at a time — a fresh dual-intent turn can't happen until the
+  // buyer sends another message, by which point any prior item B has long
+  // since resolved — so there's no need to key this by turn id; its mere
+  // presence (and `started`) is the complete state.
+  const pendingItemBRef = useRef<{
+    item: BackgroundSearchItem;
+    label: string;
+    started: boolean;
+  } | null>(null);
+
+  // The floating top-pill's own live text (see the JSX render below, near
+  // the top of this component's return — styled after the landing page's
+  // own FloatingAskBar, just anchored to the top instead of the bottom) —
+  // null hides it entirely. Set to a static "Checking on X…" line the
+  // moment a dual-intent turn's final event arrives (item B is known
+  // about, even though its real search hasn't started), then swapped for
+  // a dynamically CYCLING scanningVendorsPhrase pick once item B's fetch
+  // actually begins (see startItemB). Deliberately a floating overlay, not
+  // an in-flow bar or an inline per-turn caption — per explicit request: a
+  // buyer scrolling through item A's own results should never be
+  // auto-scrolled to, or otherwise interrupted by, item B quietly starting
+  // up underneath.
+  const [backgroundStatus, setBackgroundStatus] = useState<string | null>(null);
+  const backgroundStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const backgroundCycleRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+
+  // Clears any in-flight delayed-start timer/cycling interval — called
+  // whenever the pending pair concludes (resolveBackgroundItem) or a
+  // fresh one replaces it (onFinal below), so a stale timer from an
+  // earlier dual-intent turn this same conversation can never fire late
+  // against the wrong item.
+  function clearBackgroundTimers() {
+    if (backgroundStartTimerRef.current) {
+      clearTimeout(backgroundStartTimerRef.current);
+      backgroundStartTimerRef.current = null;
+    }
+    if (backgroundCycleRef.current) {
+      clearInterval(backgroundCycleRef.current);
+      backgroundCycleRef.current = null;
+    }
+  }
+  useEffect(() => clearBackgroundTimers, []);
+
+  // Item A's own flow just concluded — either it returned results/nothing
+  // directly with no offer at all (called right away, from onFinal), or
+  // its own reach-out-offer exchange reached a terminal status/decline
+  // (called from onFinal's offerAlreadyTerminal check, handleIdentitySubmit,
+  // or handleClarificationAnswer's decline branch). Waits the explicitly-
+  // requested ~3s beat, purely so the hand-off to
+  // item B doesn't feel instantaneous, then actually starts it. A no-op
+  // if there's no pending item B, or it's already started — safe to call
+  // speculatively rather than needing each call site to check first.
+  const ITEM_B_START_DELAY_MS = 3000;
+  function scheduleItemBStart() {
+    const pending = pendingItemBRef.current;
+    if (!pending || pending.started) return;
+    backgroundStartTimerRef.current = setTimeout(
+      startItemB,
+      ITEM_B_START_DELAY_MS,
+    );
+  }
+
+  // Flips the top bar from its initial static line to a dynamically
+  // cycling one and kicks off item B's real fetch — the moment item B
+  // genuinely "starts running," per explicit design.
+  function startItemB() {
+    const pending = pendingItemBRef.current;
+    if (!pending || pending.started) return;
+    pending.started = true;
+    setBackgroundStatus(pickAvoiding(scanningVendorsPhrase(pending.label), []));
+    backgroundCycleRef.current = setInterval(() => {
+      setBackgroundStatus((current) =>
+        pickAvoiding(
+          scanningVendorsPhrase(pending.label),
+          current ? [current] : [],
+        ),
+      );
+    }, 2500);
+    void resolveBackgroundItem(pending.item);
+  }
+
+  // Resolves item B independently — a plain deterministic fetch (no LLM,
+  // see /api/search/resolve-item's own comment), only ever called once
+  // item A's own flow has fully concluded (see scheduleItemBStart/
+  // startItemB above) — never awaited by anything, a genuine background
+  // job, per explicit request ("like how Claude works"). Item A already
+  // showed its own results/offer directly on its own turn, so there's
+  // nothing left to merge here: whatever comes back for item B just gets
+  // appended as its own standalone follow-up turn, the exact same shape
+  // any ordinary turn already uses.
+  async function resolveBackgroundItem(
+    item: BackgroundSearchItem,
+  ): Promise<void> {
+    let outcome: SearchItemOutcome | null = null;
+    let failedText: string | null = null;
+    try {
+      const res = await fetch("/api/search/resolve-item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item,
+          location: item.location,
+          buyerLocation: buyerLocationRef.current ?? undefined,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        outcome?: SearchItemOutcome;
+        error?: string;
+      } | null;
+      if (!res.ok || !data?.outcome) {
+        throw new Error(data?.error ?? "Background check failed.");
+      }
+      outcome = data.outcome;
+    } catch {
+      failedText = "Couldn't finish checking that in the background.";
+    }
+
+    clearBackgroundTimers();
+    setBackgroundStatus(null);
+    pendingItemBRef.current = null;
+
+    const base = {
+      id: generateUUID(),
+      query: "",
+      imagePreview: null,
+      imageUrl: null,
+      phase: "done" as const,
+      status: "",
+      toolCalled: true,
+      clarification: null,
+      weakProducts: [],
+      productStores: [],
+      storeServices: [],
+      vendorProducts: [],
+      vendorProductsStore: null,
+      buyerRequestOffer: null,
+      interimReplies: [],
+      awaitingBuyerRequestReply: false,
+      contextNote: null,
+      error: null,
+    };
+
+    if (failedText || !outcome) {
+      setTurns((prev) => [
+        ...prev,
+        {
+          ...base,
+          reply:
+            failedText ?? "Couldn't finish checking that in the background.",
+          products: [],
+          stores: [],
+          furtherStores: [],
+          storesQuery: null,
+          productsMatchTier: null,
+          storesMatchTier: null,
+          productsMatchQuality: undefined,
+          storesMatchQuality: undefined,
+          externalStoreSuggestions: [],
+          buyerRequestOffered: false,
+        },
+      ]);
+      return;
+    }
+
+    if (outcome.status === "offer") {
+      // Reuses the exact same buyerRequestOffered bubble/Yes-No pattern a
+      // real server-driven offer already gets — clicking either button
+      // goes through handleClarificationAnswer exactly like any other
+      // clarification answer, which sends it as the buyer's next real
+      // message; the model reads this turn's own `reply` text (now part
+      // of `history`) and proceeds through the NORMAL createBuyerRequest
+      // flow from there, completely unmodified.
+      setTurns((prev) => [
+        ...prev,
+        {
+          ...base,
+          reply: outcome.text,
+          products: [],
+          stores: [],
+          furtherStores: [],
+          storesQuery: null,
+          productsMatchTier: null,
+          storesMatchTier: null,
+          productsMatchQuality: undefined,
+          storesMatchQuality: undefined,
+          externalStoreSuggestions: [],
+          buyerRequestOffered: true,
+          awaitingBuyerRequestReply: true,
+        },
+      ]);
+      return;
+    }
+
+    if (outcome.status === "products") {
+      setTurns((prev) => [
+        ...prev,
+        {
+          ...base,
+          reply: "Found a real match on Velte for that — take a look below.",
+          products: outcome.products,
+          stores: [],
+          furtherStores: [],
+          storesQuery: null,
+          productsMatchTier: outcome.matchTier,
+          storesMatchTier: null,
+          productsMatchQuality: outcome.matchQuality,
+          storesMatchQuality: undefined,
+          externalStoreSuggestions: [],
+          buyerRequestOffered: false,
+        },
+      ]);
+      return;
+    }
+
+    if (outcome.status === "stores") {
+      setTurns((prev) => [
+        ...prev,
+        {
+          ...base,
+          reply: "Found a real match on Velte for that — take a look below.",
+          products: [],
+          stores: outcome.stores,
+          furtherStores: outcome.furtherStores,
+          storesQuery: outcome.storesQuery,
+          productsMatchTier: null,
+          storesMatchTier: outcome.matchTier,
+          productsMatchQuality: undefined,
+          storesMatchQuality: outcome.matchQuality,
+          externalStoreSuggestions: [],
+          buyerRequestOffered: false,
+        },
+      ]);
+      return;
+    }
+
+    // outcome.status === "nothing"
+    setTurns((prev) => [
+      ...prev,
+      {
+        ...base,
+        reply: outcome.text,
+        products: [],
+        stores: [],
+        furtherStores: [],
+        storesQuery: null,
+        productsMatchTier: null,
+        storesMatchTier: null,
+        productsMatchQuality: undefined,
+        storesMatchQuality: undefined,
+        externalStoreSuggestions: outcome.externalSuggestions,
+        buyerRequestOffered: false,
+      },
+    ]);
+  }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1089,19 +1632,29 @@ export function SearchHome() {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
-  // Shared by the main composer (handleSubmit) and a clarification answer
-  // (handleClarificationAnswer, via ClarificationPrompt) — both are just "the
-  // buyer sent a message," the only difference is where the text came from
-  // and whether an image rides along. Callers are responsible for their own
-  // send-guard (isSending/uploadingImage/hasPendingClarification) and for
-  // clearing their own input state before calling this.
-  async function submitMessage(
+  // Appends rather than replaces (unlike updateTurn's plain patch) — a
+  // functional setTurns update so it's correct even if two "reply" events
+  // land close together, without needing the caller to read current state
+  // first (see onReply below).
+  function appendInterimReply(id: string, text: string) {
+    setTurns((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, interimReplies: [...t.interimReplies, text] } : t,
+      ),
+    );
+  }
+
+  // The actual /api/search call + all its event handlers, for a turn that
+  // ALREADY EXISTS (appended by the caller — submitMessage below appends
+  // one fresh, submitWithLocationGate reuses the one it already showed
+  // while it was resolving location) — split out from submitMessage so
+  // BOTH can share it. `turns` is read fresh at call time (not passed in),
+  // same as it always was when this lived inline in submitMessage.
+  async function runSearchIntoTurn(
+    turnId: string,
     message: string,
     currentImageUrl: string | null,
-    currentImagePreview: string | null,
   ): Promise<void> {
-    const turnId = generateUUID();
-
     // Text-only history from prior completed turns (see SearchHistoryTurn) —
     // built before the new turn is appended, so it doesn't include itself.
     // A failed turn contributes nothing worth replaying to the model.
@@ -1115,43 +1668,25 @@ export function SearchHome() {
         {
           role: "assistant" as const,
           content: t.contextNote ? `${t.reply}\n${t.contextNote}` : t.reply,
+          // A structural signal, not left for the server to guess from the
+          // text — see SearchHistoryTurn's own comment on the bug(s) this
+          // fixes (a plain "yes," and separately the name reply after it,
+          // weren't reliably recognized as continuing THIS specific
+          // exchange).
+          awaitingBuyerRequestReply: t.awaitingBuyerRequestReply,
         },
       ]);
 
-    setTurns((prev) => [
-      ...prev,
-      {
-        id: turnId,
-        query: message,
-        imagePreview: currentImagePreview,
-        imageUrl: currentImageUrl,
-        phase: "loading",
-        status: currentImageUrl
-          ? "Looking at your photo…"
-          : "Understanding your request…",
-        reply: "",
-        toolCalled: false,
-        clarification: null,
-        products: [],
-        weakProducts: [],
-        stores: [],
-        furtherStores: [],
-        storesQuery: null,
-        productStores: [],
-        storeServices: [],
-        productsMatchTier: null,
-        storesMatchTier: null,
-        productsMatchQuality: undefined,
-        storesMatchQuality: undefined,
-        externalStoreSuggestions: [],
-        vendorProducts: [],
-        vendorProductsStore: null,
-        buyerRequestOffer: null,
-        buyerRequestOffered: false,
-        contextNote: null,
-        error: null,
-      },
-    ]);
+    // Refreshes the loading status to match what THIS call is actually
+    // about — the turn may already be showing something else (e.g.
+    // submitWithLocationGate's own gettingLocationPhrase pick while it
+    // was resolving silent geolocation) by the time this runs.
+    updateTurn(turnId, {
+      phase: "loading",
+      status: currentImageUrl
+        ? "Looking at your photo…"
+        : "Understanding your request…",
+    });
 
     await runSearchStream(
       {
@@ -1171,6 +1706,9 @@ export function SearchHome() {
           shownStatusesRef.current = [...shownStatusesRef.current, text].slice(
             -RECENT_STATUS_MEMORY,
           );
+        },
+        onReply: (text) => {
+          appendInterimReply(turnId, text);
         },
         onFinal: (event) => {
           // A dual-intent query (e.g. "a phone repair shop that also sells
@@ -1225,14 +1763,223 @@ export function SearchHome() {
             vendorProductsStore: event.vendorProductsStore,
             buyerRequestOffer: event.buyerRequestOffer,
             buyerRequestOffered: event.buyerRequestOffered,
+            awaitingBuyerRequestReply: event.awaitingBuyerRequestReply,
             contextNote,
           });
+          // A buyer who already has a verified session (a prior visit's
+          // identity cookie still valid) skips the composer's own
+          // identity-capture mode entirely — createBuyerRequest resolves
+          // straight to a terminal status (`created`, sometimes
+          // `no_match`/`error`) in THIS SAME stream event, most commonly
+          // via the agreement short-circuit's own follow-up turn (the
+          // name-ask's reply). Checked unconditionally, independent of
+          // `event.backgroundItem` — the terminal status can land on a
+          // LATER turn than the one that originally registered
+          // `pendingItemBRef` (offer → name-ask → this one), and
+          // `scheduleItemBStart` is a no-op if nothing's actually pending.
+          const offerAlreadyTerminal =
+            event.buyerRequestOffer?.status === "created" ||
+            event.buyerRequestOffer?.status === "no_match" ||
+            event.buyerRequestOffer?.status === "error";
+          if (offerAlreadyTerminal) scheduleItemBStart();
+          // The composer's own phone/OTP identity-capture mode (see
+          // IdentityCapture's own comment) takes over the instant this
+          // status arrives — `imageUrl` is read off THIS turn (the one
+          // carrying the offer), never a later one, since the composer's
+          // own `imageUrl` state may have already moved on to a fresh
+          // photo by the time the buyer actually finishes verifying.
+          if (event.buyerRequestOffer?.status === "needs_identity") {
+            setIdentityCapture({
+              offer: event.buyerRequestOffer,
+              imageUrl: currentImageUrl,
+              step: "phone",
+              phone: "",
+            });
+            setIdentityValue("");
+          }
+          // Item A (this turn, just shown above) is done; item B
+          // (event.backgroundItem) is registered as pending but does NOT
+          // start yet — see pendingItemBRef's own comment. If item A
+          // itself needs a reach-out offer (buyerRequestOffered true),
+          // item B waits for THAT to conclude (handleIdentitySubmit/
+          // handleClarificationAnswer/the offerAlreadyTerminal check just
+          // above call scheduleItemBStart once it does); otherwise item A
+          // is already fully concluded right now, so the delayed start is
+          // scheduled immediately.
+          if (event.backgroundItem) {
+            clearBackgroundTimers();
+            const label = backgroundItemLabel(event.backgroundItem);
+            pendingItemBRef.current = {
+              item: event.backgroundItem,
+              label,
+              started: false,
+            };
+            setBackgroundStatus(
+              `Also checking on "${label}" in the background…`,
+            );
+            if (!event.buyerRequestOffered) {
+              scheduleItemBStart();
+            }
+          }
         },
         onError: (errorMessage) => {
           updateTurn(turnId, { phase: "done", error: errorMessage });
         },
       },
     );
+  }
+
+  // Shared by the main composer (handleSubmit, via submitWithLocationGate)
+  // and a clarification answer (handleClarificationAnswer, via
+  // ClarificationPrompt) — both are just "the buyer sent a message," the
+  // only difference is where the text came from and whether an image rides
+  // along. Callers are responsible for their own send-guard
+  // (isSending/uploadingImage/hasPendingClarification) and for clearing
+  // their own input state before calling this. Appends a fresh turn and
+  // hands it straight to runSearchIntoTurn — the ordinary path, when
+  // location is already resolved (or this isn't a genuinely new message,
+  // e.g. answering a clarification) and there's nothing to show BEFORE the
+  // turn itself.
+  async function submitMessage(
+    message: string,
+    currentImageUrl: string | null,
+    currentImagePreview: string | null,
+  ): Promise<void> {
+    const turnId = generateUUID();
+    setTurns((prev) => [
+      ...prev,
+      createLoadingTurn(
+        turnId,
+        message,
+        currentImagePreview,
+        currentImageUrl,
+        currentImageUrl
+          ? "Looking at your photo…"
+          : "Understanding your request…",
+      ),
+    ]);
+    await runSearchIntoTurn(turnId, message, currentImageUrl);
+  }
+
+  // Silent best-effort attempt at the buyer's location — never shows a
+  // prompt/spinner itself, only succeeds if permission was already granted
+  // (an earlier visit, or the browser/OS remembers it), so it can resolve
+  // near-instantly with no visible interruption. A short timeout on
+  // purpose, unlike LocationShareAction's own generous one (which waits out
+  // a real native permission dialog) — there's no dialog to wait for here;
+  // if this hasn't resolved quickly, permission genuinely isn't granted and
+  // submitWithLocationGate should just ask instead of stalling the buyer's
+  // first message. `navigator.permissions` isn't universally supported
+  // (notably Safari) — treated as "don't know," same as "not granted",
+  // rather than blocking on a feature-detect that can't be relied on.
+  const SILENT_GEOLOCATION_TIMEOUT_MS = 4000;
+  async function trySilentGeolocation(): Promise<BuyerLocation | null> {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return null;
+    try {
+      if (navigator.permissions?.query) {
+        const status = await navigator.permissions.query({
+          name: "geolocation",
+        });
+        if (status.state !== "granted") return null;
+      }
+    } catch {
+      return null;
+    }
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) =>
+          resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          }),
+        () => resolve(null),
+        { timeout: SILENT_GEOLOCATION_TIMEOUT_MS },
+      );
+    });
+  }
+
+  // The location gate every genuinely NEW buyer message goes through before
+  // submitMessage ever runs — per explicit request, location is checked
+  // FIRST, before any search work begins, not left for the AI to notice
+  // mid-search (see buyerLocationRef's own comment for the history here).
+  // Deliberately NOT used by clarification-answer submissions
+  // (handleClarificationAnswer/handleLocationShared call submitMessage
+  // directly) — gating those too would re-trigger this on the buyer's own
+  // "Shared my location"/"Search without it" replies, an infinite loop.
+  //
+  // Three paths, checked in order: if the buyer's OWN message already
+  // names a place (messageNamesAPlace — found live: it used to ask even
+  // then, only ever checking device geolocation, never the text itself),
+  // there's nothing to ask for — proceed exactly as if location were
+  // already resolved, THIS message only (doesn't set locationDeclinedRef,
+  // so a later message with no place named still gets asked normally). If
+  // geolocation is silently available (already granted), trySilentGeolocation
+  // resolves it with zero visible interruption and the real search proceeds
+  // immediately. Otherwise, this turns into a client-only clarification —
+  // no /api/search call yet — reusing the exact same
+  // ClarificationPrompt/LocationShareAction widget and
+  // handleLocationShared/handleClarificationAnswer handlers a real
+  // server-driven location clarification already uses. Once the buyer
+  // answers, that existing mechanism takes over unmodified: the answer
+  // becomes the next real submitMessage call, with this turn already in
+  // `history`, so the model still sees the buyer's original need — same
+  // "combine it with what they already said" behavior systemPrompt.ts
+  // already documents for an in-conversation location clarification.
+  //
+  // Found live: this used to await trySilentGeolocation() BEFORE ever
+  // appending anything — the buyer's own message didn't show up at all
+  // until that resolved, which can take up to SILENT_GEOLOCATION_TIMEOUT_MS
+  // (4s) on a slow/no GPS fix. A real, confusing delay with zero visible
+  // feedback in the meantime. Now the turn appears INSTANTLY, same as any
+  // other send, with an ordinary shimmering status line (gettingLocationPhrase,
+  // same varied pool LocationShareAction's own explicit flow already uses)
+  // while the silent check happens underneath it — exactly the same
+  // pattern every other async step in this app already uses, just applied
+  // to this one too instead of blocking on it silently.
+  async function submitWithLocationGate(
+    message: string,
+    currentImageUrl: string | null,
+    currentImagePreview: string | null,
+  ): Promise<void> {
+    if (
+      buyerLocationRef.current ||
+      locationDeclinedRef.current ||
+      messageNamesAPlace(message)
+    ) {
+      await submitMessage(message, currentImageUrl, currentImagePreview);
+      return;
+    }
+
+    const turnId = generateUUID();
+    setTurns((prev) => [
+      ...prev,
+      createLoadingTurn(
+        turnId,
+        message,
+        currentImagePreview,
+        currentImageUrl,
+        // Same varied-wording pool gettingLocationPhrase already provides
+        // for LocationShareAction's own explicit "Share my location" flow
+        // — reused here rather than a single static string, matching how
+        // every other status line in this app works (see statusPhrases.ts).
+        pickAvoiding(gettingLocationPhrase(), []),
+      ),
+    ]);
+
+    const silentLocation = await trySilentGeolocation();
+    if (silentLocation) {
+      buyerLocationRef.current = silentLocation;
+      await runSearchIntoTurn(turnId, message, currentImageUrl);
+      return;
+    }
+
+    const askText = pickAvoiding(LOCATION_GATE_ASK_PHRASES, []);
+    updateTurn(turnId, {
+      phase: "done",
+      status: "",
+      reply: askText,
+      clarification: { kind: "location", question: askText },
+    });
   }
 
   // One-shot handoff from the homepage's own Velte input (Hero.tsx) and any
@@ -1256,7 +2003,7 @@ export function SearchHome() {
       // immediately, not just prefill the composer) — there's no external
       // event to defer this to a callback for.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      void submitMessage(q, null, null);
+      void submitWithLocationGate(q, null, null);
     } else {
       setQuery(q);
     }
@@ -1282,11 +2029,18 @@ export function SearchHome() {
     setQuery("");
     setImagePreview(null);
     setImageUrl(null);
-    await submitMessage(message, currentImageUrl, currentImagePreview);
+    await submitWithLocationGate(message, currentImageUrl, currentImagePreview);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // The composer's own identity-capture mode (see IdentityCapture's own
+    // comment) hijacks the SAME form/submit button, not a separate one —
+    // routed here instead of trySubmit while it's active.
+    if (identityCapture) {
+      await handleIdentitySubmit();
+      return;
+    }
     await trySubmit();
   }
 
@@ -1305,8 +2059,32 @@ export function SearchHome() {
   // submit (see ClarificationPrompt) — is just the buyer's next message.
   // Never resends a prior image: each turn's image is per-submission only
   // (same as any other typed follow-up already works — history is
-  // text-only, see SearchHistoryTurn).
+  // text-only, see SearchHistoryTurn). Deliberately calls submitMessage
+  // directly, not submitWithLocationGate — this text IS the buyer's answer
+  // to a location (or other) clarification already showing; gating it too
+  // would re-ask on the buyer's own "Search without sharing my location"
+  // reply, an infinite loop.
   function handleClarificationAnswer(text: string) {
+    // Marks the gate resolved (declined) whenever this is answering a
+    // LOCATION clarification specifically — covers both a real
+    // server-driven one (systemPrompt.ts's own rule) and
+    // submitWithLocationGate's own client-only one, so submitWithLocationGate
+    // never asks again this session either way.
+    if (lastTurn?.clarification?.kind === "location") {
+      locationDeclinedRef.current = true;
+    }
+    // A decline of item A's own reach-out offer is just as much a
+    // conclusion as an actual created request — if item B is sitting
+    // pending on item A's flow to finish (see pendingItemBRef), this is
+    // what lets it finally start. "No thanks, that's okay" is the
+    // buyerRequestOffered Yes/No pair's own literal decline text (see the
+    // button below), never typed by the buyer themselves. Only item A's
+    // OWN offer can still be pending here — by design, item B never even
+    // starts until item A concludes, so there's never a second, competing
+    // offer in flight to confuse this with.
+    if (lastTurn?.buyerRequestOffered && text === "No thanks, that's okay") {
+      scheduleItemBStart();
+    }
     void submitMessage(text, null, null);
   }
 
@@ -1326,6 +2104,196 @@ export function SearchHome() {
     buyerLocationRef.current = location;
     toast.success("Got your location!");
     void submitMessage("Shared my location", null, null);
+  }
+
+  // Appends a turn for one step of the identity-capture exchange (see
+  // IdentityCapture's own comment) — `query` IS the buyer's own submitted
+  // value (phone, then the code), rendered as an ordinary chat bubble same
+  // as any other message, with `status` as the initial shimmering line.
+  // Reuses createLoadingTurn wholesale — this is structurally identical to
+  // any other turn, just never routed through /api/search.
+  function appendIdentityTurn(query: string, status: string): string {
+    const turnId = generateUUID();
+    setTurns((prev) => [
+      ...prev,
+      createLoadingTurn(turnId, query, null, null, status),
+    ]);
+    return turnId;
+  }
+
+  // The composer's own submit handler while identityCapture is active (see
+  // handleSubmit's own branch below) — phone and OTP go through the exact
+  // same shape: echo the buyer's value as a real chat turn, narrate each
+  // REST step via the same shimmering status line every other in-progress
+  // moment in this app already uses, and land on a real terminal result.
+  // Never routes through submitMessage/runSearchIntoTurn — none of this
+  // involves the AI at all, it's the exact same three REST calls
+  // BuyerPhoneVerifyForm used to make on its own (request-otp/verify-otp/
+  // POST buyer-requests), just narrated as conversation instead of a
+  // silent form.
+  async function handleIdentitySubmit() {
+    if (!identityCapture || identitySubmitting) return;
+    const value = identityValue.trim();
+    if (!value) return;
+
+    if (identityCapture.step === "phone") {
+      if (value.length < 10) {
+        toast.error("Enter a valid phone number.");
+        return;
+      }
+      setIdentityValue("");
+      setIdentitySubmitting(true);
+      const turnId = appendIdentityTurn(
+        value,
+        pickAvoiding(sendingOtpPhrase(), []),
+      );
+      try {
+        await buyerApi.post("/api/buyer-auth/request-otp", { phone: value });
+        updateTurn(turnId, {
+          phase: "done",
+          reply: `Code sent to ${value} — enter it below.`,
+        });
+        setIdentityCapture((cur) =>
+          cur ? { ...cur, step: "otp", phone: value } : cur,
+        );
+      } catch (err) {
+        updateTurn(turnId, {
+          phase: "done",
+          error: err instanceof Error ? err.message : "Couldn't send the code.",
+        });
+        // Stays on the phone step (identityCapture untouched) so the
+        // buyer can just try again — the composer's still in phone mode.
+      } finally {
+        setIdentitySubmitting(false);
+      }
+      return;
+    }
+
+    // step === "otp"
+    if (!/^\d{6}$/.test(value)) {
+      toast.error("Enter the 6-digit code.");
+      return;
+    }
+    setIdentityValue("");
+    setIdentitySubmitting(true);
+    const turnId = appendIdentityTurn(
+      value,
+      pickAvoiding(checkingOtpPhrase(), []),
+    );
+    try {
+      const { buyer } = await buyerApi.post<{ buyer: Buyer }>(
+        "/api/buyer-auth/verify-otp",
+        { phone: identityCapture.phone, otp: value },
+      );
+      useBuyerStore.getState().setBuyer(buyer);
+      // Same turn, still "loading" — the shimmer just switches to a new
+      // line, per explicit request ("the status phrase should also
+      // indicate that it is creating the request now before displaying
+      // that the request has been created").
+      updateTurn(turnId, { status: pickAvoiding(creatingRequestPhrase(), []) });
+      const { offer } = identityCapture;
+      const { created, request } = await buyerApi.post<{
+        created: boolean;
+        request: { id: string } | null;
+      }>("/api/buyer-requests", {
+        description: offer.description,
+        name: offer.buyerName,
+        imageUrl: identityCapture.imageUrl,
+        ...(buyerLocationRef.current && { location: buyerLocationRef.current }),
+      });
+      if (!created || !request) {
+        // Mirrors BuyerRequestOfferWidget's own (now-inert for this
+        // specific path — see that file's own comment) selfResolvedNoMatch
+        // behavior: no AI turn runs for this REST-only flow, so the
+        // normal "no_match re-searches and reveals Google Places in the
+        // same turn" behavior (systemPrompt.ts) has nothing to attach to
+        // — this is that same reveal, done deterministically via the same
+        // dedicated route, rendered through the turn's own ordinary
+        // externalStoreSuggestions branch (ConversationTurnView) rather
+        // than a separate widget.
+        let externalStoreSuggestions: NearbyBusiness[] = [];
+        try {
+          const { externalSuggestions } = await buyerApi.post<{
+            externalSuggestions: NearbyBusiness[];
+          }>("/api/buyer-requests/nearby", {
+            description: offer.description,
+            ...(buyerLocationRef.current && {
+              location: buyerLocationRef.current,
+            }),
+          });
+          externalStoreSuggestions = externalSuggestions;
+        } catch {
+          // Best-effort — an empty list still resolves the turn cleanly.
+        }
+        updateTurn(turnId, {
+          phase: "done",
+          reply: pickAvoiding(
+            noMatchRequestPhrase(externalStoreSuggestions.length > 0),
+            [],
+          ),
+          externalStoreSuggestions,
+        });
+      } else {
+        updateTurn(turnId, {
+          phase: "done",
+          reply:
+            "I've reached out to a few businesses about this — if anyone's interested, they'll message you directly on WhatsApp. You'll also get an SMS confirming this went out.",
+          buyerRequestOffer: {
+            status: "created",
+            requestId: request.id,
+            description: offer.description,
+          },
+        });
+      }
+      scheduleItemBStart();
+      setIdentityCapture(null);
+    } catch (err) {
+      updateTurn(turnId, {
+        phase: "done",
+        error: err instanceof Error ? err.message : "Something went wrong.",
+      });
+      // Stays on the otp step so the buyer can retry the same code (or
+      // request a fresh one — see the composer's own "Use a different
+      // number"/resend affordance below).
+    } finally {
+      setIdentitySubmitting(false);
+    }
+  }
+
+  // The OTP step's own "Resend code"/"Use a different number" affordances
+  // — same two escape hatches BuyerPhoneVerifyForm used to offer, just
+  // reachable from the composer now. Resend goes through the exact same
+  // conversational shape as the real submit (a turn + shimmering status);
+  // changing the number is a pure client-side reset — nothing server-side
+  // has happened yet for a number that was never actually sent a code.
+  async function handleResendOtp() {
+    if (!identityCapture || identitySubmitting) return;
+    const { phone } = identityCapture;
+    setIdentitySubmitting(true);
+    const turnId = appendIdentityTurn(
+      "Resend the code",
+      pickAvoiding(sendingOtpPhrase(), []),
+    );
+    try {
+      await buyerApi.post("/api/buyer-auth/request-otp", { phone });
+      updateTurn(turnId, {
+        phase: "done",
+        reply: `Code sent to ${phone} — enter it below.`,
+      });
+    } catch (err) {
+      updateTurn(turnId, {
+        phase: "done",
+        error: err instanceof Error ? err.message : "Couldn't resend the code.",
+      });
+    } finally {
+      setIdentitySubmitting(false);
+    }
+  }
+  function handleChangeNumber() {
+    setIdentityCapture((cur) =>
+      cur ? { ...cur, step: "phone", phone: "" } : cur,
+    );
+    setIdentityValue("");
   }
 
   const lastTurn = turns[turns.length - 1];
@@ -1370,55 +2338,138 @@ export function SearchHome() {
         </div>
       )}
 
-      <div className="flex flex-col bg-white rounded-[28px] border border-gray-200 shadow-sm focus-within:border-gray-300 focus-within:shadow-md transition-shadow">
-        <textarea
-          {...autoResize}
-          rows={1}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleComposerKeyDown}
-          disabled={hasPendingClarification}
-          placeholder={
-            hasPendingClarification
-              ? "Answer the question above to continue…"
-              : collapsed
-                ? "Ask a follow-up, or search for something else…"
-                : "e.g. 'Tecno fast charger near me'"
-          }
-          className="w-full resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 max-h-40 overflow-y-auto disabled:opacity-50"
-        />
-        <div className="flex items-center justify-between px-3 pb-3 pt-1">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={handleImageSelect}
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadingImage || hasPendingClarification}
-            title="Search with a photo"
-            className="shrink-0 w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
-          >
-            <Camera size={17} />
-          </button>
-          <button
-            type="submit"
-            disabled={
-              (!query.trim() && !imageUrl) ||
-              isSending ||
-              uploadingImage ||
-              hasPendingClarification
-            }
-            title="Send"
-            className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
-          >
-            <ArrowUp size={18} />
-          </button>
+      {identityCapture ? (
+        // The composer's own phone/OTP identity-capture mode (see
+        // IdentityCapture's own comment) — the free-text textarea below is
+        // swapped for a dedicated single-line input for exactly this one
+        // value, styled the same rounded-pill container so it still reads
+        // as the SAME composer, not a different UI dropped in. Reverts to
+        // the ordinary textarea the moment identityCapture clears
+        // (handleIdentitySubmit, on a real terminal result).
+        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
+          <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
+            {identityCapture.step === "phone" ? (
+              <>
+                <PhoneIcon size={12} className="text-orange-400 shrink-0" />
+                What&apos;s your WhatsApp number? That&apos;s how a vendor will
+                reach you.
+              </>
+            ) : (
+              <>
+                <ShieldCheckIcon
+                  size={12}
+                  className="text-orange-400 shrink-0"
+                />
+                Code sent to {identityCapture.phone} — enter it below
+              </>
+            )}
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={identityValue}
+              onChange={(e) =>
+                setIdentityValue(
+                  identityCapture.step === "otp"
+                    ? e.target.value.replace(/\D/g, "").slice(0, 6)
+                    : e.target.value,
+                )
+              }
+              disabled={identitySubmitting}
+              placeholder={
+                identityCapture.step === "phone" ? "080X XXX XXXX" : "123456"
+              }
+              inputMode={identityCapture.step === "phone" ? "tel" : "numeric"}
+              className={cn(
+                "flex-1 min-w-0 h-10 bg-transparent outline-none text-base text-gray-900 placeholder:text-gray-400 disabled:opacity-50",
+                identityCapture.step === "otp" && "text-center tracking-widest",
+              )}
+            />
+            <button
+              type="submit"
+              disabled={identitySubmitting || !identityValue.trim()}
+              title={identityCapture.step === "phone" ? "Continue" : "Verify"}
+              className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
+            >
+              {identitySubmitting ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <ArrowUp size={18} />
+              )}
+            </button>
+          </div>
+          {identityCapture.step === "otp" && (
+            <div className="flex items-center gap-3 mt-2.5">
+              <button
+                type="button"
+                onClick={() => void handleResendOtp()}
+                disabled={identitySubmitting}
+                className="text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50 cursor-pointer"
+              >
+                Resend code
+              </button>
+              <button
+                type="button"
+                onClick={handleChangeNumber}
+                disabled={identitySubmitting}
+                className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50 cursor-pointer"
+              >
+                Use a different number
+              </button>
+            </div>
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col bg-white rounded-[28px] border border-gray-200 shadow-sm focus-within:border-gray-300 focus-within:shadow-md transition-shadow">
+          <textarea
+            {...autoResize}
+            rows={1}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleComposerKeyDown}
+            disabled={hasPendingClarification}
+            placeholder={
+              hasPendingClarification
+                ? "Answer the question above to continue…"
+                : collapsed
+                  ? "Ask a follow-up, or search for something else…"
+                  : "e.g. 'Tecno fast charger near me'"
+            }
+            className="w-full resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 max-h-40 overflow-y-auto disabled:opacity-50"
+          />
+          <div className="flex items-center justify-between px-3 pb-3 pt-1">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingImage || hasPendingClarification}
+              title="Search with a photo"
+              className="shrink-0 w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+            >
+              <Camera size={17} />
+            </button>
+            <button
+              type="submit"
+              disabled={
+                (!query.trim() && !imageUrl) ||
+                isSending ||
+                uploadingImage ||
+                hasPendingClarification
+              }
+              title="Send"
+              className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
+            >
+              <ArrowUp size={18} />
+            </button>
+          </div>
+        </div>
+      )}
     </form>
   );
 
@@ -1427,8 +2478,38 @@ export function SearchHome() {
     // content column beside chat/layout.tsx's own sidebar (that layout owns
     // the actual viewport-height boundary now; ChatHeader replaced the
     // <header> that used to live here). See chat/layout.tsx's own comment.
-    <div className="h-full bg-white flex flex-col overflow-hidden">
+    <div className="h-full bg-white flex flex-col overflow-hidden relative">
       <BuyerInstallPrompt />
+
+      {/* The dual-intent flow's "item B" indicator — same floating-pill
+          treatment as the landing page's own FloatingAskBar (white/blur,
+          rounded-full, shadow), just anchored to the TOP of this panel
+          instead of the bottom, per explicit request. Deliberately an
+          ABSOLUTE overlay (not an in-flow bar pushing the turns list down)
+          so it floats above whatever the buyer is scrolled to, and never
+          touches `turns` itself — it can't trigger the auto-scroll-on-
+          new-turn effect, and a buyer reading item A's results never gets
+          nudged anywhere while this appears/updates underneath them. Text
+          uses the exact same `.status-shimmer` treatment (globals.css)
+          every other in-progress status line in this app already uses —
+          not a separate pulsing-dot design of its own. */}
+      <AnimatePresence>
+        {backgroundStatus && (
+          <motion.div
+            initial={{ y: -40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -40, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="absolute inset-x-0 top-0 z-20 px-4 pt-3 pointer-events-none"
+          >
+            <div className="max-w-lg mx-auto bg-white/95 backdrop-blur-md rounded-full border-2 border-gray-100 shadow-2xl shadow-gray-400/20 px-5 h-12 flex items-center">
+              <span className="status-shimmer truncate text-sm font-medium min-w-0">
+                {backgroundStatus}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!collapsed ? (
         <main className="flex-1 flex flex-col items-center justify-center px-5">
@@ -1468,12 +2549,8 @@ export function SearchHome() {
                   isLatest={i === turns.length - 1}
                   onAnswerClarification={handleClarificationAnswer}
                   onLocationShared={handleLocationShared}
-                  buyerLocation={buyerLocationRef.current ?? undefined}
                   expandedServicesVendorId={expandedServicesVendorId}
                   onToggleServices={toggleServices}
-                  onBuyerRequestResolved={(offer) =>
-                    updateTurn(turn.id, { buyerRequestOffer: offer })
-                  }
                 />
               ))}
               <div ref={bottomRef} />

@@ -4,6 +4,9 @@ type FinalEvent = Extract<SearchStreamEvent, { type: "final" }>;
 
 interface SearchStreamHandlers {
   onStatus: (text: string) => void;
+  // A standalone bubble arriving mid-turn, before `onFinal` — see
+  // SearchStreamEvent's own "reply" comment.
+  onReply: (text: string) => void;
   onFinal: (event: FinalEvent) => void;
   onError: (message: string) => void;
 }
@@ -18,7 +21,7 @@ interface SearchStreamHandlers {
  */
 export async function runSearchStream(
   body: SearchRequestBody,
-  { onStatus, onFinal, onError }: SearchStreamHandlers,
+  { onStatus, onReply, onFinal, onError }: SearchStreamHandlers,
 ): Promise<void> {
   let res: Response;
   try {
@@ -65,6 +68,7 @@ export async function runSearchStream(
       return;
     }
     if (event.type === "status") onStatus(event.text);
+    else if (event.type === "reply") onReply(event.text);
     else if (event.type === "final") onFinal(event);
     else if (event.type === "error") onError(event.message);
   }
