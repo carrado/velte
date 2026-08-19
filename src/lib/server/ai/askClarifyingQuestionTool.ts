@@ -18,9 +18,9 @@ const inputSchema = z
         "The exact clarifying question to show the buyer, phrased conversationally — this IS your reply text for the turn, not a separate label. One short, focused question.",
       ),
     kind: z
-      .enum(["choice", "text", "location"])
+      .enum(["choice", "text", "location", "name"])
       .describe(
-        "'choice': the answer is one of a small discrete/closed set (gender, size category, color family, a plan/action fork) — provide 2-5 short concrete options. 'text': genuinely open-ended (budget, an exact address, a brand, a free-form description) with no fixed small set of answers — omit options. 'location': neither a named place nor the buyer's device location exists for a search that needs one (see systemPrompt.ts's location rule) — omit options; the frontend renders a one-tap \"share my location\" action (real device geolocation, not a typed answer) plus a plain decline, never buttons built from your own text.",
+        "'choice': the answer is one of a small discrete/closed set (gender, size category, color family, a plan/action fork) — provide 2-5 short concrete options. 'text': genuinely open-ended (budget, an exact address, a brand, a free-form description) with no fixed small set of answers — omit options. 'location': neither a named place nor the buyer's device location exists for a search that needs one (see systemPrompt.ts's location rule) — omit options; the frontend renders a one-tap \"share my location\" action (real device geolocation, not a typed answer) plus a plain decline, never buttons built from your own text. 'name': specifically asking for the buyer's own name (the createBuyerRequest agreement flow — see systemPrompt.ts) — omit options; the frontend swaps its composer into a dedicated single-line name input for this, the same treatment the phone/OTP identity capture already gets, rather than a generic text box. Never use 'text' for a name ask.",
       ),
     options: z
       .array(z.string())

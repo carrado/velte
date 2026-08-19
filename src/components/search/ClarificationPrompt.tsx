@@ -50,6 +50,16 @@ export function ClarificationPrompt({
     );
   }
 
+  // "name" is handled entirely by SearchHome.tsx's own composer (the same
+  // dedicated single-line swap phone/OTP already gets — see nameCapture's
+  // own comment there), never rendered inline here — the parent gates this
+  // component from ever mounting for a "name" clarification in the first
+  // place (ConversationTurnView's own `turn.clarification.kind !== "name"`
+  // check), so this is just a defensive no-op, not the real gate.
+  if (clarification.kind === "name") {
+    return null;
+  }
+
   if (clarification.kind === "choice") {
     return (
       <div className="flex flex-wrap gap-2">
