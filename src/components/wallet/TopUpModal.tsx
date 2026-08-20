@@ -4,12 +4,15 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { toast } from "sonner";
-import { walletApi, LEAD_COST_KOBO } from "@/services/wallet";
+import {
+  walletApi,
+  leadCostForBalance,
+  leadsRemaining,
+} from "@/services/wallet";
 import { CloseIcon, LoaderIcon, ShieldCheckIcon } from "@/components/icons";
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000];
 const MIN_TOPUP_NAIRA = 1000;
-const LEAD_COST_NAIRA = LEAD_COST_KOBO / 100;
 
 export default function TopUpModal({
   open,
@@ -26,8 +29,22 @@ export default function TopUpModal({
   const numericAmount = Number(amount);
   const isValid =
     Number.isFinite(numericAmount) && numericAmount >= MIN_TOPUP_NAIRA;
+  // Simulated tier-by-tier (see leadsRemaining's own comment), not a flat
+  // divide — pricing is tiered now, so a bigger top-up affords MORE than
+  // proportionally more leads once it crosses into a cheaper tier. No cap
+  // here (unlike the low-wallet-SMS check's own use of this same helper,
+  // which only ever needs to distinguish 0/1/2+): a real top-up estimate
+  // needs the true count, however large. Treats the top-up as starting
+  // from ₦0 (same simplification the old flat estimate already made) —
+  // doesn't account for whatever balance the vendor already has.
   const estimatedLeads =
-    numericAmount > 0 ? Math.floor(numericAmount / LEAD_COST_NAIRA) : 0;
+    numericAmount > 0 ? leadsRemaining(numericAmount * 100, Infinity) : 0;
+  // The rate shown in the "Estimated leads at ₦X/lead" caption below is
+  // whichever tier THIS top-up amount alone would land in — a reasonable
+  // single number to display even though the true per-lead cost drifts
+  // tier to tier as the balance drains.
+  const displayRateNaira =
+    numericAmount > 0 ? leadCostForBalance(numericAmount * 100) / 100 : 0;
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -88,7 +105,7 @@ export default function TopUpModal({
           {numericAmount > 0 && (
             <div className="flex items-center justify-between px-3.5 py-2.5 bg-orange-50 border border-orange-100 rounded-xl">
               <span className="text-dash-caption text-orange-700">
-                Estimated leads at ₦{LEAD_COST_NAIRA.toLocaleString("en-NG")}
+                Estimated leads at ₦{displayRateNaira.toLocaleString("en-NG")}
                 /lead
               </span>
               <span className="text-dash-body font-bold text-orange-600">

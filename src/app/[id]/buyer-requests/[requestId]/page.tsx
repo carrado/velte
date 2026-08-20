@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { formatNaira, cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/timeAgo";
-import { walletApi } from "@/services/wallet";
+import { walletApi, leadCostForBalance } from "@/services/wallet";
 import type { BuyerRequest, BuyerRequestDecision } from "@/types/buyerRequest";
 import {
   ArrowLeftIcon,
@@ -23,13 +23,6 @@ import {
   WhatsAppIcon,
   XCircleIcon,
 } from "@/components/icons";
-
-// Mirrors velte-backend's wallet.controller.js BUYER_REQUEST_LEAD_COST_KOBO —
-// manually kept in sync, same "mirrored across repos" precedent as
-// LEAD_COST_KOBO (see that file's own comment). Only used here to preview
-// the charge before the vendor commits; the real, authoritative debit
-// happens server-side in decideOnRequest.
-const BUYER_REQUEST_LEAD_COST_KOBO = 100_000;
 
 /* Full detail + Accept/Decline for a single matched Buyer Request
    (2026-08-18 redesign). Accepting is the entire monetization moment: it
@@ -100,8 +93,15 @@ export default function VendorBuyerRequestDetailPage() {
   const whatsappNumber =
     revealedWhatsapp ?? (accepted ? request.buyerPhone : null);
   const balanceKobo = wallet?.balanceKobo ?? null;
-  const canAfford =
-    balanceKobo === null || balanceKobo >= BUYER_REQUEST_LEAD_COST_KOBO;
+  // Tiered now, not flat — this previews whatever rate the vendor's OWN
+  // current balance actually lands in (see leadCostForBalance's own
+  // comment), same rate decideOnRequest charges server-side at Accept
+  // time. Falls back to the most expensive tier while the wallet is still
+  // loading (balanceKobo null) — a conservative "assume the worst" default
+  // for a price PREVIEW, never used to actually block the button (canAfford
+  // stays optimistic-true during that same loading window, unchanged).
+  const currentLeadCostKobo = leadCostForBalance(balanceKobo ?? 0);
+  const canAfford = balanceKobo === null || balanceKobo >= currentLeadCostKobo;
   const mapUrl = request.location
     ? `https://www.google.com/maps?q=${request.location.coordinates[1]},${request.location.coordinates[0]}`
     : null;
@@ -212,8 +212,8 @@ export default function VendorBuyerRequestDetailPage() {
         <div className="bg-white rounded-2xl border border-orange-200 p-5">
           <p className="text-gray-900 font-medium mb-1">Accept this request?</p>
           <p className="text-gray-500 text-sm mb-4">
-            {formatNaira(BUYER_REQUEST_LEAD_COST_KOBO)} will be deducted from
-            your wallet, and you&apos;ll get {request.buyerName}&apos;s WhatsApp
+            {formatNaira(currentLeadCostKobo)} will be deducted from your
+            wallet, and you&apos;ll get {request.buyerName}&apos;s WhatsApp
             number right away.
           </p>
           <div className="flex gap-2.5">
@@ -243,15 +243,15 @@ export default function VendorBuyerRequestDetailPage() {
           <p className="text-gray-900 font-medium mb-1">Interested?</p>
           <p className="text-gray-500 text-sm mb-4">
             Accept to get {request.buyerName}&apos;s WhatsApp number and reach
-            out directly — {formatNaira(BUYER_REQUEST_LEAD_COST_KOBO)} is
-            deducted from your wallet. Declining costs nothing.
+            out directly — {formatNaira(currentLeadCostKobo)} is deducted from
+            your wallet. Declining costs nothing.
           </p>
 
           {!canAfford && (
             <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">
               <WalletIcon size={14} className="shrink-0" />
               Your balance ({formatNaira(balanceKobo ?? 0)}) is below the{" "}
-              {formatNaira(BUYER_REQUEST_LEAD_COST_KOBO)} needed to accept —{" "}
+              {formatNaira(currentLeadCostKobo)} needed to accept —{" "}
               <a
                 href={`/${params.id}/wallet`}
                 className="underline font-medium"
@@ -286,7 +286,7 @@ export default function VendorBuyerRequestDetailPage() {
                   : "bg-gray-100 text-gray-400 cursor-not-allowed hover:bg-gray-100",
               )}
             >
-              Accept — {formatNaira(BUYER_REQUEST_LEAD_COST_KOBO)}
+              Accept — {formatNaira(currentLeadCostKobo)}
             </Button>
           </div>
         </div>

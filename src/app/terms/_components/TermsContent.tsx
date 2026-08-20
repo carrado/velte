@@ -138,7 +138,7 @@ const sections: Section[] = [
     blocks: [
       {
         kind: "p",
-        text: "Browsing or searching Velte as a buyer is free, and listing a business as a vendor is free — nothing is charged for simply being discoverable to buyers. Vendors are charged a fixed lead fee from their in-app wallet each time a buyer initiates a WhatsApp conversation about one of their listings, whether from a search result, a browse listing, or their store page; the current rate is always shown in your wallet dashboard before it applies. Other optional features, such as paid placement, may be introduced in the future and will always be disclosed clearly before they apply to you.",
+        text: "Browsing or searching Velte as a buyer is free, and listing a business as a vendor is free — nothing is charged for simply being discoverable to buyers. Vendors are charged a lead fee from their in-app wallet each time a buyer initiates a WhatsApp conversation about one of their listings, whether from a search result, a browse listing, or their store page; the fee scales with your wallet balance (higher balances unlock a lower rate), and the current rate is always shown in your wallet dashboard before it applies. Other optional features, such as paid placement, may be introduced in the future and will always be disclosed clearly before they apply to you.",
       },
       {
         kind: "list",
