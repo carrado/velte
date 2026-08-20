@@ -12,10 +12,6 @@ import {
   searchStoresCore,
 } from "@/lib/server/ai/searchStoresTool";
 import { getVendorProductsTool } from "@/lib/server/ai/getVendorProductsTool";
-import {
-  resolveSearchItem,
-  type SearchItemInput,
-} from "@/lib/server/ai/resolveSearchItem";
 import { askClarifyingQuestionTool } from "@/lib/server/ai/askClarifyingQuestionTool";
 import { createBuyerRequestTool } from "@/lib/server/ai/createBuyerRequestTool";
 import { offerBuyerRequestTool } from "@/lib/server/ai/offerBuyerRequestTool";
@@ -28,6 +24,8 @@ import {
   noVendorEvenBySectorPhrase,
   isAcknowledgementReply,
   isOfferDeclineReply,
+  splittingRequestPhrase,
+  itemPickQuestionPhrase,
 } from "@/lib/server/ai/statusPhrases";
 import {
   buildSystemPrompt,
@@ -322,11 +320,48 @@ function relevanceScore(query: string, candidateText: string): number {
 // self-report — a wrong call here only costs one extra background search on
 // route.ts's own dime, never something the buyer pays for or notices as
 // broken.
+//
+// Found live: "I need someone who can fix my Infinix Hot 50i" — a SINGLE
+// need — got the model to call searchProducts("Infinix Hot 50i repair")
+// AND searchStores("phone repair shop") in the same step (the ordinary
+// mandatory cascade, since no vendor lists that exact model), and the
+// ratio check below misread it as genuine dual intent anyway: a specific
+// phone model's own name shares zero literal vocabulary with the generic
+// word "phone", so the only shared token was "repair" — 1 shared token
+// out of the shorter side's 3 (phone/repair/shop) is a 0.33 ratio, just
+// under DUAL_INTENT_MAX_OVERLAP. Ratio alone can't tell "same need,
+// different granularity" (a model name vs. its own general category) from
+// "genuinely different things" when the shorter term is this short — a
+// higher threshold would just move the same failure onto some other short
+// pair. SAME_NEED_VERBS is a narrower, more reliable signal for this
+// specific shape: "someone who can repair/fix/install/clean/service X"
+// makes the model describe ONE need twice — a specific product-repair
+// term and a matching generic repair-shop term — and both sides will
+// share the exact same service verb regardless of how different the noun
+// itself looks. Checked before the ratio, since it's a stronger signal
+// than raw overlap can capture here.
+const SAME_NEED_VERBS = [
+  "repair",
+  "fix",
+  "install",
+  "service",
+  "clean",
+  "wash",
+  "maintain",
+  "tailor",
+  "alter",
+];
 const DUAL_INTENT_MAX_OVERLAP = 0.34;
 function isGenuineDualIntent(productTerm: string, storeTerm: string): boolean {
   const productTokens = new Set(tokenize(productTerm));
   const storeTokens = new Set(tokenize(storeTerm));
   if (!productTokens.size || !storeTokens.size) return false;
+
+  for (const verb of SAME_NEED_VERBS) {
+    const stemmed = stem(verb);
+    if (productTokens.has(stemmed) && storeTokens.has(stemmed)) return false;
+  }
+
   let shared = 0;
   for (const t of productTokens) if (storeTokens.has(t)) shared++;
   const overlapRatio = shared / Math.min(productTokens.size, storeTokens.size);
@@ -526,36 +561,53 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
             }
           : { kind: "text", question: clarifyInput.question };
 
-  // .findLast, not .find: a fallback model (Groq) occasionally calls a tool
-  // more than once for one turn — the last call is what its final reply is
-  // actually synthesized from, found live during the hardening pass.
+  // .findLast, not .find, for the CALL itself — a fallback model (Groq)
+  // occasionally calls a tool more than once for one turn (a real, common
+  // shape once a buyer names two needs that both happen to phrase as the
+  // same tool — e.g. "fix my laptop" AND "a caterer for my wedding" are
+  // both searchStores calls, not one product + one store, so
+  // isGenuineDualIntent's own productCall+storeCall precondition never
+  // even sees this as dual-intent). The most recent call is still what's
+  // used wherever a single representative `.input` is needed (the
+  // asymmetric cross-check, the dual-intent branch).
   const productCall = result.toolCalls.findLast(
     (c) => c.toolName === "searchProducts",
   );
   const storeCall = result.toolCalls.findLast(
     (c) => c.toolName === "searchStores",
   );
-  const productResult = result.toolResults.findLast(
-    (r) => r.toolName === "searchProducts",
-  )?.output as
-    | {
-        results?: VendorMatch[];
-        matchTier?: MatchTier;
-        matchQuality?: MatchQuality;
-        externalSuggestions?: NearbyBusiness[];
-      }
-    | undefined;
-  const storeResult = result.toolResults.findLast(
-    (r) => r.toolName === "searchStores",
-  )?.output as
-    | {
-        results?: StoreMatch[];
-        furtherResults?: StoreMatch[];
-        matchTier?: MatchTier;
-        matchQuality?: MatchQuality;
-        externalSuggestions?: NearbyBusiness[];
-      }
-    | undefined;
+
+  type ProductToolOutput = {
+    results?: VendorMatch[];
+    matchTier?: MatchTier;
+    matchQuality?: MatchQuality;
+    externalSuggestions?: NearbyBusiness[];
+  };
+  type StoreToolOutput = {
+    results?: StoreMatch[];
+    furtherResults?: StoreMatch[];
+    matchTier?: MatchTier;
+    matchQuality?: MatchQuality;
+    externalSuggestions?: NearbyBusiness[];
+  };
+  // .filter, not .findLast, for the RESULTS — found live: the single-call
+  // .findLast this used to be silently DROPPED every earlier call's real
+  // results the instant the model called the same tool twice in one turn.
+  // The model's own final reply text still narrated the dropped one (it
+  // saw that real tool result in its own context before writing the
+  // text), so the buyer got a full description of a genuine vendor — name,
+  // what they do, "chat on WhatsApp" — with no card, no actual WhatsApp
+  // button, nothing to act on; a coincidentally-later-called search's own
+  // vendor rendered as a normal, fully working card right next to it.
+  // Every call to the same tool this turn now contributes its own
+  // results, merged (deduped by id) rather than the last one winning and
+  // the rest silently vanishing.
+  const productOutputs = result.toolResults
+    .filter((r) => r.toolName === "searchProducts")
+    .map((r) => r.output as ProductToolOutput);
+  const storeOutputs = result.toolResults
+    .filter((r) => r.toolName === "searchStores")
+    .map((r) => r.output as StoreToolOutput);
   const vendorProductsResult = result.toolResults.findLast(
     (r) => r.toolName === "getVendorProducts",
   )?.output as
@@ -582,13 +634,43 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   const buyerRequestOffered = result.toolResults.some(
     (r) => r.toolName === "offerBuyerRequest",
   );
-  const products = productResult?.results ?? [];
-  const stores = storeResult?.results ?? [];
-  const furtherStores = storeResult?.furtherResults ?? [];
-  const productsMatchTier = productResult?.matchTier ?? null;
-  const storesMatchTier = storeResult?.matchTier ?? null;
-  const productsMatchQuality = productResult?.matchQuality;
-  const storesMatchQuality = storeResult?.matchQuality;
+  const products = Array.from(
+    new Map(
+      productOutputs
+        .flatMap((o) => o.results ?? [])
+        .map((p) => [p.productId, p]),
+    ).values(),
+  );
+  const stores = Array.from(
+    new Map(
+      storeOutputs.flatMap((o) => o.results ?? []).map((s) => [s.storeId, s]),
+    ).values(),
+  );
+  const furtherStores = Array.from(
+    new Map(
+      storeOutputs
+        .flatMap((o) => o.furtherResults ?? [])
+        .map((s) => [s.storeId, s]),
+    ).values(),
+  );
+  // Tier/quality each drive a SINGLE section heading (productsHeading/
+  // storesHeading in SearchHome.tsx) — not representable per-item once
+  // results from more than one call to the same tool are merged together
+  // above, so this takes whichever call actually produced real results,
+  // preferring the LAST one if more than one did (same recency bias the
+  // old single-call .findLast used).
+  const productsMatchTier =
+    productOutputs.findLast((o) => (o.results?.length ?? 0) > 0)?.matchTier ??
+    null;
+  const storesMatchTier =
+    storeOutputs.findLast((o) => (o.results?.length ?? 0) > 0)?.matchTier ??
+    null;
+  const productsMatchQuality = productOutputs.findLast(
+    (o) => (o.results?.length ?? 0) > 0,
+  )?.matchQuality;
+  const storesMatchQuality = storeOutputs.findLast(
+    (o) => (o.results?.length ?? 0) > 0,
+  )?.matchQuality;
   // What the model actually searched stores FOR this turn (e.g. "phone
   // repair shop", "tailor") — used to customize the WhatsApp pre-filled
   // message on a pure vendor/store card (no product attached) instead of the
@@ -606,8 +688,8 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   const externalStoreSuggestions = Array.from(
     new Map(
       [
-        ...(productResult?.externalSuggestions ?? []),
-        ...(storeResult?.externalSuggestions ?? []),
+        ...productOutputs.flatMap((o) => o.externalSuggestions ?? []),
+        ...storeOutputs.flatMap((o) => o.externalSuggestions ?? []),
       ].map((b) => [b.placeId, b]),
     ).values(),
   );
@@ -707,7 +789,39 @@ export async function POST(req: Request) {
       const recentStatuses: string[] = (body?.recentStatuses ?? []).slice(
         -RECENT_STATUS_MEMORY,
       );
+      // Found live: "I need someone who can help fix my laptop. I also
+      // need a plumber" — a genuine dual-intent turn — showed a "Searching
+      // for 'plumber' near you…" status line before the buyer was ever
+      // told two separate things had even been heard. Root cause: the AI
+      // SDK's own multi-step tool loop actually RUNS every tool call the
+      // model makes as part of resolving ONE `callLLM` invocation — when
+      // the model calls both searchProducts AND searchStores in the same
+      // turn (exactly what a dual-intent message makes it do), BOTH
+      // execute for real, each pushing its own live status text, well
+      // before this file ever gets to inspect the result and realize it's
+      // dual-intent. There's no way to know that in advance — only after
+      // the fact, once `outcome` comes back with both calls present.
+      //
+      // `bufferingStatuses` is the fix: while true, `push` holds each
+      // call's candidate pool instead of streaming it, so anything a tool
+      // says about EITHER item during this detection window can still be
+      // discarded wholesale if it turns out to be a genuine dual-intent
+      // turn (see the dual-intent branch below, which empties the buffer
+      // entirely rather than flushing it — item A gets a fresh,
+      // independent resolveSearchItem call afterward anyway, so nothing
+      // buffered here is ever actually needed). If it ISN'T dual-intent,
+      // the buffer is flushed in order right after that check (see below)
+      // — bufferedPushCandidates holds CANDIDATE POOLS, not pre-picked
+      // text, specifically so flushing later still runs each one through
+      // pickAvoiding against `recentStatuses` as it stood AT THAT POINT,
+      // identical to what plain live pushing would have produced.
+      let bufferingStatuses = false;
+      const bufferedPushCandidates: string[][] = [];
       const push = (candidates: string[]) => {
+        if (bufferingStatuses) {
+          bufferedPushCandidates.push(candidates);
+          return;
+        }
         const text = pickAvoiding(candidates, recentStatuses);
         recentStatuses.push(text);
         if (recentStatuses.length > RECENT_STATUS_MEMORY)
@@ -715,6 +829,9 @@ export async function POST(req: Request) {
         controller.enqueue(encodeEvent({ type: "status", text }));
       };
 
+      // Sent live, before buffering ever turns on — this happens before
+      // any tool has even been given a chance to run, so there's nothing
+      // to protect it from.
       push(understandingRequestPhrase(Boolean(imageUrl), message));
 
       // Populated by searchProductsTool's execute(), outside the model's own
@@ -843,6 +960,33 @@ export async function POST(req: Request) {
               : sanitizeReply(agreementResult.text) ||
                 "Sorry, something went wrong there — let me know and I'll try again.";
 
+          // Found live: "no_match" (createBuyerRequest genuinely found zero
+          // vendors to notify) used to just dead-end here with a plain
+          // sentence and no fallback at all — no AI turn re-runs for THIS
+          // short-circuit, so the ordinary "no_match re-searches and
+          // reveals Google Places in the SAME turn" rule (systemPrompt.ts)
+          // never had anything to attach to on this specific path. Mirrors
+          // /api/buyer-requests/nearby's own bypass-the-model technique
+          // (same reasoning: re-running the model here risks it re-offering
+          // the exact same reach-out and looping) — best-effort, an empty
+          // result still resolves the turn cleanly rather than throwing.
+          let agreementExternalSuggestions: NearbyBusiness[] = [];
+          if (agreementOutcome.buyerRequestOffer?.status === "no_match") {
+            try {
+              const nearby = await searchProductsCore(
+                { product: agreementOutcome.buyerRequestOffer.description },
+                { buyerLocation: body?.buyerLocation },
+              );
+              agreementExternalSuggestions =
+                "error" in nearby ? [] : nearby.externalSuggestions;
+            } catch (err) {
+              console.error(
+                "[search] nearby-business fallback failed for a no_match buyer request:",
+                err,
+              );
+            }
+          }
+
           controller.enqueue(
             encodeEvent({
               type: "final",
@@ -860,12 +1004,13 @@ export async function POST(req: Request) {
               storesMatchTier: null,
               productsMatchQuality: undefined,
               storesMatchQuality: undefined,
-              externalStoreSuggestions: [],
+              externalStoreSuggestions: agreementExternalSuggestions,
               vendorProducts: [],
               vendorProductsStore: null,
               buyerRequestOffer: agreementOutcome.buyerRequestOffer,
               buyerRequestOffered: false,
-              backgroundItem: null,
+              backgroundItems: [],
+              dualIntentItemALabel: null,
               // True only for the intermediate name-ask (still an open
               // exchange, the buyer's next reply needs routing back here
               // too) — false once createBuyerRequest actually resolved
@@ -879,6 +1024,14 @@ export async function POST(req: Request) {
           );
           return;
         }
+
+        // From here until the dual-intent check below resolves one way or
+        // the other, every push() call — including every real tool
+        // execution's own status text (searchProducts/searchStores can
+        // both genuinely run for real inside the SAME model turn — see
+        // bufferingStatuses' own comment above) — gets held rather than
+        // streamed live.
+        bufferingStatuses = true;
 
         let result = await callLLM(
           {
@@ -1235,116 +1388,124 @@ export async function POST(req: Request) {
             // passing "" through as if the buyer had named an empty place.
             const dualLocation =
               dualProductInput.location || dualStoreInput.location || undefined;
-            const itemA: SearchItemInput = {
+            const storeTerm = dualStoreInput.businessType;
+            // Plain display labels for each side — the product side mirrors
+            // SearchHome.tsx's own backgroundItemLabel product branch
+            // (product + attributes joined); the store side is just the
+            // business type, same as that same function's store branch.
+            // Used only for buyer-facing wording below (the splitting
+            // status line, the pick question, and each pick option's own
+            // label) — never fed into the actual search calls.
+            const productLabel = [
+              dualProductInput.product,
+              ...(dualProductInput.attributes ?? []),
+            ].join(" ");
+            const storeLabel = storeTerm;
+
+            // Discard everything buffered during the initial model call
+            // (see bufferingStatuses' own comment up top) — this is what
+            // actually fixes the leak: the model calling searchStores for
+            // real inside that same turn already pushed its OWN "Searching
+            // for 'plumber'…"-style status live into the buffer, and
+            // without this it would still reach the buyer even though
+            // NEITHER side's results are used here anymore — resolving
+            // either one is now deferred entirely to whichever the buyer
+            // actually picks (see the item_pick clarification below), via
+            // SearchHome.tsx's own direct POST /api/search/resolve-item
+            // call, never this initial pass.
+            bufferedPushCandidates.length = 0;
+            bufferingStatuses = false;
+
+            // A generic "two things heard" status, never naming either
+            // side's own search activity or which comes first — per
+            // explicit request (2026-08-20 redesign, replacing an earlier
+            // "product side always goes first" convention): the buyer
+            // picks which to resolve first via the two options on the
+            // item_pick clarification below, not the app.
+            push(splittingRequestPhrase(productLabel, storeLabel));
+
+            // Both sides are handed to the buyer as a real clarification —
+            // no resolveSearchItem call for EITHER one happens on this
+            // turn. Each option is a complete, self-contained
+            // BackgroundSearchItem (already carries its own `location`),
+            // so whichever the buyer taps, SearchHome.tsx can resolve it
+            // directly (POST /api/search/resolve-item) with no further LLM
+            // round trip — every term here was already extracted just now.
+            const productItem: BackgroundSearchItem = {
               type: "product",
               product: dualProductInput.product,
               attributes: dualProductInput.attributes,
+              location: dualLocation,
             };
-            const itemAOutcome = await resolveSearchItem(
-              itemA,
-              dualLocation,
-              body?.buyerLocation,
-              push,
-            );
-            const storeTerm = dualStoreInput.businessType;
-
-            const backgroundItem: BackgroundSearchItem = {
+            const storeItem: BackgroundSearchItem = {
               type: "store",
               businessType: storeTerm,
               location: dualLocation,
             };
 
-            // Mirrors the normal single-item pipeline's own final-event
-            // shape (see the tail of this handler below), just sourced
-            // from itemAOutcome instead of `outcome` — item A is shown
-            // exactly like any ordinary turn, nothing held back.
-            let dualReply: string;
-            let dualProducts: VendorMatch[] = [];
-            let dualProductsMatchTier: MatchTier = null;
-            let dualProductsMatchQuality: MatchQuality = undefined;
-            let dualStores: StoreMatch[] = [];
-            let dualFurtherStores: StoreMatch[] = [];
-            let dualStoresMatchTier: MatchTier = null;
-            let dualStoresMatchQuality: MatchQuality = undefined;
-            let dualStoresQuery: string | null = null;
-            let dualExternalSuggestions: NearbyBusiness[] = [];
-            let dualBuyerRequestOffered = false;
-
-            if (itemAOutcome.status === "products") {
-              dualReply =
-                "Found a real match on Velte for that — take a look below.";
-              dualProducts = itemAOutcome.products;
-              dualProductsMatchTier = itemAOutcome.matchTier;
-              dualProductsMatchQuality = itemAOutcome.matchQuality;
-            } else if (itemAOutcome.status === "stores") {
-              // Unreachable in practice — itemA is always a "product"-type
-              // SearchItemInput (see below), and resolveSearchItem only
-              // ever returns "stores" for a "store"-type one. Handled
-              // anyway since the type doesn't encode that narrowing, with
-              // the same plain confirmed-match wording as "products" above
-              // (a real cross-index LISTING, not the unconfirmed sector-only
-              // "offer" case right below it — see resolveSearchItem's own
-              // comment on that distinction).
-              dualReply =
-                "Found a real match on Velte for that — take a look below.";
-              dualStores = itemAOutcome.stores;
-              dualFurtherStores = itemAOutcome.furtherStores;
-              dualStoresMatchTier = itemAOutcome.matchTier;
-              dualStoresMatchQuality = itemAOutcome.matchQuality;
-              dualStoresQuery = itemAOutcome.storesQuery;
-            } else if (itemAOutcome.status === "offer") {
-              dualReply = itemAOutcome.text;
-              dualBuyerRequestOffered = true;
-            } else {
-              dualReply = itemAOutcome.text;
-              dualExternalSuggestions = itemAOutcome.externalSuggestions;
-            }
-
-            const dualProductKindResults = dualProducts.filter(
-              (p) => p.kind !== "service",
+            const pickQuestion = pickAvoiding(
+              itemPickQuestionPhrase(productLabel, storeLabel),
+              [],
             );
-            const dualProductStores = dualProductKindResults.length
-              ? await getVendorStoresForProducts(dualProductKindResults)
-              : [];
-            const dualStoreServices =
-              dualStores.length || dualFurtherStores.length
-                ? await getMatchingServicesForStores(
-                    [...dualStores, ...dualFurtherStores],
-                    dualStoresQuery,
-                  )
-                : [];
-
             controller.enqueue(
               encodeEvent({
                 type: "final",
-                reply: dualReply,
-                toolCalled: true,
-                clarification: null,
-                products: dualProducts,
+                reply: pickQuestion,
+                // Mirrors how an ordinary askClarifyingQuestion turn
+                // behaves (see the tail of this handler below) — a plain
+                // message bubble, not the "genuine dead end" Compass card,
+                // since there's a real next step on the table (the pick
+                // itself).
+                toolCalled: false,
+                clarification: {
+                  kind: "item_pick",
+                  question: pickQuestion,
+                  options: [
+                    { item: productItem, label: productLabel },
+                    { item: storeItem, label: storeLabel },
+                  ],
+                },
+                products: [],
                 weakProducts: [],
-                stores: dualStores,
-                furtherStores: dualFurtherStores,
-                storesQuery: dualStoresQuery,
-                productStores: dualProductStores,
-                storeServices: dualStoreServices,
-                productsMatchTier: dualProductsMatchTier,
-                storesMatchTier: dualStoresMatchTier,
-                productsMatchQuality: dualProductsMatchQuality,
-                storesMatchQuality: dualStoresMatchQuality,
-                externalStoreSuggestions: dualExternalSuggestions,
+                stores: [],
+                furtherStores: [],
+                storesQuery: null,
+                productStores: [],
+                storeServices: [],
+                productsMatchTier: null,
+                storesMatchTier: null,
+                productsMatchQuality: undefined,
+                storesMatchQuality: undefined,
+                externalStoreSuggestions: [],
                 vendorProducts: [],
                 vendorProductsStore: null,
                 buyerRequestOffer: null,
-                buyerRequestOffered: dualBuyerRequestOffered,
-                backgroundItem,
-                // Mirrors dualBuyerRequestOffered — item A's own offer, if
-                // this is one, needs the SAME agreement short-circuit as
-                // any other offer (see that block's own comment).
-                awaitingBuyerRequestReply: dualBuyerRequestOffered,
+                buyerRequestOffered: false,
+                backgroundItems: [],
+                dualIntentItemALabel: null,
+                // Answering this never goes through /api/search at all
+                // (SearchHome.tsx resolves the pick directly) — there's no
+                // "buyer's next message" for this short-circuit to route,
+                // so this stays false, unlike a real reach-out offer.
+                awaitingBuyerRequestReply: false,
               }),
             );
             return;
           }
+        }
+
+        // Reaching here means this ISN'T a genuine dual-intent turn (either
+        // the outer condition never held, or isGenuineDualIntent said no —
+        // the ordinary mandatory single-item cascade also produces both
+        // calls, see that function's own comment) — so nothing needs
+        // discarding. Flush every buffered candidate pool now, in order,
+        // exactly reproducing what plain live pushing would have produced
+        // (see bufferingStatuses' own comment up top for why candidate
+        // pools, not pre-picked text, are what's buffered).
+        if (bufferingStatuses) {
+          bufferingStatuses = false;
+          for (const candidates of bufferedPushCandidates) push(candidates);
+          bufferedPushCandidates.length = 0;
         }
 
         // Deterministic cross-check — don't trust the model to reliably call
@@ -1616,7 +1777,7 @@ export async function POST(req: Request) {
               buyerRequestOffered: false,
             };
             replyOverride = pickAvoiding(
-              noVendorEvenBySectorPhrase(mergedExternal.length > 0),
+              noVendorEvenBySectorPhrase(scanTerm, mergedExternal.length > 0),
               [],
             );
           }
@@ -1761,10 +1922,11 @@ export async function POST(req: Request) {
             vendorProductsStore,
             buyerRequestOffer,
             buyerRequestOffered,
-            // Null on this, the ordinary single-item path — only the
+            // Empty on this, the ordinary single-item path — only the
             // dual-intent branch further up this file (its own early
             // `return`) ever populates this.
-            backgroundItem: null,
+            backgroundItems: [],
+            dualIntentItemALabel: null,
             // Mirrors buyerRequestOffered — covers the rare case where the
             // model itself still calls offerBuyerRequestTool directly
             // (still a registered tool, even though systemPrompt.ts no

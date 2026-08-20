@@ -583,19 +583,29 @@ export function foundPossibleVendorPhrase(what: string): string[] {
   ];
 }
 
-export function noVendorEvenBySectorPhrase(hasNearby: boolean): string[] {
+// `what` names the actual term that was searched — found live: this pool
+// used to say only "this"/"this one", which reads fine on the very turn it
+// was searched for but goes vague the moment it's the buyer's SECOND thing
+// this session (a dual-intent item B, or any later turn) — nothing in the
+// sentence itself says what came up empty. Same snippet() truncation as
+// every other buyer-facing term in this file.
+export function noVendorEvenBySectorPhrase(
+  what: string,
+  hasNearby: boolean,
+): string[] {
+  const w = snippet(what, 60);
   return hasNearby
     ? [
-        "No vendor on Velte fits this, even by sector — but here's what's actually nearby.",
-        "Nothing on Velte matches this one, even broadly — here's what turned up close by though.",
-        "Couldn't find a Velte vendor for this at all — a few real options nearby did turn up.",
-        "No match on Velte, even a loose one — here's what's around you instead.",
+        `No vendor on Velte fits "${w}", even by sector — but here's what's actually nearby.`,
+        `Nothing on Velte matches "${w}", even broadly — here's what turned up close by though.`,
+        `Couldn't find a Velte vendor for "${w}" at all — a few real options nearby did turn up.`,
+        `No match on Velte for "${w}", even a loose one — here's what's around you instead.`,
       ]
     : [
-        "Nothing on Velte fits this, even by sector, and nothing nearby either.",
-        "No vendor on Velte for this, and no nearby alternative came up either.",
-        "Couldn't find a match on Velte or anything nearby for this one.",
-        "No results here — nothing on Velte, and nothing close by either.",
+        `Nothing on Velte fits "${w}", even by sector, and nothing nearby either.`,
+        `No vendor on Velte for "${w}", and no nearby alternative came up either.`,
+        `Couldn't find a match on Velte or anything nearby for "${w}".`,
+        `No results here for "${w}" — nothing on Velte, and nothing close by either.`,
       ];
 }
 
@@ -623,6 +633,111 @@ export function noMatchRequestPhrase(hasNearby: boolean): string[] {
         "That didn't reach anyone this time — Velte's vendor list is growing, so it may be worth another try later.",
         "No match to send that to just now — check back later, new businesses join Velte all the time.",
       ];
+}
+
+// The dual-intent branch's own two extra moments (route.ts) — a buyer's
+// single message named TWO distinct needs (a specific item AND a separate
+// kind of business), and per explicit request the buyer should be told
+// that's what's happening, not just see one side's results appear with no
+// acknowledgement the other was even heard. `itemA`/`itemB` are already
+// the plain display labels route.ts derives for each side (the product
+// term + attributes joined, and the store/business type), truncated the
+// same way every other phrase pool here truncates a buyer-facing term.
+//
+// Neither phrase commits to an ORDER anymore (2026-08-20, per explicit
+// request) — which one starts first is now the buyer's own pick (see
+// itemPickQuestionPhrase below), not a fixed "product side always goes
+// first" convention, so nothing here can say "starting with X" before the
+// buyer has actually chosen.
+
+// A STATUS line (pushed via route.ts's own `push`, same shimmering
+// treatment as every other status event) shown the moment the dual-intent
+// branch is confirmed — before the pick question itself renders, so the
+// buyer sees "two things heard" arrive as a beat of its own, not bundled
+// into the question bubble.
+export function splittingRequestPhrase(itemA: string, itemB: string): string[] {
+  const a = snippet(itemA, 40);
+  const b = snippet(itemB, 40);
+  return [
+    `Looks like two separate things here — "${a}" and "${b}"…`,
+    `Two requests in one — "${a}" and "${b}"…`,
+    `Splitting this into two: "${a}" and "${b}"…`,
+    `Got two needs here — "${a}" and "${b}"…`,
+    `Noticed two things in there — "${a}" and "${b}"…`,
+  ];
+}
+
+// The REPLY-text question itself (this turn's `clarification.question`,
+// kind "item_pick" — see Clarification's own comment) — asks the buyer
+// which of the two to look into first, rather than assuming. Sits above
+// the two pick buttons SearchHome.tsx renders from the SAME clarification
+// (see ClarificationPrompt.tsx).
+export function itemPickQuestionPhrase(itemA: string, itemB: string): string[] {
+  const a = snippet(itemA, 40);
+  const b = snippet(itemB, 40);
+  return [
+    `You mentioned two things — "${a}" and "${b}". Which should I look into first?`,
+    `Two things to sort out — "${a}" or "${b}" — which one first?`,
+    `Sounds like you need both "${a}" and "${b}". Which should I start with?`,
+    `Got it — "${a}" and "${b}". Which one should I tackle first?`,
+  ];
+}
+
+// The background-item bar's own three states (SearchHome.tsx) — deferred
+// item B (or a later chained item), narrated once its OWN turn/fetch
+// exists. `justConcluded` is whichever item just finished (item A the first
+// time; the item that just resolved, on any later chained hop) and
+// `next` is the one about to start — both already plain display labels.
+
+// Shown the instant a deferred item is queued (route.ts's own
+// backgroundItems), before it's actually started fetching — covers the
+// whole stretch while `justConcluded`'s own flow (including a full
+// reach-out-offer exchange, if it has one) is still resolving. Always
+// visible unconditionally while this is the bar's state — there's no turn
+// of `next`'s own yet to check on-screen-ness against.
+export function initiatingBackgroundItemPhrase(
+  justConcluded: string,
+  next: string,
+): string[] {
+  const a = snippet(justConcluded, 40);
+  const b = snippet(next, 40);
+  return [
+    `Sorting out "${a}" first — I'll come back for "${b}" right after.`,
+    `Working on "${a}" now; "${b}" is queued up next.`,
+    `Getting "${a}" settled first, then I'll pick up "${b}".`,
+    `Handling "${a}" now — "${b}" is next in line.`,
+    `Wrapping up "${a}" — "${b}" starts as soon as that's done.`,
+  ];
+}
+
+// Shown once the deferred item's own resolution needs the buyer's own
+// action (an "offer" — the same reach-out exchange a normal offer gets).
+// Only ever rendered while its own turn is off-screen (see
+// itemBTurnVisible in SearchHome.tsx) — this is a "you're missing
+// something" flag, not a persistent banner.
+export function backgroundItemPendingPhrase(label: string): string[] {
+  const w = snippet(label, 40);
+  return [
+    `"${w}" needs a quick reply from you — tap to see it.`,
+    `I need your input on "${w}" — tap to answer.`,
+    `Waiting on you for "${w}" — tap to reply.`,
+    `"${w}" has a question waiting — tap to answer it.`,
+  ];
+}
+
+// Shown once the deferred item resolved into a terminal result needing no
+// action (real Velte results, or a genuine dead end — always backed by a
+// cross-check + Google Places, never a silent nothing — see
+// resolveSearchItem.ts). Same off-screen-only gating as the pending phrase
+// above.
+export function backgroundItemResolvedPhrase(label: string): string[] {
+  const w = snippet(label, 40);
+  return [
+    `"${w}" is sorted — tap to see what I found.`,
+    `Good news on "${w}" — tap to take a look.`,
+    `Done with "${w}" — tap to see the results.`,
+    `"${w}" wrapped up — tap to view it.`,
+  ];
 }
 
 // Sole status line for getVendorProductsTool — a plain lookup by handle

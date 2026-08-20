@@ -68,7 +68,10 @@ export async function resolveSearchItem(
       return {
         status: "nothing",
         text: pickAvoiding(
-          noVendorEvenBySectorPhrase(primary.externalSuggestions.length > 0),
+          noVendorEvenBySectorPhrase(
+            term,
+            primary.externalSuggestions.length > 0,
+          ),
           [],
         ),
         externalSuggestions: primary.externalSuggestions,
@@ -89,7 +92,10 @@ export async function resolveSearchItem(
     );
     return {
       status: "nothing",
-      text: pickAvoiding(noVendorEvenBySectorPhrase(merged.length > 0), []),
+      text: pickAvoiding(
+        noVendorEvenBySectorPhrase(term, merged.length > 0),
+        [],
+      ),
       externalSuggestions: merged,
     };
   }
@@ -124,7 +130,10 @@ export async function resolveSearchItem(
     return {
       status: "nothing",
       text: pickAvoiding(
-        noVendorEvenBySectorPhrase(primary.externalSuggestions.length > 0),
+        noVendorEvenBySectorPhrase(
+          term,
+          primary.externalSuggestions.length > 0,
+        ),
         [],
       ),
       externalSuggestions: primary.externalSuggestions,
@@ -150,7 +159,7 @@ export async function resolveSearchItem(
   );
   return {
     status: "nothing",
-    text: pickAvoiding(noVendorEvenBySectorPhrase(merged.length > 0), []),
+    text: pickAvoiding(noVendorEvenBySectorPhrase(term, merged.length > 0), []),
     externalSuggestions: merged,
   };
 }
