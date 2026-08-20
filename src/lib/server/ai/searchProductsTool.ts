@@ -1,8 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { buildProductTerm } from "@/lib/productTerm";
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
+import { looksLikeServiceTask } from "@/lib/server/ai/sectorClarifiers";
 import {
   searchingPhrase,
   foundCountPhrase,
@@ -22,11 +24,24 @@ const inputSchema = z.object({
   product: z
     .string()
     .describe("The specific product or service the buyer is looking for."),
+  // Found live: for a vague repair request naming no symptom at all ("fix
+  // my Infinix Hot 50i phone"), the model started ENUMERATING plausible
+  // things that might be wrong — "screen replacement", "battery",
+  // "software" — none of which the buyer ever said, rendered back to the
+  // SAME buyer moments later as if it were a direct quote of their own
+  // request ("No match on Velte for 'Infinix Hot 50i repair phone screen
+  // replacement battery software...'"). This is a narrower case of the
+  // same rule CLAUDE.md states for the whole product: "the LLM never
+  // invents ... those only ever come from the database" — an attribute is
+  // data about what the BUYER said, not the model's own plausible-sounding
+  // elaboration of what they might have meant, and the field's own
+  // description below didn't say that clearly enough for a more
+  // "thorough"/elaborative reasoning model to hold the line on its own.
   attributes: z
     .array(z.string())
     .optional()
     .describe(
-      "Specific attributes — color, size, brand, material, style, condition, etc. Include these whether the buyer typed them OR you can see them in an attached photo — for a photo, describe everything visually identifiable, not just the bare category, so matching can tell an exact match from a loosely related one.",
+      "Specific attributes — color, size, brand, material, style, condition, etc. — but ONLY ones the buyer's own words actually named, or that you can genuinely see in an attached photo (for a photo, describe everything visually identifiable, not just the bare category, so matching can tell an exact match from a loosely related one). Never invent, guess, or list out plausible-sounding attributes the buyer never mentioned and no photo shows — e.g. for a bare repair request naming no symptom ('fix my phone', 'my laptop isn't working'), do NOT enumerate possible causes or parts ('screen', 'battery', 'software issue') as if the buyer had named them; leave this empty instead. An empty/omitted attributes list is the correct, honest output far more often than a guessed one.",
     ),
   // Optional on purpose: set this ONLY when the buyer's own message names or
   // clearly implies a specific place. Omit it entirely otherwise — the
@@ -111,7 +126,7 @@ export async function searchProductsCore(
   }
   const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
-  const queryText = [product, ...(attributes ?? [])].join(" ");
+  const queryText = buildProductTerm(product, attributes);
   let results: VendorMatch[],
     weakResults: VendorMatch[],
     matchTier: MatchTier,
@@ -157,7 +172,7 @@ export async function searchProductsCore(
       push?.(foundCountPhrase(results.length, "product", matchTier));
     }
   } else {
-    push?.(noProductMatchPhrase());
+    push?.(noProductMatchPhrase(looksLikeServiceTask(queryText)));
   }
 
   // Side channel, not this function's return value — see weakResultsOut's

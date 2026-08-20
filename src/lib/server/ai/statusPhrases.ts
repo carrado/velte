@@ -65,6 +65,19 @@ const ACKNOWLEDGEMENT_REPLIES = new Set([
   "that works",
   "perfect",
   "great",
+  // Found live: "continue" (typed after hitting Stop mid-search — see
+  // SearchHome.tsx's own Stop button) fell through to the generic quoting
+  // branch below — "Following up on 'continue'…" — same category of
+  // content-free filler as "yes"/"ok" above, just missing from the list.
+  // Deliberately only added HERE, not to OFFER_AGREEMENT_REPLIES below —
+  // "continue" reads as "resume the conversation," not a clear "yes, reach
+  // out to that vendor," so it stays out of that narrower, direction-aware
+  // check.
+  "continue",
+  "go on",
+  "keep going",
+  "proceed",
+  "resume",
   // The literal, hardcoded button text for the buyerRequestOffered Yes/No
   // pair (see SearchHome.tsx's ConversationTurnView) — a buyer never types
   // these themselves, clicking the button sends this exact string. Added
@@ -143,9 +156,22 @@ export function isOfferDeclineReply(text: string): boolean {
 // `text` is the buyer's own raw message (undefined for a bare photo with no
 // caption) — quoting it back is what keeps this line from reading as the
 // same canned "Understanding your request…" on every single search.
+//
+// `isContinuation` — true when route.ts's own body carries
+// SearchRequestBody's isContinuation flag: the CLIENT already knows this
+// text is answering something in progress (a typed name, a clarification
+// answer, the canned "Shared my location" string) rather than a fresh
+// query, structurally, not guessable from the text itself the way
+// isAcknowledgementReply's fixed word list can for "yes"/"ok"/"continue".
+// Found live: "Looking into 'Shared my location'…" and "Looking into
+// 'John Okafor'…" both read as nonsense for the exact same reason a bare
+// "yes" does — routed into the SAME generic pool below, not a separate
+// one, since the underlying problem (this isn't a fresh request to quote)
+// is identical.
 export function understandingRequestPhrase(
   hasImage: boolean,
   text?: string,
+  isContinuation = false,
 ): string[] {
   const q = text?.trim();
 
@@ -187,7 +213,7 @@ export function understandingRequestPhrase(
       "One sec, studying the photo…",
     ];
   }
-  if (q && isAcknowledgementReply(q)) {
+  if (isContinuation || (q && isAcknowledgementReply(q))) {
     return [
       "Got it — following up on that…",
       "Continuing from there…",
@@ -404,15 +430,29 @@ export function similarMatchPhrase(count: number): string[] {
 // businesses" (i.e. leaving Velte) at this point is simply wrong — that
 // phrasing belongs to noVendorMatchPhrase, once the store-level check has
 // ALSO come back empty and the flow is genuinely about to go external.
-export function noProductMatchPhrase(): string[] {
+// `isService` — see looksLikeServiceTask's own comment (sectorClarifiers.ts)
+// for why this needs its own signal rather than treating every
+// searchProducts term as a stocked item: `product` doubles as the field
+// name for a SERVICE need too ("laptop repair" is still passed as
+// `product`), and "who else might carry it"/"who sells this kind of
+// thing" are both wrong for a job to be done, not an item to be sold.
+export function noProductMatchPhrase(isService: boolean): string[] {
   return [
     "No listing yet — checking other Velte vendors…",
-    "Not listed as a product — checking other vendors on Velte…",
+    isService
+      ? "Not listed as a service — checking other vendors on Velte…"
+      : "Not listed as a product — checking other vendors on Velte…",
     "Nothing under that exact item — checking other vendors…",
-    "No product match yet — checking who else might carry it…",
+    isService
+      ? "No exact match yet — checking who else might be able to help…"
+      : "No product match yet — checking who else might carry it…",
     "Not found as a listing — widening to other Velte vendors…",
-    "No exact listing yet — checking other vendors who might have it…",
-    "Nothing matched as a product — checking vendors who sell this kind of thing…",
+    isService
+      ? "No exact listing yet — checking other vendors who might do this…"
+      : "No exact listing yet — checking other vendors who might have it…",
+    isService
+      ? "Nothing matched exactly — checking vendors who handle this kind of job…"
+      : "Nothing matched as a product — checking vendors who sell this kind of thing…",
     "No listing for that yet — checking other vendors nearby…",
     "Not listed yet, but checking other Velte vendors…",
     "No match on that listing — checking other vendors on Velte…",
@@ -572,14 +612,19 @@ export function scanningVendorsPhrase(what: string): string[] {
   ];
 }
 
-export function foundPossibleVendorPhrase(what: string): string[] {
+export function foundPossibleVendorPhrase(
+  what: string,
+  isService: boolean,
+): string[] {
   const w = snippet(what, 60);
   return [
     `No direct listing, but I found a business whose sector fits "${w}" — want me to reach out to them on your behalf?`,
     `Nothing listed exactly, but a vendor nearby looks like a fit for "${w}" — want me to check with them?`,
     `Found a business that might handle "${w}", even without a direct listing — should I reach out for you?`,
     `Not listed directly, but there's a vendor whose store fits "${w}" — want me to get in touch with them?`,
-    `A real business turned up that might carry "${w}" — want me to reach out and ask?`,
+    isService
+      ? `A real business turned up that might be able to help with "${w}" — want me to reach out and ask?`
+      : `A real business turned up that might carry "${w}" — want me to reach out and ask?`,
   ];
 }
 
@@ -589,18 +634,34 @@ export function foundPossibleVendorPhrase(what: string): string[] {
 // this session (a dual-intent item B, or any later turn) — nothing in the
 // sentence itself says what came up empty. Same snippet() truncation as
 // every other buyer-facing term in this file.
+//
+// `isService` — found live: "No vendor on Velte carries 'Infinix Hot 50i
+// repair' yet" was shown for a REPAIR request — a service isn't something
+// a vendor "carries", and "get it from one of these nearby" reads as if
+// the buyer were shopping for a stocked item. Pass looksLikeServiceTask's
+// own verdict on `what` (sectorClarifiers.ts) rather than guessing here —
+// same signal already used to pick service- vs retail-appropriate
+// clarifying-question fields.
 export function noVendorEvenBySectorPhrase(
   what: string,
   hasNearby: boolean,
+  isService: boolean,
 ): string[] {
   const w = snippet(what, 60);
   return hasNearby
-    ? [
-        `No vendor on Velte fits "${w}", even by sector — but here's what's actually nearby.`,
-        `Nothing on Velte matches "${w}", even broadly — here's what turned up close by though.`,
-        `Couldn't find a Velte vendor for "${w}" at all — a few real options nearby did turn up.`,
-        `No match on Velte for "${w}", even a loose one — here's what's around you instead.`,
-      ]
+    ? isService
+      ? [
+          `No vendor on Velte offers "${w}" yet — but one of these nearby might be able to help.`,
+          `Nothing on Velte matches "${w}", even broadly — here's where you might actually get this done close by.`,
+          `Couldn't find a Velte vendor for "${w}" at all — the businesses below might be able to help though.`,
+          `No match on Velte for "${w}", even a loose one — here's where you could possibly get this done nearby.`,
+        ]
+      : [
+          `No vendor on Velte carries "${w}" yet — but you may be able to get it from one of these nearby.`,
+          `Nothing on Velte matches "${w}", even broadly — here's where you might actually find it close by.`,
+          `Couldn't find a Velte vendor for "${w}" at all — the businesses below might have it though.`,
+          `No match on Velte for "${w}", even a loose one — here's where you could possibly get it nearby.`,
+        ]
     : [
         `Nothing on Velte fits "${w}", even by sector, and nothing nearby either.`,
         `No vendor on Velte for "${w}", and no nearby alternative came up either.`,
@@ -619,12 +680,12 @@ export function noVendorEvenBySectorPhrase(
 export function noMatchRequestPhrase(hasNearby: boolean): string[] {
   return hasNearby
     ? [
-        "Couldn't find a Velte vendor to send that to, but here's what's actually nearby.",
-        "No Velte vendor for this one — here's what turned up close by instead.",
-        "Nobody on Velte to reach out to for that yet, but a few real options nearby did turn up.",
-        "That didn't reach anyone on Velte, but here's what's around you.",
-        "No luck finding a Velte vendor for this — here's what's nearby though.",
-        "Couldn't get this to a Velte vendor, but found a few nearby options worth a look.",
+        "Couldn't find a Velte vendor to send that to, but you might be able to get this from one of the businesses below.",
+        "No Velte vendor for this one — here's where you could possibly find it nearby instead.",
+        "Nobody on Velte to reach out to for that yet, but the options below might actually have it.",
+        "That didn't reach anyone on Velte, but you may be able to get this from what's nearby.",
+        "No luck finding a Velte vendor for this — here's where you might still be able to get it.",
+        "Couldn't get this to a Velte vendor, but the nearby options below are worth a look for this.",
       ]
     : [
         "Couldn't find any businesses to reach out to for that just now — new vendors join often, so it's worth trying again later.",

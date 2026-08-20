@@ -7,8 +7,10 @@ import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { generateUUID } from "@/lib/uuid";
+import { buildProductTerm } from "@/lib/productTerm";
 import { runSearchStream } from "@/lib/searchStream";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
+import { lookupCopiedImage, hashBlob } from "@/lib/copiedImageRegistry";
 import { VendorResultCard } from "@/components/search/VendorResultCard";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
@@ -61,8 +63,10 @@ import {
 // Composer icons only (upload spinner, remove-photo, camera, send) are
 // lucide-react, not the custom set — reverted 2026-08-17 per explicit
 // request, scoped to just this textarea; every other icon on this page
-// stays on @/components/icons. See [[custom_icon_system]].
-import { ArrowUp, Camera, Loader2, Square, X } from "lucide-react";
+// stays on @/components/icons. See [[custom_icon_system]]. Copy/Pencil
+// (the buyer-bubble copy/edit buttons) joined this same lucide exception
+// later, per explicit request, for visual consistency with each other.
+import { ArrowUp, Camera, Loader2, Pencil, Square, X } from "lucide-react";
 
 // `products` decides the noun: a pure service turn (e.g. "haircut near me")
 // shouldn't be headed "Products", and a turn can genuinely mix both kinds
@@ -185,7 +189,7 @@ function messageNamesAPlace(message: string): boolean {
 // to, instead of the actual offered one).
 function backgroundItemLabel(item: BackgroundSearchItem): string {
   return item.type === "product"
-    ? [item.product, ...(item.attributes ?? [])].join(" ")
+    ? buildProductTerm(item.product, item.attributes)
     : item.businessType;
 }
 
@@ -724,6 +728,13 @@ interface ConversationTurn {
   // buyer, and never anything beyond what's already visible on the cards.
   contextNote: string | null;
   error: string | null;
+  // True only when the buyer hit Stop mid-search (handleStop/onAbort) —
+  // per explicit request, a stopped turn shows no wrap-up bubble of its
+  // own at all, just whatever status/interim-reply text already arrived
+  // before the stop; the shimmering status line simply stops once `phase`
+  // flips to "done", same as it would for any other turn. Omitted/false
+  // for every ordinary turn.
+  stopped?: boolean;
 }
 
 function ConversationTurnView({
@@ -734,6 +745,13 @@ function ConversationTurnView({
   onPickItem,
   expandedServicesVendorId,
   onToggleServices,
+  isEditing,
+  editDraft,
+  onEditDraftChange,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  canEdit,
 }: {
   turn: ConversationTurn;
   isLatest: boolean;
@@ -752,6 +770,18 @@ function ConversationTurnView({
   // leaving an earlier turn's panel visibly stuck open.
   expandedServicesVendorId: string | null;
   onToggleServices: (vendorId: string) => void;
+  // Editing this turn's own buyer message — see handleStartEdit's own
+  // comment in SearchHome for the full flow. `canEdit` is false while
+  // ANY turn is loading (isSending) — editing something into the past
+  // while a search is already running would race with it, same reasoning
+  // as the composer itself locking during that window.
+  isEditing: boolean;
+  editDraft: string;
+  onEditDraftChange: (text: string) => void;
+  onStartEdit: () => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  canEdit: boolean;
 }) {
   // Scrolls the panel into view the moment it opens — a buyer who clicked
   // "View matching services" on a card scrolled into the middle of a
@@ -769,6 +799,10 @@ function ConversationTurnView({
     }
   }, [expandedServicesVendorId]);
 
+  // Same grow-to-fit behavior as the main composer's own textarea, reused
+  // here for the edit-in-place one.
+  const editAutoResize = useAutoResizeTextarea(editDraft);
+
   return (
     <div className="space-y-4">
       {/* The buyer's own message — right-aligned, shaded with the app's
@@ -782,512 +816,609 @@ function ConversationTurnView({
           blank "ghost" bubble flashing before the AI's own results appeared
           underneath it. */}
       {(turn.query || turn.imagePreview) && (
-        // Copy is buyer-side only, per explicit request — the AI's own
-        // replies don't get this (see CopyMessageButton's own comment).
-        // Always visible, no hover-reveal; right-aligned to match the
-        // bubble above it.
+        // Copy/Edit are buyer-side only, per explicit request — the AI's
+        // own replies don't get either (see CopyMessageButton's own
+        // comment). Always visible, no hover-reveal; right-aligned to
+        // match the bubble above it.
         <div>
-          <div className="flex justify-end">
-            <div className="max-w-[85%] sm:max-w-[75%] bg-orange-100/70 rounded-3xl px-4 py-2.5 flex items-start gap-2.5">
-              {turn.imagePreview && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={turn.imagePreview}
-                  alt="Search photo"
-                  className="w-14 h-14 rounded-lg object-cover shrink-0 border border-orange-200"
-                />
-              )}
-              {turn.query && (
-                <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed flex items-center gap-1.5">
-                  {/* Same MapPinIcon Settings' own location field uses (see
-                      [[custom_icon_system]]) — was a literal 📍 emoji character
-                      baked into the submitted text before this. */}
-                  {turn.query === "Shared my location" && (
-                    <MapPinIcon
-                      size={16}
-                      className="text-orange-600 shrink-0"
+          {isEditing ? (
+            // Swaps the plain bubble for an inline editable one — same
+            // shape/color as the read-only bubble so it doesn't jump
+            // around, just an actual textarea instead of a <p>. The image
+            // (if any) stays as a non-editable thumbnail alongside it —
+            // only the text is editable here.
+            <div className="flex justify-end">
+              <div className="max-w-[85%] sm:max-w-[75%] w-full bg-orange-100/70 rounded-3xl px-4 py-2.5 flex flex-col gap-2">
+                <div className="flex items-start gap-2.5">
+                  {turn.imagePreview && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={turn.imagePreview}
+                      alt="Search photo"
+                      className="w-14 h-14 rounded-lg object-cover shrink-0 border border-orange-200"
                     />
                   )}
-                  {turn.query}
-                </p>
+                  <textarea
+                    {...editAutoResize}
+                    autoFocus
+                    rows={1}
+                    value={editDraft}
+                    onChange={(e) => onEditDraftChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        onSaveEdit();
+                      } else if (e.key === "Escape") {
+                        onCancelEdit();
+                      }
+                    }}
+                    className="flex-1 min-w-0 resize-none bg-transparent outline-none text-[15px] sm:text-base text-[#023337] leading-relaxed"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={onCancelEdit}
+                    className="px-3 py-1 rounded-full text-xs font-medium text-gray-500 hover:bg-gray-200/60 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onSaveEdit}
+                    disabled={!editDraft.trim()}
+                    className="px-3 py-1 rounded-full text-xs font-medium bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-end">
+                <div className="max-w-[85%] sm:max-w-[75%] bg-orange-100/70 rounded-3xl px-4 py-2.5 flex items-start gap-2.5">
+                  {turn.imagePreview && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={turn.imagePreview}
+                      alt="Search photo"
+                      className="w-14 h-14 rounded-lg object-cover shrink-0 border border-orange-200"
+                    />
+                  )}
+                  {turn.query && (
+                    <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed flex items-center gap-1.5">
+                      {/* Same MapPinIcon Settings' own location field uses (see
+                          [[custom_icon_system]]) — was a literal 📍 emoji character
+                          baked into the submitted text before this. */}
+                      {turn.query === "Shared my location" && (
+                        <MapPinIcon
+                          size={16}
+                          className="text-orange-600 shrink-0"
+                        />
+                      )}
+                      {turn.query}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {/* Copy shows whenever there's text AND/OR a real uploaded
+                  image to copy (see CopyMessageButton's own comment — a
+                  photo-only message now copies the image itself, not just
+                  nothing). Edit stays text-only — there's no text to edit
+                  on a bare photo message, and swapping the attached photo
+                  isn't part of this flow (see handleSaveEdit's own
+                  comment). */}
+              {(turn.query.trim() || turn.imageUrl) && (
+                <div className="flex justify-end items-center gap-0.5">
+                  <CopyMessageButton
+                    text={turn.query}
+                    imageUrl={turn.imageUrl}
+                  />
+                  {turn.query.trim() && (
+                    <button
+                      type="button"
+                      onClick={onStartEdit}
+                      disabled={!canEdit}
+                      title="Edit"
+                      aria-label="Edit message"
+                      className="-mt-1 inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                </div>
               )}
-            </div>
-          </div>
-          {/* Text only — a bare photo with no caption (turn.query empty)
-              has nothing textual to copy. */}
-          {turn.query.trim() && (
-            <div className="flex justify-end">
-              <CopyMessageButton text={turn.query} />
-            </div>
+            </>
           )}
         </div>
       )}
 
-      <div className="flex items-start gap-3">
-        {/* Velte's own avatar — same image for the status/"thinking" phase
-            and the final reply/results, since both are this one persona
-            talking, just at different points in the same turn. */}
-        <img
-          src="/velte_ai_assistant.png"
-          alt="Velte"
-          className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shrink-0"
-        />
-        <div className="flex-1 min-w-0 pt-0.5">
-          {/* Standalone bubbles that arrived mid-turn (route.ts's unified
+      {/* A stopped turn with nothing else to show (no interim bubbles
+          already streamed in before the stop) gets no AI row at all — per
+          explicit request, not even the avatar. Found live: suppressing
+          just the final-content block (above) still left this whole row
+          rendering, avatar and all, next to empty space where the reply
+          would have been — an orphaned image with nothing beside it. A
+          stopped turn that DID get at least one interim reply first still
+          shows this row normally, since there's real content to sit next
+          to the avatar. */}
+      {!(turn.stopped && turn.interimReplies.length === 0) && (
+        <div className="flex items-start gap-3">
+          {/* Velte's own avatar — same image for the status/"thinking" phase
+              and the final reply/results, since both are this one persona
+              talking, just at different points in the same turn. */}
+          <img
+            src="/velte_ai_assistant.png"
+            alt="Velte"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shrink-0"
+          />
+          <div className="flex-1 min-w-0 pt-0.5">
+            {/* Standalone bubbles that arrived mid-turn (route.ts's unified
               dead-end handler — see interimReplies' own comment). Rendered
               regardless of phase: while still "loading" they sit above the
               status shimmer (the turn keeps visibly working underneath
               them), and they persist once "done" too, above the final
               reply/results — a real part of the conversation, not a
               transient status line. */}
-          {turn.interimReplies.length > 0 && (
-            <div className="space-y-3 mb-3">
-              {turn.interimReplies.map((text, i) => (
-                <div key={i} className={AI_MESSAGE_BUBBLE_CLASS}>
-                  <FormattedReply text={text} />
-                </div>
-              ))}
-            </div>
-          )}
+            {turn.interimReplies.length > 0 && (
+              <div className="space-y-3 mb-3">
+                {turn.interimReplies.map((text, i) => (
+                  <div key={i} className={AI_MESSAGE_BUBBLE_CLASS}>
+                    <FormattedReply text={text} />
+                  </div>
+                ))}
+              </div>
+            )}
 
-          {turn.phase === "loading" && (
-            <div className="min-w-0">
-              <span className="status-shimmer block truncate text-[15px] font-medium">
-                {turn.status}
-              </span>
-            </div>
-          )}
+            {turn.phase === "loading" && (
+              <div className="min-w-0">
+                <span className="status-shimmer block truncate text-[15px] font-medium">
+                  {turn.status}
+                </span>
+              </div>
+            )}
 
-          {turn.phase === "done" && turn.error && (
-            <p className="text-sm text-red-600">{turn.error}</p>
-          )}
+            {turn.phase === "done" && turn.error && (
+              <p className="text-sm text-red-600">{turn.error}</p>
+            )}
 
-          {turn.phase === "done" && !turn.error && (
-            <div className="space-y-6">
-              {turn.products.length > 0 ||
-              turn.stores.length > 0 ||
-              turn.vendorProducts.length > 0 ? (
-                <>
-                  <FormattedReply text={turn.reply} />
-                  {turn.vendorProducts.length > 0 &&
-                    turn.vendorProductsStore && (
+            {/* A stopped turn (onAbort) never reaches onFinal, so products/
+              stores/etc. all stay at their initial empty state — nothing
+              real to show, and per explicit request no synthetic wrap-up
+              bubble either. The status shimmer above already stopped the
+              instant `phase` flipped to "done"; this is what keeps nothing
+              else from appearing in its place. */}
+            {turn.phase === "done" && !turn.error && !turn.stopped && (
+              <div className="space-y-6">
+                {turn.products.length > 0 ||
+                turn.stores.length > 0 ||
+                turn.vendorProducts.length > 0 ? (
+                  <>
+                    <FormattedReply text={turn.reply} />
+                    {turn.vendorProducts.length > 0 &&
+                      turn.vendorProductsStore && (
+                        <div className="space-y-3">
+                          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                            From {turn.vendorProductsStore.name}
+                          </h2>
+                          {turn.vendorProducts.length > 1 ? (
+                            <CardCarousel
+                              items={turn.vendorProducts}
+                              getKey={(item) => item.productId}
+                              renderItem={(item) => (
+                                <StoreProductCard
+                                  match={item}
+                                  storeName={turn.vendorProductsStore!.name}
+                                  storeWhatsapp={
+                                    turn.vendorProductsStore!.whatsapp
+                                  }
+                                  vendorId={turn.vendorProductsStore!.vendorId}
+                                />
+                              )}
+                            />
+                          ) : (
+                            <div className="max-w-[280px]">
+                              <StoreProductCard
+                                match={turn.vendorProducts[0]}
+                                storeName={turn.vendorProductsStore.name}
+                                storeWhatsapp={
+                                  turn.vendorProductsStore.whatsapp
+                                }
+                                vendorId={turn.vendorProductsStore.vendorId}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    {turn.products.length > 0 &&
+                      (() => {
+                        const groups = groupProductsByVendor(
+                          turn.products,
+                          turn.productStores,
+                        );
+                        // Each group's own card content — product(s) + "Sold
+                        // by" companion — unchanged from before the carousel
+                        // rework, just stacked vertically (space-y-3) instead
+                        // of tiled in a responsive grid: once a group can sit
+                        // in its own fixed-width carousel slide, there's no
+                        // longer a row wide enough for 2-3 columns to matter.
+                        const renderGroup = (
+                          group: (typeof groups)[number],
+                        ) => (
+                          <div className="space-y-3">
+                            <div className="space-y-3">
+                              {group.products.map((match) => (
+                                <VendorResultCard
+                                  key={match.productId}
+                                  match={match}
+                                  // Hidden here once a "Sold by" store card
+                                  // exists below — that card is now where View
+                                  // Store lives. Kept for a service-only group
+                                  // (group.store is always null there — see
+                                  // route.ts), which has no store card at all.
+                                  showViewStore={!group.store}
+                                />
+                              ))}
+                            </div>
+                            {group.store ? (
+                              <div className="pl-3 border-l-2 border-orange-100 space-y-2">
+                                <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                                  Sold by
+                                </p>
+                                <StoreResultCard match={group.store} />
+                              </div>
+                            ) : (
+                              // Service-only vendor group — no store card (see
+                              // route.ts: a service listing's own card already
+                              // shows the vendor's description/attributes/
+                              // WhatsApp, so a companion store card would be
+                              // redundant). Still anchor the group to its
+                              // vendor visually when there's more than one
+                              // listing, same purpose the "Sold by" label
+                              // serves above.
+                              group.products.length > 1 && (
+                                <p className="pl-3 text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                                  {group.products.length} services from{" "}
+                                  {group.products[0].vendorName}
+                                </p>
+                              )
+                            )}
+                          </div>
+                        );
+                        return (
+                          <div className="space-y-3">
+                            {(turn.stores.length > 0 ||
+                              (turn.productsMatchTier &&
+                                turn.productsMatchTier !== "local") ||
+                              turn.productsMatchQuality) && (
+                              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                                {productsHeading(
+                                  turn.productsMatchTier,
+                                  turn.productsMatchQuality,
+                                  turn.products,
+                                )}
+                              </h2>
+                            )}
+                            {groups.length > 1 ? (
+                              <CardCarousel
+                                items={groups}
+                                getKey={(group) => group.vendorId}
+                                renderItem={renderGroup}
+                                slideClassName="w-[280px] sm:w-[300px]"
+                              />
+                            ) : (
+                              <div className="max-w-[300px]">
+                                {renderGroup(groups[0])}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    {turn.weakProducts.length > 0 && (
                       <div className="space-y-3">
                         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          From {turn.vendorProductsStore.name}
+                          A couple more options — not an exact match
                         </h2>
-                        {turn.vendorProducts.length > 1 ? (
+                        {turn.weakProducts.length > 1 ? (
                           <CardCarousel
-                            items={turn.vendorProducts}
-                            getKey={(item) => item.productId}
-                            renderItem={(item) => (
-                              <StoreProductCard
-                                match={item}
-                                storeName={turn.vendorProductsStore!.name}
-                                storeWhatsapp={
-                                  turn.vendorProductsStore!.whatsapp
+                            items={turn.weakProducts}
+                            getKey={(match) => match.productId}
+                            renderItem={(match) => (
+                              <VendorResultCard match={match} />
+                            )}
+                          />
+                        ) : (
+                          <div className="max-w-[280px]">
+                            <VendorResultCard match={turn.weakProducts[0]} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {turn.stores.length > 0 && (
+                      <div className="space-y-3">
+                        {(turn.products.length > 0 ||
+                          (turn.storesMatchTier &&
+                            turn.storesMatchTier !== "local") ||
+                          turn.storesMatchQuality) && (
+                          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                            {storesHeading(
+                              turn.storesMatchTier,
+                              turn.storesMatchQuality,
+                            )}
+                          </h2>
+                        )}
+                        {turn.stores.length > 1 ? (
+                          <CardCarousel
+                            items={turn.stores}
+                            getKey={(store) => store.storeId}
+                            renderItem={(store) => (
+                              <StoreWithServices
+                                store={store}
+                                services={turn.storeServices.filter(
+                                  (s) => s.vendorId === store.vendorId,
+                                )}
+                                // Only when this is a pure vendor/store result
+                                // (no product attached) — a dual-intent turn
+                                // already has a product for the buyer to
+                                // reference instead.
+                                searchQuery={
+                                  turn.products.length === 0
+                                    ? turn.storesQuery
+                                    : null
                                 }
-                                vendorId={turn.vendorProductsStore!.vendorId}
+                                isServicesOpen={
+                                  expandedServicesVendorId === store.vendorId
+                                }
+                                onToggleServices={() =>
+                                  onToggleServices(store.vendorId)
+                                }
+                              />
+                            )}
+                          />
+                        ) : (
+                          // A lone result skips the carousel (nothing to
+                          // scroll to) but still caps to a normal card width
+                          // — matches the carousel's own slide width, so "1
+                          // result" and "many results" read as the same
+                          // design, not two different ones.
+                          <div className="max-w-[280px]">
+                            <StoreWithServices
+                              store={turn.stores[0]}
+                              services={turn.storeServices.filter(
+                                (s) => s.vendorId === turn.stores[0].vendorId,
+                              )}
+                              searchQuery={
+                                turn.products.length === 0
+                                  ? turn.storesQuery
+                                  : null
+                              }
+                              isServicesOpen={
+                                expandedServicesVendorId ===
+                                turn.stores[0].vendorId
+                              }
+                              onToggleServices={() =>
+                                onToggleServices(turn.stores[0].vendorId)
+                              }
+                            />
+                          </div>
+                        )}
+                        {(() => {
+                          const activeStore = turn.stores.find(
+                            (s) => s.vendorId === expandedServicesVendorId,
+                          );
+                          const activeServices = activeStore
+                            ? turn.storeServices.filter(
+                                (s) => s.vendorId === activeStore.vendorId,
+                              )
+                            : [];
+                          if (!activeStore || activeServices.length === 0)
+                            return null;
+                          return (
+                            <MatchingServicesThread
+                              storeName={activeStore.name}
+                              services={activeServices}
+                              panelRef={servicesThreadRef}
+                            />
+                          );
+                        })()}
+                      </div>
+                    )}
+                    {turn.furtherStores.length > 0 && (
+                      <div className="space-y-3">
+                        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                          Also available further out
+                        </h2>
+                        {turn.furtherStores.length > 1 ? (
+                          <CardCarousel
+                            items={turn.furtherStores}
+                            getKey={(store) => store.storeId}
+                            renderItem={(store) => (
+                              <StoreWithServices
+                                store={store}
+                                services={turn.storeServices.filter(
+                                  (s) => s.vendorId === store.vendorId,
+                                )}
+                                searchQuery={
+                                  turn.products.length === 0
+                                    ? turn.storesQuery
+                                    : null
+                                }
+                                isServicesOpen={
+                                  expandedServicesVendorId === store.vendorId
+                                }
+                                onToggleServices={() =>
+                                  onToggleServices(store.vendorId)
+                                }
                               />
                             )}
                           />
                         ) : (
                           <div className="max-w-[280px]">
-                            <StoreProductCard
-                              match={turn.vendorProducts[0]}
-                              storeName={turn.vendorProductsStore.name}
-                              storeWhatsapp={turn.vendorProductsStore.whatsapp}
-                              vendorId={turn.vendorProductsStore.vendorId}
+                            <StoreWithServices
+                              store={turn.furtherStores[0]}
+                              services={turn.storeServices.filter(
+                                (s) =>
+                                  s.vendorId === turn.furtherStores[0].vendorId,
+                              )}
+                              searchQuery={
+                                turn.products.length === 0
+                                  ? turn.storesQuery
+                                  : null
+                              }
+                              isServicesOpen={
+                                expandedServicesVendorId ===
+                                turn.furtherStores[0].vendorId
+                              }
+                              onToggleServices={() =>
+                                onToggleServices(turn.furtherStores[0].vendorId)
+                              }
                             />
                           </div>
                         )}
+                        {(() => {
+                          const activeStore = turn.furtherStores.find(
+                            (s) => s.vendorId === expandedServicesVendorId,
+                          );
+                          const activeServices = activeStore
+                            ? turn.storeServices.filter(
+                                (s) => s.vendorId === activeStore.vendorId,
+                              )
+                            : [];
+                          if (!activeStore || activeServices.length === 0)
+                            return null;
+                          return (
+                            <MatchingServicesThread
+                              storeName={activeStore.name}
+                              services={activeServices}
+                              panelRef={servicesThreadRef}
+                            />
+                          );
+                        })()}
                       </div>
                     )}
-                  {turn.products.length > 0 &&
-                    (() => {
-                      const groups = groupProductsByVendor(
-                        turn.products,
-                        turn.productStores,
-                      );
-                      // Each group's own card content — product(s) + "Sold
-                      // by" companion — unchanged from before the carousel
-                      // rework, just stacked vertically (space-y-3) instead
-                      // of tiled in a responsive grid: once a group can sit
-                      // in its own fixed-width carousel slide, there's no
-                      // longer a row wide enough for 2-3 columns to matter.
-                      const renderGroup = (group: (typeof groups)[number]) => (
-                        <div className="space-y-3">
-                          <div className="space-y-3">
-                            {group.products.map((match) => (
-                              <VendorResultCard
-                                key={match.productId}
-                                match={match}
-                                // Hidden here once a "Sold by" store card
-                                // exists below — that card is now where View
-                                // Store lives. Kept for a service-only group
-                                // (group.store is always null there — see
-                                // route.ts), which has no store card at all.
-                                showViewStore={!group.store}
-                              />
-                            ))}
-                          </div>
-                          {group.store ? (
-                            <div className="pl-3 border-l-2 border-orange-100 space-y-2">
-                              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                Sold by
-                              </p>
-                              <StoreResultCard match={group.store} />
-                            </div>
-                          ) : (
-                            // Service-only vendor group — no store card (see
-                            // route.ts: a service listing's own card already
-                            // shows the vendor's description/attributes/
-                            // WhatsApp, so a companion store card would be
-                            // redundant). Still anchor the group to its
-                            // vendor visually when there's more than one
-                            // listing, same purpose the "Sold by" label
-                            // serves above.
-                            group.products.length > 1 && (
-                              <p className="pl-3 text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                {group.products.length} services from{" "}
-                                {group.products[0].vendorName}
-                              </p>
-                            )
-                          )}
-                        </div>
-                      );
-                      return (
-                        <div className="space-y-3">
-                          {(turn.stores.length > 0 ||
-                            (turn.productsMatchTier &&
-                              turn.productsMatchTier !== "local") ||
-                            turn.productsMatchQuality) && (
-                            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                              {productsHeading(
-                                turn.productsMatchTier,
-                                turn.productsMatchQuality,
-                                turn.products,
-                              )}
-                            </h2>
-                          )}
-                          {groups.length > 1 ? (
-                            <CardCarousel
-                              items={groups}
-                              getKey={(group) => group.vendorId}
-                              renderItem={renderGroup}
-                              slideClassName="w-[280px] sm:w-[300px]"
-                            />
-                          ) : (
-                            <div className="max-w-[300px]">
-                              {renderGroup(groups[0])}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  {turn.weakProducts.length > 0 && (
-                    <div className="space-y-3">
-                      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                        A couple more options — not an exact match
-                      </h2>
-                      {turn.weakProducts.length > 1 ? (
-                        <CardCarousel
-                          items={turn.weakProducts}
-                          getKey={(match) => match.productId}
-                          renderItem={(match) => (
-                            <VendorResultCard match={match} />
-                          )}
-                        />
-                      ) : (
-                        <div className="max-w-[280px]">
-                          <VendorResultCard match={turn.weakProducts[0]} />
-                        </div>
-                      )}
+                  </>
+                ) : turn.externalStoreSuggestions.length > 0 &&
+                  !turn.buyerRequestOffered ? (
+                  // No Velte vendor matched — real nearby businesses via Google
+                  // Places (searchStores Tier 5), visibly distinct from an actual
+                  // Velte listing (see ExternalBusinessCard). `!buyerRequestOffered`
+                  // is the "Buyer Requests come first" gate (2026-08-16, see
+                  // offerBuyerRequestTool's own comment): Tier 5 can come back in
+                  // the SAME tool result as an otherwise-empty search, but on the
+                  // turn where the model is making the reach-out offer instead,
+                  // these stay hidden and this falls through to the dead-end
+                  // Compass card below — visually identical whether or not Places
+                  // secretly found something, so the offer is always what the
+                  // buyer sees first. They only render once a later turn
+                  // re-searches with the offer declined (buyerRequestOffered
+                  // false again that time).
+                  //
+                  // 2026-08-19: `reply` now wrapped in the same
+                  // AI_MESSAGE_BUBBLE_CLASS every other pure-text reply gets —
+                  // this was a bare fragment before, the one place in this
+                  // whole chain a plain-text reply didn't get bubble
+                  // treatment (BuyerRequestOfferWidget's own no_match message
+                  // had the identical gap — see that file's matching fix).
+                  <>
+                    <div className={AI_MESSAGE_BUBBLE_CLASS}>
+                      <FormattedReply text={turn.reply} />
                     </div>
-                  )}
-                  {turn.stores.length > 0 && (
-                    <div className="space-y-3">
-                      {(turn.products.length > 0 ||
-                        (turn.storesMatchTier &&
-                          turn.storesMatchTier !== "local") ||
-                        turn.storesMatchQuality) && (
-                        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          {storesHeading(
-                            turn.storesMatchTier,
-                            turn.storesMatchQuality,
-                          )}
-                        </h2>
-                      )}
-                      {turn.stores.length > 1 ? (
-                        <CardCarousel
-                          items={turn.stores}
-                          getKey={(store) => store.storeId}
-                          renderItem={(store) => (
-                            <StoreWithServices
-                              store={store}
-                              services={turn.storeServices.filter(
-                                (s) => s.vendorId === store.vendorId,
-                              )}
-                              // Only when this is a pure vendor/store result
-                              // (no product attached) — a dual-intent turn
-                              // already has a product for the buyer to
-                              // reference instead.
-                              searchQuery={
-                                turn.products.length === 0
-                                  ? turn.storesQuery
-                                  : null
-                              }
-                              isServicesOpen={
-                                expandedServicesVendorId === store.vendorId
-                              }
-                              onToggleServices={() =>
-                                onToggleServices(store.vendorId)
-                              }
-                            />
-                          )}
+                    {turn.externalStoreSuggestions.length > 1 ? (
+                      <CardCarousel
+                        items={turn.externalStoreSuggestions}
+                        getKey={(match) => match.name + match.address}
+                        renderItem={(match) => (
+                          <ExternalBusinessCard match={match} />
+                        )}
+                      />
+                    ) : (
+                      <div className="max-w-[280px]">
+                        <ExternalBusinessCard
+                          match={turn.externalStoreSuggestions[0]}
                         />
-                      ) : (
-                        // A lone result skips the carousel (nothing to
-                        // scroll to) but still caps to a normal card width
-                        // — matches the carousel's own slide width, so "1
-                        // result" and "many results" read as the same
-                        // design, not two different ones.
-                        <div className="max-w-[280px]">
-                          <StoreWithServices
-                            store={turn.stores[0]}
-                            services={turn.storeServices.filter(
-                              (s) => s.vendorId === turn.stores[0].vendorId,
-                            )}
-                            searchQuery={
-                              turn.products.length === 0
-                                ? turn.storesQuery
-                                : null
-                            }
-                            isServicesOpen={
-                              expandedServicesVendorId ===
-                              turn.stores[0].vendorId
-                            }
-                            onToggleServices={() =>
-                              onToggleServices(turn.stores[0].vendorId)
-                            }
-                          />
-                        </div>
-                      )}
-                      {(() => {
-                        const activeStore = turn.stores.find(
-                          (s) => s.vendorId === expandedServicesVendorId,
-                        );
-                        const activeServices = activeStore
-                          ? turn.storeServices.filter(
-                              (s) => s.vendorId === activeStore.vendorId,
-                            )
-                          : [];
-                        if (!activeStore || activeServices.length === 0)
-                          return null;
-                        return (
-                          <MatchingServicesThread
-                            storeName={activeStore.name}
-                            services={activeServices}
-                            panelRef={servicesThreadRef}
-                          />
-                        );
-                      })()}
-                    </div>
-                  )}
-                  {turn.furtherStores.length > 0 && (
-                    <div className="space-y-3">
-                      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                        Also available further out
-                      </h2>
-                      {turn.furtherStores.length > 1 ? (
-                        <CardCarousel
-                          items={turn.furtherStores}
-                          getKey={(store) => store.storeId}
-                          renderItem={(store) => (
-                            <StoreWithServices
-                              store={store}
-                              services={turn.storeServices.filter(
-                                (s) => s.vendorId === store.vendorId,
-                              )}
-                              searchQuery={
-                                turn.products.length === 0
-                                  ? turn.storesQuery
-                                  : null
-                              }
-                              isServicesOpen={
-                                expandedServicesVendorId === store.vendorId
-                              }
-                              onToggleServices={() =>
-                                onToggleServices(store.vendorId)
-                              }
-                            />
-                          )}
-                        />
-                      ) : (
-                        <div className="max-w-[280px]">
-                          <StoreWithServices
-                            store={turn.furtherStores[0]}
-                            services={turn.storeServices.filter(
-                              (s) =>
-                                s.vendorId === turn.furtherStores[0].vendorId,
-                            )}
-                            searchQuery={
-                              turn.products.length === 0
-                                ? turn.storesQuery
-                                : null
-                            }
-                            isServicesOpen={
-                              expandedServicesVendorId ===
-                              turn.furtherStores[0].vendorId
-                            }
-                            onToggleServices={() =>
-                              onToggleServices(turn.furtherStores[0].vendorId)
-                            }
-                          />
-                        </div>
-                      )}
-                      {(() => {
-                        const activeStore = turn.furtherStores.find(
-                          (s) => s.vendorId === expandedServicesVendorId,
-                        );
-                        const activeServices = activeStore
-                          ? turn.storeServices.filter(
-                              (s) => s.vendorId === activeStore.vendorId,
-                            )
-                          : [];
-                        if (!activeStore || activeServices.length === 0)
-                          return null;
-                        return (
-                          <MatchingServicesThread
-                            storeName={activeStore.name}
-                            services={activeServices}
-                            panelRef={servicesThreadRef}
-                          />
-                        );
-                      })()}
-                    </div>
-                  )}
-                </>
-              ) : turn.externalStoreSuggestions.length > 0 &&
-                !turn.buyerRequestOffered ? (
-                // No Velte vendor matched — real nearby businesses via Google
-                // Places (searchStores Tier 5), visibly distinct from an actual
-                // Velte listing (see ExternalBusinessCard). `!buyerRequestOffered`
-                // is the "Buyer Requests come first" gate (2026-08-16, see
-                // offerBuyerRequestTool's own comment): Tier 5 can come back in
-                // the SAME tool result as an otherwise-empty search, but on the
-                // turn where the model is making the reach-out offer instead,
-                // these stay hidden and this falls through to the dead-end
-                // Compass card below — visually identical whether or not Places
-                // secretly found something, so the offer is always what the
-                // buyer sees first. They only render once a later turn
-                // re-searches with the offer declined (buyerRequestOffered
-                // false again that time).
-                //
-                // 2026-08-19: `reply` now wrapped in the same
-                // AI_MESSAGE_BUBBLE_CLASS every other pure-text reply gets —
-                // this was a bare fragment before, the one place in this
-                // whole chain a plain-text reply didn't get bubble
-                // treatment (BuyerRequestOfferWidget's own no_match message
-                // had the identical gap — see that file's matching fix).
-                <>
+                      </div>
+                    )}
+                  </>
+                ) : turn.buyerRequestOffer ? (
+                  // createBuyerRequest ran this turn (see systemPrompt.ts) —
+                  // real agent action, not a dead end, so this gets the same
+                  // message-bubble treatment as every other pure-text reply,
+                  // never the "nothing found anywhere" Compass treatment.
                   <div className={AI_MESSAGE_BUBBLE_CLASS}>
                     <FormattedReply text={turn.reply} />
                   </div>
-                  {turn.externalStoreSuggestions.length > 1 ? (
-                    <CardCarousel
-                      items={turn.externalStoreSuggestions}
-                      getKey={(match) => match.name + match.address}
-                      renderItem={(match) => (
-                        <ExternalBusinessCard match={match} />
-                      )}
+                ) : turn.buyerRequestOffered ? (
+                  // offerBuyerRequest ran this turn (see offerBuyerRequestTool's
+                  // own comment) — the model is actively making the reach-out
+                  // offer in `reply`'s text right now. There's a real next step
+                  // on the table, so this is NOT a dead end either — same
+                  // message-bubble treatment, not the "nothing found anywhere"
+                  // Compass case below. The Yes/No pair turns that next step
+                  // into an actual click instead of the buyer having to type
+                  // "yes" — both just submit canned text as the next message,
+                  // same mechanism ClarificationPrompt's "choice" pills already
+                  // use (see handleClarificationAnswer), so no new plumbing
+                  // was needed for this. Only rendered on the latest turn, same
+                  // gate every other still-actionable widget in this thread
+                  // uses — an answered offer shouldn't still show buttons on
+                  // scrollback.
+                  <div className={cn(AI_MESSAGE_BUBBLE_CLASS, "space-y-3")}>
+                    <FormattedReply text={turn.reply} />
+                    {isLatest && (
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onAnswerClarification("Yes, find someone")
+                          }
+                          className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
+                        >
+                          Yes, find someone
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onAnswerClarification("No thanks, that's okay")
+                          }
+                          className="text-sm text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                        >
+                          No thanks
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : !turn.toolCalled ? (
+                  // The model asked a clarifying question instead of searching
+                  // (see systemPrompt.ts) — same message-bubble treatment as
+                  // the text above a result grid, never the "nothing found
+                  // anywhere" case below: the conversation is still open, not
+                  // a dead end.
+                  <div className={AI_MESSAGE_BUBBLE_CLASS}>
+                    <FormattedReply text={turn.reply} />
+                  </div>
+                ) : (
+                  // A real search ran and came up completely empty, with no
+                  // further move on the table (no reach-out offer, no
+                  // clarification) — genuinely nothing to show. Still just a
+                  // message, not product/vendor cards, so it gets the same
+                  // message-bubble treatment as every other pure-text reply
+                  // (see AI_MESSAGE_BUBBLE_CLASS) rather than sitting bare —
+                  // only the actual result cards stay unboxed.
+                  <div
+                    className={cn(
+                      AI_MESSAGE_BUBBLE_CLASS,
+                      "flex items-start gap-2.5",
+                    )}
+                  >
+                    <CompassIcon
+                      size={18}
+                      className="text-orange-400 shrink-0 mt-0.5"
                     />
-                  ) : (
-                    <div className="max-w-[280px]">
-                      <ExternalBusinessCard
-                        match={turn.externalStoreSuggestions[0]}
-                      />
-                    </div>
-                  )}
-                </>
-              ) : turn.buyerRequestOffer ? (
-                // createBuyerRequest ran this turn (see systemPrompt.ts) —
-                // real agent action, not a dead end, so this gets the same
-                // message-bubble treatment as every other pure-text reply,
-                // never the "nothing found anywhere" Compass treatment.
-                <div className={AI_MESSAGE_BUBBLE_CLASS}>
-                  <FormattedReply text={turn.reply} />
-                </div>
-              ) : turn.buyerRequestOffered ? (
-                // offerBuyerRequest ran this turn (see offerBuyerRequestTool's
-                // own comment) — the model is actively making the reach-out
-                // offer in `reply`'s text right now. There's a real next step
-                // on the table, so this is NOT a dead end either — same
-                // message-bubble treatment, not the "nothing found anywhere"
-                // Compass case below. The Yes/No pair turns that next step
-                // into an actual click instead of the buyer having to type
-                // "yes" — both just submit canned text as the next message,
-                // same mechanism ClarificationPrompt's "choice" pills already
-                // use (see handleClarificationAnswer), so no new plumbing
-                // was needed for this. Only rendered on the latest turn, same
-                // gate every other still-actionable widget in this thread
-                // uses — an answered offer shouldn't still show buttons on
-                // scrollback.
-                <div className={cn(AI_MESSAGE_BUBBLE_CLASS, "space-y-3")}>
-                  <FormattedReply text={turn.reply} />
-                  {isLatest && (
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onAnswerClarification("Yes, find someone")
-                        }
-                        className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
-                      >
-                        Yes, find someone
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onAnswerClarification("No thanks, that's okay")
-                        }
-                        className="text-sm text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-                      >
-                        No thanks
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : !turn.toolCalled ? (
-                // The model asked a clarifying question instead of searching
-                // (see systemPrompt.ts) — same message-bubble treatment as
-                // the text above a result grid, never the "nothing found
-                // anywhere" case below: the conversation is still open, not
-                // a dead end.
-                <div className={AI_MESSAGE_BUBBLE_CLASS}>
-                  <FormattedReply text={turn.reply} />
-                </div>
-              ) : (
-                // A real search ran and came up completely empty, with no
-                // further move on the table (no reach-out offer, no
-                // clarification) — genuinely nothing to show. Still just a
-                // message, not product/vendor cards, so it gets the same
-                // message-bubble treatment as every other pure-text reply
-                // (see AI_MESSAGE_BUBBLE_CLASS) rather than sitting bare —
-                // only the actual result cards stay unboxed.
-                <div
-                  className={cn(
-                    AI_MESSAGE_BUBBLE_CLASS,
-                    "flex items-start gap-2.5",
-                  )}
-                >
-                  <CompassIcon
-                    size={18}
-                    className="text-orange-400 shrink-0 mt-0.5"
-                  />
-                  <FormattedReply text={turn.reply} />
-                </div>
-              )}
-              {/* Sits after, not inside, the chain above — so the rare turn
+                    <FormattedReply text={turn.reply} />
+                  </div>
+                )}
+                {/* Sits after, not inside, the chain above — so the rare turn
               where the model both ran a real search AND asked a follow-up
               question still shows the results AND this widget, rather than
               one silently suppressing the other. Only actionable (rendered
@@ -1300,33 +1431,34 @@ function ConversationTurnView({
               own big, auto-resizing textarea answers it directly now (see
               pendingTextClarification's own comment) instead of this
               widget's separate, fixed-height input. */}
-              {turn.clarification &&
-                turn.clarification.kind !== "name" &&
-                turn.clarification.kind !== "text" &&
-                isLatest && (
-                  <ClarificationPrompt
-                    clarification={turn.clarification}
-                    onAnswer={onAnswerClarification}
-                    onLocationShared={onLocationShared}
-                    onPickItem={onPickItem}
-                  />
-                )}
-              {/* "needs_identity" excluded — SearchHome.tsx's own composer
+                {turn.clarification &&
+                  turn.clarification.kind !== "name" &&
+                  turn.clarification.kind !== "text" &&
+                  isLatest && (
+                    <ClarificationPrompt
+                      clarification={turn.clarification}
+                      onAnswer={onAnswerClarification}
+                      onLocationShared={onLocationShared}
+                      onPickItem={onPickItem}
+                    />
+                  )}
+                {/* "needs_identity" excluded — SearchHome.tsx's own composer
                   (see IdentityCapture) takes over the phone/OTP exchange
                   entirely now, narrated as ordinary follow-up turns
                   instead of an inline form widget here. This only ever
                   renders the "created" confirmation card now — see that
                   component's own comment for why "no_match"/"error" have
                   nothing left to render here either. */}
-              {turn.buyerRequestOffer &&
-                turn.buyerRequestOffer.status !== "needs_identity" &&
-                isLatest && (
-                  <BuyerRequestOfferWidget offer={turn.buyerRequestOffer} />
-                )}
-            </div>
-          )}
+                {turn.buyerRequestOffer &&
+                  turn.buyerRequestOffer.status !== "needs_identity" &&
+                  isLatest && (
+                    <BuyerRequestOfferWidget offer={turn.buyerRequestOffer} />
+                  )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -1364,6 +1496,46 @@ export function SearchHome() {
   >(null);
   function toggleServices(vendorId: string) {
     setExpandedServicesVendorId((cur) => (cur === vendorId ? null : vendorId));
+  }
+
+  // Editing a past buyer message — ChatGPT-style: swaps that one bubble
+  // into an inline textarea, Save discards it and everything after it
+  // (the rest of the conversation is only valid in light of what was
+  // originally asked, so it can't just be left dangling), then resubmits
+  // the edited text through the exact same path a brand-new message takes.
+  // At most one turn editable at a time — starting a new edit while
+  // another is open just moves it (handleStartEdit below doesn't guard
+  // against this, since ConversationTurnView already only ever shows the
+  // Edit button on turns that aren't currently loading, and there's no UI
+  // path to open two at once).
+  const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  function handleStartEdit(turn: ConversationTurn) {
+    setEditingTurnId(turn.id);
+    setEditDraft(turn.query);
+  }
+  function handleCancelEdit() {
+    setEditingTurnId(null);
+    setEditDraft("");
+  }
+  async function handleSaveEdit(turn: ConversationTurn) {
+    const newMessage = editDraft.trim();
+    if (!newMessage || isSending) return;
+    setEditingTurnId(null);
+    setEditDraft("");
+    // Same image (if any) carries over unchanged — only the TEXT is
+    // editable; re-attaching/replacing a photo isn't part of this flow.
+    const editedImageUrl = turn.imageUrl;
+    const editedImagePreview = turn.imagePreview;
+    setTurns((prev) => {
+      const idx = prev.findIndex((t) => t.id === turn.id);
+      return idx === -1 ? prev : prev.slice(0, idx);
+    });
+    await submitWithLocationGate(
+      newMessage,
+      editedImageUrl,
+      editedImagePreview,
+    );
   }
   // This page is public (no buyer account) — a vendor can land here too, and
   // must never be silently bounced to /auth/login just for loading it (see
@@ -1540,8 +1712,11 @@ export function SearchHome() {
       // Exactly the same path a clarification answer typed into
       // ClarificationPrompt's own inline widget already goes through — the
       // buyer's name is just their next ordinary message, nothing routes
-      // this any differently once it leaves the composer.
-      await submitMessage(value, null, null);
+      // this any differently once it leaves the composer. `isContinuation`
+      // — a typed name is never a fresh search query, and the server can't
+      // tell that from the text alone (see SearchRequestBody's own
+      // comment).
+      await submitMessage(value, null, null, true);
     } finally {
       setNameSubmitting(false);
     }
@@ -2114,11 +2289,13 @@ export function SearchHome() {
     settleBackgroundItem(turnId, "resolved", label);
   }
 
-  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file later
-    if (!file) return;
-
+  // The actual validate → preview → upload pipeline, shared by every way a
+  // photo can attach to the composer — the file-picker (handleImageSelect
+  // below) and pasting an image (handleComposerPaste) both funnel through
+  // this SAME function, so a pasted photo goes through the exact "natural
+  // flow" a picked one already did, not a parallel reimplementation that
+  // could quietly drift from it.
+  async function handleImageFile(file: File) {
     const validationError = validateImageFile(file);
     if (validationError) {
       toast.error(validationError);
@@ -2126,6 +2303,20 @@ export function SearchHome() {
     }
 
     setImagePreview(URL.createObjectURL(file));
+
+    // If this exact image was just copied from one of this conversation's
+    // own bubbles (CopyMessageButton registers it there — see
+    // copiedImageRegistry's own comment), reuse that upload instead of
+    // creating a redundant duplicate for pixel-identical content. Only
+    // ever matches a paste-right-back within this same browser tab/session
+    // — any other image genuinely is new and falls through to a real
+    // upload below.
+    const knownUrl = lookupCopiedImage(await hashBlob(file));
+    if (knownUrl) {
+      setImageUrl(knownUrl);
+      return;
+    }
+
     setImageUrl(null);
     setUploadingImage(true);
     try {
@@ -2137,6 +2328,42 @@ export function SearchHome() {
     } finally {
       setUploadingImage(false);
     }
+  }
+
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    await handleImageFile(file);
+  }
+
+  // Pasting a copied buyer message (see CopyMessageButton's own comment —
+  // it writes both the image and the text to the clipboard together, when
+  // the original message had a photo) should reconstruct it exactly, not
+  // just drop the image on the floor because a plain <textarea> has no
+  // native way to paste one in. Only intervenes when the clipboard
+  // actually contains an image — an ordinary text paste is left
+  // completely alone, falling through to the browser's own default
+  // handling. Once an image IS found, this takes over the whole paste
+  // (preventDefault) and applies both halves itself: the image through
+  // handleImageFile (the identical pipeline the file-picker uses), and
+  // any text/plain alongside it appended into the query — the default
+  // insertion that would have happened for that part on its own, now done
+  // by hand since the rest of the event was suppressed.
+  function handleComposerPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageItem = Array.from(items).find((item) =>
+      item.type.startsWith("image/"),
+    );
+    if (!imageItem) return; // no image — let the ordinary text paste through
+
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (file) void handleImageFile(file);
+
+    const text = e.clipboardData.getData("text/plain");
+    if (text) setQuery((prev) => (prev ? `${prev} ${text}` : text));
   }
 
   function clearImage() {
@@ -2170,6 +2397,7 @@ export function SearchHome() {
     turnId: string,
     message: string,
     currentImageUrl: string | null,
+    isContinuation = false,
   ): Promise<void> {
     // Text-only history from prior completed turns (see SearchHistoryTurn) —
     // built before the new turn is appended, so it doesn't include itself.
@@ -2221,6 +2449,7 @@ export function SearchHome() {
         buyerLocation: buyerLocationRef.current ?? undefined,
         history,
         recentStatuses: shownStatusesRef.current,
+        isContinuation,
       },
       {
         onStatus: (text) => {
@@ -2371,20 +2600,22 @@ export function SearchHome() {
           updateTurn(turnId, { phase: "done", error: errorMessage });
         },
         // The buyer hit Stop (handleStop) — a deliberate cancel, not a
-        // failure, so this gets its own quiet wrap-up rather than
-        // onError's scarier "couldn't reach search" wording. No results,
-        // no error styling — `toolCalled: false` keeps it out of the
-        // "genuinely nothing found" dead-end rendering too (that branch
-        // checks toolCalled, and no search actually finished this time).
-        // Whatever status/interim-reply bubbles already arrived before the
-        // stop stay exactly where they are — only this final wrap-up line
-        // is new.
+        // failure. Per explicit request, this shows NO wrap-up bubble of
+        // its own ("Stopped generating." used to be sent as `reply` here,
+        // which rendered as a full chat bubble) — the buyer already sees
+        // the search stop, since `stopped: true` (via ConversationTurnView's
+        // own render gate) suppresses the whole final-content block for
+        // this turn entirely. Whatever status/interim-reply bubbles already
+        // arrived before the stop stay exactly where they are; the
+        // shimmering status line just stops the instant `phase` flips to
+        // "done", nothing new appears to replace it.
         onAbort: () => {
           updateTurn(turnId, {
             phase: "done",
-            reply: "Stopped generating.",
+            reply: "",
             toolCalled: false,
             clarification: null,
+            stopped: true,
           });
         },
       },
@@ -2421,6 +2652,11 @@ export function SearchHome() {
     message: string,
     currentImageUrl: string | null,
     currentImagePreview: string | null,
+    // See SearchRequestBody's own comment — true only from a call site that
+    // KNOWS this text is answering something already in progress (name
+    // capture, a clarification answer, "Shared my location"), never guessed
+    // here from the text itself.
+    isContinuation = false,
   ): Promise<void> {
     const turnId = generateUUID();
     setTurns((prev) => [
@@ -2435,7 +2671,7 @@ export function SearchHome() {
           : "Understanding your request…",
       ),
     ]);
-    await runSearchIntoTurn(turnId, message, currentImageUrl);
+    await runSearchIntoTurn(turnId, message, currentImageUrl, isContinuation);
   }
 
   // Silent best-effort attempt at the buyer's location — never shows a
@@ -2756,7 +2992,10 @@ export function SearchHome() {
     if (lastTurn?.buyerRequestOffered && text === "No thanks, that's okay") {
       concludeCurrentItemFlow();
     }
-    void submitMessage(text, null, null);
+    // `isContinuation` — a clarification answer is never a fresh search
+    // query, whatever its own text happens to say (see SearchRequestBody's
+    // own comment).
+    void submitMessage(text, null, null, true);
   }
 
   // The "location" clarification's own answer path (LocationShareAction, via
@@ -2774,7 +3013,10 @@ export function SearchHome() {
   function handleLocationShared(location: BuyerLocation) {
     buyerLocationRef.current = location;
     toast.success("Got your location!");
-    void submitMessage("Shared my location", null, null);
+    // `isContinuation` — this canned string stands in for the buyer's
+    // action, not a fresh search query (see SearchRequestBody's own
+    // comment).
+    void submitMessage("Shared my location", null, null, true);
   }
 
   // Appends a turn for one step of the identity-capture exchange (see
@@ -3150,15 +3392,26 @@ export function SearchHome() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleComposerKeyDown}
-            disabled={hasPendingClarification && !pendingTextClarification}
+            onPaste={handleComposerPaste}
+            // `isSending` — per explicit request, the composer locks while
+            // Velte is still generating a response, same as the Send
+            // button already effectively required (trySubmit's own
+            // isSending guard) but now visibly so, instead of letting the
+            // buyer type and hit Enter into what silently no-ops.
+            disabled={
+              (hasPendingClarification && !pendingTextClarification) ||
+              isSending
+            }
             placeholder={
-              pendingTextClarification
-                ? "Type your answer…"
-                : hasPendingClarification
-                  ? "Answer the question above to continue…"
-                  : collapsed
-                    ? "Ask a follow-up, or search for something else…"
-                    : "e.g. 'Tecno fast charger near me'"
+              isSending
+                ? "Velte is still working on that…"
+                : pendingTextClarification
+                  ? "Type your answer…"
+                  : hasPendingClarification
+                    ? "Answer the question above to continue…"
+                    : collapsed
+                      ? "Ask a follow-up, or search for something else…"
+                      : "e.g. 'Tecno fast charger near me'"
             }
             className="w-full resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 disabled:opacity-50"
           />
@@ -3173,7 +3426,7 @@ export function SearchHome() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingImage || hasPendingClarification}
+              disabled={uploadingImage || hasPendingClarification || isSending}
               title="Search with a photo"
               className="shrink-0 w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
             >
@@ -3274,6 +3527,13 @@ export function SearchHome() {
                     onPickItem={handleItemPick}
                     expandedServicesVendorId={expandedServicesVendorId}
                     onToggleServices={toggleServices}
+                    isEditing={editingTurnId === turn.id}
+                    editDraft={editDraft}
+                    onEditDraftChange={setEditDraft}
+                    onStartEdit={() => handleStartEdit(turn)}
+                    onSaveEdit={() => void handleSaveEdit(turn)}
+                    onCancelEdit={handleCancelEdit}
+                    canEdit={!isSending}
                   />
                 </div>
               ))}

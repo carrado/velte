@@ -1,5 +1,6 @@
 import { stepCountIs, type ModelMessage, type UserContent } from "ai";
 
+import { buildProductTerm } from "@/lib/productTerm";
 import { callLLM } from "@/lib/server/ai/router";
 import { backendData } from "@/lib/server/backend";
 import { aiSearchFetch } from "@/lib/server/aiSearchBackend";
@@ -15,6 +16,7 @@ import { getVendorProductsTool } from "@/lib/server/ai/getVendorProductsTool";
 import { askClarifyingQuestionTool } from "@/lib/server/ai/askClarifyingQuestionTool";
 import { createBuyerRequestTool } from "@/lib/server/ai/createBuyerRequestTool";
 import { offerBuyerRequestTool } from "@/lib/server/ai/offerBuyerRequestTool";
+import { buildRequestDescriptionTool } from "@/lib/server/ai/buildRequestDescriptionTool";
 import {
   understandingRequestPhrase,
   pickAvoiding,
@@ -30,10 +32,14 @@ import {
 import {
   buildSystemPrompt,
   buildAgreementOnlySystemPrompt,
+  buildDescriptionOnlySystemPrompt,
   buildScopeCheckSystemPrompt,
 } from "@/lib/server/ai/systemPrompt";
 import { classifyScopeTool } from "@/lib/server/ai/classifyScopeTool";
-import { getSectorClarifiers } from "@/lib/server/ai/sectorClarifiers";
+import {
+  getSectorClarifiers,
+  looksLikeServiceTask,
+} from "@/lib/server/ai/sectorClarifiers";
 import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
 import type {
   BackgroundSearchItem,
@@ -297,6 +303,12 @@ function tokenize(text: string): string[] {
     .filter((t) => t.length > 1 && !STOPWORDS.has(t))
     .map(stem);
 }
+
+// buildProductTerm (product + attributes, deduped against restatement —
+// see src/lib/productTerm.ts's own comment) lives there, not here, since
+// SearchHome.tsx's own backgroundItemLabel needs the identical fix and
+// can't import a server-only file — see that file's own import.
+
 // Fraction of the query's own (non-stopword) tokens that also appear in the
 // candidate text — deliberately query-token-normalized, not candidate-
 // normalized: a long service description shouldn't get penalized for
@@ -321,10 +333,23 @@ function relevanceScore(query: string, candidateText: string): number {
 // check word overlap instead: a paraphrase of the same item shares real
 // vocabulary with it ("power bank" / "power bank retailer" — real overlap);
 // two actually different things typically don't ("laptop screen repair" /
-// "plumber" — none). Deliberately a cheap heuristic, not a model
-// self-report — a wrong call here only costs one extra background search on
-// route.ts's own dime, never something the buyer pays for or notices as
-// broken.
+// "plumber" — none). Deliberately a cheap heuristic — and, since a false
+// positive here means the buyer sees a fabricated, confusing choice rather
+// than just an extra background search, no longer trusted alone: the call
+// site also requires hasMultipleIntents (classifyScopeTool.ts, the
+// dedicated pre-flight classifier judging intent count straight from the
+// buyer's own words, before any tool call happens) to independently agree
+// first. That classifier was added specifically because THIS heuristic
+// still isn't reliable enough on its own — found live: a photo of one item
+// + the caption "where can I get this" got the model to call
+// searchProducts for the identified item, hit the same zero-result
+// mandatory cascade described below, and land on a store term sharing
+// neither a literal token nor a SAME_NEED_VERBS verb with the product term
+// — passing this function's own check and getting misread as two separate
+// needs even though the buyer only ever asked about the one thing in the
+// photo. Requiring both signals to agree is strictly more conservative
+// than either alone, which is the right direction for a check whose
+// failure mode is a buyer-visible, made-up split.
 //
 // Found live: "I need someone who can fix my Infinix Hot 50i" — a SINGLE
 // need — got the model to call searchProducts("Infinix Hot 50i repair")
@@ -741,6 +766,16 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
     buyerRequestOffered,
     productCall,
     storeCall,
+    // ALL searchStores/searchProducts calls this turn, not just the
+    // latest — needed by the dual-intent detection's own "same tool
+    // called twice" shapes below (see that block's comment): productCall/
+    // storeCall alone (.findLast) can't tell two genuinely different
+    // calls apart from one call repeated, since each only ever keeps the
+    // most recent one.
+    storeCalls: result.toolCalls.filter((c) => c.toolName === "searchStores"),
+    productCalls: result.toolCalls.filter(
+      (c) => c.toolName === "searchProducts",
+    ),
   };
 }
 
@@ -950,28 +985,44 @@ export async function POST(req: Request) {
       // comment for why this is its OWN dedicated call, run first, before
       // anything else this turn touches (before the first status line,
       // before sectorClarifiers, before the location gate, before the main
-      // model call). Also reports namesPlace — see classifyScopeTool.ts's
-      // own comment for why that rides along on this SAME call rather than
-      // a second dedicated round trip. A bare photo (no text, or text
-      // alongside it) is always presumptively in scope — skipped entirely,
-      // same as the gibberish check above, both to avoid a second
-      // vision-model call for every photo search AND because
-      // systemPrompt.ts's own photo-identification path already treats a
-      // bare image as a first-class shopping signal on its own.
-      // `inScope ?? true`/`namesPlace ?? false` both fail toward "let the
-      // buyer through" — if the classifier call itself errors, or the
-      // model somehow returns without calling classifyScope at all, a real
-      // buyer's genuine request must never be silently blocked over an
-      // infrastructure hiccup; the main call's own embedded scope judgment
-      // (buildSystemPrompt's own paragraph) and location gate are still
-      // there as a second line of defense either way.
+      // model call). Also reports namesPlace and hasMultipleIntents — see
+      // classifyScopeTool.ts's own comment for why both ride along on this
+      // SAME call rather than a separate dedicated round trip each.
+      //
+      // Runs on ANY turn with real caption/message text, image attached or
+      // not — text-only (scopeCheckMessages below deliberately drops the
+      // image, see classifyScopeTool.ts's comment on why hasMultipleIntents
+      // doesn't need it), so attaching an image never adds a second
+      // vision-model call here. A BARE photo with no caption at all is
+      // still skipped entirely (message is empty) — there's no text to
+      // read intent count from, and systemPrompt.ts's own
+      // photo-identification path already treats a bare image as a
+      // first-class, single-item shopping signal on its own.
+      //
+      // inScope is only ever acted on when there's NO image this turn — a
+      // photo is presumptively in scope regardless of how a thin caption
+      // alone reads (a bare "check this out" next to a product photo could
+      // easily misread as off-topic from text alone). `inScope ?? true`,
+      // `namesPlace ?? false`, and `hasMultipleIntents ?? false` all fail
+      // toward the safer default — if the classifier call itself errors, or
+      // the model somehow returns without calling classifyScope at all, a
+      // real buyer's genuine request must never be silently blocked, and a
+      // single-item turn must never be wrongly split, over an
+      // infrastructure hiccup. The main call's own embedded scope judgment
+      // (buildSystemPrompt's own paragraph) and the downstream
+      // isGenuineDualIntent heuristic are both still there as a second line
+      // of defense either way.
       let namesPlace = false;
-      if (message && !imageUrl) {
+      let hasMultipleIntents = false;
+      if (message) {
         try {
+          const scopeCheckMessages: ModelMessage[] = imageUrl
+            ? [...historyMessages, { role: "user", content: message }]
+            : messages;
           const scopeResult = await callLLM(
             {
               system: buildScopeCheckSystemPrompt(),
-              messages,
+              messages: scopeCheckMessages,
               tools: { classifyScope: classifyScopeTool() },
               toolChoice: "required",
             },
@@ -979,8 +1030,14 @@ export async function POST(req: Request) {
           );
           const scopeOutput = scopeResult.toolResults.find(
             (r) => r.toolName === "classifyScope",
-          )?.output as { inScope: boolean; namesPlace: boolean } | undefined;
-          if (scopeOutput?.inScope === false) {
+          )?.output as
+            | {
+                inScope: boolean;
+                namesPlace: boolean;
+                hasMultipleIntents: boolean;
+              }
+            | undefined;
+          if (scopeOutput?.inScope === false && !imageUrl) {
             sendBareFinal(
               "That doesn't look like something I can search for — I'm a shopping assistant for Velte, here to help you find products, food, services, or vendors. What are you looking for?",
               null,
@@ -988,6 +1045,7 @@ export async function POST(req: Request) {
             return;
           }
           namesPlace = scopeOutput?.namesPlace ?? false;
+          hasMultipleIntents = scopeOutput?.hasMultipleIntents ?? false;
         } catch (err) {
           console.error("[search] scope check failed, failing open:", err);
         }
@@ -1054,7 +1112,13 @@ export async function POST(req: Request) {
       // Sent live, before buffering ever turns on — this happens before
       // any tool has even been given a chance to run, so there's nothing
       // to protect it from.
-      push(understandingRequestPhrase(Boolean(imageUrl), message));
+      push(
+        understandingRequestPhrase(
+          Boolean(imageUrl),
+          message,
+          Boolean(body?.isContinuation),
+        ),
+      );
 
       // Populated by searchProductsTool's execute(), outside the model's own
       // return value — see that tool's weakResultsOut doc comment. Declared
@@ -1113,10 +1177,20 @@ export async function POST(req: Request) {
           Boolean(body?.buyerLocation),
           sectorClarifiers,
         );
-        // Groq is text-only — never route an image query to it.
-        const providerOrder: ("openai" | "groq")[] = imageUrl
-          ? ["openai"]
-          : ["openai", "groq"];
+        // "openai-strong" (gpt-5-mini, low reasoning effort — see
+        // router.ts's own PROVIDERS comment) is the primary for every call
+        // that shares this order: the main tool-calling call below, the
+        // agreement-only short-circuit, and their retries — the actual
+        // multi-step, many-instruction decisions this whole file's worth of
+        // deterministic guardrails grew up around. Falls through to plain
+        // "openai" (gpt-4o-mini) on a 429/503 before ever reaching Groq, so
+        // a rate limit doesn't drop straight to the weakest tier. Groq is
+        // text-only — never route an image query to it, and gpt-5-mini is
+        // multimodal same as gpt-4o-mini was, so the image chain doesn't
+        // need a separate model tier of its own.
+        const providerOrder: ("openai-strong" | "openai" | "groq")[] = imageUrl
+          ? ["openai-strong", "openai"]
+          : ["openai-strong", "openai", "groq"];
 
         // Deterministic short-circuit — don't trust the model to reliably
         // recognize "the buyer just agreed to my own earlier reach-out
@@ -1154,6 +1228,124 @@ export async function POST(req: Request) {
           !isOfferDeclineReply(message);
 
         if (isAnsweringOffer) {
+          // Pre-check — per explicit request, verify a real vendor
+          // actually exists BEFORE ever asking the buyer for their name,
+          // rather than discovering it only after they've invested a name
+          // into the exchange. Found live: the offer above gets triggered
+          // by a short, clean sector-match term ("wedding decoration
+          // services"), but createBuyerRequest's own matching re-embeds
+          // and searches `description` instead — a longer, model-authored
+          // summary combining item + budget + timeframe + more, which can
+          // legitimately score below match threshold in vector search
+          // even for the SAME vendor the short term matched cleanly. A
+          // buyer agreed, gave their name, and still landed on "couldn't
+          // find anyone to contact" — this runs that exact same search a
+          // step earlier, on the exact query createBuyerRequest will
+          // actually use, so a doomed offer never gets that far. See
+          // buildRequestDescriptionTool's own comment for the full story.
+          const descriptionResult = await callLLM(
+            {
+              system: buildDescriptionOnlySystemPrompt(message),
+              messages,
+              tools: {
+                buildRequestDescription: buildRequestDescriptionTool(),
+              },
+              toolChoice: "required",
+              stopWhen: stepCountIs(1),
+            },
+            providerOrder,
+          );
+          const candidateDescription = (
+            descriptionResult.toolResults.find(
+              (r) => r.toolName === "buildRequestDescription",
+            )?.output as { description?: string } | undefined
+          )?.description?.trim();
+
+          // Fails OPEN (treated as "a match exists") on any hiccup — an
+          // infrastructure error in this EXTRA verification step must
+          // never block a buyer from an otherwise-working reach-out flow;
+          // the existing no_match handling further below is still there
+          // as a real backstop if this optimistic assumption turns out
+          // wrong.
+          let hasRealMatch = true;
+          let preCheckExternalSuggestions: NearbyBusiness[] = [];
+          if (candidateDescription) {
+            try {
+              const [productCheck, storeCheck] = await Promise.all([
+                searchProductsCore(
+                  { product: candidateDescription },
+                  { buyerLocation: body?.buyerLocation },
+                ),
+                searchStoresCore(
+                  { businessType: candidateDescription },
+                  { buyerLocation: body?.buyerLocation },
+                ),
+              ]);
+              const productHits =
+                "results" in productCheck ? productCheck.results.length : 0;
+              const storeHits =
+                "results" in storeCheck ? storeCheck.results.length : 0;
+              hasRealMatch = productHits > 0 || storeHits > 0;
+              if (!hasRealMatch) {
+                preCheckExternalSuggestions = Array.from(
+                  new Map(
+                    [
+                      ...("results" in productCheck
+                        ? productCheck.externalSuggestions
+                        : []),
+                      ...("results" in storeCheck
+                        ? storeCheck.externalSuggestions
+                        : []),
+                    ].map((b) => [b.placeId, b]),
+                  ).values(),
+                );
+              }
+            } catch (err) {
+              console.error(
+                "[search] buyer-request pre-check failed, failing open:",
+                err,
+              );
+            }
+          }
+
+          if (!hasRealMatch && candidateDescription) {
+            const offer: BuyerRequestOffer = {
+              status: "no_match",
+              description: candidateDescription,
+            };
+            controller.enqueue(
+              encodeEvent({
+                type: "final",
+                reply: buyerRequestStatusReply(offer),
+                toolCalled: false,
+                clarification: null,
+                products: [],
+                weakProducts: [],
+                stores: [],
+                furtherStores: [],
+                storesQuery: null,
+                productStores: [],
+                storeServices: [],
+                productsMatchTier: null,
+                storesMatchTier: null,
+                productsMatchQuality: undefined,
+                storesMatchQuality: undefined,
+                externalStoreSuggestions: preCheckExternalSuggestions,
+                vendorProducts: [],
+                vendorProductsStore: null,
+                buyerRequestOffer: offer,
+                buyerRequestOffered: false,
+                backgroundItems: [],
+                dualIntentItemALabel: null,
+                // Terminal — never asked for a name, so there's no open
+                // exchange for the buyer's next message to route back
+                // into.
+                awaitingBuyerRequestReply: false,
+              }),
+            );
+            return;
+          }
+
           // stepCountIs(1), not 2 — capped at EXACTLY one tool call on
           // purpose (see buyerRequestStatusReply's own comment): letting
           // the model take a second step to write its own natural-language
@@ -1589,6 +1781,83 @@ export async function POST(req: Request) {
         // matter what the model itself decided to call this turn — let it
         // fall through to the ordinary pipeline below instead, same as any
         // other agreement turn.
+        // Shared tail for every dual-intent shape below (product+store,
+        // store+store, product+product): discards whatever this turn's
+        // real tool calls already pushed into the status buffer (see
+        // bufferingStatuses' own comment up top — both sides' results are
+        // deferred to whichever the buyer picks, via SearchHome.tsx's own
+        // direct POST /api/search/resolve-item, never this initial pass),
+        // narrates the split, and sends the item_pick clarification. Each
+        // caller's own job is only to detect its shape and build the two
+        // items/labels — this is what used to be duplicated three times
+        // (once per shape) before being pulled out here. Always the last
+        // thing a caller does — every call site immediately `return`s
+        // right after.
+        function emitDualIntentSplit(
+          itemA: BackgroundSearchItem,
+          itemB: BackgroundSearchItem,
+          labelA: string,
+          labelB: string,
+        ) {
+          bufferedPushCandidates.length = 0;
+          bufferingStatuses = false;
+
+          // A generic "two things heard" status, never naming either
+          // side's own search activity or which comes first — per
+          // explicit request (2026-08-20 redesign, replacing an earlier
+          // "product side always goes first" convention): the buyer picks
+          // which to resolve first via the two options on the item_pick
+          // clarification below, not the app.
+          push(splittingRequestPhrase(labelA, labelB));
+
+          const pickQuestion = pickAvoiding(
+            itemPickQuestionPhrase(labelA, labelB),
+            [],
+          );
+          controller.enqueue(
+            encodeEvent({
+              type: "final",
+              reply: pickQuestion,
+              // Mirrors how an ordinary askClarifyingQuestion turn behaves
+              // (see the tail of this handler below) — a plain message
+              // bubble, not the "genuine dead end" Compass card, since
+              // there's a real next step on the table (the pick itself).
+              toolCalled: false,
+              clarification: {
+                kind: "item_pick",
+                question: pickQuestion,
+                options: [
+                  { item: itemA, label: labelA },
+                  { item: itemB, label: labelB },
+                ],
+              },
+              products: [],
+              weakProducts: [],
+              stores: [],
+              furtherStores: [],
+              storesQuery: null,
+              productStores: [],
+              storeServices: [],
+              productsMatchTier: null,
+              storesMatchTier: null,
+              productsMatchQuality: undefined,
+              storesMatchQuality: undefined,
+              externalStoreSuggestions: [],
+              vendorProducts: [],
+              vendorProductsStore: null,
+              buyerRequestOffer: null,
+              buyerRequestOffered: false,
+              backgroundItems: [],
+              dualIntentItemALabel: null,
+              // Answering this never goes through /api/search at all
+              // (SearchHome.tsx resolves the pick directly) — there's no
+              // "buyer's next message" for this short-circuit to route, so
+              // this stays false, unlike a real reach-out offer.
+              awaitingBuyerRequestReply: false,
+            }),
+          );
+        }
+
         if (
           outcome.productCall &&
           outcome.storeCall &&
@@ -1608,6 +1877,7 @@ export async function POST(req: Request) {
           if (
             dualProductInput.product &&
             dualStoreInput.businessType &&
+            hasMultipleIntents &&
             isGenuineDualIntent(
               dualProductInput.product,
               dualStoreInput.businessType,
@@ -1627,41 +1897,12 @@ export async function POST(req: Request) {
             // Used only for buyer-facing wording below (the splitting
             // status line, the pick question, and each pick option's own
             // label) — never fed into the actual search calls.
-            const productLabel = [
+            const productLabel = buildProductTerm(
               dualProductInput.product,
-              ...(dualProductInput.attributes ?? []),
-            ].join(" ");
+              dualProductInput.attributes,
+            );
             const storeLabel = storeTerm;
 
-            // Discard everything buffered during the initial model call
-            // (see bufferingStatuses' own comment up top) — this is what
-            // actually fixes the leak: the model calling searchStores for
-            // real inside that same turn already pushed its OWN "Searching
-            // for 'plumber'…"-style status live into the buffer, and
-            // without this it would still reach the buyer even though
-            // NEITHER side's results are used here anymore — resolving
-            // either one is now deferred entirely to whichever the buyer
-            // actually picks (see the item_pick clarification below), via
-            // SearchHome.tsx's own direct POST /api/search/resolve-item
-            // call, never this initial pass.
-            bufferedPushCandidates.length = 0;
-            bufferingStatuses = false;
-
-            // A generic "two things heard" status, never naming either
-            // side's own search activity or which comes first — per
-            // explicit request (2026-08-20 redesign, replacing an earlier
-            // "product side always goes first" convention): the buyer
-            // picks which to resolve first via the two options on the
-            // item_pick clarification below, not the app.
-            push(splittingRequestPhrase(productLabel, storeLabel));
-
-            // Both sides are handed to the buyer as a real clarification —
-            // no resolveSearchItem call for EITHER one happens on this
-            // turn. Each option is a complete, self-contained
-            // BackgroundSearchItem (already carries its own `location`),
-            // so whichever the buyer taps, SearchHome.tsx can resolve it
-            // directly (POST /api/search/resolve-item) with no further LLM
-            // round trip — every term here was already extracted just now.
             const productItem: BackgroundSearchItem = {
               type: "product",
               product: dualProductInput.product,
@@ -1674,54 +1915,153 @@ export async function POST(req: Request) {
               location: dualLocation,
             };
 
-            const pickQuestion = pickAvoiding(
-              itemPickQuestionPhrase(productLabel, storeLabel),
-              [],
-            );
-            controller.enqueue(
-              encodeEvent({
-                type: "final",
-                reply: pickQuestion,
-                // Mirrors how an ordinary askClarifyingQuestion turn
-                // behaves (see the tail of this handler below) — a plain
-                // message bubble, not the "genuine dead end" Compass card,
-                // since there's a real next step on the table (the pick
-                // itself).
-                toolCalled: false,
-                clarification: {
-                  kind: "item_pick",
-                  question: pickQuestion,
-                  options: [
-                    { item: productItem, label: productLabel },
-                    { item: storeItem, label: storeLabel },
-                  ],
-                },
-                products: [],
-                weakProducts: [],
-                stores: [],
-                furtherStores: [],
-                storesQuery: null,
-                productStores: [],
-                storeServices: [],
-                productsMatchTier: null,
-                storesMatchTier: null,
-                productsMatchQuality: undefined,
-                storesMatchQuality: undefined,
-                externalStoreSuggestions: [],
-                vendorProducts: [],
-                vendorProductsStore: null,
-                buyerRequestOffer: null,
-                buyerRequestOffered: false,
-                backgroundItems: [],
-                dualIntentItemALabel: null,
-                // Answering this never goes through /api/search at all
-                // (SearchHome.tsx resolves the pick directly) — there's no
-                // "buyer's next message" for this short-circuit to route,
-                // so this stays false, unlike a real reach-out offer.
-                awaitingBuyerRequestReply: false,
-              }),
+            emitDualIntentSplit(
+              productItem,
+              storeItem,
+              productLabel,
+              storeLabel,
             );
             return;
+          }
+        }
+
+        // The OTHER two dual-intent shapes: the SAME tool called twice in
+        // one turn for two genuinely different needs — never one
+        // searchProducts + one searchStores. The branch above can never
+        // see either of these — its own precondition requires BOTH
+        // outcome.productCall AND outcome.storeCall, but a message naming
+        // two separate professions/business types ("wedding decorators"
+        // and "a plumber") makes the model call searchStores TWICE, not
+        // once each way — outcome.productCall stays undefined the whole
+        // turn (see the .findLast comment on productCall/storeCall above,
+        // which already flagged this exact gap: "e.g. 'fix my laptop' AND
+        // 'a caterer for my wedding' are both searchStores calls ...
+        // isGenuineDualIntent's own precondition never even sees this as
+        // dual-intent"). The same applies symmetrically to two PHYSICAL
+        // products named in one message ("a laptop and also wireless
+        // earbuds") — both go through searchProducts, never searchStores.
+        //
+        // Found live (searchStores side): exactly that shape, with no
+        // split at all — both searches ran for real, and extractOutcome's
+        // own stores/furtherStores/externalStoreSuggestions merge (by
+        // design, for the ordinary "same tool called twice for the
+        // mandatory cascade" case) flattened both needs' results into ONE
+        // undifferentiated bucket. The model's own reply text still
+        // correctly described two separate outcomes side by side (a real
+        // Velte match for one need, external suggestions for the other) —
+        // but the result CARDS couldn't show which belonged to which, and
+        // the second need's own findings didn't surface anywhere the buyer
+        // could actually see them, even though the text said they would.
+        // Added pre-emptively for searchProducts too, same gap, same fix.
+        //
+        // Same double-gate as the branch above (hasMultipleIntents AND
+        // isGenuineDualIntent) — a plain "≥2 calls to the same tool" alone
+        // isn't enough, since the model can genuinely call either tool
+        // twice for the SAME need too (e.g. two slightly different
+        // phrasings after a first attempt found nothing, or the mandatory
+        // cascade's own retry shapes). Deduped by the call's own term
+        // first — a literal repeat of the same call is never two distinct
+        // needs, whatever isGenuineDualIntent's own token-overlap check
+        // might say about a short/generic term compared against itself.
+        if (
+          !outcome.clarification &&
+          !isAcknowledgementReply(message) &&
+          hasMultipleIntents
+        ) {
+          const uniqueStoreCalls: typeof outcome.storeCalls = [];
+          const seenBusinessTypes = new Set<string>();
+          for (const call of outcome.storeCalls) {
+            const businessType = (
+              call.input as { businessType?: string } | undefined
+            )?.businessType;
+            if (businessType && !seenBusinessTypes.has(businessType)) {
+              seenBusinessTypes.add(businessType);
+              uniqueStoreCalls.push(call);
+            }
+          }
+
+          if (uniqueStoreCalls.length >= 2) {
+            const [callA, callB] = uniqueStoreCalls;
+            const inputA = callA.input as {
+              businessType: string;
+              location?: string;
+            };
+            const inputB = callB.input as {
+              businessType: string;
+              location?: string;
+            };
+
+            if (isGenuineDualIntent(inputA.businessType, inputB.businessType)) {
+              const labelA = inputA.businessType;
+              const labelB = inputB.businessType;
+              const itemA: BackgroundSearchItem = {
+                type: "store",
+                businessType: inputA.businessType,
+                location: inputA.location || inputB.location || undefined,
+              };
+              const itemB: BackgroundSearchItem = {
+                type: "store",
+                businessType: inputB.businessType,
+                location: inputB.location || inputA.location || undefined,
+              };
+              emitDualIntentSplit(itemA, itemB, labelA, labelB);
+              return;
+            }
+          }
+
+          // Mirror of the searchStores case just above, for two PHYSICAL
+          // products named in one message instead — see this whole
+          // section's own top comment. Only reached when the searchStores
+          // shape didn't already fire (a turn is realistically only ever
+          // going to hit ONE of these two same-tool shapes, never both).
+          const uniqueProductCalls: typeof outcome.productCalls = [];
+          const seenProducts = new Set<string>();
+          for (const call of outcome.productCalls) {
+            const product = (call.input as { product?: string } | undefined)
+              ?.product;
+            if (product && !seenProducts.has(product)) {
+              seenProducts.add(product);
+              uniqueProductCalls.push(call);
+            }
+          }
+
+          if (uniqueProductCalls.length >= 2) {
+            const [callA, callB] = uniqueProductCalls;
+            const inputA = callA.input as {
+              product: string;
+              attributes?: string[];
+              location?: string;
+            };
+            const inputB = callB.input as {
+              product: string;
+              attributes?: string[];
+              location?: string;
+            };
+
+            if (isGenuineDualIntent(inputA.product, inputB.product)) {
+              const labelA = buildProductTerm(
+                inputA.product,
+                inputA.attributes,
+              );
+              const labelB = buildProductTerm(
+                inputB.product,
+                inputB.attributes,
+              );
+              const itemA: BackgroundSearchItem = {
+                type: "product",
+                product: inputA.product,
+                attributes: inputA.attributes,
+                location: inputA.location || inputB.location || undefined,
+              };
+              const itemB: BackgroundSearchItem = {
+                type: "product",
+                product: inputB.product,
+                attributes: inputB.attributes,
+                location: inputB.location || inputA.location || undefined,
+              };
+              emitDualIntentSplit(itemA, itemB, labelA, labelB);
+              return;
+            }
           }
         }
 
@@ -1806,10 +2146,10 @@ export async function POST(req: Request) {
             radiusKm?: number;
           };
           if (productInput.product) {
-            const businessType = [
+            const businessType = buildProductTerm(
               productInput.product,
-              ...(productInput.attributes ?? []),
-            ].join(" ");
+              productInput.attributes,
+            );
             const fallback = await searchStoresCore(
               {
                 businessType,
@@ -1859,11 +2199,19 @@ export async function POST(req: Request) {
         // before it should. A plain phrase pool (statusPhrases.ts) can't
         // drift the way a model call can.
         //
-        // Three visible stages per explicit request, not one combined
-        // message: (1) a `reply` event — its own chat bubble — closing the
-        // loop on the search that just ran; (2) a `status` event narrating
-        // a second look now starting; (3) that look actually happening —
-        // see the CROSS-CHECK comment below for what it does and why.
+        // ONE reply bubble for this whole turn — whichever scan-outcome
+        // phrase fires below (found a real match, found a possible vendor,
+        // or noVendorEvenBySectorPhrase) is the buyer's only chat message.
+        // Reverted (2026-08-20) from an earlier three-visible-stage design
+        // (a `reply` event of its own closing the direct search, THEN a
+        // second bubble reporting the scan) per explicit request: back to
+        // back, those two bubbles read as the same statement twice —
+        // "couldn't find X directly on Velte" immediately followed by "no
+        // match on Velte for X, even a loose one" says the same thing in
+        // two messages. The "not found directly" framing still narrates,
+        // just as a STATUS line now (transient, never a persisted bubble)
+        // right below, ahead of the scan actually running — see the
+        // CROSS-CHECK comment below for what that scan does and why.
         if (
           !outcome.clarification &&
           outcome.products.length === 0 &&
@@ -1878,22 +2226,17 @@ export async function POST(req: Request) {
             | { businessType?: string; location?: string }
             | undefined;
           const productTerm = deadEndProductInput?.product
-            ? [
+            ? buildProductTerm(
                 deadEndProductInput.product,
-                ...(deadEndProductInput.attributes ?? []),
-              ].join(" ")
+                deadEndProductInput.attributes,
+              )
             : null;
           const storeTerm = deadEndStoreInput?.businessType ?? null;
           const scanTerm = productTerm ?? storeTerm ?? "that";
           const scanLocation =
             deadEndProductInput?.location ?? deadEndStoreInput?.location;
 
-          controller.enqueue(
-            encodeEvent({
-              type: "reply",
-              text: pickAvoiding(notFoundDirectlyPhrase(scanTerm), []),
-            }),
-          );
+          push(notFoundDirectlyPhrase(scanTerm));
           push(scanningVendorsPhrase(scanTerm));
           const scanStartedAt = Date.now();
 
@@ -1982,7 +2325,10 @@ export async function POST(req: Request) {
           } else if (storeScanResult && storeScanResult.results.length) {
             outcome = { ...outcome, buyerRequestOffered: true };
             replyOverride = pickAvoiding(
-              foundPossibleVendorPhrase(scanTerm),
+              foundPossibleVendorPhrase(
+                scanTerm,
+                looksLikeServiceTask(scanTerm),
+              ),
               [],
             );
           } else {
@@ -2008,7 +2354,11 @@ export async function POST(req: Request) {
               buyerRequestOffered: false,
             };
             replyOverride = pickAvoiding(
-              noVendorEvenBySectorPhrase(scanTerm, mergedExternal.length > 0),
+              noVendorEvenBySectorPhrase(
+                scanTerm,
+                mergedExternal.length > 0,
+                looksLikeServiceTask(scanTerm),
+              ),
               [],
             );
           }
