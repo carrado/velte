@@ -111,18 +111,29 @@ const SITE_URL = "https://velte.ng";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  // Kept in sync with page.tsx's own homepage override — see that file's
+  // comment on why this moved off the old generic "Find anything nearby"
+  // (told Google nothing about what kind of site this is, and gave search
+  // algorithms nothing to anchor on against "VULTe"/vulte.ng, Polaris
+  // Bank's much larger banking platform this name is phonetically close
+  // to). This is the fallback for every route that doesn't set its own
+  // more specific title (most already do — see the many generateMetadata/
+  // `metadata` exports across src/app).
   title: {
-    default: "Velte | Find anything nearby",
+    default: "Velte | AI Shopping Assistant & Local Vendor Marketplace Nigeria",
     template: "%s | Velte",
   },
   description:
-    "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
+    "Describe what you need and Velte's AI instantly matches you with real, nearby vendors across Nigeria — products, food, and services. Chat directly with them and get it sorted.",
   keywords: [
     "Velte",
     "product search Nigeria",
     "find vendors near me",
     "AI shopping assistant",
     "local marketplace search",
+    "Nigeria vendor marketplace",
+    "buy from local vendors Nigeria",
+    "online shopping marketplace Nigeria",
   ],
   authors: [{ name: "Velte Technologies", url: SITE_URL }],
   creator: "Velte Technologies",
@@ -136,9 +147,9 @@ export const metadata: Metadata = {
     telephone: false,
   },
   openGraph: {
-    title: "Velte | Find anything nearby",
+    title: "Velte | AI Shopping Assistant & Local Vendor Marketplace Nigeria",
     description:
-      "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
+      "Describe what you need and Velte's AI instantly matches you with real, nearby vendors across Nigeria — products, food, and services. Chat directly with them and get it sorted.",
     url: SITE_URL,
     siteName: "Velte",
     // No dedicated 1200×630 social banner exists yet — the logo at least
@@ -157,9 +168,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Velte | Find anything nearby",
+    title: "Velte | AI Shopping Assistant & Local Vendor Marketplace Nigeria",
     description:
-      "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
+      "Describe what you need and Velte's AI instantly matches you with real, nearby vendors across Nigeria — products, food, and services. Chat directly with them and get it sorted.",
     images: ["/velte_manifest.png"],
   },
   robots: {

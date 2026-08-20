@@ -16,7 +16,9 @@ import type { BuyerLocation } from "@/types/search";
 // the buyer item B is being checked in the background, SearchHome.tsx calls
 // THIS route directly for item B — no LLM involved, item B's exact term was
 // already extracted by the model on the main turn, so there's nothing left
-// to interpret, only to search. Deliberately its own endpoint rather than a
+// to interpret, only to search (or, if the term is genuinely bare, one
+// deterministic clarify round first — see resolveSearchItem.ts's own
+// comment; still no LLM call). Deliberately its own endpoint rather than a
 // flag on /api/search: reusing that route would mean re-running the whole
 // understanding/tool-choice/location-gate pipeline for a term that's
 // already fully specified, for no benefit.

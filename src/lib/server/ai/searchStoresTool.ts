@@ -139,6 +139,19 @@ export async function searchStoresCore(
     push?.(noVendorMatchPhrase(Boolean(externalSuggestions?.length)));
   }
 
+  // Tag every store with the exact businessType THIS call searched for —
+  // the backend response has no notion of it. Lets a turn that calls
+  // searchStores more than once for genuinely different needs (see
+  // route.ts's own .findLast comment) give each store card a WhatsApp
+  // message scoped to what actually matched it, rather than every result
+  // across every call sharing one turn-level query (see StoreMatch's own
+  // matchedQuery comment).
+  results = results.map((s) => ({ ...s, matchedQuery: businessType }));
+  furtherResults = furtherResults.map((s) => ({
+    ...s,
+    matchedQuery: businessType,
+  }));
+
   // Same mechanical-fact reasoning as searchProductsCore's own
   // locationNote — see that file's comment. `coords` truthy means a real
   // place was actually searched (Tiers 1-3 already ran and came up

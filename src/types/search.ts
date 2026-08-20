@@ -132,6 +132,19 @@ export interface StoreMatch {
   // Powers StoreResultCard's avatar and VendorDetailModal's sliding cover.
   avatar: string | null;
   gallery: string[];
+  // Which businessType search actually surfaced THIS store — route.ts sets
+  // it to the exact searchStores call's own `businessType` input (not the
+  // turn-level storesQuery) whenever a turn calls searchStores more than
+  // once for genuinely different needs in the same message (e.g. "fix my
+  // laptop, and a caterer for my wedding" — both phrase as searchStores
+  // calls, so they land in the SAME `stores` array — see extractOutcome's
+  // own comment on why that's not the dual-intent branch). Null for a
+  // store that isn't attributable to one specific call (getVendorStoresForProducts'
+  // "Sold by" enrichment, which is a plain vendorId lookup, not a search).
+  // StoreResultCard prefers this over its `searchQuery` prop so each card's
+  // WhatsApp message reflects what THAT vendor actually matched on, not
+  // whichever call happened to run last/be passed down at the turn level.
+  matchedQuery: string | null;
 }
 
 // A real nearby business from Google Places — Tier 3 of searchStores, only
@@ -433,9 +446,21 @@ export type SearchStreamEvent =
 // itself lives here, not there, specifically so it stays safe to import
 // into a client component like SearchHome.tsx without dragging that
 // file's server-only search calls into the client bundle).
+//
+// `clarified` — true once SearchHome.tsx has already folded a buyer's
+// answer to resolveSearchItem's own deterministic clarify round back into
+// this item (see that file's own comment) — the hard cap that keeps the
+// round to exactly one ask per item, same "ask ONCE" rule
+// buildSystemPrompt's sectorNote already holds itself to. Omitted/false on
+// the item's first resolution attempt.
 export type SearchItemInput =
-  | { type: "product"; product: string; attributes?: string[] }
-  | { type: "store"; businessType: string };
+  | {
+      type: "product";
+      product: string;
+      attributes?: string[];
+      clarified?: boolean;
+    }
+  | { type: "store"; businessType: string; clarified?: boolean };
 
 // The full outcome of resolving one item (see resolveSearchItem.ts) — a
 // confirmed find, an unconfirmed one worth a reach-out offer, or genuinely
@@ -446,6 +471,16 @@ export type SearchItemOutcome =
       products: VendorMatch[];
       matchTier: MatchTier;
       matchQuality: MatchQuality;
+      // The term this item actually searched for (searchItemTerm's own
+      // output) — mirrors "stores"' own storesQuery below. Lets
+      // SearchHome.tsx's resolveBackgroundItem say what was found ("Found a
+      // real match for 'caterer'…") instead of a bare "Found a real match
+      // on Velte for that…" that reads fine as the buyer's only open
+      // request but goes ambiguous the moment a SECOND item (dual-intent
+      // item B, or any later background item) is also in flight this
+      // session — same class of bug noVendorEvenBySectorPhrase's own
+      // comment already fixed for the "nothing" case.
+      query: string;
     }
   | {
       status: "stores";
@@ -456,16 +491,33 @@ export type SearchItemOutcome =
       storesQuery: string;
     }
   | { status: "offer"; text: string }
-  | { status: "nothing"; text: string; externalSuggestions: NearbyBusiness[] };
+  | { status: "nothing"; text: string; externalSuggestions: NearbyBusiness[] }
+  // One deterministic clarify round for a genuinely bare item — see
+  // resolveSearchItem.ts's own comment on why this is safe to do WITHOUT an
+  // LLM call (sector detection is plain token-matching, already used by
+  // buildSystemPrompt's sectorNote). Per explicit request, this fires for
+  // ANY item resolved through this deterministic path, not just a
+  // dual-intent one — SearchHome.tsx folds the buyer's reply back into a
+  // new item (with `clarified: true` set) and resolves it again, exactly
+  // once; resolveSearchItem.ts never returns this a second time for the
+  // same item.
+  | { status: "needs_clarification"; question: string };
 
 // What SearchHome.tsx sends to POST /api/search/resolve-item to resolve
 // item B independently, in the background — the exact term(s) the model
 // already extracted for it on the main turn, nothing left to interpret.
+// `clarified` mirrors SearchItemInput's own field — see its comment.
 export type BackgroundSearchItem =
   | {
       type: "product";
       product: string;
       attributes?: string[];
       location?: string;
+      clarified?: boolean;
     }
-  | { type: "store"; businessType: string; location?: string };
+  | {
+      type: "store";
+      businessType: string;
+      location?: string;
+      clarified?: boolean;
+    };

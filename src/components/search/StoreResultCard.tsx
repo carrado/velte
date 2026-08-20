@@ -24,11 +24,16 @@ function withArticle(phrase: string): string {
 // storefront, not a listing.
 export function StoreResultCard({
   match,
-  // The businessType actually searched for (e.g. "tailor") — only passed
-  // when this card is a PURE vendor/store result (no product attached to
-  // the same turn); customizes the WhatsApp message instead of the generic
+  // Turn-level fallback businessType (e.g. "tailor") — only passed when
+  // this card is a PURE vendor/store result (no product attached to the
+  // same turn); customizes the WhatsApp message instead of the generic
   // "interested in what you offer." Omit/null for every other usage
   // (productStores, or a dual-intent turn that already has a product).
+  // Superseded below by match.matchedQuery whenever that's set — this
+  // turn-level value can't tell two different searchStores calls in the
+  // SAME turn apart (see StoreMatch's own matchedQuery comment), so it only
+  // still matters as a fallback for a store this specific search call
+  // didn't tag (e.g. an older cached turn).
   searchQuery = null,
   // Undefined/0 when this store has no matching service listings at all —
   // the link below only renders when there's something for it to open.
@@ -46,10 +51,16 @@ export function StoreResultCard({
   matchingServicesOpen?: boolean;
   onToggleMatchingServices?: () => void;
 }) {
+  // match.matchedQuery — set server-side to the EXACT searchStores call
+  // that found this specific store — always wins over the turn-level
+  // searchQuery prop, which can't distinguish two different searchStores
+  // calls merged into the same turn (e.g. "fix my laptop, and a caterer for
+  // my wedding" both landing in `stores` — see StoreMatch's own comment).
+  const query = match.matchedQuery ?? searchQuery;
   const chatHref = buildWhatsappLink(
     match.whatsapp,
-    searchQuery
-      ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(searchQuery)}, are you able to help?`
+    query
+      ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(query)}, are you able to help?`
       : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.`,
   );
   // A logged-in vendor can match their own storefront — no WhatsApp CTA to

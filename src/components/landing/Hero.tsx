@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { goAskVelte } from "@/lib/askVelte";
+import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import { ArrowRightIcon, CameraIcon } from "@/components/icons";
 
 const stagger = {
@@ -58,10 +59,12 @@ const EXAMPLE_PROMPTS = [
 export default function Hero() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Grows the textarea to fit typed content instead of scrolling internally
+  // — see the hook's own comment.
+  const autoResize = useAutoResizeTextarea(query);
 
   function go(text: string) {
-    if (!goAskVelte(router, text)) textareaRef.current?.focus();
+    if (!goAskVelte(router, text)) autoResize.ref.current?.focus();
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -117,7 +120,7 @@ export default function Hero() {
           >
             <div className="flex flex-col bg-white rounded-[28px] border-2 border-gray-100 shadow-xl shadow-gray-300/30 focus-within:border-orange-300 transition-colors">
               <textarea
-                ref={textareaRef}
+                {...autoResize}
                 rows={1}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}

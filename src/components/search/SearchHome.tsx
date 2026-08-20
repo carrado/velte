@@ -15,6 +15,7 @@ import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
 import { CardCarousel } from "@/components/search/CardCarousel";
 import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
+import { CopyMessageButton } from "@/components/search/CopyMessageButton";
 import { BuyerRequestOfferWidget } from "@/components/search/BuyerRequestOfferWidget";
 import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
 import { useUserStore } from "@/store/userStore";
@@ -61,7 +62,7 @@ import {
 // lucide-react, not the custom set — reverted 2026-08-17 per explicit
 // request, scoped to just this textarea; every other icon on this page
 // stays on @/components/icons. See [[custom_icon_system]].
-import { ArrowUp, Camera, Loader2, X } from "lucide-react";
+import { ArrowUp, Camera, Loader2, Square, X } from "lucide-react";
 
 // `products` decides the noun: a pure service turn (e.g. "haircut near me")
 // shouldn't be headed "Products", and a turn can genuinely mix both kinds
@@ -79,18 +80,6 @@ const RECENT_STATUS_MEMORY = 8;
 // existing light-surface token, so it reads as "a message from Velte" set
 // against the plain white chat background, not a competing card style.
 const AI_MESSAGE_BUBBLE_CLASS = "bg-slate-100 rounded-2xl px-4 py-3 max-w-md";
-
-// submitWithLocationGate's own ask, when silently getting the buyer's
-// location fails/isn't granted — client-authored (not the model's own
-// phrasing) since this fires before any search or AI call even happens;
-// same "varied wording, same meaning" convention as the server-side phrase
-// pools in statusPhrases.ts, reusing that file's own pickAvoiding.
-const LOCATION_GATE_ASK_PHRASES = [
-  "Before I start — could you share your location? It just helps me find vendors actually near you.",
-  "Quick thing first — sharing your location helps me match you with vendors nearby.",
-  "One thing before I search — your location helps me find businesses close to you.",
-  "Mind sharing your location first? It's only to find vendors near you, never to track you.",
-];
 
 // Found live: the gate used to fire even when the buyer's OWN message
 // already named a place ("...in Lekki") — it only ever checked device
@@ -200,6 +189,89 @@ function backgroundItemLabel(item: BackgroundSearchItem): string {
     : item.businessType;
 }
 
+// Folds a buyer's answer to resolveSearchItem.ts's own deterministic
+// clarify round (see backgroundClarifyItem's own comment) back into the
+// item that asked it, so re-resolving actually uses the new detail: a
+// "product" item gets it appended to `attributes` (the same channel
+// distinguishing detail already travels through); a "store" item has no
+// such channel at all, so it's folded straight into `businessType`, the
+// only text searchStoresCore ever reads. `clarified: true` is the hard cap
+// — resolveSearchItem.ts never asks again once this is set, regardless of
+// whether the answer actually resolved the bareness that triggered it.
+function foldClarificationAnswer(
+  item: BackgroundSearchItem,
+  answer: string,
+): BackgroundSearchItem {
+  return item.type === "product"
+    ? {
+        ...item,
+        attributes: [...(item.attributes ?? []), answer],
+        clarified: true,
+      }
+    : {
+        ...item,
+        businessType: `${item.businessType} — ${answer}`,
+        clarified: true,
+      };
+}
+
+// The explicit "I don't have anything to add" escape hatch for a background
+// item's own clarify round (see foldClarificationAnswer's own comment) —
+// marks `clarified` without touching the item's actual search term/
+// attributes at all, unlike a real answer. Needed because this whole path
+// is deliberately LLM-free (resolveSearchItem.ts's own comment) — there's
+// no model to recognize "the buyer doesn't want to add detail" on its own,
+// only whatever plain patterns looksLikeSkip below catches.
+function skipClarification(item: BackgroundSearchItem): BackgroundSearchItem {
+  return { ...item, clarified: true };
+}
+
+// Matches a plain "I have nothing to add, just search" — see
+// skipClarification's own comment on why this needs its own explicit
+// recognition rather than folding the literal text in as if it were a real
+// detail.
+const SKIP_PATTERN =
+  /^(skip|none|n\/a|no thanks?|nah?|never ?mind|just search|no idea|don'?t know|dont know|not sure)\.?!?$/i;
+
+function looksLikeSkip(text: string): boolean {
+  return SKIP_PATTERN.test(text.trim());
+}
+
+// Catches a buyer asking Velte something INSTEAD of answering the clarify
+// question — "Can you explain it well for me to understand", "what do you
+// mean?" — plain pattern matching, not real intent understanding (same
+// LLM-free constraint as the rest of this path). Found live: an
+// unrecognized reply like this got folded straight into the search term as
+// if it WERE the answer, producing a garbled query ("laptop repair Can you
+// explain it well for me to understand") that predictably matched nothing.
+// See handleClarificationAnswer's own branch for what happens once this
+// catches something — a plainer restatement instead of a wasted search.
+const QUESTION_STARTERS =
+  /^(what|why|how|can you|could you|do you|does this|is this|are these|explain|i\s*don'?t\s*understand|confused|sorry|huh)\b/i;
+
+function looksLikeQuestion(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.endsWith("?") || QUESTION_STARTERS.test(trimmed);
+}
+
+// Pulls the "- Field (e.g. ...)" lines back out of resolveSearchItem.ts's
+// own buildClarifyingQuestion text (see sectorClarifiers.ts) — used by
+// looksLikeQuestion's own re-explain branch below so a buyer asking "can
+// you explain that?" gets an answer that actually names the SAME fields
+// they were just asked about, not a generic, unrelated substitute. Found
+// live: the re-explain text used to invent its own placeholder examples
+// ("budget, timing, or any particular requirement") that had nothing to
+// do with what the original question actually listed (Turnaround Time,
+// Services Offered, Device Types, say) — technically an answer, but not
+// to the question that was actually asked.
+function extractBulletLines(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^[-*•]\s+/.test(line))
+    .map((line) => line.replace(/^[-*•]\s+/, ""));
+}
+
 // A fresh, empty turn ready to show a buyer's message right away, before
 // anything about it is actually known yet — `status` is the only thing
 // that varies per call site (submitMessage's own "Understanding your
@@ -228,6 +300,7 @@ function createLoadingTurn(
     reply: "",
     toolCalled: false,
     clarification: null,
+    backgroundClarifyItem: null,
     products: [],
     weakProducts: [],
     stores: [],
@@ -575,6 +648,16 @@ interface ConversationTurn {
   // actionable (rendered as a live widget) while this is the LATEST turn;
   // see the `isLatest` prop on ConversationTurnView.
   clarification: Clarification | null;
+  // Non-null exactly when `clarification` above came from
+  // resolveSearchItem.ts's own deterministic clarify round (a background
+  // item, dual-intent half or not — see that file's comment), not the main
+  // LLM turn. Carries the item that's still awaiting an answer so
+  // handleClarificationAnswer knows to fold the reply back in and re-call
+  // resolve-item (via startItem) instead of routing it through the normal
+  // submitMessage/LLM path — answering a background item's own question
+  // must never touch the model (see backgroundItemLabel's own comment on
+  // why that specifically caused a real bug before).
+  backgroundClarifyItem: BackgroundSearchItem | null;
   products: VendorMatch[];
   // Up to 2 "not that close" candidates from the same tier as `products` —
   // see WEAK_MATCH_LIMIT in retrieval.service.js and weakProducts' own
@@ -699,28 +782,44 @@ function ConversationTurnView({
           blank "ghost" bubble flashing before the AI's own results appeared
           underneath it. */}
       {(turn.query || turn.imagePreview) && (
-        <div className="flex justify-end">
-          <div className="max-w-[85%] sm:max-w-[75%] bg-orange-100/70 rounded-3xl px-4 py-2.5 flex items-start gap-2.5">
-            {turn.imagePreview && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={turn.imagePreview}
-                alt="Search photo"
-                className="w-14 h-14 rounded-lg object-cover shrink-0 border border-orange-200"
-              />
-            )}
-            {turn.query && (
-              <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed flex items-center gap-1.5">
-                {/* Same MapPinIcon Settings' own location field uses (see
-                    [[custom_icon_system]]) — was a literal 📍 emoji character
-                    baked into the submitted text before this. */}
-                {turn.query === "Shared my location" && (
-                  <MapPinIcon size={16} className="text-orange-600 shrink-0" />
-                )}
-                {turn.query}
-              </p>
-            )}
+        // Copy is buyer-side only, per explicit request — the AI's own
+        // replies don't get this (see CopyMessageButton's own comment).
+        // Always visible, no hover-reveal; right-aligned to match the
+        // bubble above it.
+        <div>
+          <div className="flex justify-end">
+            <div className="max-w-[85%] sm:max-w-[75%] bg-orange-100/70 rounded-3xl px-4 py-2.5 flex items-start gap-2.5">
+              {turn.imagePreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={turn.imagePreview}
+                  alt="Search photo"
+                  className="w-14 h-14 rounded-lg object-cover shrink-0 border border-orange-200"
+                />
+              )}
+              {turn.query && (
+                <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed flex items-center gap-1.5">
+                  {/* Same MapPinIcon Settings' own location field uses (see
+                      [[custom_icon_system]]) — was a literal 📍 emoji character
+                      baked into the submitted text before this. */}
+                  {turn.query === "Shared my location" && (
+                    <MapPinIcon
+                      size={16}
+                      className="text-orange-600 shrink-0"
+                    />
+                  )}
+                  {turn.query}
+                </p>
+              )}
+            </div>
           </div>
+          {/* Text only — a bare photo with no caption (turn.query empty)
+              has nothing textual to copy. */}
+          {turn.query.trim() && (
+            <div className="flex justify-end">
+              <CopyMessageButton text={turn.query} />
+            </div>
+          )}
         </div>
       )}
 
@@ -1196,9 +1295,14 @@ function ConversationTurnView({
               a new turn is appended and this one's isLatest flips false.
               "name" excluded — same reasoning as "needs_identity" below:
               SearchHome.tsx's own composer takes that one over entirely
-              (see nameCapture's own comment), never this inline widget. */}
+              (see nameCapture's own comment), never this inline widget.
+              "text" excluded too, per explicit request — the composer's
+              own big, auto-resizing textarea answers it directly now (see
+              pendingTextClarification's own comment) instead of this
+              widget's separate, fixed-height input. */}
               {turn.clarification &&
                 turn.clarification.kind !== "name" &&
+                turn.clarification.kind !== "text" &&
                 isLatest && (
                   <ClarificationPrompt
                     clarification={turn.clarification}
@@ -1282,6 +1386,15 @@ export function SearchHome() {
   // state: it's sent along on the NEXT call, never rendered itself. Mirrors
   // route.ts's own RECENT_STATUS_MEMORY cap.
   const shownStatusesRef = useRef<string[]>([]);
+
+  // The MAIN search's own in-flight controller (ChatGPT-style Stop button —
+  // see handleStop/runSearchIntoTurn) — one at a time by construction: the
+  // composer is disabled (isSending) for the whole time one is set, so a
+  // second main search can never start while this is still live. Deliberately
+  // scoped to the composer-driven flow only, not resolveBackgroundItem's own
+  // separate fetches (those run automatically, off the composer, with their
+  // own floating-pill UI — stopping one mid-flight isn't this button's job).
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   // Scrolls the new message into view only when a turn is actually ADDED
   // (submit), not on every subsequent status/final update within that same
@@ -1656,26 +1769,38 @@ export function SearchHome() {
   }
 
   // Actually starts resolving one item (chosen or deferred, doesn't
-  // matter which — see the two call sites below) — appends its OWN
-  // loading turn to the chat body right away (per explicit request: once
-  // an item "begins," its progress belongs in the ordinary chat flow,
-  // same shimmering status any other turn gets, with the floating bar
-  // only stepping back in once the buyer scrolls away from it — see
+  // matter which — see the call sites below) — appends its OWN loading
+  // turn to the chat body right away (per explicit request: once an item
+  // "begins," its progress belongs in the ordinary chat flow, same
+  // shimmering status any other turn gets, with the floating bar only
+  // stepping back in once the buyer scrolls away from it — see
   // itemBTurnVisible above), rather than staying invisible until it
-  // resolves. `prevTurnCountRef` is bumped in lockstep with the append so
-  // this never triggers the ordinary "new turn" auto-scroll (bottomRef's
-  // own effect) — a buyer reading an earlier turn's own results should
-  // never be yanked anywhere by this quietly starting underneath them.
+  // resolves.
   //
   // `displayQuery` is what shows as the buyer's OWN chat bubble above the
   // loading status — empty for an ordinary deferred item (nothing was
   // "said," it's a background job — see the query/imagePreview-gated
   // bubble render below), but the item's own label for handleItemPick's
-  // call (the buyer DID just say this, via tapping its pick button, so it
-  // reads naturally as their own message confirming the choice).
+  // call (the buyer DID just say this, via tapping its pick button) or the
+  // buyer's own typed reply for a clarify-round answer (handleClarification
+  // Answer's backgroundClarifyItem branch) — both real actions the buyer
+  // just took, not something quietly starting on its own.
+  //
+  // `silent` bumps `prevTurnCountRef` in lockstep with the append so this
+  // DOESN'T trigger the ordinary "new turn" auto-scroll (bottomRef's own
+  // effect) — only ever passed true by startNextBackgroundItem's own
+  // automatic, no-buyer-action start: a buyer reading an earlier turn's own
+  // results should never be yanked anywhere by THAT quietly starting
+  // underneath them. Every other call here is a real thing the buyer just
+  // did (a pick, a typed answer) and gets the SAME auto-scroll-to-bottom any
+  // ordinary sent message does — found live: reusing this function
+  // unconditionally-silent for the clarify-answer case left the buyer's own
+  // typed reply (and Velte's response to it) rendering off-screen below
+  // their current scroll position, with nothing visibly happening.
   function startItem(
     next: { item: BackgroundSearchItem; label: string },
     displayQuery: string,
+    silent = false,
   ) {
     const turnId = generateUUID();
     setTurns((prev) => [
@@ -1688,7 +1813,7 @@ export function SearchHome() {
         pickAvoiding(scanningVendorsPhrase(next.label), []),
       ),
     ]);
-    prevTurnCountRef.current += 1;
+    if (silent) prevTurnCountRef.current += 1;
 
     setBackgroundBar({
       kind: "working",
@@ -1717,7 +1842,7 @@ export function SearchHome() {
     backgroundStartScheduledRef.current = false;
     const next = pendingBackgroundQueueRef.current.shift();
     if (!next) return;
-    startItem(next, "");
+    startItem(next, "", true);
   }
 
   // The dual-intent item_pick clarification's own answer (see
@@ -1740,29 +1865,41 @@ export function SearchHome() {
   }
 
   // Settles the floating bar once one deferred item's own fetch concludes
-  // — shared by every branch of resolveBackgroundItem below. If another
-  // item is still queued behind this one, the bar moves straight to
-  // "queued" for THAT one (same unconditional-visibility state onFinal
-  // sets up initially) and schedules it, rather than sitting on this
-  // item's own "pending"/"resolved" state — otherwise a later queued item
-  // starting right behind this one would never get its own turn to show.
+  // — shared by every branch of resolveBackgroundItem below. Only a
+  // "resolved" item (nothing left the buyer owes a reply to — see
+  // resolveBackgroundItem's own status handling) is allowed to advance the
+  // queue: if another item is still queued behind it, the bar moves
+  // straight to "queued" for THAT one (same unconditional-visibility state
+  // onFinal sets up initially) and schedules it. Found live: this used to
+  // check `next` unconditionally, so a "pending" item (an offer's own
+  // Yes/No, or resolveSearchItem.ts's own deterministic clarify question)
+  // ALSO drained the queue immediately — a real multi-intent bug, item B
+  // (e.g. "caterer") started searching and posting real results while item
+  // A (e.g. "laptop repair") was still sitting there mid-conversation,
+  // unanswered. "pending" now only ever shows its own bar state and waits —
+  // the queue only advances later, once whatever concluded THIS item calls
+  // concludeCurrentItemFlow (an offer's decline, createBuyerRequest going
+  // terminal, or this same function being called again with "resolved"
+  // once a clarify-then-search round finally lands on a real result).
   function settleBackgroundItem(
     turnId: string,
     kind: "pending" | "resolved",
     label: string,
   ) {
     lastConcludedLabelRef.current = label;
-    const next = pendingBackgroundQueueRef.current[0];
-    if (next) {
-      setBackgroundBar({
-        kind: "queued",
-        text: pickAvoiding(
-          initiatingBackgroundItemPhrase(label, next.label),
-          [],
-        ),
-      });
-      scheduleNextBackgroundItem();
-      return;
+    if (kind === "resolved") {
+      const next = pendingBackgroundQueueRef.current[0];
+      if (next) {
+        setBackgroundBar({
+          kind: "queued",
+          text: pickAvoiding(
+            initiatingBackgroundItemPhrase(label, next.label),
+            [],
+          ),
+        });
+        scheduleNextBackgroundItem();
+        return;
+      }
     }
     setBackgroundBar({
       kind,
@@ -1839,6 +1976,41 @@ export function SearchHome() {
       return;
     }
 
+    if (outcome.status === "needs_clarification") {
+      // resolveSearchItem.ts's own deterministic clarify round (see its
+      // comment) — `toolCalled: false` is what routes this into
+      // ConversationTurnView's plain "the model asked a clarifying
+      // question instead of searching" bubble rather than the "genuinely
+      // nothing" dead-end card (that branch checks toolCalled, and no
+      // search actually ran yet this call). `kind: "text"` reuses
+      // ClarificationPrompt's existing free-input widget as-is;
+      // backgroundClarifyItem is what tells handleClarificationAnswer to
+      // route the reply back here (via startItem) instead of through the
+      // normal LLM turn — see that field's own comment.
+      updateTurn(turnId, {
+        phase: "done",
+        reply: outcome.question,
+        toolCalled: false,
+        clarification: { kind: "text", question: outcome.question },
+        backgroundClarifyItem: item,
+        products: [],
+        stores: [],
+        furtherStores: [],
+        storesQuery: null,
+        productsMatchTier: null,
+        storesMatchTier: null,
+        productsMatchQuality: undefined,
+        storesMatchQuality: undefined,
+        externalStoreSuggestions: [],
+        buyerRequestOffered: false,
+      });
+      // Needs the buyer's own reply — same "pending" bar treatment as an
+      // "offer" outcome (see backgroundItemPendingPhrase's own wording,
+      // generic enough to cover either).
+      settleBackgroundItem(turnId, "pending", label);
+      return;
+    }
+
     if (outcome.status === "offer") {
       // Reuses the exact same buyerRequestOffered bubble/Yes-No pattern a
       // real server-driven offer already gets — clicking either button
@@ -1871,7 +2043,14 @@ export function SearchHome() {
     if (outcome.status === "products") {
       updateTurn(turnId, {
         phase: "done",
-        reply: "Found a real match on Velte for that — take a look below.",
+        // Names what was actually found (outcome.query, e.g. "caterer") —
+        // a bare "for that" reads fine as the buyer's only open request but
+        // goes ambiguous once a second item (dual-intent item B, or any
+        // later background item) is also in flight this session — found
+        // live: the caterer half of a "fix my phone + a caterer" turn came
+        // back with this same generic sentence, and nothing about it told
+        // the buyer which of their two asks it was even answering.
+        reply: `Found a real match on Velte for "${outcome.query}" — take a look below.`,
         toolCalled: true,
         products: outcome.products,
         stores: [],
@@ -1891,7 +2070,10 @@ export function SearchHome() {
     if (outcome.status === "stores") {
       updateTurn(turnId, {
         phase: "done",
-        reply: "Found a real match on Velte for that — take a look below.",
+        // Same reasoning as the "products" branch above — names what was
+        // found (outcome.storesQuery, e.g. "caterer") instead of a bare
+        // "for that" that goes ambiguous once a second item is in flight.
+        reply: `Found a real vendor on Velte for "${outcome.storesQuery}" — take a look below.`,
         toolCalled: true,
         products: [],
         stores: outcome.stores,
@@ -2021,6 +2203,12 @@ export function SearchHome() {
         ? "Looking at your photo…"
         : "Understanding your request…",
     });
+
+    // A fresh controller per call — this function only ever runs while no
+    // OTHER main search is in flight (isSending gates the composer), so
+    // there's never a stale one left over to clean up first.
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
 
     await runSearchStream(
       {
@@ -2182,8 +2370,40 @@ export function SearchHome() {
         onError: (errorMessage) => {
           updateTurn(turnId, { phase: "done", error: errorMessage });
         },
+        // The buyer hit Stop (handleStop) — a deliberate cancel, not a
+        // failure, so this gets its own quiet wrap-up rather than
+        // onError's scarier "couldn't reach search" wording. No results,
+        // no error styling — `toolCalled: false` keeps it out of the
+        // "genuinely nothing found" dead-end rendering too (that branch
+        // checks toolCalled, and no search actually finished this time).
+        // Whatever status/interim-reply bubbles already arrived before the
+        // stop stay exactly where they are — only this final wrap-up line
+        // is new.
+        onAbort: () => {
+          updateTurn(turnId, {
+            phase: "done",
+            reply: "Stopped generating.",
+            toolCalled: false,
+            clarification: null,
+          });
+        },
       },
+      controller.signal,
     );
+    // Settled one way or another (finished, errored, or was stopped) — safe
+    // to drop now. A stale reference here would otherwise abort a LATER,
+    // unrelated search that reused this same ref once isSending allowed a
+    // new one to start.
+    searchAbortRef.current = null;
+  }
+
+  // ChatGPT-style Stop — the composer's send button swaps to this while
+  // isSending (see its own render below). A no-op if there's nothing to
+  // abort (the ref is only ever set for the DURATION of runSearchIntoTurn's
+  // own fetch/stream, see its own comment) — safe to wire up unconditionally
+  // rather than every call site re-checking isSending first.
+  function handleStop() {
+    searchAbortRef.current?.abort();
   }
 
   // Shared by the main composer (handleSubmit, via submitWithLocationGate)
@@ -2269,43 +2489,48 @@ export function SearchHome() {
   }
 
   // The location gate every genuinely NEW buyer message goes through before
-  // submitMessage ever runs — per explicit request, location is checked
-  // FIRST, before any search work begins, not left for the AI to notice
-  // mid-search (see buyerLocationRef's own comment for the history here).
-  // Deliberately NOT used by clarification-answer submissions
-  // (handleClarificationAnswer/handleLocationShared call submitMessage
-  // directly) — gating those too would re-trigger this on the buyer's own
-  // "Shared my location"/"Search without it" replies, an infinite loop.
+  // submitMessage ever runs — location is checked before any search work
+  // begins, not left for the AI to notice mid-search (see buyerLocationRef's
+  // own comment for the history here). Deliberately NOT used by
+  // clarification-answer submissions (handleClarificationAnswer/
+  // handleLocationShared call submitMessage directly) — gating those too
+  // would re-trigger this on the buyer's own "Shared my location"/"Search
+  // without it" replies, an infinite loop.
   //
-  // Three paths, checked in order: if the buyer's OWN message already
-  // names a place (messageNamesAPlace — found live: it used to ask even
-  // then, only ever checking device geolocation, never the text itself),
-  // there's nothing to ask for — proceed exactly as if location were
-  // already resolved, THIS message only (doesn't set locationDeclinedRef,
-  // so a later message with no place named still gets asked normally). If
-  // geolocation is silently available (already granted), trySilentGeolocation
-  // resolves it with zero visible interruption and the real search proceeds
-  // immediately. Otherwise, this turns into a client-only clarification —
-  // no /api/search call yet — reusing the exact same
-  // ClarificationPrompt/LocationShareAction widget and
-  // handleLocationShared/handleClarificationAnswer handlers a real
-  // server-driven location clarification already uses. Once the buyer
-  // answers, that existing mechanism takes over unmodified: the answer
-  // becomes the next real submitMessage call, with this turn already in
-  // `history`, so the model still sees the buyer's original need — same
-  // "combine it with what they already said" behavior systemPrompt.ts
-  // already documents for an in-conversation location clarification.
+  // Two paths, checked in order: if the buyer's OWN message already names a
+  // place (messageNamesAPlace — found live: it used to ask even then, only
+  // ever checking device geolocation, never the text itself), or their
+  // location/a decline is already known this session, there's nothing left
+  // to resolve client-side — straight to submitMessage. Otherwise, this
+  // tries SILENT geolocation only (trySilentGeolocation — zero visible
+  // interruption, only succeeds if permission was already granted) and then
+  // ALWAYS hands off to the server either way, via runSearchIntoTurn.
   //
-  // Found live: this used to await trySilentGeolocation() BEFORE ever
-  // appending anything — the buyer's own message didn't show up at all
-  // until that resolved, which can take up to SILENT_GEOLOCATION_TIMEOUT_MS
-  // (4s) on a slow/no GPS fix. A real, confusing delay with zero visible
-  // feedback in the meantime. Now the turn appears INSTANTLY, same as any
-  // other send, with an ordinary shimmering status line (gettingLocationPhrase,
-  // same varied pool LocationShareAction's own explicit flow already uses)
-  // while the silent check happens underneath it — exactly the same
-  // pattern every other async step in this app already uses, just applied
-  // to this one too instead of blocking on it silently.
+  // Per explicit request (found live: a buyer pasting a bcrypt hash got
+  // asked to share their location, before Velte had any chance to notice
+  // the message wasn't a real request at all): this used to ask for
+  // location right here, client-side, the instant silent geolocation
+  // failed — no /api/search call at all, which meant route.ts's own
+  // dedicated in-scope check (see its own comment) never got a chance to
+  // run either. Location can ONLY be asked for correctly once scope has
+  // already been confirmed, and only the server can confirm that — so this
+  // function no longer decides to ask on its own; it just makes one honest
+  // attempt at a free location fix, then lets route.ts's own
+  // needsLocationButDidntAsk (which runs AFTER its in-scope check) decide
+  // whether asking is actually warranted. The buyer still sees the exact
+  // same "share your location" widget either way (ClarificationPrompt's
+  // "location" branch renders identically regardless of whether the
+  // clarification came from here or from a real server turn) — only WHEN
+  // it's allowed to appear changed.
+  //
+  // Found live (separately): this used to await trySilentGeolocation()
+  // BEFORE ever appending anything — the buyer's own message didn't show up
+  // at all until that resolved, which can take up to
+  // SILENT_GEOLOCATION_TIMEOUT_MS (8s) on a slow/no GPS fix. The turn still
+  // appears INSTANTLY here, same as any other send, with an ordinary
+  // shimmering status line (gettingLocationPhrase, same varied pool
+  // LocationShareAction's own explicit flow already uses) while the silent
+  // check happens underneath it.
   async function submitWithLocationGate(
     message: string,
     currentImageUrl: string | null,
@@ -2337,19 +2562,8 @@ export function SearchHome() {
     ]);
 
     const silentLocation = await trySilentGeolocation();
-    if (silentLocation) {
-      buyerLocationRef.current = silentLocation;
-      await runSearchIntoTurn(turnId, message, currentImageUrl);
-      return;
-    }
-
-    const askText = pickAvoiding(LOCATION_GATE_ASK_PHRASES, []);
-    updateTurn(turnId, {
-      phase: "done",
-      status: "",
-      reply: askText,
-      clarification: { kind: "location", question: askText },
-    });
+    if (silentLocation) buyerLocationRef.current = silentLocation;
+    await runSearchIntoTurn(turnId, message, currentImageUrl);
   }
 
   // One-shot handoff from the homepage's own Velte input (Hero.tsx) and any
@@ -2386,13 +2600,24 @@ export function SearchHome() {
   // difference is which DOM event triggered it.
   async function trySubmit() {
     const message = query.trim();
-    if (
-      (!message && !imageUrl) ||
-      isSending ||
-      uploadingImage ||
-      hasPendingClarification
-    )
+    if ((!message && !imageUrl) || isSending || uploadingImage) return;
+
+    // A "text" kind clarification's own answer — typed straight into THIS
+    // composer instead of ClarificationPrompt's separate small input (see
+    // hasPendingClarification's own comment, and the textarea's own
+    // disabled/placeholder logic below) — per explicit request: whatever
+    // detail the buyer needs to write may run longer than a cramped
+    // fixed-height input comfortably fits, and this textarea already grows
+    // to whatever they type. Every OTHER clarification kind still blocks
+    // the composer below (choice/location/item_pick all answer through
+    // their own dedicated action, not free text; "name" already swaps the
+    // composer into its own mode before this ever renders).
+    if (hasPendingClarification && lastTurn?.clarification?.kind === "text") {
+      setQuery("");
+      handleClarificationAnswer(message);
       return;
+    }
+    if (hasPendingClarification) return;
 
     const currentImageUrl = imageUrl;
     const currentImagePreview = imagePreview;
@@ -2423,8 +2648,10 @@ export function SearchHome() {
     await trySubmit();
   }
 
-  // Auto-grows with content, capped at max-h (CSS below) — same feel as
-  // ChatGPT's composer.
+  // Auto-grows with content, uncapped — per explicit request, no internal
+  // scrollbar however much the buyer types; the composer sits in a
+  // shrink-0 row below the flex-1 message list (which scrolls on its own),
+  // so a taller textarea just pushes that list up, never overflows.
   const autoResize = useAutoResizeTextarea(query);
 
   function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -2444,11 +2671,75 @@ export function SearchHome() {
   // would re-ask on the buyer's own "Search without sharing my location"
   // reply, an infinite loop.
   function handleClarificationAnswer(text: string) {
+    // A background item's own clarify round (see backgroundClarifyItem's
+    // own comment) — never routes through the main LLM turn (submitMessage
+    // below). Must return here, before any of the submitMessage-flow logic
+    // below (which assumes it's answering a real model-driven clarification).
+    if (lastTurn?.backgroundClarifyItem) {
+      const item = lastTurn.backgroundClarifyItem;
+
+      // The buyer asked Velte something instead of answering (see
+      // looksLikeQuestion's own comment) — do NOT fold this into the
+      // search term (that's the exact bug this catches). Just a plain
+      // restatement + an explicit skip option, appended as an ordinary new
+      // turn (real auto-scroll, unlike startNextBackgroundItem's own
+      // silent start — see startItem's own comment) — `backgroundClarifyItem`
+      // stays set to the SAME unmodified item, so the buyer gets a genuine
+      // next try rather than a wasted one.
+      if (looksLikeQuestion(text)) {
+        const turnId = generateUUID();
+        setTurns((prev) => [
+          ...prev,
+          createLoadingTurn(turnId, text, null, null, ""),
+        ]);
+        // Re-presents the SAME fields the original question already
+        // listed (see extractBulletLines' own comment) — falls back to a
+        // generic line only if that text genuinely had no bullets to pull
+        // (shouldn't happen for a real needs_clarification turn, but this
+        // is the buyer's second try at getting an answer, not the place
+        // to leave them with nothing at all). The "or just say 'skip'"
+        // framing sits in the INTRO line, before the colon, same reason as
+        // buildClarifyingQuestion's own comment in sectorClarifiers.ts — a
+        // trailing sentence AFTER the bullets would visibly glue itself
+        // onto the last one instead of standing on its own (FormattedReply
+        // treats a plain line right after a list item as that item's own
+        // continuation, not a new paragraph).
+        const bullets = extractBulletLines(lastTurn.reply);
+        const label = backgroundItemLabel(item);
+        const question = bullets.length
+          ? `No worries — mention whichever of these matter to you, or just say "skip" and I'll search with what you've already told me:\n${bullets.map((b) => `- ${b}`).join("\n")}`
+          : `No worries — I'm just asking if there's anything specific about your "${label}" that would help me find the right vendor. If nothing comes to mind, just say "skip" and I'll search with what you've already told me.`;
+        updateTurn(turnId, {
+          phase: "done",
+          reply: question,
+          toolCalled: false,
+          clarification: { kind: "text", question },
+          backgroundClarifyItem: item,
+        });
+        return;
+      }
+
+      // Same defensive clear handleItemPick already does before its own
+      // startItem call — cancels a stray "start the next queued item"
+      // timer that settleBackgroundItem may have already armed while this
+      // item sat waiting on the buyer, so it can never collide with this
+      // fresh start.
+      clearBackgroundTimers();
+      // An explicit "nothing to add" (see skipClarification's own comment)
+      // searches with the item exactly as it was, unmodified — a real
+      // answer (the fallback case) folds the text in and re-resolves with
+      // it added, same as before.
+      const resolved = looksLikeSkip(text)
+        ? skipClarification(item)
+        : foldClarificationAnswer(item, text);
+      startItem({ item: resolved, label: backgroundItemLabel(resolved) }, text);
+      return;
+    }
     // Marks the gate resolved (declined) whenever this is answering a
-    // LOCATION clarification specifically — covers both a real
-    // server-driven one (systemPrompt.ts's own rule) and
-    // submitWithLocationGate's own client-only one, so submitWithLocationGate
-    // never asks again this session either way.
+    // LOCATION clarification — always server-driven now (systemPrompt.ts's
+    // own rule, via needsLocationButDidntAsk — see submitWithLocationGate's
+    // own comment on why it no longer generates this clarification itself)
+    // — so submitWithLocationGate never asks again this session either way.
     if (lastTurn?.clarification?.kind === "location") {
       locationDeclinedRef.current = true;
     }
@@ -2693,6 +2984,13 @@ export function SearchHome() {
     lastTurn.phase === "done" &&
     !lastTurn.error &&
     !!lastTurn.clarification;
+  // A "text" kind clarification answers through the composer itself (see
+  // trySubmit's own comment) rather than staying disabled like every other
+  // kind — drives both the textarea's disabled/placeholder below and
+  // ConversationTurnView's own gate on mounting ClarificationPrompt's
+  // separate input for this kind (same "name" already gets).
+  const pendingTextClarification =
+    hasPendingClarification && lastTurn.clarification?.kind === "text";
 
   const collapsed = turns.length > 0;
 
@@ -2852,15 +3150,17 @@ export function SearchHome() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleComposerKeyDown}
-            disabled={hasPendingClarification}
+            disabled={hasPendingClarification && !pendingTextClarification}
             placeholder={
-              hasPendingClarification
-                ? "Answer the question above to continue…"
-                : collapsed
-                  ? "Ask a follow-up, or search for something else…"
-                  : "e.g. 'Tecno fast charger near me'"
+              pendingTextClarification
+                ? "Type your answer…"
+                : hasPendingClarification
+                  ? "Answer the question above to continue…"
+                  : collapsed
+                    ? "Ask a follow-up, or search for something else…"
+                    : "e.g. 'Tecno fast charger near me'"
             }
-            className="w-full resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 max-h-40 overflow-y-auto disabled:opacity-50"
+            className="w-full resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 disabled:opacity-50"
           />
           <div className="flex items-center justify-between px-3 pb-3 pt-1">
             <input
@@ -2879,19 +3179,37 @@ export function SearchHome() {
             >
               <Camera size={17} />
             </button>
-            <button
-              type="submit"
-              disabled={
-                (!query.trim() && !imageUrl) ||
-                isSending ||
-                uploadingImage ||
-                hasPendingClarification
-              }
-              title="Send"
-              className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
-            >
-              <ArrowUp size={18} />
-            </button>
+            {/* Swaps to a Stop button the instant a search goes "loading" —
+                ChatGPT-style — instead of just disabling Send; clicking it
+                calls handleStop, which aborts searchAbortRef's own
+                controller and wraps the turn up with a quiet "Stopped
+                generating." note (see runSearchIntoTurn's onAbort). Always
+                clickable while isSending, unlike Send's own disabled
+                checks — nothing about a thin query/pending clarification
+                should block stopping an ALREADY-running search. */}
+            {isSending ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                title="Stop generating"
+                className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-gray-800 hover:bg-gray-900 text-white transition-colors"
+              >
+                <Square size={13} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={
+                  (!query.trim() && !imageUrl) ||
+                  uploadingImage ||
+                  (hasPendingClarification && !pendingTextClarification)
+                }
+                title="Send"
+                className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
+              >
+                <ArrowUp size={18} />
+              </button>
+            )}
           </div>
         </div>
       )}

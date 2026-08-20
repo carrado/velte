@@ -30,7 +30,9 @@ import {
 import {
   buildSystemPrompt,
   buildAgreementOnlySystemPrompt,
+  buildScopeCheckSystemPrompt,
 } from "@/lib/server/ai/systemPrompt";
+import { classifyScopeTool } from "@/lib/server/ai/classifyScopeTool";
 import { getSectorClarifiers } from "@/lib/server/ai/sectorClarifiers";
 import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
 import type {
@@ -215,6 +217,9 @@ async function getVendorStoresForProducts(
           score: match.score,
           avatar: store.avatar,
           gallery: store.gallery,
+          // A plain vendorId lookup, not a search — no businessType query
+          // to attribute this store to (see StoreMatch's own comment).
+          matchedQuery: null,
         };
         return result;
       } catch (err) {
@@ -605,6 +610,14 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   const productOutputs = result.toolResults
     .filter((r) => r.toolName === "searchProducts")
     .map((r) => r.output as ProductToolOutput);
+  // Each store here already carries its own `matchedQuery` (see
+  // searchStoresCore) — the exact businessType THAT call searched for, set
+  // at the source rather than re-derived here — so a turn that calls
+  // searchStores more than once for genuinely different needs (e.g. "fix my
+  // laptop, and a caterer for my wedding" — see the .findLast comment above)
+  // still gives each store its own accurate query once merged into one
+  // array below, instead of every store inheriting whichever call's
+  // businessType `storesQuery` (singular, turn-level) happens to point at.
   const storeOutputs = result.toolResults
     .filter((r) => r.toolName === "searchStores")
     .map((r) => r.output as StoreToolOutput);
@@ -731,6 +744,42 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   };
 }
 
+// A single long token dense with digits/symbols (a bcrypt hash, a JWT, an
+// API key, a UUID, a raw hex digest) is never a real shopping request — no
+// buyer types a 40+ character alphanumeric blob to describe something they
+// want to buy. Checked BEFORE the model ever sees the message at all: found
+// live, systemPrompt.ts's own "IN SCOPE" judgment (see buildSystemPrompt)
+// is NOT reliable for this specific shape of input — across repeated runs
+// on the exact same pasted bcrypt hash, the model variously declined
+// correctly, tried to search with the hash as a literal product name, or
+// even fabricated a "dual intent" split out of it (once matching it against
+// "product" as a second, invented item). A deterministic pre-check
+// sidesteps every one of those failure modes for the one case that's
+// unambiguous enough to catch without an LLM at all — real natural-language
+// text, even a single plain word like "sneakers" or "generator", never
+// looks like this. Deliberately narrow: a multi-word off-topic message
+// ("what's the capital of France") still needs the model's own judgment
+// (see systemPrompt.ts's IN SCOPE paragraph) — this only ever catches
+// noise, never a real (if unrelated) sentence.
+function looksLikeGibberishInput(message: string): boolean {
+  const trimmed = message.trim();
+  // Multi-word text (any whitespace at all) always gets the model's own
+  // judgment — a real query can legitimately be long and symbol-heavy
+  // ("case for iPhone 14 Pro Max - black, 6.7\""), just never a single
+  // unbroken token.
+  if (!trimmed || /\s/.test(trimmed)) return false;
+  if (trimmed.length < 20) return false;
+  // A JWT (three dot-separated base64url segments — header.payload.signature)
+  // is almost entirely letters, so the digit/symbol-density check below
+  // wouldn't reliably catch it on its own — matched by its own distinctive
+  // shape instead.
+  if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(trimmed)) {
+    return true;
+  }
+  const nonLetterCount = trimmed.replace(/[a-zA-Z]/g, "").length;
+  return nonLetterCount / trimmed.length >= 0.3;
+}
+
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as SearchRequestBody | null;
   const message = body?.message?.trim() ?? "";
@@ -828,6 +877,179 @@ export async function POST(req: Request) {
           recentStatuses.shift();
         controller.enqueue(encodeEvent({ type: "status", text }));
       };
+
+      // Shared by every early-exit check below (off-topic decline, the
+      // proactive location ask) — enqueues the SAME "final" shape a
+      // genuinely empty/clarifying search turn would (no results,
+      // toolCalled false) so the frontend renders this exactly like any
+      // other plain-text reply/clarification, then closes the stream
+      // itself (rather than relying on the try/finally further below,
+      // which every caller here runs before) — this is the whole turn,
+      // nothing else runs after it.
+      function sendBareFinal(
+        reply: string,
+        clarification: Clarification | null,
+      ) {
+        controller.enqueue(
+          encodeEvent({
+            type: "final",
+            reply,
+            toolCalled: false,
+            clarification,
+            products: [],
+            weakProducts: [],
+            stores: [],
+            furtherStores: [],
+            storesQuery: null,
+            productStores: [],
+            storeServices: [],
+            productsMatchTier: null,
+            storesMatchTier: null,
+            productsMatchQuality: undefined,
+            storesMatchQuality: undefined,
+            externalStoreSuggestions: [],
+            vendorProducts: [],
+            vendorProductsStore: null,
+            buyerRequestOffer: null,
+            buyerRequestOffered: false,
+            backgroundItems: [],
+            dualIntentItemALabel: null,
+            awaitingBuyerRequestReply: false,
+          }),
+        );
+        controller.close();
+      }
+
+      // See looksLikeGibberishInput's own comment — a free, instant
+      // decline for the one shape of off-topic input that's unambiguous
+      // enough to catch without any model call at all. Runs before the
+      // (slower, real) dedicated scope check just below so the obvious
+      // case never pays for a whole extra LLM round trip.
+      if (!imageUrl && looksLikeGibberishInput(message)) {
+        sendBareFinal(
+          "That doesn't look like something I can search for — I'm a shopping assistant for Velte, here to help you find products, food, services, or vendors. What are you looking for?",
+          null,
+        );
+        return;
+      }
+
+      // Reused by needsLocationButDidntAsk/searchedNationwideWithoutAsking
+      // further below (their own reactive fallback checks) — moved up here
+      // so the PROACTIVE gate right after the scope check can use them too,
+      // without duplicating the history scan. See those two later call
+      // sites for LOCATION_CLARIFY_PATTERN's own full doc comment.
+      const LOCATION_CLARIFY_PATTERN =
+        /\b(city|area|location|located|situated|whereabouts|neighbo(?:u)?rhood|which (?:state|town)|where (?:are|do) you|part of town)\b/i;
+      const alreadyAskedLocationThisConversation = (body?.history ?? []).some(
+        (turn) =>
+          turn.role === "assistant" &&
+          LOCATION_CLARIFY_PATTERN.test(turn.content),
+      );
+
+      // The general off-topic case — see buildScopeCheckSystemPrompt's own
+      // comment for why this is its OWN dedicated call, run first, before
+      // anything else this turn touches (before the first status line,
+      // before sectorClarifiers, before the location gate, before the main
+      // model call). Also reports namesPlace — see classifyScopeTool.ts's
+      // own comment for why that rides along on this SAME call rather than
+      // a second dedicated round trip. A bare photo (no text, or text
+      // alongside it) is always presumptively in scope — skipped entirely,
+      // same as the gibberish check above, both to avoid a second
+      // vision-model call for every photo search AND because
+      // systemPrompt.ts's own photo-identification path already treats a
+      // bare image as a first-class shopping signal on its own.
+      // `inScope ?? true`/`namesPlace ?? false` both fail toward "let the
+      // buyer through" — if the classifier call itself errors, or the
+      // model somehow returns without calling classifyScope at all, a real
+      // buyer's genuine request must never be silently blocked over an
+      // infrastructure hiccup; the main call's own embedded scope judgment
+      // (buildSystemPrompt's own paragraph) and location gate are still
+      // there as a second line of defense either way.
+      let namesPlace = false;
+      if (message && !imageUrl) {
+        try {
+          const scopeResult = await callLLM(
+            {
+              system: buildScopeCheckSystemPrompt(),
+              messages,
+              tools: { classifyScope: classifyScopeTool() },
+              toolChoice: "required",
+            },
+            ["openai", "groq"],
+          );
+          const scopeOutput = scopeResult.toolResults.find(
+            (r) => r.toolName === "classifyScope",
+          )?.output as { inScope: boolean; namesPlace: boolean } | undefined;
+          if (scopeOutput?.inScope === false) {
+            sendBareFinal(
+              "That doesn't look like something I can search for — I'm a shopping assistant for Velte, here to help you find products, food, services, or vendors. What are you looking for?",
+              null,
+            );
+            return;
+          }
+          namesPlace = scopeOutput?.namesPlace ?? false;
+        } catch (err) {
+          console.error("[search] scope check failed, failing open:", err);
+        }
+      }
+
+      // The proactive location gate — per explicit request, location must
+      // be asked EVERY time it's still missing, on any turn, not just the
+      // first — never left for the main call's own location gate to
+      // (unreliably) enforce mid-search. Found live: a genuine search
+      // ("fix my iPhone 14 Pro Max") ran nationwide and came back with a
+      // real dead-end reply, without ever asking for location first —
+      // route.ts's existing REACTIVE fallbacks for this
+      // (needsLocationButDidntAsk/searchedNationwideWithoutAsking, both
+      // further below) only fire when the search comes back with
+      // absolutely nothing at all; a turn that found even a thin result
+      // (an external Google Places suggestion, say) was deliberately left
+      // alone by an earlier, since-reversed design decision ("a real find
+      // isn't thrown away for a location question"). This gate runs
+      // BEFORE any search happens at all, so that tension no longer
+      // applies — there's nothing found yet to weigh against asking.
+      // Skipped when the buyer's device location is already known, this
+      // message (or an earlier one) already named a place, or location's
+      // already been asked this conversation (an answer either way —
+      // shared or declined — routes through submitMessage directly, never
+      // back through this gate; see SearchHome.tsx's own comment on why).
+      if (
+        message &&
+        !imageUrl &&
+        !body?.buyerLocation &&
+        !namesPlace &&
+        !alreadyAskedLocationThisConversation
+      ) {
+        try {
+          const locationOnlySystem = `The buyer just asked: "${message}". Their location is unknown — neither a device location nor a named place exists for this search, and this search needs one. Call the askClarifyingQuestion tool with kind: "location" and a short, natural, ONE-sentence \`question\` asking for their location so you can find vendors actually near them — make clear this is only to find nearby vendors, never to track them. Do not ask about anything else this turn, and do not call any other tool.`;
+          const locationResult = await callLLM(
+            {
+              system: locationOnlySystem,
+              messages,
+              tools: { askClarifyingQuestion: askClarifyingQuestionTool() },
+              toolChoice: "required",
+            },
+            ["openai", "groq"],
+          );
+          const locationOutcome = extractOutcome(locationResult);
+          if (locationOutcome.clarifyCandidate?.kind === "location") {
+            sendBareFinal(locationOutcome.clarifyCandidate.question, {
+              kind: "location",
+              question: locationOutcome.clarifyCandidate.question,
+            });
+            return;
+          }
+          // Extremely unlikely given toolChoice: "required" plus a
+          // single-tool set, but if the forced call somehow didn't produce
+          // a location clarify, fall through to the normal pipeline below
+          // rather than silently dropping the buyer's turn.
+        } catch (err) {
+          console.error(
+            "[search] proactive location check failed, falling through:",
+            err,
+          );
+        }
+      }
 
       // Sent live, before buffering ever turns on — this happens before
       // any tool has even been given a chance to run, so there's nothing
@@ -1077,23 +1299,31 @@ export async function POST(req: Request) {
         // from the tool set — a second plain request not to ask again is
         // exactly the instruction that failed the first time, so the model is
         // left with no way to repeat the mistake and must pick a real search
-        // tool instead.
-        const LOCATION_CLARIFY_PATTERN =
-          /\b(city|area|location|located|situated|whereabouts|neighbo(?:u)?rhood|which (?:state|town)|where (?:are|do) you|part of town)\b/i;
-        // Guards the two NEW "force a location ask" retries below (see
-        // their own comments) — without this, a buyer who already declined
-        // ("Search without sharing my location", the widget's own canned
-        // decline text — see ClarificationPrompt.tsx) gets asked AGAIN on
-        // this very turn, because a forced retry can't otherwise tell
-        // "never asked yet" apart from "already asked, buyer said no."
-        // Checking the whole history, not just the immediately-prior turn:
-        // systemPrompt.ts's own rule is "don't ask again for the same need
-        // EITHER way" for the rest of the conversation, not just once.
-        const alreadyAskedLocationThisConversation = (body?.history ?? []).some(
-          (turn) =>
-            turn.role === "assistant" &&
-            LOCATION_CLARIFY_PATTERN.test(turn.content),
-        );
+        // tool instead. LOCATION_CLARIFY_PATTERN/alreadyAskedLocationThisConversation
+        // themselves now live up near the proactive location check, above —
+        // this block and the reactive retries below it just reuse them via
+        // closure.
+        //
+        // Guards needsLocationButDidntAsk further below — a genuinely
+        // off-topic message (see systemPrompt.ts's own "IN SCOPE" rule —
+        // random noise, a general-knowledge question, anything unrelated
+        // to shopping) legitimately produces the exact same shape a
+        // "forgot to ask for location" turn does: no search tool called,
+        // no clarifyCandidate, buyer location still unknown. Found live: a
+        // buyer pasting a bcrypt hash got a correct off-topic decline from
+        // the model, which needsLocationButDidntAsk then silently
+        // discarded and overrode with a forced "share your location"
+        // ask — nonsensical for a message that was never a shopping
+        // request in the first place. Matched against the model's own
+        // reply text loosely, not verbatim (systemPrompt.ts's own
+        // "shopping assistant... can't help with that" line is guidance,
+        // not a fixed script the model is required to quote). Largely
+        // superseded by the dedicated scope check above (which now kills an
+        // off-topic message before the main call ever runs at all), kept as
+        // a second line of defense for whatever that check's own fail-open
+        // path misses.
+        const OFF_TOPIC_DECLINE_PATTERN =
+          /\b(shopping assistant|can'?t help (?:you )?with that|not something i can help|outside (?:of )?what i (?:can|could) help)\b/i;
         const looksLikeLocationClarify =
           Boolean(body?.buyerLocation) &&
           Boolean(outcome.clarifyCandidate) &&
@@ -1262,7 +1492,8 @@ export async function POST(req: Request) {
           !outcome.productCall &&
           !outcome.storeCall &&
           !outcome.hasUsefulResults &&
-          outcome.clarifyCandidate?.kind !== "location";
+          outcome.clarifyCandidate?.kind !== "location" &&
+          !OFF_TOPIC_DECLINE_PATTERN.test(result.text ?? "");
 
         if (needsLocationButDidntAsk) {
           console.warn(

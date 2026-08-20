@@ -87,6 +87,25 @@ const SYNONYMS: Record<string, string[]> = {
   sneakers: ["shoes", "footwear", "fashion"],
 };
 
+// A buyer phrase carrying an explicit task/service verb ("laptop repair",
+// "fix my sink", "phone screen replacement") is asking to have something
+// DONE, never to buy a stocked item — even when the matched sector also
+// sells retail products (e.g. "Computers & Laptops" is classified "both":
+// it sells AND repairs laptops). Found live: "laptop repair" matched that
+// sector and pulled fields from BOTH its service pool (Diagnosis Fee,
+// Turnaround Time — genuinely relevant) AND its retail "Electronics"
+// category (Battery, Power, RAM — nonsensical for a repair job), since
+// selectClarifierFields has no notion of which pool actually fits what
+// the buyer described. Deliberately a plain keyword check, not real NLP —
+// same spirit as systemPrompt.ts's own "a build, a fix, a repair, an
+// install..." list for tool-choice, reused here for field selection.
+const TASK_KEYWORDS =
+  /\b(repair|repairs|fix|fixing|install|installation|service|servicing|replace|replacement|clean|cleaning|wash|washing|deliver|delivery|maintain|maintenance)\b/i;
+
+function looksLikeServiceTask(query: string): boolean {
+  return TASK_KEYWORDS.test(query);
+}
+
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
@@ -146,8 +165,15 @@ function dedupeByName(fields: ClarifierField[]): ClarifierField[] {
  * sector (excluding the always-there General group) for a service-capable
  * classification, plus the sector's own product-attribute category
  * (excluding General) for a retail-capable one. Deliberately excludes
- * General — that's the fallback pool, never the first choice. */
-function sectorSpecificFields(sector: SectorLeaf): ClarifierField[] {
+ * General — that's the fallback pool, never the first choice. `serviceOnly`
+ * (see looksLikeServiceTask) drops the retail pool entirely regardless of
+ * the sector's own classification — a "both" sector's retail attributes
+ * are for a vendor's product LISTING, never relevant to a buyer describing
+ * a job to be done. */
+function sectorSpecificFields(
+  sector: SectorLeaf,
+  serviceOnly: boolean,
+): ClarifierField[] {
   const fields: ClarifierField[] = [];
   const { classification, listingConfig } = sector;
   const isServiceCapable =
@@ -155,9 +181,10 @@ function sectorSpecificFields(sector: SectorLeaf): ClarifierField[] {
     classification === "both" ||
     classification === "food_both";
   const isRetailCapable =
-    classification === "retail" ||
-    classification === "both" ||
-    classification === "food_both";
+    !serviceOnly &&
+    (classification === "retail" ||
+      classification === "both" ||
+      classification === "food_both");
 
   if (isServiceCapable) {
     for (const group of getServiceDetailPresets(sector.value)) {
@@ -182,8 +209,12 @@ function sectorSpecificFields(sector: SectorLeaf): ClarifierField[] {
 }
 
 /** The General fallback pool — only ever drawn from when the sector-specific
- * pool alone has fewer fields than the requested count. */
-function generalFields(sector: SectorLeaf): ClarifierField[] {
+ * pool alone has fewer fields than the requested count. `serviceOnly` — see
+ * sectorSpecificFields' own comment. */
+function generalFields(
+  sector: SectorLeaf,
+  serviceOnly: boolean,
+): ClarifierField[] {
   const { classification } = sector;
   const fields: ClarifierField[] = [];
   const isServiceCapable =
@@ -191,9 +222,10 @@ function generalFields(sector: SectorLeaf): ClarifierField[] {
     classification === "both" ||
     classification === "food_both";
   const isRetailCapable =
-    classification === "retail" ||
-    classification === "both" ||
-    classification === "food_both";
+    !serviceOnly &&
+    (classification === "retail" ||
+      classification === "both" ||
+      classification === "food_both");
 
   if (isServiceCapable) {
     const general = SERVICE_DETAIL_PRESETS.find((g) => g.group === "General");
@@ -213,25 +245,42 @@ function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 
+// `important` (see ClarifierField's own comment) marks the same handful of
+// fields per group vendors are already nudged hardest to fill in, because
+// they most affect AI match quality — the actual "key service details" this
+// whole app already curates per sector. A buyer-facing clarifying question
+// should ask about THOSE first, not draw uniformly at random across every
+// field a sector happens to list. Each half is still shuffled on its own
+// (so which important field leads varies session to session), but an
+// important field always sorts ahead of a non-important one.
+function prioritizeImportant(fields: ClarifierField[]): ClarifierField[] {
+  const important = shuffle(fields.filter((f) => f.important));
+  const rest = shuffle(fields.filter((f) => !f.important));
+  return [...important, ...rest];
+}
+
 const DEFAULT_FIELD_COUNT = 3;
 
 /**
  * Weighted, not random, selection of 2-3 fields to ask the buyer about.
- * Exhausts the sector-specific pool FIRST (shuffled, so which fields get
- * asked varies session to session) — General is only ever drawn from to
- * fill a shortfall, never traded in for variety. Deterministic given a
- * fixed pool size relationship: sector-specific pool >= count always wins
+ * Exhausts the sector-specific pool FIRST (important fields first within
+ * it — see prioritizeImportant) — General is only ever drawn from to fill
+ * a shortfall, never traded in for variety. Deterministic given a fixed
+ * pool size relationship: sector-specific pool >= count always wins
  * outright; General only ever supplements, never replaces.
  */
 export function selectClarifierFields(
   sector: SectorLeaf,
   count = DEFAULT_FIELD_COUNT,
+  serviceOnly = false,
 ): ClarifierField[] {
-  const specific = shuffle(sectorSpecificFields(sector));
+  const specific = prioritizeImportant(
+    sectorSpecificFields(sector, serviceOnly),
+  );
   if (specific.length >= count) return specific.slice(0, count);
 
   const remaining = count - specific.length;
-  const general = shuffle(generalFields(sector));
+  const general = prioritizeImportant(generalFields(sector, serviceOnly));
   return [...specific, ...general.slice(0, remaining)];
 }
 
@@ -243,6 +292,10 @@ export function selectClarifierFields(
  * plain server-side helper, not a model-callable tool — see systemPrompt.ts
  * for why: it's computed once per turn and folded into a short conditional
  * paragraph, so the model's own tool-call set never gains an extra entry.
+ * `query` doubles as the looksLikeServiceTask check (see its own comment) —
+ * the exact same text used for sector detection also decides whether this
+ * is a "get something done" request that should never surface retail
+ * attributes, even for a sector that also sells products.
  */
 export function getSectorClarifiers(
   query: string,
@@ -251,7 +304,11 @@ export function getSectorClarifiers(
   const sector = detectSector(query);
   if (!sector) return null;
 
-  const fields = selectClarifierFields(sector, count);
+  const fields = selectClarifierFields(
+    sector,
+    count,
+    looksLikeServiceTask(query),
+  );
   if (fields.length === 0) return null;
 
   return {
@@ -260,6 +317,56 @@ export function getSectorClarifiers(
     businessType: sector.classification,
     fields,
   };
+}
+
+// Some preset examples already bake in their own "e.g. " prefix (the
+// Electronics retail category's "e.g. 5000mAh", for one), others don't
+// ("free diagnosis", "30 days") — a pre-existing inconsistency in
+// attribute-presets.ts, shared with the vendor-facing Add-Offering
+// wizard's own attribute suggestions, so not safe to normalize there
+// without touching that surface too. Stripped here instead, at the one
+// place this file adds its OWN "(e.g. ...)" wrapper — found live: without
+// this, an already-prefixed example rendered as "(e.g. e.g. 5000mAh)".
+function fieldPhrase(f: ClarifierField): string {
+  if (!f.example) return f.name;
+  const example = f.example.replace(/^e\.?g\.?\s*/i, "");
+  return `${f.name} (e.g. ${example})`;
+}
+
+/**
+ * A deterministic (no LLM) stand-in for buildSystemPrompt's own sectorNote
+ * paragraph — used by resolveSearchItem.ts, which has no model call to ask
+ * the question FOR it (see that file's own comment on why this path stayed
+ * LLM-free). It draws from the exact same field data (getSectorClarifiers),
+ * so it asks about the same real modifiers ("Capacity", "Menu Options" for
+ * catering, etc.) a vendor's own listing actually carries — but it can't
+ * rephrase them the way an LLM would, so it doesn't try to fold them into
+ * one grammatical sentence.
+ *
+ * Found live: an earlier version asked "what's your Repair Warranty,
+ * On-site Support, and Turnaround Time?" — grammatically tidy, but
+ * backwards from a buyer's point of view (a repair WARRANTY is something a
+ * VENDOR offers, not something the buyer has one of; the same "what's
+ * your X" framing reads just as oddly for most preset field names, which
+ * are all written from a vendor-listing perspective). Rendered as a plain
+ * intro line + a real markdown bullet list (FormattedReply already parses
+ * "- item" lines into a <ul>) instead: each field is presented as a thing
+ * worth mentioning, not a question the buyer has to answer literally as
+ * asked — self-explanatory without requiring any grammatical gymnastics
+ * per field. The "mention whichever matter to you" framing sits in the
+ * INTRO line, before the colon, rather than as its own closing sentence
+ * after the list — FormattedReply's own parser treats a plain line right
+ * after a list item as THAT item's continuation, not a new paragraph (so
+ * lists don't fracture into two separately-numbered ones), so a trailing
+ * sentence here would have visibly glued itself onto the last bullet
+ * instead of standing on its own.
+ */
+export function buildClarifyingQuestion(
+  term: string,
+  fields: ClarifierField[],
+): string {
+  const bullets = fields.map((f) => `- ${fieldPhrase(f)}`).join("\n");
+  return `Before I search for "${term}" — mention whichever of these matter to you, so I can match you with the right vendor:\n${bullets}`;
 }
 
 // Re-exported for the deterministic eval script (scripts/eval-sector-clarifiers.ts)
