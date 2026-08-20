@@ -144,7 +144,12 @@ export interface NearbyBusiness {
   address: string;
   lat: number;
   lng: number;
-  distanceKm: number;
+  // `null` specifically when this came from a genuinely locationless search
+  // (buyer declined device location AND named no place) — there's no buyer
+  // coordinate to measure a real distance from, so this is omitted rather
+  // than a fabricated/misleading number (see googlePlacesFallback in
+  // staffly-ai-backend's retrieval.service.js).
+  distanceKm: number | null;
 }
 
 // One item from getVendorProductsTool — a SPECIFIC, already-identified
@@ -234,7 +239,27 @@ export type Clarification =
   // so SearchHome.tsx can give the name ask that identical composer-swap
   // treatment instead — no options, same shape as "text" otherwise, just a
   // distinct discriminant so the frontend can tell the two apart.
-  | { kind: "name"; question: string };
+  | { kind: "name"; question: string }
+  // route.ts's dual-intent branch's own pick (2026-08-20, per explicit
+  // request — replaces an earlier "product side always goes first"
+  // convention): the buyer named two distinct needs in one message, and
+  // rather than the app deciding which to resolve first, this hands the
+  // choice to them. Exactly 2 entries in practice today (route.ts only
+  // ever detects one product term + one store term — see
+  // isGenuineDualIntent's own comment), but not typed as a fixed pair:
+  // SearchHome.tsx's own pick-handling walks the array generically, so a
+  // future real N-way split only has to populate more entries here.
+  // `item` is a complete, self-contained spec (already carries its own
+  // `location`) — SearchHome.tsx resolves whichever one the buyer picks
+  // directly via POST /api/search/resolve-item, no further LLM call
+  // needed (every term here was already extracted on THIS turn), and
+  // queues the other one exactly like an ordinary deferred background
+  // item once the picked one's own flow concludes.
+  | {
+      kind: "item_pick";
+      question: string;
+      options: { item: BackgroundSearchItem; label: string }[];
+    };
 
 // Build-order step d — /api/search streams a sequence of these as
 // newline-delimited JSON: zero or more "status" events while the model +
@@ -354,22 +379,38 @@ export type SearchStreamEvent =
       // buyer declines the offer on a later turn (a fresh search, this
       // flag false that time — see systemPrompt.ts's own rule).
       buyerRequestOffered: boolean;
-      // Non-null only on a genuine DUAL-intent turn (the buyer named a
+      // Empty except on a genuine DUAL-intent turn (the buyer named a
       // specific item AND a separate kind of business, e.g. "fix my laptop
       // screen, and also a plumber") — see route.ts's own comment on where
       // this branches off the normal single-item flow entirely. Item A
       // (the product-side term, by convention) is resolved to completion
       // and shown normally, this same turn, via the fields above — nothing
-      // is held back. This field is what SearchHome.tsx should fetch next,
-      // via POST /api/search/resolve-item, for item B (the store-side
-      // term) — but WHEN that fetch actually starts is entirely
-      // SearchHome.tsx's own call, not this turn's: only once item A's own
-      // flow concludes (including its own reach-out-offer exchange, if it
-      // has one), per explicit design — see SearchHome.tsx's own comment
-      // on the background-item top bar. No LLM involved in resolving it —
-      // the term was already extracted on this same turn, only the search
-      // itself is still pending.
-      backgroundItem: BackgroundSearchItem | null;
+      // is held back. This is what SearchHome.tsx queues up next, one at a
+      // time, via POST /api/search/resolve-item — but WHEN that first fetch
+      // actually starts is entirely SearchHome.tsx's own call, not this
+      // turn's: only once item A's own flow concludes (including its own
+      // reach-out-offer exchange, if it has one), per explicit design — see
+      // SearchHome.tsx's own comment on the background-item bar. No LLM
+      // involved in resolving any of it — every term here was already
+      // extracted on this same turn, only the search itself is still
+      // pending.
+      //
+      // An array, not a single item, so the client-side queue this feeds
+      // (SearchHome.tsx's pendingBackgroundQueueRef) is already shaped to
+      // walk N deferred items one after another, not just one — route.ts
+      // itself only ever detects and populates exactly one entry today (its
+      // dual-intent branch only pairs ONE product term with ONE store term;
+      // real 3+-way intent splitting is a separate, not-yet-built piece of
+      // work), but the client's own chaining logic doesn't need to change
+      // the day that lands.
+      backgroundItems: BackgroundSearchItem[];
+      // The display label for item A (see backgroundItemLabel's own
+      // equivalent in SearchHome.tsx) on a genuine dual-intent turn — null
+      // on every ordinary turn. Purely cosmetic: lets the client phrase the
+      // background-item bar/status around what item A actually was
+      // ("wrapping up X, starting Y next") without having to re-derive it
+      // from `reply`'s free text.
+      dualIntentItemALabel: string | null;
       // True whenever the buyer's VERY NEXT message should be routed
       // through route.ts's deterministic agreement short-circuit instead
       // of treated as a fresh request — mirrors `buyerRequestOffered`

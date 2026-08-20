@@ -30,7 +30,11 @@ export function ExternalBusinessCard({ match }: { match: NearbyBusiness }) {
       <div className="flex items-start gap-1.5 text-xs text-gray-500">
         <MapPinIcon size={13} className="shrink-0 mt-0.5" />
         <span>
-          {match.address} · {match.distanceKm}km away
+          {match.address}
+          {/* Omitted, not "· nullkm away", when this came from a genuinely
+              locationless search (see NearbyBusiness's own comment) — there
+              was no buyer coordinate to measure a real distance from. */}
+          {match.distanceKm != null && ` · ${match.distanceKm}km away`}
         </span>
       </div>
 

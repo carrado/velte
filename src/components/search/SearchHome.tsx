@@ -31,6 +31,9 @@ import {
   checkingOtpPhrase,
   creatingRequestPhrase,
   noMatchRequestPhrase,
+  initiatingBackgroundItemPhrase,
+  backgroundItemPendingPhrase,
+  backgroundItemResolvedPhrase,
 } from "@/lib/server/ai/statusPhrases";
 import type {
   BackgroundSearchItem,
@@ -184,9 +187,9 @@ function messageNamesAPlace(message: string): boolean {
   );
 }
 
-// A plain display term for a pending background item — purely for the
-// "Checking on X in the background…" top bar (see pendingItemBRef/
-// BackgroundStatusBar below). Deliberately NEVER fed back into the AI's
+// A plain display term for a queued background item — purely for the
+// floating background-item bar (see pendingBackgroundQueueRef/
+// BackgroundBarState below). Deliberately NEVER fed back into the AI's
 // own reply text/history — see route.ts's own comment on why that
 // specifically caused a real bug (the model misreading a combined
 // sentence's LAST-mentioned item as what the buyer's "yes" was agreeing
@@ -645,6 +648,7 @@ function ConversationTurnView({
   isLatest,
   onAnswerClarification,
   onLocationShared,
+  onPickItem,
   expandedServicesVendorId,
   onToggleServices,
 }: {
@@ -652,6 +656,12 @@ function ConversationTurnView({
   isLatest: boolean;
   onAnswerClarification: (text: string) => void;
   onLocationShared: (location: BuyerLocation) => void;
+  // See ClarificationPrompt's own onPickItem comment — only actually
+  // called for an "item_pick" clarification.
+  onPickItem: (
+    chosen: { item: BackgroundSearchItem; label: string },
+    deferred: { item: BackgroundSearchItem; label: string },
+  ) => void;
   // Which store's "matching services" panel is open, if any, across the
   // WHOLE conversation, not just this turn — lifted up to SearchHome (see
   // its own comment) so opening one on any turn closes whichever was open
@@ -1194,6 +1204,7 @@ function ConversationTurnView({
                     clarification={turn.clarification}
                     onAnswer={onAnswerClarification}
                     onLocationShared={onLocationShared}
+                    onPickItem={onPickItem}
                   />
                 )}
               {/* "needs_identity" excluded — SearchHome.tsx's own composer
@@ -1278,6 +1289,17 @@ export function SearchHome() {
   // view down again right as the final reply/cards rendered, when the
   // buyer may have already been reading from the top of the response.
   const bottomRef = useRef<HTMLDivElement>(null);
+  // The actual scrolling element (the `overflow-y-auto` div wrapping the
+  // turns list below) — needed as the IntersectionObserver's own `root`
+  // for itemBTurnVisible's effect (see that ref's own comment): without an
+  // explicit root, IntersectionObserver measures against the browser's
+  // top-level viewport, not this nested scroll container, which is a
+  // different box entirely once the page has its own header/sidebar/
+  // composer taking up space around it — found live, this produced
+  // scroll-direction-dependent nonsense (the pill popping back up while
+  // scrolling FURTHER DOWN, toward the turn, not away from it) since the
+  // two boxes' bounds simply don't match.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevTurnCountRef = useRef(0);
   useEffect(() => {
     if (turns.length > prevTurnCountRef.current) {
@@ -1412,57 +1434,89 @@ export function SearchHome() {
     }
   }
 
-  // Tracks the still-pending half of a dual-intent turn (see route.ts's
-  // own comment on where this branches off the normal single-item flow) —
-  // item B's exact spec, a plain display label for it, and whether its
-  // real background fetch has actually started yet. Per explicit design
-  // (2026-08-20 redesign, replacing an earlier "hold both, reveal
-  // together" version): item A always shows its own results/offer
-  // immediately, on its own turn — item B never even STARTS until item
-  // A's own flow fully concludes (its own reach-out-offer exchange, if it
-  // has one, all the way to a terminal status or a decline — see
-  // scheduleItemBStart's own call sites). At most one of these is ever
-  // live at a time — a fresh dual-intent turn can't happen until the
-  // buyer sends another message, by which point any prior item B has long
-  // since resolved — so there's no need to key this by turn id; its mere
-  // presence (and `started`) is the complete state.
-  const pendingItemBRef = useRef<{
-    item: BackgroundSearchItem;
-    label: string;
-    started: boolean;
-  } | null>(null);
-
-  // The floating top-pill's own live state (see the JSX render below, near
-  // the top of this component's return — styled after the landing page's
-  // own FloatingAskBar, just anchored to the top instead of the bottom) —
-  // null hides it entirely. Deliberately a floating overlay, not an in-flow
-  // bar or an inline per-turn caption — per explicit request: a buyer
-  // scrolling through item A's own results should never be auto-scrolled
-  // to, or otherwise interrupted by, item B quietly starting up underneath.
+  // A queue of every not-yet-resolved item deferred off a dual-intent turn
+  // (see route.ts's own comment on where this branches off the normal
+  // single-item flow) — each entry's exact spec plus a plain display label
+  // for it. Per explicit design (2026-08-20 redesign, replacing an earlier
+  // "hold both, reveal together" version): item A always shows its own
+  // results/offer immediately, on its own turn — the queue never even
+  // starts draining until item A's own flow fully concludes (its own
+  // reach-out-offer exchange, if it has one, all the way to a terminal
+  // status or a decline — see scheduleNextBackgroundItem's own call
+  // sites), then drains one entry at a time, each waiting the same beat
+  // before starting as the one before it.
   //
-  // Three states, per explicit design:
-  // - "working": item B is still being fetched — a cycling status line,
-  //   same shimmer treatment every other in-progress line in this app
-  //   uses. Not clickable — there's no turn yet to jump to.
-  // - "pending": item B resolved into something that needs the buyer's own
-  //   action (an "offer" — see resolveBackgroundItem — the same Yes/No
-  //   reach-out exchange a normal offer gets). Clickable; names the item
-  //   and flags it as a pending message to answer.
-  // - "resolved": item B resolved into a terminal result needing no action
-  //   (results, or a real dead end — always Google Places-backed, never a
-  //   silent nothing, see resolveSearchItem.ts). Clickable; names the item
-  //   and says it's done.
-  // "pending"/"resolved" both carry the turnId resolveBackgroundItem just
-  // appended, so this can be scrolled to (scrollToTurn) and its own
-  // on-screen-ness tracked (itemBTurnIdToWatch/itemBTurnVisible below) —
-  // per explicit request, the bar for either of THOSE two states must only
-  // show while that turn is actually off-screen; the instant the buyer
-  // scrolls it into view, the bar disappears on its own, since there's
-  // nothing left to flag once it's already visible.
+  // A real array/queue, not a single "item B" slot — route.ts's own
+  // dual-intent branch only ever populates ONE entry today (its detection
+  // is hard-wired to a single product term + a single store term; a real
+  // 3-way query split is separate, not-yet-built server work), but the
+  // draining logic below already walks N entries sequentially, so that
+  // future work only has to populate more than one entry here, not change
+  // how this side works.
+  const pendingBackgroundQueueRef = useRef<
+    { item: BackgroundSearchItem; label: string }[]
+  >([]);
+  // Guards scheduleNextBackgroundItem against firing twice for the same
+  // queue entry — several call sites can all try to schedule the same
+  // "item A just concluded" moment (the offerAlreadyTerminal check,
+  // handleIdentitySubmit, handleClarificationAnswer's decline branch), and
+  // without this a double-call would start the timer twice and shift TWO
+  // entries off the queue for what should be one hop. Reset false the
+  // instant a scheduled timer actually fires (startNextBackgroundItem), so
+  // the NEXT queued entry (if any) can be scheduled again.
+  const backgroundStartScheduledRef = useRef(false);
+  // Whichever item most recently finished — item A's own label the first
+  // time a queue is populated (onFinal), then whichever queued item just
+  // resolved (resolveBackgroundItem) — purely for phrasing the "queued"
+  // bar state's "wrapping up X, starting Y next" text below.
+  const lastConcludedLabelRef = useRef("");
+
+  // The floating pill's own live state (see the JSX render below, docked
+  // directly above the composer with a margin separating the two — per
+  // explicit request, replacing an earlier top-anchored version) — null
+  // hides it entirely. Deliberately a floating overlay, not an in-flow bar
+  // or an inline per-turn caption — per explicit request: a buyer
+  // scrolling through item A's own results should never be auto-scrolled
+  // to, or otherwise interrupted by, a deferred item quietly starting up
+  // underneath.
+  //
+  // Four states, per explicit design:
+  // - "queued": the next deferred item hasn't started fetching yet — shown
+  //   unconditionally the whole time item A's own flow (offer exchange
+  //   included) is still wrapping up, since there's no turn of the
+  //   deferred item's own yet to check on-screen-ness against.
+  // - "working": the deferred item's own turn now exists and is actively
+  //   fetching — a cycling status line (same shimmer treatment every other
+  //   in-progress line in this app uses) mirrored onto that turn's own
+  //   status in the chat body at the same time, so the two always say the
+  //   same thing. Only shown while that turn is off-screen (see
+  //   itemBTurnVisible below) — once the buyer can see it happening in the
+  //   chat body itself, the pill has nothing left to add.
+  // - "pending": the deferred item resolved into something that needs the
+  //   buyer's own action (an "offer" — see resolveBackgroundItem — the
+  //   same Yes/No reach-out exchange a normal offer gets).
+  // - "resolved": the deferred item resolved into a terminal result
+  //   needing no action (results, or a real dead end — always Google
+  //   Places-backed, never a silent nothing, see resolveSearchItem.ts).
+  //   Still tracked/carried through as real state (for scrollToTurn, and
+  //   so lastConcludedLabelRef/settleBackgroundItem's own chaining logic
+  //   stays simple), but per explicit request (2026-08-20) the PILL ITSELF
+  //   never renders for this state at all — see the JSX render below.
+  //   There's genuinely nothing left for the buyer to act on once it's
+  //   resolved, so there's nothing left to flag either; they discover the
+  //   results naturally by scrolling, same as any other completed turn.
+  // "working"/"pending" carry the turnId of that item's own turn, so this
+  // can be scrolled to (scrollToTurn) and its own on-screen-ness tracked
+  // (itemBTurnIdToWatch/itemBTurnVisible below) — per explicit request,
+  // those two are a "you're missing something" flag, not a persistent
+  // banner, so they only show while that turn is actually off-screen; the
+  // instant the buyer scrolls it into view, the bar disappears on its
+  // own, since there's nothing left to flag once it's already visible.
   type BackgroundBarState =
-    | { kind: "working"; text: string }
-    | { kind: "pending"; turnId: string; label: string }
-    | { kind: "resolved"; turnId: string; label: string };
+    | { kind: "queued"; text: string }
+    | { kind: "working"; turnId: string; text: string }
+    | { kind: "pending"; turnId: string; text: string }
+    | { kind: "resolved"; turnId: string; text: string };
   const [backgroundBar, setBackgroundBar] = useState<BackgroundBarState | null>(
     null,
   );
@@ -1491,14 +1545,22 @@ export function SearchHome() {
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // Whether item B's own turn (backgroundBar's turnId, once it's "pending"
-  // or "resolved") is currently visible on screen — drives whether the
-  // floating bar shows for those two states (see backgroundBar's own
-  // comment). Derived to a plain id (not the whole backgroundBar object) so
-  // the observer effect below only re-runs when the WATCHED TURN actually
-  // changes, not on every "working"-phase cycling-text tick.
+  // Whether the deferred item's own turn (backgroundBar's turnId, once
+  // it's "working", "pending", or "resolved") is currently visible on
+  // screen — drives whether the floating bar shows for those three states
+  // (see backgroundBar's own comment). Derived to a plain id (not the
+  // whole backgroundBar object) so the observer effect below only re-runs
+  // when the WATCHED TURN actually changes, not on every cycling-text
+  // tick.
+  // "resolved" excluded too (alongside "queued") — per explicit request,
+  // once a deferred item is fully done with nothing left for the buyer to
+  // act on, the pill has no further reason to flag it at all, so there's
+  // no visibility to track for that state either (see the JSX render
+  // below for the matching "never show for resolved" condition).
   const itemBTurnIdToWatch =
-    backgroundBar && backgroundBar.kind !== "working"
+    backgroundBar &&
+    backgroundBar.kind !== "queued" &&
+    backgroundBar.kind !== "resolved"
       ? backgroundBar.turnId
       : null;
   const [itemBTurnVisible, setItemBTurnVisible] = useState(false);
@@ -1509,19 +1571,23 @@ export function SearchHome() {
     }
     const el = turnElRef.current.get(itemBTurnIdToWatch);
     if (!el) return;
+    // `root: scrollContainerRef.current` — see that ref's own comment on
+    // why this can't be left as the default (the top-level browser
+    // viewport, a different box than the actual scrolling element here).
     const observer = new IntersectionObserver(
       ([entry]) => setItemBTurnVisible(entry.isIntersecting),
-      { threshold: 0.15 },
+      { root: scrollContainerRef.current, threshold: 0.15 },
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, [itemBTurnIdToWatch]);
 
-  // Clears any in-flight delayed-start timer/cycling interval — called
-  // whenever the pending pair concludes (resolveBackgroundItem) or a
-  // fresh one replaces it (onFinal below), so a stale timer from an
-  // earlier dual-intent turn this same conversation can never fire late
-  // against the wrong item.
+  // Clears any in-flight delayed-start timer/cycling interval, and the
+  // "already scheduled" guard alongside them — called whenever one queued
+  // item concludes (resolveBackgroundItem) or a fresh queue replaces the
+  // old one (onFinal below), so a stale timer from an earlier dual-intent
+  // turn this same conversation can never fire late against the wrong
+  // item.
   function clearBackgroundTimers() {
     if (backgroundStartTimerRef.current) {
       clearTimeout(backgroundStartTimerRef.current);
@@ -1531,65 +1597,198 @@ export function SearchHome() {
       clearInterval(backgroundCycleRef.current);
       backgroundCycleRef.current = null;
     }
+    backgroundStartScheduledRef.current = false;
   }
   useEffect(() => clearBackgroundTimers, []);
 
-  // Item A's own flow just concluded — either it returned results/nothing
-  // directly with no offer at all (called right away, from onFinal), or
-  // its own reach-out-offer exchange reached a terminal status/decline
-  // (called from onFinal's offerAlreadyTerminal check, handleIdentitySubmit,
-  // or handleClarificationAnswer's decline branch). Waits the explicitly-
-  // requested ~3s beat, purely so the hand-off to
-  // item B doesn't feel instantaneous, then actually starts it. A no-op
-  // if there's no pending item B, or it's already started — safe to call
-  // speculatively rather than needing each call site to check first.
+  // Called once the queue is known to have something in it — either the
+  // item just ahead of the front one returned results/nothing directly
+  // with no offer at all (called right away), or its own reach-out-offer
+  // exchange reached a terminal status/decline (via concludeCurrentItemFlow
+  // below, which is what onFinal's offerAlreadyTerminal check,
+  // handleIdentitySubmit, and handleClarificationAnswer's decline branch
+  // actually call) — or a PRIOR queued item just resolved and another one
+  // is queued right behind it (settleBackgroundItem, inside
+  // resolveBackgroundItem below). Waits the explicitly-requested ~3s beat,
+  // purely so each hand-off doesn't feel instantaneous, then actually
+  // starts the next queued item. A no-op if the queue is empty, or a start
+  // is already scheduled — safe to call speculatively rather than needing
+  // each call site to check first.
   const ITEM_B_START_DELAY_MS = 3000;
-  function scheduleItemBStart() {
-    const pending = pendingItemBRef.current;
-    if (!pending || pending.started) return;
+  function scheduleNextBackgroundItem() {
+    if (
+      pendingBackgroundQueueRef.current.length === 0 ||
+      backgroundStartScheduledRef.current
+    )
+      return;
+    backgroundStartScheduledRef.current = true;
     backgroundStartTimerRef.current = setTimeout(
-      startItemB,
+      startNextBackgroundItem,
       ITEM_B_START_DELAY_MS,
     );
   }
 
-  // Flips the top bar from its initial static line to a dynamically
-  // cycling one and kicks off item B's real fetch — the moment item B
-  // genuinely "starts running," per explicit design.
-  function startItemB() {
-    const pending = pendingItemBRef.current;
-    if (!pending || pending.started) return;
-    pending.started = true;
-    setBackgroundBar({
-      kind: "working",
-      text: pickAvoiding(scanningVendorsPhrase(pending.label), []),
-    });
-    backgroundCycleRef.current = setInterval(() => {
-      setBackgroundBar((current) =>
-        current?.kind === "working"
-          ? {
-              kind: "working",
-              text: pickAvoiding(scanningVendorsPhrase(pending.label), [
-                current.text,
-              ]),
-            }
-          : current,
-      );
-    }, 2500);
-    void resolveBackgroundItem(pending.item);
+  // The shared "an item's own reach-out-offer exchange just concluded"
+  // handler — call this (instead of scheduleNextBackgroundItem directly)
+  // from every place that offer can conclude (onFinal's offerAlreadyTerminal
+  // check, handleIdentitySubmit, handleClarificationAnswer's decline
+  // branch). Found live: answering a background item's OWN offer (the
+  // pill's "pending" state — "needs a quick reply") never cleared that
+  // pill afterward — scheduleNextBackgroundItem is a no-op once the queue
+  // is empty (nothing left to chain to), so the "needs a quick reply" flag
+  // just sat there forever, popping back up every time the buyer scrolled
+  // away from that turn, even though it had genuinely already been
+  // answered. If something IS still queued, this defers to
+  // scheduleNextBackgroundItem exactly as before; otherwise, if the pill
+  // is currently flagging a "pending" reply, this is what that reply WAS —
+  // the whole deferred-item flow has now truly concluded, so the pill
+  // clears outright rather than lingering. Safe to call unconditionally,
+  // including for a turn with no background-item flow involved at all
+  // (backgroundBar is simply null already, this is then a no-op).
+  function concludeCurrentItemFlow() {
+    if (pendingBackgroundQueueRef.current.length > 0) {
+      scheduleNextBackgroundItem();
+      return;
+    }
+    setBackgroundBar((current) =>
+      current?.kind === "pending" ? null : current,
+    );
   }
 
-  // Resolves item B independently — a plain deterministic fetch (no LLM,
-  // see /api/search/resolve-item's own comment), only ever called once
-  // item A's own flow has fully concluded (see scheduleItemBStart/
-  // startItemB above) — never awaited by anything, a genuine background
-  // job, per explicit request ("like how Claude works"). Item A already
-  // showed its own results/offer directly on its own turn, so there's
-  // nothing left to merge here: whatever comes back for item B just gets
-  // appended as its own standalone follow-up turn, the exact same shape
-  // any ordinary turn already uses.
+  // Actually starts resolving one item (chosen or deferred, doesn't
+  // matter which — see the two call sites below) — appends its OWN
+  // loading turn to the chat body right away (per explicit request: once
+  // an item "begins," its progress belongs in the ordinary chat flow,
+  // same shimmering status any other turn gets, with the floating bar
+  // only stepping back in once the buyer scrolls away from it — see
+  // itemBTurnVisible above), rather than staying invisible until it
+  // resolves. `prevTurnCountRef` is bumped in lockstep with the append so
+  // this never triggers the ordinary "new turn" auto-scroll (bottomRef's
+  // own effect) — a buyer reading an earlier turn's own results should
+  // never be yanked anywhere by this quietly starting underneath them.
+  //
+  // `displayQuery` is what shows as the buyer's OWN chat bubble above the
+  // loading status — empty for an ordinary deferred item (nothing was
+  // "said," it's a background job — see the query/imagePreview-gated
+  // bubble render below), but the item's own label for handleItemPick's
+  // call (the buyer DID just say this, via tapping its pick button, so it
+  // reads naturally as their own message confirming the choice).
+  function startItem(
+    next: { item: BackgroundSearchItem; label: string },
+    displayQuery: string,
+  ) {
+    const turnId = generateUUID();
+    setTurns((prev) => [
+      ...prev,
+      createLoadingTurn(
+        turnId,
+        displayQuery,
+        null,
+        null,
+        pickAvoiding(scanningVendorsPhrase(next.label), []),
+      ),
+    ]);
+    prevTurnCountRef.current += 1;
+
+    setBackgroundBar({
+      kind: "working",
+      turnId,
+      text: pickAvoiding(scanningVendorsPhrase(next.label), []),
+    });
+    backgroundCycleRef.current = setInterval(() => {
+      setBackgroundBar((current) => {
+        if (current?.kind !== "working" || current.turnId !== turnId)
+          return current;
+        const text = pickAvoiding(scanningVendorsPhrase(next.label), [
+          current.text,
+        ]);
+        updateTurn(turnId, { status: text });
+        return { ...current, text };
+      });
+    }, 2500);
+
+    void resolveBackgroundItem(next.item, next.label, turnId);
+  }
+
+  // Shifts the next entry off the queue and starts it (see startItem
+  // above) — the ordinary deferred-item path, always with an empty
+  // display query (nothing the buyer said, a background job).
+  function startNextBackgroundItem() {
+    backgroundStartScheduledRef.current = false;
+    const next = pendingBackgroundQueueRef.current.shift();
+    if (!next) return;
+    startItem(next, "");
+  }
+
+  // The dual-intent item_pick clarification's own answer (see
+  // ClarificationPrompt's onPickItem) — per explicit request (2026-08-20
+  // redesign, replacing an earlier "product side always goes first"
+  // convention): the buyer, not the app, decides which of the two named
+  // needs gets resolved first. `chosen` starts immediately (via startItem,
+  // same as any other item, just with its own label standing in as the
+  // buyer's displayed message — they DID just say this, by tapping its
+  // button); `deferred` is queued exactly like an ordinary background
+  // item, picked up once `chosen`'s own flow (including a full
+  // reach-out-offer exchange, if it has one) concludes.
+  function handleItemPick(
+    chosen: { item: BackgroundSearchItem; label: string },
+    deferred: { item: BackgroundSearchItem; label: string },
+  ) {
+    clearBackgroundTimers();
+    pendingBackgroundQueueRef.current = [deferred];
+    startItem(chosen, chosen.label);
+  }
+
+  // Settles the floating bar once one deferred item's own fetch concludes
+  // — shared by every branch of resolveBackgroundItem below. If another
+  // item is still queued behind this one, the bar moves straight to
+  // "queued" for THAT one (same unconditional-visibility state onFinal
+  // sets up initially) and schedules it, rather than sitting on this
+  // item's own "pending"/"resolved" state — otherwise a later queued item
+  // starting right behind this one would never get its own turn to show.
+  function settleBackgroundItem(
+    turnId: string,
+    kind: "pending" | "resolved",
+    label: string,
+  ) {
+    lastConcludedLabelRef.current = label;
+    const next = pendingBackgroundQueueRef.current[0];
+    if (next) {
+      setBackgroundBar({
+        kind: "queued",
+        text: pickAvoiding(
+          initiatingBackgroundItemPhrase(label, next.label),
+          [],
+        ),
+      });
+      scheduleNextBackgroundItem();
+      return;
+    }
+    setBackgroundBar({
+      kind,
+      turnId,
+      text: pickAvoiding(
+        kind === "pending"
+          ? backgroundItemPendingPhrase(label)
+          : backgroundItemResolvedPhrase(label),
+        [],
+      ),
+    });
+  }
+
+  // Resolves one deferred item independently — a plain deterministic fetch
+  // (no LLM, see /api/search/resolve-item's own comment), only ever called
+  // once the item ahead of it (item A the first time, or whichever queued
+  // item preceded it) has fully concluded (see scheduleNextBackgroundItem/
+  // startNextBackgroundItem above) — never awaited by anything, a genuine
+  // background job, per explicit request ("like how Claude works"). Updates
+  // its OWN loading turn (already appended by startNextBackgroundItem) in
+  // place, rather than appending a fresh one — that turn has been visible,
+  // shimmering, in the chat body this whole time.
   async function resolveBackgroundItem(
     item: BackgroundSearchItem,
+    label: string,
+    turnId: string,
   ): Promise<void> {
     let outcome: SearchItemOutcome | null = null;
     let failedText: string | null = null;
@@ -1616,60 +1815,27 @@ export function SearchHome() {
     }
 
     clearBackgroundTimers();
-    // Captured before nulling pendingItemBRef — still needed below to label
-    // the "pending"/"resolved" bar state this resolves into (see
-    // backgroundBar's own comment). `turnId` is generated up front, not
-    // inline in `base`, specifically so it can ALSO be handed to
-    // setBackgroundBar — the bar needs the exact same id the turn below
-    // gets appended under, to scroll to/observe it.
-    const label = pendingItemBRef.current?.label ?? "";
-    const turnId = generateUUID();
-    pendingItemBRef.current = null;
-
-    const base = {
-      id: turnId,
-      query: "",
-      imagePreview: null,
-      imageUrl: null,
-      phase: "done" as const,
-      status: "",
-      toolCalled: true,
-      clarification: null,
-      weakProducts: [],
-      productStores: [],
-      storeServices: [],
-      vendorProducts: [],
-      vendorProductsStore: null,
-      buyerRequestOffer: null,
-      interimReplies: [],
-      awaitingBuyerRequestReply: false,
-      contextNote: null,
-      error: null,
-    };
 
     if (failedText || !outcome) {
-      setTurns((prev) => [
-        ...prev,
-        {
-          ...base,
-          reply:
-            failedText ?? "Couldn't finish checking that in the background.",
-          products: [],
-          stores: [],
-          furtherStores: [],
-          storesQuery: null,
-          productsMatchTier: null,
-          storesMatchTier: null,
-          productsMatchQuality: undefined,
-          storesMatchQuality: undefined,
-          externalStoreSuggestions: [],
-          buyerRequestOffered: false,
-        },
-      ]);
-      // A genuine failure still resolves item B's own lifecycle — no
+      updateTurn(turnId, {
+        phase: "done",
+        reply: failedText ?? "Couldn't finish checking that in the background.",
+        toolCalled: true,
+        products: [],
+        stores: [],
+        furtherStores: [],
+        storesQuery: null,
+        productsMatchTier: null,
+        storesMatchTier: null,
+        productsMatchQuality: undefined,
+        storesMatchQuality: undefined,
+        externalStoreSuggestions: [],
+        buyerRequestOffered: false,
+      });
+      // A genuine failure still resolves this item's own lifecycle — no
       // further action the buyer can take on it, so this is "resolved" not
       // "pending", same as a normal empty result.
-      setBackgroundBar({ kind: "resolved", turnId, label });
+      settleBackgroundItem(turnId, "resolved", label);
       return;
     }
 
@@ -1681,70 +1847,64 @@ export function SearchHome() {
       // message; the model reads this turn's own `reply` text (now part
       // of `history`) and proceeds through the NORMAL createBuyerRequest
       // flow from there, completely unmodified.
-      setTurns((prev) => [
-        ...prev,
-        {
-          ...base,
-          reply: outcome.text,
-          products: [],
-          stores: [],
-          furtherStores: [],
-          storesQuery: null,
-          productsMatchTier: null,
-          storesMatchTier: null,
-          productsMatchQuality: undefined,
-          storesMatchQuality: undefined,
-          externalStoreSuggestions: [],
-          buyerRequestOffered: true,
-          awaitingBuyerRequestReply: true,
-        },
-      ]);
+      updateTurn(turnId, {
+        phase: "done",
+        reply: outcome.text,
+        toolCalled: true,
+        products: [],
+        stores: [],
+        furtherStores: [],
+        storesQuery: null,
+        productsMatchTier: null,
+        storesMatchTier: null,
+        productsMatchQuality: undefined,
+        storesMatchQuality: undefined,
+        externalStoreSuggestions: [],
+        buyerRequestOffered: true,
+        awaitingBuyerRequestReply: true,
+      });
       // Needs the buyer's own Yes/No — see backgroundBar's own comment.
-      setBackgroundBar({ kind: "pending", turnId, label });
+      settleBackgroundItem(turnId, "pending", label);
       return;
     }
 
     if (outcome.status === "products") {
-      setTurns((prev) => [
-        ...prev,
-        {
-          ...base,
-          reply: "Found a real match on Velte for that — take a look below.",
-          products: outcome.products,
-          stores: [],
-          furtherStores: [],
-          storesQuery: null,
-          productsMatchTier: outcome.matchTier,
-          storesMatchTier: null,
-          productsMatchQuality: outcome.matchQuality,
-          storesMatchQuality: undefined,
-          externalStoreSuggestions: [],
-          buyerRequestOffered: false,
-        },
-      ]);
-      setBackgroundBar({ kind: "resolved", turnId, label });
+      updateTurn(turnId, {
+        phase: "done",
+        reply: "Found a real match on Velte for that — take a look below.",
+        toolCalled: true,
+        products: outcome.products,
+        stores: [],
+        furtherStores: [],
+        storesQuery: null,
+        productsMatchTier: outcome.matchTier,
+        storesMatchTier: null,
+        productsMatchQuality: outcome.matchQuality,
+        storesMatchQuality: undefined,
+        externalStoreSuggestions: [],
+        buyerRequestOffered: false,
+      });
+      settleBackgroundItem(turnId, "resolved", label);
       return;
     }
 
     if (outcome.status === "stores") {
-      setTurns((prev) => [
-        ...prev,
-        {
-          ...base,
-          reply: "Found a real match on Velte for that — take a look below.",
-          products: [],
-          stores: outcome.stores,
-          furtherStores: outcome.furtherStores,
-          storesQuery: outcome.storesQuery,
-          productsMatchTier: null,
-          storesMatchTier: outcome.matchTier,
-          productsMatchQuality: undefined,
-          storesMatchQuality: outcome.matchQuality,
-          externalStoreSuggestions: [],
-          buyerRequestOffered: false,
-        },
-      ]);
-      setBackgroundBar({ kind: "resolved", turnId, label });
+      updateTurn(turnId, {
+        phase: "done",
+        reply: "Found a real match on Velte for that — take a look below.",
+        toolCalled: true,
+        products: [],
+        stores: outcome.stores,
+        furtherStores: outcome.furtherStores,
+        storesQuery: outcome.storesQuery,
+        productsMatchTier: null,
+        storesMatchTier: outcome.matchTier,
+        productsMatchQuality: undefined,
+        storesMatchQuality: outcome.matchQuality,
+        externalStoreSuggestions: [],
+        buyerRequestOffered: false,
+      });
+      settleBackgroundItem(turnId, "resolved", label);
       return;
     }
 
@@ -1754,24 +1914,22 @@ export function SearchHome() {
     // dead end (see that file's own comment). Still "resolved", not
     // "pending" — there's nothing the buyer owes a reply to, just results
     // (possibly Google Places ones) to look at whenever they scroll down.
-    setTurns((prev) => [
-      ...prev,
-      {
-        ...base,
-        reply: outcome.text,
-        products: [],
-        stores: [],
-        furtherStores: [],
-        storesQuery: null,
-        productsMatchTier: null,
-        storesMatchTier: null,
-        productsMatchQuality: undefined,
-        storesMatchQuality: undefined,
-        externalStoreSuggestions: outcome.externalSuggestions,
-        buyerRequestOffered: false,
-      },
-    ]);
-    setBackgroundBar({ kind: "resolved", turnId, label });
+    updateTurn(turnId, {
+      phase: "done",
+      reply: outcome.text,
+      toolCalled: true,
+      products: [],
+      stores: [],
+      furtherStores: [],
+      storesQuery: null,
+      productsMatchTier: null,
+      storesMatchTier: null,
+      productsMatchQuality: undefined,
+      storesMatchQuality: undefined,
+      externalStoreSuggestions: outcome.externalSuggestions,
+      buyerRequestOffered: false,
+    });
+    settleBackgroundItem(turnId, "resolved", label);
   }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1949,15 +2107,17 @@ export function SearchHome() {
           // `no_match`/`error`) in THIS SAME stream event, most commonly
           // via the agreement short-circuit's own follow-up turn (the
           // name-ask's reply). Checked unconditionally, independent of
-          // `event.backgroundItem` — the terminal status can land on a
-          // LATER turn than the one that originally registered
-          // `pendingItemBRef` (offer → name-ask → this one), and
-          // `scheduleItemBStart` is a no-op if nothing's actually pending.
+          // `event.backgroundItems` — the terminal status can land on a
+          // LATER turn than the one that originally populated
+          // `pendingBackgroundQueueRef` (offer → name-ask → this one).
+          // concludeCurrentItemFlow handles both cases: advances the queue
+          // if anything's left in it, otherwise clears a "pending" pill
+          // that this exact answer just resolved.
           const offerAlreadyTerminal =
             event.buyerRequestOffer?.status === "created" ||
             event.buyerRequestOffer?.status === "no_match" ||
             event.buyerRequestOffer?.status === "error";
-          if (offerAlreadyTerminal) scheduleItemBStart();
+          if (offerAlreadyTerminal) concludeCurrentItemFlow();
           // The composer's own phone/OTP identity-capture mode (see
           // IdentityCapture's own comment) takes over the instant this
           // status arrives — `imageUrl` is read off THIS turn (the one
@@ -1982,29 +2142,40 @@ export function SearchHome() {
             setNameCapture({ question: event.clarification.question });
             setNameValue("");
           }
-          // Item A (this turn, just shown above) is done; item B
-          // (event.backgroundItem) is registered as pending but does NOT
-          // start yet — see pendingItemBRef's own comment. If item A
-          // itself needs a reach-out offer (buyerRequestOffered true),
-          // item B waits for THAT to conclude (handleIdentitySubmit/
+          // Generic handling for a turn that arrives with its own deferred
+          // item(s) already queued — currently dormant in practice: a
+          // genuine dual-intent turn no longer populates
+          // event.backgroundItems on ITS OWN turn at all (2026-08-20
+          // redesign — it hands both sides to the buyer as an "item_pick"
+          // clarification instead, see handleItemPick, which populates
+          // pendingBackgroundQueueRef directly once the buyer actually
+          // picks one). Left in place as the generic "a turn already knows
+          // about a deferred item" path — this turn's OWN flow is done;
+          // the deferred item(s) are queued but does NOT start yet — see
+          // pendingBackgroundQueueRef's own comment. If this turn itself
+          // needs a reach-out offer (buyerRequestOffered true), the queue
+          // waits for THAT to conclude (handleIdentitySubmit/
           // handleClarificationAnswer/the offerAlreadyTerminal check just
-          // above call scheduleItemBStart once it does); otherwise item A
-          // is already fully concluded right now, so the delayed start is
-          // scheduled immediately.
-          if (event.backgroundItem) {
+          // above all call concludeCurrentItemFlow once it does); otherwise
+          // this turn is already fully concluded right now, so the
+          // delayed start is scheduled immediately.
+          if (event.backgroundItems.length > 0) {
             clearBackgroundTimers();
-            const label = backgroundItemLabel(event.backgroundItem);
-            pendingItemBRef.current = {
-              item: event.backgroundItem,
-              label,
-              started: false,
-            };
+            const itemALabel = event.dualIntentItemALabel ?? "that";
+            lastConcludedLabelRef.current = itemALabel;
+            pendingBackgroundQueueRef.current = event.backgroundItems.map(
+              (item) => ({ item, label: backgroundItemLabel(item) }),
+            );
+            const next = pendingBackgroundQueueRef.current[0];
             setBackgroundBar({
-              kind: "working",
-              text: `Also checking on "${label}" in the background…`,
+              kind: "queued",
+              text: pickAvoiding(
+                initiatingBackgroundItemPhrase(itemALabel, next.label),
+                [],
+              ),
             });
             if (!event.buyerRequestOffered) {
-              scheduleItemBStart();
+              scheduleNextBackgroundItem();
             }
           }
         },
@@ -2282,16 +2453,17 @@ export function SearchHome() {
       locationDeclinedRef.current = true;
     }
     // A decline of item A's own reach-out offer is just as much a
-    // conclusion as an actual created request — if item B is sitting
-    // pending on item A's flow to finish (see pendingItemBRef), this is
-    // what lets it finally start. "No thanks, that's okay" is the
-    // buyerRequestOffered Yes/No pair's own literal decline text (see the
-    // button below), never typed by the buyer themselves. Only item A's
-    // OWN offer can still be pending here — by design, item B never even
-    // starts until item A concludes, so there's never a second, competing
-    // offer in flight to confuse this with.
+    // conclusion as an actual created request — if a deferred item is
+    // sitting queued on item A's flow to finish (see
+    // pendingBackgroundQueueRef), this is what lets it finally start.
+    // "No thanks, that's okay" is the buyerRequestOffered Yes/No pair's
+    // own literal decline text (see the button below), never typed by the
+    // buyer themselves. Only item A's OWN offer can still be pending
+    // here — by design, the queue never even starts draining until item A
+    // concludes, so there's never a second, competing offer in flight to
+    // confuse this with.
     if (lastTurn?.buyerRequestOffered && text === "No thanks, that's okay") {
-      scheduleItemBStart();
+      concludeCurrentItemFlow();
     }
     void submitMessage(text, null, null);
   }
@@ -2454,7 +2626,7 @@ export function SearchHome() {
           },
         });
       }
-      scheduleItemBStart();
+      concludeCurrentItemFlow();
       setIdentityCapture(null);
     } catch (err) {
       updateTurn(turnId, {
@@ -2734,86 +2906,6 @@ export function SearchHome() {
     <div className="h-full bg-white flex flex-col overflow-hidden relative">
       <BuyerInstallPrompt />
 
-      {/* The dual-intent flow's "item B" indicator — same floating-pill
-          treatment as the landing page's own FloatingAskBar (white/blur,
-          rounded-full, shadow), just anchored to the TOP of this panel
-          instead of the bottom, per explicit request. Deliberately an
-          ABSOLUTE overlay (not an in-flow bar pushing the turns list down)
-          so it floats above whatever the buyer is scrolled to, and never
-          touches `turns` itself — it can't trigger the auto-scroll-on-
-          new-turn effect, and a buyer reading item A's results never gets
-          nudged anywhere while this appears/updates underneath them.
-          "working" text uses the exact same `.status-shimmer` treatment
-          (globals.css) every other in-progress status line in this app
-          already uses — not a separate pulsing-dot design of its own.
-          "pending"/"resolved" only render at all while their own turn is
-          off screen (itemBTurnVisible, tracked above) — per explicit
-          request, this is a "you're missing something" flag, not a
-          persistent banner, so it has nothing left to say once that turn
-          is actually in view. The outer wrapper stays pointer-events-none
-          (it spans the full width, most of which is empty) — only the pill
-          itself re-enables pointer-events, and only once it's actually
-          clickable. */}
-      <AnimatePresence>
-        {backgroundBar &&
-          (backgroundBar.kind === "working" || !itemBTurnVisible) && (
-            <motion.div
-              initial={{ y: -40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -40, opacity: 0 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="absolute inset-x-0 top-0 z-20 px-4 pt-3 pointer-events-none"
-            >
-              <div
-                onClick={
-                  backgroundBar.kind !== "working"
-                    ? () => scrollToTurn(backgroundBar.turnId)
-                    : undefined
-                }
-                onKeyDown={
-                  backgroundBar.kind !== "working"
-                    ? (e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          scrollToTurn(backgroundBar.turnId);
-                        }
-                      }
-                    : undefined
-                }
-                role={backgroundBar.kind !== "working" ? "button" : undefined}
-                tabIndex={backgroundBar.kind !== "working" ? 0 : undefined}
-                className={cn(
-                  "max-w-lg mx-auto bg-white/95 backdrop-blur-md rounded-full border-2 border-gray-100 shadow-2xl shadow-gray-400/20 px-5 h-12 flex items-center gap-2",
-                  backgroundBar.kind !== "working" &&
-                    "pointer-events-auto cursor-pointer hover:bg-white hover:border-orange-200 transition-colors",
-                )}
-              >
-                {backgroundBar.kind === "working" ? (
-                  <span className="status-shimmer truncate text-sm font-medium min-w-0">
-                    {backgroundBar.text}
-                  </span>
-                ) : (
-                  <>
-                    <span
-                      className={cn(
-                        "w-2 h-2 rounded-full shrink-0",
-                        backgroundBar.kind === "pending"
-                          ? "bg-orange-500 animate-pulse"
-                          : "bg-emerald-500",
-                      )}
-                    />
-                    <span className="truncate text-sm font-medium min-w-0 text-[#023337]">
-                      {backgroundBar.kind === "pending"
-                        ? `"${backgroundBar.label}" — 1 pending message`
-                        : `"${backgroundBar.label}" resolved`}
-                    </span>
-                  </>
-                )}
-              </div>
-            </motion.div>
-          )}
-      </AnimatePresence>
-
       {!collapsed ? (
         <main className="flex-1 flex flex-col items-center justify-center px-5">
           {/* The idle screen reads as Velte itself greeting the buyer — same
@@ -2843,7 +2935,10 @@ export function SearchHome() {
         <>
           {/* Newest content stays pinned to the bottom (bottomRef) as the
               thread grows, so scrolling reads bottom-up like a chat. */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-6">
+          <div
+            ref={scrollContainerRef}
+            className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-6"
+          >
             <div className="max-w-3xl lg:max-w-4xl mx-auto space-y-8">
               {turns.map((turn, i) => (
                 // Wrapper div only exists to give registerTurnEl a real DOM
@@ -2858,6 +2953,7 @@ export function SearchHome() {
                     isLatest={i === turns.length - 1}
                     onAnswerClarification={handleClarificationAnswer}
                     onLocationShared={handleLocationShared}
+                    onPickItem={handleItemPick}
                     expandedServicesVendorId={expandedServicesVendorId}
                     onToggleServices={toggleServices}
                   />
@@ -2867,7 +2963,95 @@ export function SearchHome() {
             </div>
           </div>
           <div className="shrink-0 px-5 sm:px-8 pt-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-            <div className="max-w-3xl lg:max-w-4xl mx-auto">{inputForm}</div>
+            <div className="max-w-3xl lg:max-w-4xl mx-auto">
+              {/* The deferred-item flow's own indicator — docked directly
+                  above the composer, with a margin separating the two
+                  (per explicit request, replacing an earlier top-anchored
+                  version). Carries Velte's own avatar so it reads as
+                  Velte narrating, the same voice as every other status
+                  line and reply in this thread, not a bare status chip.
+                  "queued" always shows (there's no turn of its own yet to
+                  check on-screen-ness against — see backgroundBar's own
+                  comment); "working"/"pending" only show while their own
+                  turn (itemBTurnIdToWatch) is off screen — per explicit
+                  request, this is a "you're missing something" flag, not
+                  a persistent banner, so it has nothing left to say once
+                  the buyer can already see that turn. "resolved" NEVER
+                  shows here at all (2026-08-20, per explicit request) —
+                  once a deferred item is fully done with nothing left
+                  needing the buyer's action, there's nothing left to flag
+                  either; the buyer discovers the results naturally by
+                  scrolling, same as any other completed turn. */}
+              <AnimatePresence>
+                {backgroundBar &&
+                  backgroundBar.kind !== "resolved" &&
+                  (backgroundBar.kind === "queued" || !itemBTurnVisible) && (
+                    <motion.div
+                      initial={{ y: 16, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: 16, opacity: 0 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="mb-3"
+                    >
+                      <div
+                        onClick={
+                          backgroundBar.kind !== "queued"
+                            ? () => scrollToTurn(backgroundBar.turnId)
+                            : undefined
+                        }
+                        onKeyDown={
+                          backgroundBar.kind !== "queued"
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  scrollToTurn(backgroundBar.turnId);
+                                }
+                              }
+                            : undefined
+                        }
+                        role={
+                          backgroundBar.kind !== "queued" ? "button" : undefined
+                        }
+                        tabIndex={
+                          backgroundBar.kind !== "queued" ? 0 : undefined
+                        }
+                        className={cn(
+                          "max-w-lg mx-auto bg-white/95 backdrop-blur-md rounded-full border-2 border-gray-100 shadow-lg shadow-gray-400/15 pl-2 pr-5 h-12 flex items-center gap-2.5",
+                          backgroundBar.kind !== "queued" &&
+                            "cursor-pointer hover:bg-white hover:border-orange-200 transition-colors",
+                        )}
+                      >
+                        <img
+                          src="/velte_ai_assistant.png"
+                          alt="Velte"
+                          className="w-8 h-8 rounded-full object-cover shrink-0"
+                        />
+                        {backgroundBar.kind === "queued" ||
+                        backgroundBar.kind === "working" ? (
+                          <span className="status-shimmer truncate text-sm font-medium min-w-0">
+                            {backgroundBar.text}
+                          </span>
+                        ) : (
+                          <>
+                            <span
+                              className={cn(
+                                "w-2 h-2 rounded-full shrink-0",
+                                backgroundBar.kind === "pending"
+                                  ? "bg-orange-500 animate-pulse"
+                                  : "bg-emerald-500",
+                              )}
+                            />
+                            <span className="truncate text-sm font-medium min-w-0 text-[#023337]">
+                              {backgroundBar.text}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+              </AnimatePresence>
+              {inputForm}
+            </div>
           </div>
         </>
       )}

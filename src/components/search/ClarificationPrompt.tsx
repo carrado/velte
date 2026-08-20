@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   pickAvoiding,
   gettingLocationPhrase,
 } from "@/lib/server/ai/statusPhrases";
-import type { BuyerLocation, Clarification } from "@/types/search";
+import type {
+  BackgroundSearchItem,
+  BuyerLocation,
+  Clarification,
+} from "@/types/search";
 import { SendIcon } from "@/components/icons";
 
 const LOCATION_PHRASE_ROTATE_MS = 1500;
@@ -31,6 +36,7 @@ export function ClarificationPrompt({
   clarification,
   onAnswer,
   onLocationShared,
+  onPickItem,
 }: {
   clarification: Clarification;
   onAnswer: (text: string) => void;
@@ -41,6 +47,14 @@ export function ClarificationPrompt({
   // text a buyer typed, so the parent needs to tell those two cases apart
   // structurally, not by sniffing the string.
   onLocationShared: (location: BuyerLocation) => void;
+  // Only actually called for an "item_pick" clarification (see below) —
+  // its own callback, same reasoning as onLocationShared: picking an item
+  // resolves it directly via a background fetch, it's never just text sent
+  // back through onAnswer like a "choice" pill.
+  onPickItem: (
+    chosen: { item: BackgroundSearchItem; label: string },
+    deferred: { item: BackgroundSearchItem; label: string },
+  ) => void;
 }) {
   const [value, setValue] = useState("");
 
@@ -73,6 +87,38 @@ export function ClarificationPrompt({
             {option}
           </button>
         ))}
+      </div>
+    );
+  }
+
+  // route.ts's dual-intent branch's own pick (see Clarification's own
+  // comment) — two real options, each a complete BackgroundSearchItem, not
+  // plain option strings like "choice" above. Tapping one resolves it
+  // directly (SearchHome.tsx's onPickItem, via POST /api/search/
+  // resolve-item — no further LLM round trip, every term here was already
+  // extracted on this same turn) and queues the OTHER one exactly like an
+  // ordinary deferred background item. Same pill styling as "choice" —
+  // this is still just "tap the thing you want," not a heavier decision
+  // that needs its own visual treatment.
+  if (clarification.kind === "item_pick") {
+    const [first, second] = clarification.options;
+    if (!first || !second) return null;
+    return (
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onPickItem(first, second)}
+          className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
+        >
+          {first.label}
+        </button>
+        <button
+          type="button"
+          onClick={() => onPickItem(second, first)}
+          className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
+        >
+          {second.label}
+        </button>
       </div>
     );
   }
@@ -152,6 +198,9 @@ function LocationShareAction({
   function handleShare() {
     if (!navigator.geolocation) {
       setPhase("error");
+      toast.error(
+        "Location isn't supported on this browser — search without it instead.",
+      );
       return;
     }
     cancelledRef.current = false;
@@ -179,6 +228,17 @@ function LocationShareAction({
           `[location] geolocation failed (code ${err.code}): ${err.message}`,
         );
         setPhase("error");
+        // A real permission denial (code 1) gets its own honest wording —
+        // the generic "couldn't get your location" undersells that the
+        // buyer (or their browser/OS) actively said no, and how to fix it
+        // is different (a browser/site permission toggle, not just "try
+        // again"). Codes 2/3 (no fix available / timed out) share the
+        // plain retry-or-decline wording below instead.
+        toast.error(
+          err.code === 1
+            ? "Location permission was denied — check your browser/device settings, or search without it."
+            : "Couldn't get your location — try again, or search without it.",
+        );
       },
       // `timeout` keeps ticking while the browser's own native permission
       // dialog is sitting there waiting for a tap — it does NOT pause for

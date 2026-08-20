@@ -161,8 +161,22 @@ export async function searchProductsCore(
   }
 
   // Side channel, not this function's return value — see weakResultsOut's
-  // own doc comment above for why.
-  if (weakResultsOut) weakResultsOut.current = weakResults;
+  // own doc comment above for why. Accumulated (deduped by productId), not
+  // overwritten — same reasoning as extractOutcome's own products/stores
+  // merge in route.ts: the model can call searchProducts more than once in
+  // a single turn (e.g. two distinct product needs named in one message),
+  // and a plain `=` here would silently drop an earlier call's own weak
+  // matches the moment a later call also set this.
+  if (weakResultsOut) {
+    weakResultsOut.current = Array.from(
+      new Map(
+        [...weakResultsOut.current, ...weakResults].map((p) => [
+          p.productId,
+          p,
+        ]),
+      ).values(),
+    );
+  }
 
   // A mechanical fact, not left to the model's own inference: `coords`
   // truthy means a REAL place was actually searched (the buyer's device
