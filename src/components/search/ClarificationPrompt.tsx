@@ -11,7 +11,6 @@ import type {
   BuyerLocation,
   Clarification,
 } from "@/types/search";
-import { SendIcon } from "@/components/icons";
 
 const LOCATION_PHRASE_ROTATE_MS = 1500;
 // Generous, not the browser API's own short-feeling default — see
@@ -23,15 +22,18 @@ const GEOLOCATION_TIMEOUT_MS = 30000;
 // Renders askClarifyingQuestionTool's structured widget metadata (see
 // systemPrompt.ts) — the question TEXT itself is already shown above this
 // as the turn's normal reply; this is just the answer affordance: a row of
-// pill buttons ("choice"), a small dedicated input ("text"), or a real
-// device-geolocation action ("location") — deliberately distinct from the
-// main composer at the bottom of the page. No internal disabled/loading
-// state for "choice"/"text" — the parent appends a new turn the instant
-// `onAnswer` fires, which (via the `isLatest` gate in SearchHome) unmounts
-// this widget before a double-submit is possible. "location" is the one
-// exception: sharing location takes real time (the browser's own
-// getCurrentPosition() round-trip), so it needs its own in-flight state —
-// see LocationShareAction below.
+// pill buttons ("choice"/"item_pick"), or a real device-geolocation action
+// ("location") — deliberately distinct from the main composer at the
+// bottom of the page. "name" and "text" both answer through THAT composer
+// instead (its own dedicated modes — see nameCapture's and
+// pendingTextClarification's own comments in SearchHome.tsx) and never
+// render anything here at all. No internal disabled/loading state for
+// "choice"/"item_pick" — the parent appends a new turn the instant
+// `onAnswer`/`onPickItem` fires, which (via the `isLatest` gate in
+// SearchHome) unmounts this widget before a double-submit is possible.
+// "location" is the one exception: sharing location takes real time (the
+// browser's own getCurrentPosition() round-trip), so it needs its own
+// in-flight state — see LocationShareAction below.
 export function ClarificationPrompt({
   clarification,
   onAnswer,
@@ -56,8 +58,6 @@ export function ClarificationPrompt({
     deferred: { item: BackgroundSearchItem; label: string },
   ) => void;
 }) {
-  const [value, setValue] = useState("");
-
   if (clarification.kind === "location") {
     return (
       <LocationShareAction onShared={onLocationShared} onDecline={onAnswer} />
@@ -123,33 +123,17 @@ export function ClarificationPrompt({
     );
   }
 
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const trimmed = value.trim();
-        if (!trimmed) return;
-        onAnswer(trimmed);
-      }}
-      className="flex items-center gap-1.5 bg-white rounded-xl border border-orange-200 pl-3.5 pr-1.5 h-11 max-w-md focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500"
-    >
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Type your answer…"
-        className="flex-1 min-w-0 h-full outline-none text-sm bg-transparent"
-      />
-      <button
-        type="submit"
-        disabled={!value.trim()}
-        title="Send"
-        className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:hover:bg-orange-500 text-white transition-colors"
-      >
-        <SendIcon size={14} />
-      </button>
-    </form>
-  );
+  // "text" is the only remaining possibility here by elimination (the
+  // Clarification union has exactly these 5 kinds) — per explicit request,
+  // it now answers through SearchHome.tsx's own composer (the same
+  // dedicated-input treatment "name" above already gets) instead of a
+  // separate, fixed-height input here: whatever detail the buyer needs to
+  // write may run longer than a small pill input comfortably fits, and the
+  // composer already auto-resizes to whatever they type. The parent gates
+  // this component from ever mounting for a "text" clarification in the
+  // first place (ConversationTurnView's own check, mirroring the "name"
+  // one above), so this is just a defensive no-op, not the real gate.
+  return null;
 }
 
 // The "location" clarification's own answer affordance — a real

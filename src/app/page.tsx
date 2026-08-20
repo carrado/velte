@@ -52,10 +52,20 @@ import StandaloneHomeRedirect from "@/components/StandaloneHomeRedirect";
 // products, 25 vendors) still never appear anywhere on this page as a
 // headline — BuiltForNigeria sells real-and-growing, not a number that
 // reads small today and would need rewriting constantly as it changes.
+// Title/description tightened 2026-08-2x for SEO — "Find anything nearby"
+// alone told Google nothing about WHAT kind of site this is (map app? food
+// delivery? e-commerce?), and gave search algorithms nothing to anchor on
+// against "VULTe" (vulte.ng), Polaris Bank's much larger, heavily-searched
+// digital banking platform — phonetically/alphabetically close enough that
+// a typo'd or ambiguous search risks an autocorrect toward the bank
+// instead. Naming "marketplace"/"vendors"/"shopping"/"Nigeria" explicitly
+// here (and in layout.tsx's own site-wide default, kept in sync) signals
+// the retail/directory category plainly, on top of being genuinely more
+// specific/descriptive on its own merits.
 export const metadata: Metadata = {
-  title: "Velte | Find anything nearby",
+  title: "Velte | AI Shopping Assistant & Local Vendor Marketplace Nigeria",
   description:
-    "Describe what you need — Velte finds the nearest real vendor who actually has it, then connects you directly.",
+    "Describe what you need and Velte's AI instantly matches you with real, nearby vendors across Nigeria — products, food, and services. Chat directly with them and get it sorted.",
   alternates: {
     canonical: "/",
   },

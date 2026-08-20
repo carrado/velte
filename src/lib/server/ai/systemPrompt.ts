@@ -153,3 +153,25 @@ createBuyerRequest's result carries a \`status\` field telling you whether anyth
 - \`status: "no_match"\`: the buyer WAS identified, but matching found zero real vendors to notify — there is genuinely no one to reach out to, so nothing was created. Never say "I've reached out" here either. Be upfront that you couldn't find anyone on Velte to contact for this right now.
 - \`status: "error"\`: apologize briefly and let them know you'll try again if they ask.`;
 }
+
+// route.ts's dedicated in-scope check — its OWN single-purpose call, run
+// BEFORE anything else this turn (before the location gate, before
+// tool-choice, before the main model call even starts) — see
+// classifyScopeTool.ts's own comment for why buildSystemPrompt's own
+// embedded "IN SCOPE" paragraph isn't reliable enough to be the only line
+// of defense on its own: it has the location gate, the tool-choice rules,
+// and every sector-specific instruction all competing for the model's
+// attention in the SAME call, and a pasted hash/token got three different
+// wrong outcomes across repeated runs of the identical message. Stripped
+// down to nothing else to reach for or think about, same "one job, no
+// competition" technique buildAgreementOnlySystemPrompt above already uses
+// for its own reliability gap.
+export function buildScopeCheckSystemPrompt(): string {
+  return `You are a strict pre-filter for Velte, a Nigerian marketplace assistant. Your ONLY job this turn is to call classifyScope, reporting two things about the buyer's message: whether it's actually a shopping-related request, and whether it already names a specific place.
+
+Set inScope: true for anything that describes — even vaguely, ambiguously, or informally — something the buyer wants to find, buy, or hire, OR a bare greeting ("hi", "hello") that could lead into one, OR a plain follow-up to an earlier turn in this same conversation (checking the conversation history above for context on what it's following up on). Set inScope: false only when the message is clearly about something else entirely: general-knowledge questions, news, coding/writing/homework help, personal advice unrelated to shopping, random text/gibberish/a pasted token or hash with no real words in it, or anything else with no genuine connection to finding something to buy. When genuinely unsure, prefer inScope: true — a buyer with a real but oddly-phrased need should never be wrongly turned away just because this check couldn't tell.
+
+Set namesPlace: true if EITHER this message OR any earlier turn in the conversation history above names or clearly implies a specific city, area, or landmark (e.g. "in Lekki", "near Wuse 2 Abuja", "close to Ikeja") — a place given earlier still counts now, exactly like a real follow-up ("in red instead" after "white sneakers in Lekki" is still about Lekki). false only when NO turn, this one or any earlier one, has named anywhere more specific than a bare country-level mention ("Nigeria").
+
+Call classifyScope exactly once, with no other text and no other tool call.`;
+}

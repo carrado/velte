@@ -85,10 +85,19 @@ export interface SectorPickerProps {
 }
 
 /** One candidate detail to ask the buyer about — `name` is the underlying
- * preset field (e.g. "Turnaround Time"), `example` seeds a natural phrasing. */
+ * preset field (e.g. "Turnaround Time"), `example` seeds a natural phrasing.
+ * `important` mirrors AttributePreset's own field of the same name (see its
+ * doc comment there) — the 1-2 fields per group vendors are nudged hardest
+ * to fill in because they most affect AI match quality. selectClarifierFields
+ * prioritizes these first, precisely because they're the same "key service
+ * details" already curated per sector for that exact reason — a buyer-facing
+ * clarifying question should draw from the same handful of fields that
+ * actually move the needle on matching, not a uniform random pick across
+ * every field a sector happens to have. */
 export interface ClarifierField {
   name: string;
   example?: string;
+  important?: boolean;
 }
 
 /** Output of getSectorClarifiers(query) — a search-turn's detected sector
