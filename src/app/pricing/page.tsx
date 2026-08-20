@@ -24,7 +24,7 @@ const faqs: PricingFaqItem[] = [
   },
   {
     q: "How much does a lead cost?",
-    a: "We're finalising exact pricing as Velte rolls out. It'll be a small, predictable cost per lead — never a surprise charge.",
+    a: "It scales with your wallet balance — ₦1,000 per lead under ₦5,000, ₦700 from ₦5,000, and ₦500 once you're at ₦10,000 or more. Bigger top-ups unlock a lower rate, and your current rate is always shown in your wallet before it applies — never a surprise charge.",
   },
   {
     q: "What counts as a lead?",

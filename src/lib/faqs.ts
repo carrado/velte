@@ -103,7 +103,7 @@ export const faqs: FaqItem[] = [
     featured: true,
     question: "Do I have to pay to be found?",
     answer:
-      "There's no ad spend or bidding for placement — matching itself is free. Your wallet does need to hold at least ₦500 (the cost of a single lead) to stay eligible to appear in search; if it drains, top up to come back into results.",
+      "There's no ad spend or bidding for placement — matching itself is free. Your wallet does need to hold at least ₦1,000 (the cost of a single lead at our top rate) to stay eligible to appear in search; if it drains, top up to come back into results. The bigger your balance, the cheaper each lead gets — from ₦1,000 under ₦5,000, down to ₦700 from ₦5,000, and ₦500 once you're at ₦10,000 or more.",
   },
   {
     category: "vendor",
