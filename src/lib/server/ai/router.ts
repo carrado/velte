@@ -25,11 +25,59 @@ import {
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
 
-const PROVIDERS = {
-  openai: (): LanguageModel => openai("gpt-4o-mini"),
+// Each entry pairs a model factory with that PROVIDER's own default
+// providerOptions (if any) — kept together and applied per-attempt inside
+// callLLM's own fallback loop below, rather than as a single opts field
+// shared across every provider in the chain. That distinction matters here
+// specifically: reasoningEffort (openai-strong's own entry) is only valid
+// on a reasoning-capable model. If it were bundled into a single shared
+// GenerateTextOpts.providerOptions instead, it would still be present on
+// the SAME opts object when the loop below falls through to plain "openai"
+// (gpt-4o-mini) after a 429 — a non-reasoning model, which OpenAI's API
+// rejects that parameter on. Keeping it scoped to only the provider entry
+// that actually wants it is what keeps that fallback safe.
+// Explicitly typed as Record<..literal key union.., ProviderEntry> —
+// deliberately NOT inferred via `as const`/`satisfies` (the pattern this
+// object used before adding per-entry providerOptions): either of those
+// would keep each entry's own distinct literal shape instead of unifying
+// to one, which makes `providerOptions` inaccessible on the union
+// `PROVIDERS[name]` produces below wherever a given entry doesn't declare
+// it — not even as `undefined`, since it wouldn't exist on that entry's
+// type at all. The explicit Record keeps BOTH the literal key union
+// ProviderName needs AND a uniform value shape every entry actually has.
+type ProviderEntry = {
+  model: () => LanguageModel;
+  providerOptions?: Parameters<typeof generateText>[0]["providerOptions"];
+};
+const PROVIDERS: Record<"openai" | "openai-strong" | "groq", ProviderEntry> = {
+  openai: { model: (): LanguageModel => openai("gpt-4o-mini") },
+  // A stronger, genuinely reasoning-capable tier for route.ts's own main
+  // pipeline (the multi-step tool-choice + sector-rule + reply-phrasing
+  // call, and its retries — see route.ts's own providerOrder) — NOT used
+  // by the narrow, single-purpose classifier calls (classifyScopeTool, the
+  // location-only ask), which stay on the plain "openai" entry above:
+  // they're scoped down to one small judgment each, cheap enough that a
+  // non-reasoning model already handles them reliably, so paying for
+  // reasoning there would just be wasted spend for no real gain.
+  //
+  // reasoningEffort: "low", not the default — per explicit decision: this
+  // is a tool-use/multi-step-decision workload, exactly what OpenAI's own
+  // guidance names "low" for ("optimizing for speed and cost"), and this
+  // route streams live status text to a buyer mid-search, so every extra
+  // reasoning token is real, buyer-visible latency before anything shows
+  // up on screen — "high" trades that away for a depth of thought this
+  // workload doesn't actually need (its failures were compound
+  // instruction-following under a crowded prompt, not hard multi-step
+  // reasoning). Price itself is flat regardless of effort level — this
+  // only controls how many reasoning tokens get generated, billed at the
+  // model's own output rate ($2.00/1M — vs gpt-4o-mini's $0.60/1M).
+  "openai-strong": {
+    model: (): LanguageModel => openai("gpt-5-mini"),
+    providerOptions: { openai: { reasoningEffort: "low" } },
+  },
   // Same model already live in generateBusinessDescription.ts.
-  groq: (): LanguageModel => groq("llama-3.3-70b-versatile"),
-} as const;
+  groq: { model: (): LanguageModel => groq("llama-3.3-70b-versatile") },
+};
 type ProviderName = keyof typeof PROVIDERS;
 
 // `generateText` retries internally by default before giving up, and wraps
@@ -81,7 +129,18 @@ export async function callLLM(
   let lastErr: unknown;
   for (const name of order) {
     try {
-      return await generateText({ model: PROVIDERS[name](), ...opts });
+      const entry = PROVIDERS[name];
+      // The provider's own default providerOptions (if any — currently
+      // only "openai-strong"'s reasoningEffort) wins over whatever the
+      // caller passed for THIS attempt specifically, rather than a plain
+      // opts.providerOptions passthrough — see PROVIDERS' own comment for
+      // why: it must never leak onto a fallback provider that doesn't
+      // support it.
+      return await generateText({
+        model: entry.model(),
+        ...opts,
+        providerOptions: entry.providerOptions ?? opts.providerOptions,
+      });
     } catch (err) {
       lastErr = err;
       if (!isRateLimitedOrUnavailable(err)) throw err;

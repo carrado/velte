@@ -68,6 +68,20 @@ export interface SearchRequestBody {
   // search after search. Most-recent-last, capped client-side; the server
   // caps it again on its own end regardless.
   recentStatuses?: string[];
+  // True when `message` is the buyer ANSWERING something already in
+  // progress — their typed name (IdentityCapture's own name-capture mode),
+  // a plain clarification answer, or the canned "Shared my location" text
+  // — rather than a fresh, independent request. A structural signal, not
+  // left for the server to guess from the text: found live, the server's
+  // own understandingRequestPhrase quoted this kind of text verbatim
+  // ("Looking into 'Shared my location'…", "Looking into 'John Okafor'…")
+  // since there's no fixed word list that could ever catch an arbitrary
+  // typed name — the CLIENT already knows structurally, at the exact
+  // moment it calls submitMessage, that this text isn't a fresh query, so
+  // it says so directly instead of the server trying to reconstruct that
+  // from the string alone. Omitted (falsy) for an ordinary composer
+  // submission.
+  isContinuation?: boolean;
 }
 
 // Mirrors the shape searchProducts() returns in velte-backend's

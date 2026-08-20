@@ -88,21 +88,26 @@ const SYNONYMS: Record<string, string[]> = {
 };
 
 // A buyer phrase carrying an explicit task/service verb ("laptop repair",
-// "fix my sink", "phone screen replacement") is asking to have something
-// DONE, never to buy a stocked item — even when the matched sector also
-// sells retail products (e.g. "Computers & Laptops" is classified "both":
-// it sells AND repairs laptops). Found live: "laptop repair" matched that
-// sector and pulled fields from BOTH its service pool (Diagnosis Fee,
-// Turnaround Time — genuinely relevant) AND its retail "Electronics"
-// category (Battery, Power, RAM — nonsensical for a repair job), since
-// selectClarifierFields has no notion of which pool actually fits what
-// the buyer described. Deliberately a plain keyword check, not real NLP —
-// same spirit as systemPrompt.ts's own "a build, a fix, a repair, an
-// install..." list for tool-choice, reused here for field selection.
+// "fix my sink", "phone screen replacement") — OR naming a service
+// profession outright ("a plumber", "a caterer") — is asking to have
+// something DONE, never to buy a stocked item — even when the matched
+// sector also sells retail products (e.g. "Computers & Laptops" is
+// classified "both": it sells AND repairs laptops). Found live: "laptop
+// repair" matched that sector and pulled fields from BOTH its service pool
+// (Diagnosis Fee, Turnaround Time — genuinely relevant) AND its retail
+// "Electronics" category (Battery, Power, RAM — nonsensical for a repair
+// job), since selectClarifierFields has no notion of which pool actually
+// fits what the buyer described. Deliberately a plain keyword check, not
+// real NLP — same spirit as systemPrompt.ts's own "a build, a fix, a
+// repair, an install..." list for tool-choice, reused here for field
+// selection AND (exported) by statusPhrases.ts to pick "carries"
+// (product-appropriate) vs "offers"/"does" (service-appropriate) wording
+// in buyer-facing dead-end messages — a plumber or a repair job is never
+// something a vendor "carries".
 const TASK_KEYWORDS =
-  /\b(repair|repairs|fix|fixing|install|installation|service|servicing|replace|replacement|clean|cleaning|wash|washing|deliver|delivery|maintain|maintenance)\b/i;
+  /\b(repair|repairs|fix|fixing|install|installation|service|servicing|replace|replacement|clean|cleaning|cleaner|wash|washing|deliver|delivery|maintain|maintenance|plumber|electrician|caterer|catering|tailor|tailoring|mechanic|photographer|planner|developer|designer|decorator|barber|tutor|mover|movers|contractor|painter|technician|consultant|stylist)\b/i;
 
-function looksLikeServiceTask(query: string): boolean {
+export function looksLikeServiceTask(query: string): boolean {
   return TASK_KEYWORDS.test(query);
 }
 

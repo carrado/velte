@@ -1,8 +1,10 @@
+import { buildProductTerm } from "@/lib/productTerm";
 import { searchProductsCore } from "@/lib/server/ai/searchProductsTool";
 import { searchStoresCore } from "@/lib/server/ai/searchStoresTool";
 import {
   getSectorClarifiers,
   buildClarifyingQuestion,
+  looksLikeServiceTask,
 } from "@/lib/server/ai/sectorClarifiers";
 import {
   pickAvoiding,
@@ -19,7 +21,7 @@ export type { SearchItemInput, SearchItemOutcome };
 
 export function searchItemTerm(item: SearchItemInput): string {
   return item.type === "product"
-    ? [item.product, ...(item.attributes ?? [])].join(" ")
+    ? buildProductTerm(item.product, item.attributes)
     : item.businessType;
 }
 
@@ -44,6 +46,11 @@ export async function resolveSearchItem(
   push?: (candidates: string[]) => void,
 ): Promise<SearchItemOutcome> {
   const term = searchItemTerm(item);
+  // See statusPhrases.ts's own noVendorEvenBySectorPhrase comment — a
+  // service isn't something a vendor "carries"/"has", so every dead-end
+  // phrase built from `term` in this function needs to know which wording
+  // fits. Computed once here rather than at each call site below.
+  const isService = looksLikeServiceTask(term);
 
   // One deterministic clarify round for a genuinely bare item — the exact
   // sector-field data buildSystemPrompt's own sectorNote draws from for an
@@ -107,6 +114,7 @@ export async function resolveSearchItem(
           noVendorEvenBySectorPhrase(
             term,
             primary.externalSuggestions.length > 0,
+            isService,
           ),
           [],
         ),
@@ -116,7 +124,7 @@ export async function resolveSearchItem(
     if (cross.results.length) {
       return {
         status: "offer",
-        text: pickAvoiding(foundPossibleVendorPhrase(term), []),
+        text: pickAvoiding(foundPossibleVendorPhrase(term, isService), []),
       };
     }
     const merged = Array.from(
@@ -129,7 +137,7 @@ export async function resolveSearchItem(
     return {
       status: "nothing",
       text: pickAvoiding(
-        noVendorEvenBySectorPhrase(term, merged.length > 0),
+        noVendorEvenBySectorPhrase(term, merged.length > 0, isService),
         [],
       ),
       externalSuggestions: merged,
@@ -169,6 +177,7 @@ export async function resolveSearchItem(
         noVendorEvenBySectorPhrase(
           term,
           primary.externalSuggestions.length > 0,
+          isService,
         ),
         [],
       ),
@@ -196,7 +205,10 @@ export async function resolveSearchItem(
   );
   return {
     status: "nothing",
-    text: pickAvoiding(noVendorEvenBySectorPhrase(term, merged.length > 0), []),
+    text: pickAvoiding(
+      noVendorEvenBySectorPhrase(term, merged.length > 0, isService),
+      [],
+    ),
     externalSuggestions: merged,
   };
 }
