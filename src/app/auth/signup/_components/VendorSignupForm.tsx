@@ -86,7 +86,10 @@ export default function VendorSignupForm() {
     onSubmit: async ({ value }) => {
       const parsed = signupSchema.safeParse(value);
       if (!parsed.success) {
-        toast.error("Please fix the highlighted fields before submitting.");
+        toast.error(
+          parsed.error.issues[0]?.message ??
+            "Please fix the highlighted fields before submitting.",
+        );
         return;
       }
       const {
@@ -156,7 +159,10 @@ export default function VendorSignupForm() {
     );
     const result = step1Schema.safeParse(form.store.state.values);
     if (!result.success) {
-      toast.error("Please complete all fields in this step to continue.");
+      toast.error(
+        result.error.issues[0]?.message ??
+          "Please complete all fields in this step to continue.",
+      );
       return;
     }
     setStep(2);
