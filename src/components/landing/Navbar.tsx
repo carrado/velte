@@ -6,7 +6,6 @@ import Link from "next/link";
 import { LayoutGrid } from "lucide-react";
 import { Button } from "../ui/button";
 import { AskVeluxButton } from "@/components/AskVeluxButton";
-import { scrollToMarketplace } from "@/lib/scrollToMarketplace";
 import Image from "next/image";
 
 export default function Navbar() {
@@ -55,19 +54,14 @@ export default function Navbar() {
                 — sits alongside Browse on every screen size, including
                 mobile. */}
             <AskVeluxButton variant="compact" label="Ask Velux" />
-            {/* Full path + hash, not a bare "#marketplace" — Navbar is
+            {/* Goes straight to the full /marketplace catalog (every
+                listing + the vendor directory, tabbed) rather than
+                scrolling to "/"'s capped homepage preview — Navbar is
                 shared across every marketing page (About/FAQ/Terms/
-                Privacy), not just "/", so a bare hash would silently do
-                nothing on any page besides the homepage itself. onClick
-                handles the OTHER real bug: Link's hash-scroll doesn't fire
-                when already on "/" since the pathname isn't changing — see
-                scrollToMarketplace's own comment. Hidden on mobile — only
+                Privacy), so a real route works the same everywhere instead
+                of only making sense from "/". Hidden on mobile — only
                 Sign In + Ask Velux show there. */}
-            <Link
-              href="/"
-              onClick={scrollToMarketplace}
-              className="hidden sm:block"
-            >
+            <Link href="/marketplace" className="hidden sm:block">
               <Button className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 text-xs sm:text-sm px-3 sm:px-5 gap-1.5">
                 <LayoutGrid className="w-3.5 h-3.5" />
                 Browse
