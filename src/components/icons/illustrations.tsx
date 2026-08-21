@@ -150,6 +150,49 @@ export const SearchXIllustration = createIllustration(
   </>,
 );
 
+// The 404 page's own illustration — a map with a dashed route trailing
+// off into a broken pin, rather than a generic "lost astronaut"/"broken
+// robot" cliché. Deliberately reuses this app's OWN real visual vocabulary
+// (a map pin — the same shape proximity-matched search results render
+// around) so a dead link still reads as distinctly Velte, not a stock
+// error-page illustration that could belong to any app. Shares the same
+// X-mark language as SearchXIllustration above (a "nothing here" pin, same
+// as a "nothing here" search) for one consistent system, not two
+// unrelated ideas.
+export const MapPinBrokenIllustration = createIllustration(
+  "MapPinBrokenIllustration",
+  <>
+    <path
+      fill={ORANGE_SOFT}
+      d="M2.5 15.2C2.5 10 6.2 5.3 12 4.4c5.8-.9 9.4 3.6 9.1 8.5-.3 4.9-5.2 8-10.1 7.7-4.9-.3-8.5-1.6-8.5-5.4Z"
+    />
+    <path
+      fill="none"
+      stroke={INK}
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeDasharray="0.2 2.4"
+      opacity="0.6"
+      d="M4.6 17.2c2.3-1.8 3.9-4.5 5.7-6 1.8-1.5 3.7-2 5-3"
+    />
+    <circle fill={INK} opacity="0.6" cx="7.7" cy="14.6" r="0.55" />
+    <circle fill={INK} opacity="0.6" cx="12" cy="10.8" r="0.55" />
+    <path
+      fill={ORANGE}
+      stroke={ORANGE_STRONG}
+      strokeWidth="1"
+      d="M16.5 4.3c2.2 0 4 1.8 4 4 0 3-4 7-4 7s-4-4-4-7c0-2.2 1.8-4 4-4Z"
+    />
+    <circle fill={WHITE} cx="16.5" cy="8.2" r="2" />
+    <path
+      stroke={ORANGE_STRONG}
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      d="M15.6 7.3l1.8 1.8M17.4 7.3l-1.8 1.8"
+    />
+  </>,
+);
+
 export const PackageIllustration = createIllustration(
   "PackageIllustration",
   <>
