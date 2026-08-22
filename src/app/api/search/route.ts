@@ -568,6 +568,7 @@ async function getMatchingServicesForStores(
               attributes: [],
               vendorId: store.vendorId,
               vendorName: store.name,
+              avatar: store.avatar,
               area: store.area,
               state: store.state,
               whatsapp: store.whatsapp,
