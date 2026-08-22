@@ -44,6 +44,9 @@ export function createBuyerRequestTool(
   buyerLocation: BuyerLocation | undefined,
   imageUrl: string | undefined,
   push?: (candidates: string[]) => void,
+  // Short term that justified the reach-out offer (sector / product query).
+  // Used for vendor matching; `description` stays the vendor-facing text.
+  matchQuery?: string,
 ) {
   return tool({
     description:
@@ -71,6 +74,7 @@ export function createBuyerRequestTool(
             description,
             name: buyerName,
             imageUrl: imageUrl ?? null,
+            ...(matchQuery?.trim() && { matchQuery: matchQuery.trim() }),
             // Only the location granted for THIS request — never a saved/
             // remembered one (buyers don't have accounts to save one on).
             // Omitted entirely when not granted, so the backend stores no

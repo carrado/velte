@@ -51,6 +51,7 @@ export interface ListingDetailVendor {
   handle: string | null;
   area: string | null;
   state: string | null;
+  avatar?: string | null;
 }
 
 /** The full-detail view a listing card's "See more" opens into — shared by
@@ -231,8 +232,16 @@ export function ListingDetailModal({
 
         {vendor && (
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-orange-50 flex items-center justify-center shrink-0">
-              <StoreIcon size={13} className="text-orange-500" />
+            <div className="w-7 h-7 rounded-full bg-orange-50 overflow-hidden flex items-center justify-center shrink-0">
+              {vendor.avatar ? (
+                <ProtectedImage
+                  src={optimizedImageUrl(vendor.avatar)}
+                  alt={vendor.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <StoreIcon size={13} className="text-orange-500" />
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold text-gray-700 truncate">

@@ -43,6 +43,7 @@ import {
 import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
 import type {
   BackgroundSearchItem,
+  BuyerLocation,
   BuyerRequestOffer,
   Clarification,
   MatchQuality,
@@ -175,6 +176,28 @@ function buyerRequestStatusReply(offer: BuyerRequestOffer): string {
       return "Couldn't find anyone on Velte to contact for this right now.";
     case "error":
       return "Something went wrong sending that — let me know and I'll try again.";
+  }
+}
+
+/** Text/sector match only — same bar createBuyerRequest uses to find who to notify. */
+async function hasContactableVendorsForQuery(
+  query: string,
+  buyerLocation?: BuyerLocation,
+): Promise<boolean> {
+  const q = query.trim();
+  if (!q) return false;
+  try {
+    const [productCheck, storeCheck] = await Promise.all([
+      searchProductsCore({ product: q }, { buyerLocation }),
+      searchStoresCore({ businessType: q }, { buyerLocation }),
+    ]);
+    const productHits =
+      "results" in productCheck ? productCheck.results.length : 0;
+    const storeHits = "results" in storeCheck ? storeCheck.results.length : 0;
+    return productHits > 0 || storeHits > 0;
+  } catch (err) {
+    console.error("[search] contactable-vendor check failed:", err);
+    return false;
   }
 }
 
@@ -398,6 +421,24 @@ function isGenuineDualIntent(productTerm: string, storeTerm: string): boolean {
   return overlapRatio < DUAL_INTENT_MAX_OVERLAP;
 }
 
+// Mandatory zero-result cascade paraphrase: a specific product term plus a
+// short generic "… store/shop/…" venue for the SAME need ("orange polo" →
+// "clothing store", "Tecno charger" → "phone accessories store"). Token
+// overlap alone misses these — the nouns rarely share vocabulary. Only for
+// the product+store dual-intent shape (never store+store / product+product,
+// where both sides can legitimately end in "store").
+const GENERIC_VENUE_SUFFIX =
+  /\b(?:stores?|shops?|outlets?|boutiques?|markets?|vendors?|stalls?)\s*$/i;
+function isProductToCategoryStoreCascade(
+  productTerm: string,
+  storeTerm: string,
+): boolean {
+  if (!GENERIC_VENUE_SUFFIX.test(storeTerm.trim())) return false;
+  const category = storeTerm.replace(GENERIC_VENUE_SUFFIX, "").trim();
+  const categoryTokens = tokenize(category);
+  return categoryTokens.length > 0 && categoryTokens.length <= 3;
+}
+
 // Found live (2026-08-19): a genuinely two-part original message ("fix my
 // laptop... and I need a plumber as well") correctly triggers the
 // dual-intent branch above when sent FRESH, but on a CONTENT-FREE
@@ -420,6 +461,14 @@ function isGenuineDualIntent(productTerm: string, storeTerm: string): boolean {
 // negative just leaves today's known gap unfixed for that one phrasing.
 const DUAL_INTENT_TEXT_PATTERN =
   /\b(?:and (?:i(?:'m| am)? )?(?:also )?need|also need|as well|and also|plus (?:a|an|i)\b|also (?:want|looking for|need))\b/i;
+// Caption that only points at an attached photo — always one need, never two
+// (see classifyScopeTool.ts). Used server-side so a flaky hasMultipleIntents
+// from the pre-flight classifier can't still invent a dual-intent split.
+const PHOTO_REFERRING_CAPTION =
+  /^(?:where can i (?:find|get) this|how much(?: is this)?|what(?:'s| is) this|find(?: me)? this|get(?: me)? this|this(?: one)?)\b/i;
+function isSharedLocationMessage(text: string): boolean {
+  return text.trim() === "Shared my location";
+}
 function lastSubstantiveUserMessage(
   history: SearchHistoryTurn[],
 ): string | null {
@@ -430,7 +479,7 @@ function lastSubstantiveUserMessage(
     // Skip content-free continuations themselves — "Shared my location" is
     // SearchHome.tsx's own literal stand-in text (see handleLocationShared),
     // never something with a real need of its own to check.
-    if (isAcknowledgementReply(trimmed) || trimmed === "Shared my location")
+    if (isAcknowledgementReply(trimmed) || isSharedLocationMessage(trimmed))
       continue;
     return turn.content;
   }
@@ -950,6 +999,7 @@ export async function POST(req: Request) {
             backgroundItems: [],
             dualIntentItemALabel: null,
             awaitingBuyerRequestReply: false,
+            buyerRequestMatchQuery: null,
           }),
         );
         controller.close();
@@ -1049,6 +1099,31 @@ export async function POST(req: Request) {
         } catch (err) {
           console.error("[search] scope check failed, failing open:", err);
         }
+      }
+
+      // hasMultipleIntents overrides — the classifier alone has produced
+      // false dual-intent splits (found live: photo + "where can I find
+      // this" → location share → polo vs "clothing store"). Two cases the
+      // current message's own text can never name two needs:
+      //
+      // 1. Photo + empty/demonstrative caption — always one item (the photo).
+      // 2. Content-free continuation ("Shared my location", bare yes/ok) —
+      //    re-derive from the last substantive user message via the same
+      //    cheap text heuristic retryDualIntentReminder already trusts,
+      //    never from classifying the canned continuation string itself.
+      if (
+        imageUrl &&
+        (!message.trim() || PHOTO_REFERRING_CAPTION.test(message.trim()))
+      ) {
+        hasMultipleIntents = false;
+      } else if (
+        isSharedLocationMessage(message) ||
+        isAcknowledgementReply(message)
+      ) {
+        const priorText = lastSubstantiveUserMessage(body?.history ?? []);
+        hasMultipleIntents = Boolean(
+          priorText && DUAL_INTENT_TEXT_PATTERN.test(priorText),
+        );
       }
 
       // The proactive location gate — per explicit request, location must
@@ -1243,6 +1318,15 @@ export async function POST(req: Request) {
           // step earlier, on the exact query createBuyerRequest will
           // actually use, so a doomed offer never gets that far. See
           // buildRequestDescriptionTool's own comment for the full story.
+          //
+          // Also reuse `buyerRequestMatchQuery` from the offer turn when
+          // present — that short term is what justified the offer; the
+          // long description alone often no_matches the same vendors.
+          const offerMatchQuery =
+            typeof lastHistoryTurn.buyerRequestMatchQuery === "string"
+              ? lastHistoryTurn.buyerRequestMatchQuery.trim()
+              : "";
+
           const descriptionResult = await callLLM(
             {
               system: buildDescriptionOnlySystemPrompt(message),
@@ -1269,49 +1353,49 @@ export async function POST(req: Request) {
           // wrong.
           let hasRealMatch = true;
           let preCheckExternalSuggestions: NearbyBusiness[] = [];
-          if (candidateDescription) {
+          const preCheckQueries = [
+            offerMatchQuery,
+            candidateDescription ?? "",
+          ].filter((q, i, arr) => q.length > 0 && arr.indexOf(q) === i);
+
+          if (preCheckQueries.length) {
             try {
-              const [productCheck, storeCheck] = await Promise.all([
-                searchProductsCore(
-                  { product: candidateDescription },
-                  { buyerLocation: body?.buyerLocation },
-                ),
-                searchStoresCore(
-                  { businessType: candidateDescription },
-                  { buyerLocation: body?.buyerLocation },
-                ),
-              ]);
-              const productHits =
-                "results" in productCheck ? productCheck.results.length : 0;
-              const storeHits =
-                "results" in storeCheck ? storeCheck.results.length : 0;
-              hasRealMatch = productHits > 0 || storeHits > 0;
+              hasRealMatch = false;
+              for (const q of preCheckQueries) {
+                if (
+                  await hasContactableVendorsForQuery(q, body?.buyerLocation)
+                ) {
+                  hasRealMatch = true;
+                  break;
+                }
+              }
               if (!hasRealMatch) {
-                preCheckExternalSuggestions = Array.from(
-                  new Map(
-                    [
-                      ...("results" in productCheck
-                        ? productCheck.externalSuggestions
-                        : []),
-                      ...("results" in storeCheck
-                        ? storeCheck.externalSuggestions
-                        : []),
-                    ].map((b) => [b.placeId, b]),
-                  ).values(),
+                // Best-effort Places for the description (or match query)
+                // when nothing on Velte is contactable.
+                const nearbyProbe = await searchProductsCore(
+                  {
+                    product: candidateDescription || offerMatchQuery || "that",
+                  },
+                  { buyerLocation: body?.buyerLocation },
                 );
+                preCheckExternalSuggestions =
+                  "results" in nearbyProbe
+                    ? nearbyProbe.externalSuggestions
+                    : [];
               }
             } catch (err) {
               console.error(
                 "[search] buyer-request pre-check failed, failing open:",
                 err,
               );
+              hasRealMatch = true;
             }
           }
 
-          if (!hasRealMatch && candidateDescription) {
+          if (!hasRealMatch && (candidateDescription || offerMatchQuery)) {
             const offer: BuyerRequestOffer = {
               status: "no_match",
-              description: candidateDescription,
+              description: candidateDescription || offerMatchQuery || "that",
             };
             controller.enqueue(
               encodeEvent({
@@ -1341,6 +1425,7 @@ export async function POST(req: Request) {
                 // exchange for the buyer's next message to route back
                 // into.
                 awaitingBuyerRequestReply: false,
+                buyerRequestMatchQuery: null,
               }),
             );
             return;
@@ -1359,7 +1444,13 @@ export async function POST(req: Request) {
               messages,
               tools: {
                 askClarifyingQuestion: askClarifyingQuestionTool(),
-                createBuyerRequest: searchTools.createBuyerRequest,
+                createBuyerRequest: createBuyerRequestTool(
+                  buyerAuth,
+                  body?.buyerLocation,
+                  imageUrl,
+                  push,
+                  offerMatchQuery || undefined,
+                ),
               },
               toolChoice: "required",
               stopWhen: stepCountIs(1),
@@ -1434,6 +1525,9 @@ export async function POST(req: Request) {
               // which never goes through another /api/search round-trip).
               awaitingBuyerRequestReply:
                 agreementOutcome.clarification !== null,
+              // Keep the offer's short match query alive across the
+              // name-ask turn (and needs_identity) so create still uses it.
+              buyerRequestMatchQuery: offerMatchQuery || null,
             }),
           );
           return;
@@ -1854,6 +1948,7 @@ export async function POST(req: Request) {
               // "buyer's next message" for this short-circuit to route, so
               // this stays false, unlike a real reach-out offer.
               awaitingBuyerRequestReply: false,
+              buyerRequestMatchQuery: null,
             }),
           );
         }
@@ -1879,6 +1974,10 @@ export async function POST(req: Request) {
             dualStoreInput.businessType &&
             hasMultipleIntents &&
             isGenuineDualIntent(
+              dualProductInput.product,
+              dualStoreInput.businessType,
+            ) &&
+            !isProductToCategoryStoreCascade(
               dualProductInput.product,
               dualStoreInput.businessType,
             )
@@ -2079,6 +2178,71 @@ export async function POST(req: Request) {
           bufferedPushCandidates.length = 0;
         }
 
+        // Mandatory product→store cascade found category vendors but no
+        // product LISTING (found live: sneaker photo → empty searchProducts
+        // → searchStores returned vendors framed as "here's what matched
+        // best"). Those vendors aren't a catalog match — they're businesses
+        // that might carry / do the thing without having listed it. Convert
+        // to the same Buyer Request offer the dead-end cross-check uses
+        // (foundPossibleVendorPhrase + Yes/No), and hide the store cards —
+        // but ONLY when create-style matching on the short query that found
+        // them can still contact someone (found live: offering then
+        // no_matching on Yes because create re-searched a long photo
+        // description). Skipped when the buyer only asked for a kind of
+        // business (storeCall alone) — that IS a store search and should
+        // show cards.
+        let replyOverride: string | null = null;
+        let buyerRequestMatchQuery: string | null = null;
+        if (
+          outcome.productCall &&
+          outcome.products.length === 0 &&
+          outcome.stores.length > 0 &&
+          !outcome.clarification &&
+          !isAcknowledgementReply(message)
+        ) {
+          const cascadeProductInput = outcome.productCall.input as {
+            product?: string;
+            attributes?: string[];
+          };
+          const cascadeTerm = cascadeProductInput.product
+            ? buildProductTerm(
+                cascadeProductInput.product,
+                cascadeProductInput.attributes,
+              )
+            : "that";
+          const storeBusinessType = (
+            outcome.storeCall?.input as { businessType?: string } | undefined
+          )?.businessType;
+          const matchQuery = (storeBusinessType || cascadeTerm).trim();
+          const canContact = matchQuery
+            ? await hasContactableVendorsForQuery(
+                matchQuery,
+                body?.buyerLocation,
+              )
+            : false;
+          // Always hide the cascade store cards — they aren't listings for
+          // the buyer's item. Only offer reach-out when matching can deliver.
+          outcome = {
+            ...outcome,
+            stores: [],
+            furtherStores: [],
+            storesQuery: null,
+            storesMatchTier: null,
+            storesMatchQuality: undefined,
+            ...(canContact ? { buyerRequestOffered: true } : {}),
+          };
+          if (canContact) {
+            buyerRequestMatchQuery = matchQuery;
+            replyOverride = pickAvoiding(
+              foundPossibleVendorPhrase(
+                cascadeTerm,
+                looksLikeServiceTask(cascadeTerm),
+              ),
+              [],
+            );
+          }
+        }
+
         // Deterministic cross-check — don't trust the model to reliably call
         // the OTHER search tool when its own choice came back empty, even
         // though systemPrompt.ts's symmetric-fallback paragraph tells it to.
@@ -2097,7 +2261,6 @@ export async function POST(req: Request) {
         // knowing this fallback would run, so if it finds a real match, the
         // original "couldn't find" narration would otherwise contradict the
         // real result card now being shown.
-        let replyOverride: string | null = null;
 
         if (
           outcome.storeCall &&
@@ -2214,6 +2377,7 @@ export async function POST(req: Request) {
         // CROSS-CHECK comment below for what that scan does and why.
         if (
           !outcome.clarification &&
+          !outcome.buyerRequestOffered &&
           outcome.products.length === 0 &&
           outcome.stores.length === 0 &&
           outcome.vendorProducts.length === 0 &&
@@ -2322,8 +2486,13 @@ export async function POST(req: Request) {
             };
             replyOverride =
               "Found a real match on Velte for that — take a look below.";
-          } else if (storeScanResult && storeScanResult.results.length) {
+          } else if (
+            storeScanResult &&
+            storeScanResult.results.length &&
+            (await hasContactableVendorsForQuery(scanTerm, body?.buyerLocation))
+          ) {
             outcome = { ...outcome, buyerRequestOffered: true };
+            buyerRequestMatchQuery = scanTerm;
             replyOverride = pickAvoiding(
               foundPossibleVendorPhrase(
                 scanTerm,
@@ -2515,6 +2684,9 @@ export async function POST(req: Request) {
             // that file's own comment) — same agreement short-circuit
             // applies regardless of which code path produced the offer.
             awaitingBuyerRequestReply: buyerRequestOffered,
+            buyerRequestMatchQuery: buyerRequestOffered
+              ? buyerRequestMatchQuery
+              : null,
           }),
         );
 

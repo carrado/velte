@@ -49,6 +49,11 @@ export interface SearchHistoryTurn {
   // reliable, not just the first. Omitted (or false/undefined) for every
   // other turn, including a user-role one.
   awaitingBuyerRequestReply?: boolean;
+  // Short query that justified a reach-out offer on this assistant turn
+  // (or the name-ask that continues it) — createBuyerRequest matching must
+  // use this, not only the long vendor-facing description, or Yes can
+  // no_match after an offer that already found sector vendors.
+  buyerRequestMatchQuery?: string | null;
 }
 
 export interface SearchRequestBody {
@@ -112,6 +117,10 @@ export interface VendorMatch {
   attributes: { name: string; value: string }[];
   vendorId: string;
   vendorName: string;
+  // Vendor profile picture (User.avatar) — same field StoreResultCard uses.
+  // Null when the vendor hasn't uploaded one; the card falls back to a
+  // store icon next to "Sold by".
+  avatar: string | null;
   area: string | null;
   state: string | null;
   whatsapp: string | null;
@@ -239,6 +248,8 @@ export type BuyerRequestOffer =
 export interface IdentityCapture {
   offer: Extract<BuyerRequestOffer, { status: "needs_identity" }>;
   imageUrl: string | null;
+  // Same short match query the offer turn used — see SearchHistoryTurn.
+  matchQuery: string | null;
   step: "phone" | "otp";
   phone: string;
 }
@@ -387,6 +398,7 @@ export type SearchStreamEvent =
         handle: string;
         whatsapp: string | null;
         vendorId: string;
+        avatar: string | null;
       } | null;
       // Non-null only when createBuyerRequest was called this turn — see
       // BuyerRequestOffer's own comment. Independent of `clarification`
@@ -450,6 +462,10 @@ export type SearchStreamEvent =
       // SearchHistoryTurn's own matching field, which SearchHome.tsx
       // copies this into for the next call's `history`.
       awaitingBuyerRequestReply: boolean;
+      // Present when this turn offered a Buyer Request (or continues that
+      // exchange with a name-ask) — the short term create matching should
+      // reuse. Null/omitted otherwise.
+      buyerRequestMatchQuery: string | null;
     }
   | { type: "error"; message: string };
 

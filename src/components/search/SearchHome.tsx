@@ -20,6 +20,8 @@ import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
 import { CopyMessageButton } from "@/components/search/CopyMessageButton";
 import { BuyerRequestOfferWidget } from "@/components/search/BuyerRequestOfferWidget";
 import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
+import { ProtectedImage } from "@/components/ProtectedImage";
+import { optimizedImageUrl } from "@/lib/cloudinary";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
@@ -323,6 +325,7 @@ function createLoadingTurn(
     buyerRequestOffered: false,
     interimReplies: [],
     awaitingBuyerRequestReply: false,
+    buyerRequestMatchQuery: null,
     contextNote: null,
     error: null,
   };
@@ -358,41 +361,6 @@ function productsHeading(
       : "A bit further out";
   }
   return matchQuality === "similar" ? "Similar options nearby" : noun;
-}
-
-// Clusters `products` by vendorId, preserving each product's original rank
-// order and the order vendors first appear in (so the highest-ranked
-// product's vendor group still leads) — a buyer asking for "sneakers" who
-// gets 3 listings from the same vendor should see those 3 together with one
-// "Sold by" card underneath, not scattered across the grid with a separate,
-// disconnected vendor-card section at the bottom (the old layout). `store`
-// is null for a group whose products are all service-kind (route.ts
-// excludes those from productStores — see StoreProductItem's own comment).
-function groupProductsByVendor(
-  products: VendorMatch[],
-  productStores: StoreMatch[],
-): { vendorId: string; products: VendorMatch[]; store: StoreMatch | null }[] {
-  const storeByVendorId = new Map(productStores.map((s) => [s.vendorId, s]));
-  const groups: {
-    vendorId: string;
-    products: VendorMatch[];
-    store: StoreMatch | null;
-  }[] = [];
-  const groupByVendorId = new Map<string, (typeof groups)[number]>();
-  for (const product of products) {
-    let group = groupByVendorId.get(product.vendorId);
-    if (!group) {
-      group = {
-        vendorId: product.vendorId,
-        products: [],
-        store: storeByVendorId.get(product.vendorId) ?? null,
-      };
-      groupByVendorId.set(product.vendorId, group);
-      groups.push(group);
-    }
-    group.products.push(product);
-  }
-  return groups;
 }
 
 function storesHeading(
@@ -697,6 +665,7 @@ interface ConversationTurn {
     handle: string;
     whatsapp: string | null;
     vendorId: string;
+    avatar: string | null;
   } | null;
   // Non-null when createBuyerRequest ran this turn — see BuyerRequestOffer's
   // own comment and BuyerRequestOfferWidget, which renders this.
@@ -722,6 +691,8 @@ interface ConversationTurn {
   // call's `history` (see submitMessage's own history-building code) —
   // that's the whole mechanism, nothing else reads this client-side.
   awaitingBuyerRequestReply: boolean;
+  // Short query that justified a reach-out offer — see SearchHistoryTurn.
+  buyerRequestMatchQuery: string | null;
   // A machine-only breadcrumb (e.g. store handles just found) appended to
   // this turn's text in `history` so a LATER turn's model call can resolve
   // "what do they sell" back to a specific store — never rendered to the
@@ -999,140 +970,71 @@ function ConversationTurnView({
                     {turn.vendorProducts.length > 0 &&
                       turn.vendorProductsStore && (
                         <div className="space-y-3">
-                          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                          <h2 className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                            {turn.vendorProductsStore.avatar ? (
+                              <span className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-orange-50">
+                                <ProtectedImage
+                                  src={optimizedImageUrl(
+                                    turn.vendorProductsStore.avatar,
+                                  )}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              </span>
+                            ) : null}
                             From {turn.vendorProductsStore.name}
                           </h2>
-                          {turn.vendorProducts.length > 1 ? (
-                            <CardCarousel
-                              items={turn.vendorProducts}
-                              getKey={(item) => item.productId}
-                              renderItem={(item) => (
-                                <StoreProductCard
-                                  match={item}
-                                  storeName={turn.vendorProductsStore!.name}
-                                  storeWhatsapp={
-                                    turn.vendorProductsStore!.whatsapp
-                                  }
-                                  vendorId={turn.vendorProductsStore!.vendorId}
-                                />
-                              )}
-                            />
-                          ) : (
-                            <div className="max-w-[280px]">
+                          <CardCarousel
+                            items={turn.vendorProducts}
+                            getKey={(item) => item.productId}
+                            renderItem={(item) => (
                               <StoreProductCard
-                                match={turn.vendorProducts[0]}
-                                storeName={turn.vendorProductsStore.name}
+                                match={item}
+                                storeName={turn.vendorProductsStore!.name}
                                 storeWhatsapp={
-                                  turn.vendorProductsStore.whatsapp
+                                  turn.vendorProductsStore!.whatsapp
                                 }
-                                vendorId={turn.vendorProductsStore.vendorId}
+                                vendorId={turn.vendorProductsStore!.vendorId}
                               />
-                            </div>
-                          )}
+                            )}
+                          />
                         </div>
                       )}
-                    {turn.products.length > 0 &&
-                      (() => {
-                        const groups = groupProductsByVendor(
-                          turn.products,
-                          turn.productStores,
-                        );
-                        // Each group's own card content — product(s) + "Sold
-                        // by" companion — unchanged from before the carousel
-                        // rework, just stacked vertically (space-y-3) instead
-                        // of tiled in a responsive grid: once a group can sit
-                        // in its own fixed-width carousel slide, there's no
-                        // longer a row wide enough for 2-3 columns to matter.
-                        const renderGroup = (
-                          group: (typeof groups)[number],
-                        ) => (
-                          <div className="space-y-3">
-                            <div className="space-y-3">
-                              {group.products.map((match) => (
-                                <VendorResultCard
-                                  key={match.productId}
-                                  match={match}
-                                  // Hidden here once a "Sold by" store card
-                                  // exists below — that card is now where View
-                                  // Store lives. Kept for a service-only group
-                                  // (group.store is always null there — see
-                                  // route.ts), which has no store card at all.
-                                  showViewStore={!group.store}
-                                />
-                              ))}
-                            </div>
-                            {group.store ? (
-                              <div className="pl-3 border-l-2 border-orange-100 space-y-2">
-                                <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                  Sold by
-                                </p>
-                                <StoreResultCard match={group.store} />
-                              </div>
-                            ) : (
-                              // Service-only vendor group — no store card (see
-                              // route.ts: a service listing's own card already
-                              // shows the vendor's description/attributes/
-                              // WhatsApp, so a companion store card would be
-                              // redundant). Still anchor the group to its
-                              // vendor visually when there's more than one
-                              // listing, same purpose the "Sold by" label
-                              // serves above.
-                              group.products.length > 1 && (
-                                <p className="pl-3 text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                                  {group.products.length} services from{" "}
-                                  {group.products[0].vendorName}
-                                </p>
-                              )
+                    {turn.products.length > 0 && (
+                      <div className="space-y-3">
+                        {(turn.stores.length > 0 ||
+                          (turn.productsMatchTier &&
+                            turn.productsMatchTier !== "local") ||
+                          turn.productsMatchQuality) && (
+                          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                            {productsHeading(
+                              turn.productsMatchTier,
+                              turn.productsMatchQuality,
+                              turn.products,
                             )}
-                          </div>
-                        );
-                        return (
-                          <div className="space-y-3">
-                            {(turn.stores.length > 0 ||
-                              (turn.productsMatchTier &&
-                                turn.productsMatchTier !== "local") ||
-                              turn.productsMatchQuality) && (
-                              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                                {productsHeading(
-                                  turn.productsMatchTier,
-                                  turn.productsMatchQuality,
-                                  turn.products,
-                                )}
-                              </h2>
-                            )}
-                            {groups.length > 1 ? (
-                              <CardCarousel
-                                items={groups}
-                                getKey={(group) => group.vendorId}
-                                renderItem={renderGroup}
-                                slideClassName="w-[280px] sm:w-[300px]"
-                              />
-                            ) : (
-                              <div className="max-w-[300px]">
-                                {renderGroup(groups[0])}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
+                          </h2>
+                        )}
+                        <CardCarousel
+                          items={turn.products}
+                          getKey={(match) => match.productId}
+                          renderItem={(match) => (
+                            <VendorResultCard match={match} />
+                          )}
+                        />
+                      </div>
+                    )}
                     {turn.weakProducts.length > 0 && (
                       <div className="space-y-3">
                         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                           A couple more options — not an exact match
                         </h2>
-                        {turn.weakProducts.length > 1 ? (
-                          <CardCarousel
-                            items={turn.weakProducts}
-                            getKey={(match) => match.productId}
-                            renderItem={(match) => (
-                              <VendorResultCard match={match} />
-                            )}
-                          />
-                        ) : (
-                          <div className="max-w-[280px]">
-                            <VendorResultCard match={turn.weakProducts[0]} />
-                          </div>
-                        )}
+                        <CardCarousel
+                          items={turn.weakProducts}
+                          getKey={(match) => match.productId}
+                          renderItem={(match) => (
+                            <VendorResultCard match={match} />
+                          )}
+                        />
                       </div>
                     )}
                     {turn.stores.length > 0 && (
@@ -1148,61 +1050,33 @@ function ConversationTurnView({
                             )}
                           </h2>
                         )}
-                        {turn.stores.length > 1 ? (
-                          <CardCarousel
-                            items={turn.stores}
-                            getKey={(store) => store.storeId}
-                            renderItem={(store) => (
-                              <StoreWithServices
-                                store={store}
-                                services={turn.storeServices.filter(
-                                  (s) => s.vendorId === store.vendorId,
-                                )}
-                                // Only when this is a pure vendor/store result
-                                // (no product attached) — a dual-intent turn
-                                // already has a product for the buyer to
-                                // reference instead.
-                                searchQuery={
-                                  turn.products.length === 0
-                                    ? turn.storesQuery
-                                    : null
-                                }
-                                isServicesOpen={
-                                  expandedServicesVendorId === store.vendorId
-                                }
-                                onToggleServices={() =>
-                                  onToggleServices(store.vendorId)
-                                }
-                              />
-                            )}
-                          />
-                        ) : (
-                          // A lone result skips the carousel (nothing to
-                          // scroll to) but still caps to a normal card width
-                          // — matches the carousel's own slide width, so "1
-                          // result" and "many results" read as the same
-                          // design, not two different ones.
-                          <div className="max-w-[280px]">
+                        <CardCarousel
+                          items={turn.stores}
+                          getKey={(store) => store.storeId}
+                          renderItem={(store) => (
                             <StoreWithServices
-                              store={turn.stores[0]}
+                              store={store}
                               services={turn.storeServices.filter(
-                                (s) => s.vendorId === turn.stores[0].vendorId,
+                                (s) => s.vendorId === store.vendorId,
                               )}
+                              // Only when this is a pure vendor/store result
+                              // (no product attached) — a dual-intent turn
+                              // already has a product for the buyer to
+                              // reference instead.
                               searchQuery={
                                 turn.products.length === 0
                                   ? turn.storesQuery
                                   : null
                               }
                               isServicesOpen={
-                                expandedServicesVendorId ===
-                                turn.stores[0].vendorId
+                                expandedServicesVendorId === store.vendorId
                               }
                               onToggleServices={() =>
-                                onToggleServices(turn.stores[0].vendorId)
+                                onToggleServices(store.vendorId)
                               }
                             />
-                          </div>
-                        )}
+                          )}
+                        />
                         {(() => {
                           const activeStore = turn.stores.find(
                             (s) => s.vendorId === expandedServicesVendorId,
@@ -1229,37 +1103,14 @@ function ConversationTurnView({
                         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                           Also available further out
                         </h2>
-                        {turn.furtherStores.length > 1 ? (
-                          <CardCarousel
-                            items={turn.furtherStores}
-                            getKey={(store) => store.storeId}
-                            renderItem={(store) => (
-                              <StoreWithServices
-                                store={store}
-                                services={turn.storeServices.filter(
-                                  (s) => s.vendorId === store.vendorId,
-                                )}
-                                searchQuery={
-                                  turn.products.length === 0
-                                    ? turn.storesQuery
-                                    : null
-                                }
-                                isServicesOpen={
-                                  expandedServicesVendorId === store.vendorId
-                                }
-                                onToggleServices={() =>
-                                  onToggleServices(store.vendorId)
-                                }
-                              />
-                            )}
-                          />
-                        ) : (
-                          <div className="max-w-[280px]">
+                        <CardCarousel
+                          items={turn.furtherStores}
+                          getKey={(store) => store.storeId}
+                          renderItem={(store) => (
                             <StoreWithServices
-                              store={turn.furtherStores[0]}
+                              store={store}
                               services={turn.storeServices.filter(
-                                (s) =>
-                                  s.vendorId === turn.furtherStores[0].vendorId,
+                                (s) => s.vendorId === store.vendorId,
                               )}
                               searchQuery={
                                 turn.products.length === 0
@@ -1267,15 +1118,14 @@ function ConversationTurnView({
                                   : null
                               }
                               isServicesOpen={
-                                expandedServicesVendorId ===
-                                turn.furtherStores[0].vendorId
+                                expandedServicesVendorId === store.vendorId
                               }
                               onToggleServices={() =>
-                                onToggleServices(turn.furtherStores[0].vendorId)
+                                onToggleServices(store.vendorId)
                               }
                             />
-                          </div>
-                        )}
+                          )}
+                        />
                         {(() => {
                           const activeStore = turn.furtherStores.find(
                             (s) => s.vendorId === expandedServicesVendorId,
@@ -1324,21 +1174,13 @@ function ConversationTurnView({
                     <div className={AI_MESSAGE_BUBBLE_CLASS}>
                       <FormattedReply text={turn.reply} />
                     </div>
-                    {turn.externalStoreSuggestions.length > 1 ? (
-                      <CardCarousel
-                        items={turn.externalStoreSuggestions}
-                        getKey={(match) => match.name + match.address}
-                        renderItem={(match) => (
-                          <ExternalBusinessCard match={match} />
-                        )}
-                      />
-                    ) : (
-                      <div className="max-w-[280px]">
-                        <ExternalBusinessCard
-                          match={turn.externalStoreSuggestions[0]}
-                        />
-                      </div>
-                    )}
+                    <CardCarousel
+                      items={turn.externalStoreSuggestions}
+                      getKey={(match) => match.name + match.address}
+                      renderItem={(match) => (
+                        <ExternalBusinessCard match={match} />
+                      )}
+                    />
                   </>
                 ) : turn.buyerRequestOffer ? (
                   // createBuyerRequest ran this turn (see systemPrompt.ts) —
@@ -2209,6 +2051,7 @@ export function SearchHome() {
         externalStoreSuggestions: [],
         buyerRequestOffered: true,
         awaitingBuyerRequestReply: true,
+        buyerRequestMatchQuery: backgroundItemLabel(item),
       });
       // Needs the buyer's own Yes/No — see backgroundBar's own comment.
       settleBackgroundItem(turnId, "pending", label);
@@ -2418,6 +2261,7 @@ export function SearchHome() {
           // weren't reliably recognized as continuing THIS specific
           // exchange).
           awaitingBuyerRequestReply: t.awaitingBuyerRequestReply,
+          buyerRequestMatchQuery: t.buyerRequestMatchQuery,
         },
       ]);
 
@@ -2515,6 +2359,7 @@ export function SearchHome() {
             buyerRequestOffer: event.buyerRequestOffer,
             buyerRequestOffered: event.buyerRequestOffered,
             awaitingBuyerRequestReply: event.awaitingBuyerRequestReply,
+            buyerRequestMatchQuery: event.buyerRequestMatchQuery,
             contextNote,
           });
           // A buyer who already has a verified session (a prior visit's
@@ -2545,6 +2390,7 @@ export function SearchHome() {
             setIdentityCapture({
               offer: event.buyerRequestOffer,
               imageUrl: currentImageUrl,
+              matchQuery: event.buyerRequestMatchQuery,
               step: "phone",
               phone: "",
             });
@@ -2899,13 +2745,17 @@ export function SearchHome() {
 
   // A clarification answer — button click or the dedicated input's own
   // submit (see ClarificationPrompt) — is just the buyer's next message.
-  // Never resends a prior image: each turn's image is per-submission only
-  // (same as any other typed follow-up already works — history is
-  // text-only, see SearchHistoryTurn). Deliberately calls submitMessage
-  // directly, not submitWithLocationGate — this text IS the buyer's answer
-  // to a location (or other) clarification already showing; gating it too
-  // would re-ask on the buyer's own "Search without sharing my location"
-  // reply, an infinite loop.
+  // Typed follow-ups stay text-only (history is text-only, see
+  // SearchHistoryTurn). Exception: answering a LOCATION clarify that
+  // interrupted a photo turn must re-attach that turn's imageUrl — the
+  // search never actually ran yet, and dropping the photo makes the
+  // follow-up a text-only "sneakers" match that can still label unrelated
+  // catalog shoes as Exact match (found live). Preview stays null so the
+  // bubble doesn't re-show the same photo. Deliberately calls
+  // submitMessage directly, not submitWithLocationGate — this text IS
+  // the buyer's answer to a location (or other) clarification already
+  // showing; gating it too would re-ask on the buyer's own "Search
+  // without sharing my location" reply, an infinite loop.
   function handleClarificationAnswer(text: string) {
     // A background item's own clarify round (see backgroundClarifyItem's
     // own comment) — never routes through the main LLM turn (submitMessage
@@ -2994,8 +2844,13 @@ export function SearchHome() {
     }
     // `isContinuation` — a clarification answer is never a fresh search
     // query, whatever its own text happens to say (see SearchRequestBody's
-    // own comment).
-    void submitMessage(text, null, null, true);
+    // own comment). Carry the origin photo only for a location answer that
+    // still owes the buyer a real search (see comment above).
+    const carryImageUrl =
+      lastTurn?.clarification?.kind === "location"
+        ? (lastTurn.imageUrl ?? null)
+        : null;
+    void submitMessage(text, carryImageUrl, null, true);
   }
 
   // The "location" clarification's own answer path (LocationShareAction, via
@@ -3015,8 +2870,10 @@ export function SearchHome() {
     toast.success("Got your location!");
     // `isContinuation` — this canned string stands in for the buyer's
     // action, not a fresh search query (see SearchRequestBody's own
-    // comment).
-    void submitMessage("Shared my location", null, null, true);
+    // comment). Same photo carry-forward as handleClarificationAnswer:
+    // location was asked before the photo search ran.
+    const carryImageUrl = lastTurn?.imageUrl ?? null;
+    void submitMessage("Shared my location", carryImageUrl, null, true);
   }
 
   // Appends a turn for one step of the identity-capture exchange (see
@@ -3113,6 +2970,9 @@ export function SearchHome() {
         description: offer.description,
         name: offer.buyerName,
         imageUrl: identityCapture.imageUrl,
+        ...(identityCapture.matchQuery && {
+          matchQuery: identityCapture.matchQuery,
+        }),
         ...(buyerLocationRef.current && { location: buyerLocationRef.current }),
       });
       if (!created || !request) {

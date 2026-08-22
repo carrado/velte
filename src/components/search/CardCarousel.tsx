@@ -5,26 +5,22 @@ import { cn } from "@/lib/utils";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
 // Generic horizontal carousel for a row of result cards (products, stores,
-// external suggestions, …) — replaces the old CSS grid wherever a section
-// can have more than one card. Each item gets wrapped in a fixed-width,
-// non-shrinking, scroll-snapped slide so cards line up evenly regardless of
-// their own internal content length; the row itself scrolls natively
-// (touch/trackpad/scrollbar all just work), the two arrow buttons are a
-// convenience on top of that, not the only way to move it. An arrow only
-// renders on the side there's actually more to see — found early that
-// showing both permanently, greyed out at the ends, read as broken/dead
-// controls rather than a clear "you've reached the end."
+// external suggestions, …) — Google Places-style: one card per slide in a
+// swipeable row, with the next card peeking so it's obvious you can scroll.
+// Touch/trackpad/scrollbar all work natively; the arrow buttons are a
+// desktop convenience on top, not the only way to move. An arrow only
+// renders on the side there's actually more to see — showing both
+// permanently, greyed out at the ends, read as broken/dead controls.
 export function CardCarousel<T>({
   items,
   renderItem,
   getKey,
-  slideClassName = "w-[260px] sm:w-[280px]",
+  // Wider slides pass a custom width rather than this component guessing.
+  slideClassName = "w-[min(280px,78%)] sm:w-[280px]",
 }: {
   items: T[];
   renderItem: (item: T) => React.ReactNode;
   getKey: (item: T) => string;
-  // Wider slides (e.g. a product group with its own "Sold by" companion)
-  // pass a wider width in here rather than this component guessing.
   slideClassName?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -59,35 +55,47 @@ export function CardCarousel<T>({
   function scrollByPage(direction: 1 | -1) {
     const el = scrollRef.current;
     if (!el) return;
-    // ~85% of the visible width, not a full page — leaves the next card
-    // partially in view before the jump, so the motion reads as "sliding
-    // over," not an abrupt cut to a completely new set of cards.
+    // One slide at a time when we can measure one; otherwise ~85% of the
+    // visible width — leaves the next card partially in view so the motion
+    // reads as "sliding over," not an abrupt cut.
+    const slide = el.querySelector<HTMLElement>("[data-carousel-slide]");
+    const delta = slide ? slide.offsetWidth + 16 : el.clientWidth * 0.85;
     el.scrollBy({
-      left: direction * el.clientWidth * 0.85,
+      left: direction * delta,
       behavior: "smooth",
     });
   }
 
   if (items.length === 0) return null;
 
+  // A single card still uses the same slide width so "1 result" and "many
+  // results" share one visual language — just no arrows / nothing to swipe.
+  if (items.length === 1) {
+    return (
+      <div className={cn("max-w-full", slideClassName)}>
+        {renderItem(items[0])}
+      </div>
+    );
+  }
+
   return (
-    <div className="relative">
+    <div className="relative -mx-1">
       <div
         ref={scrollRef}
         // No `scroll-smooth` here on purpose — that sets scroll-behavior:
         // smooth for EVERY scroll on this element, not just the arrow
         // buttons' own scrollBy() calls (those already pass their own
-        // `behavior: "smooth"` independently, so dropping the class here
-        // doesn't touch them). Left on, it fights native touch-drag
-        // momentum on iOS Safari and several Android WebViews — found live:
-        // the row read as stuck/unresponsive to a finger swipe, not just
-        // less smooth. `-webkit-overflow-scrolling: touch` is the
-        // companion fix, for buttery momentum on older iOS specifically.
-        className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-1 -mx-1 px-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        // `behavior: "smooth"` independently). Left on, it fights native
+        // touch-drag momentum on iOS Safari and several Android WebViews —
+        // found live: the row read as stuck/unresponsive to a finger swipe.
+        // `touch-pan-x` prefers horizontal pans so the parent chat's
+        // vertical scroll doesn't steal the gesture mid-swipe.
+        className="flex gap-4 overflow-x-auto overscroll-x-contain snap-x snap-mandatory pb-1 px-1 touch-pan-x [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       >
         {items.map((item) => (
           <div
             key={getKey(item)}
+            data-carousel-slide
             className={cn("shrink-0 snap-start", slideClassName)}
           >
             {renderItem(item)}
@@ -99,7 +107,7 @@ export function CardCarousel<T>({
           type="button"
           onClick={() => scrollByPage(-1)}
           aria-label="Scroll left"
-          className="flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/3 sm:-translate-x-1/2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
+          className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
           <ChevronLeftIcon size={16} />
         </button>
@@ -109,7 +117,7 @@ export function CardCarousel<T>({
           type="button"
           onClick={() => scrollByPage(1)}
           aria-label="Scroll right"
-          className="flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/3 sm:translate-x-1/2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
+          className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-8 h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
           <ChevronRightIcon size={16} />
         </button>

@@ -16,19 +16,16 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   MapPinIcon,
-  ShieldCheckIcon,
   StoreIcon,
 } from "@/components/icons";
 
 export function VendorResultCard({
   match,
-  // False whenever this card is guaranteed to render alongside its own
-  // vendor's StoreResultCard (a "Sold by" companion, or a matching-service
-  // companion under a store match) — that card is now the one place "View
-  // Store" lives, so a second copy right here would just be a duplicate
-  // pointing at the same store. Defaults true for a standalone card (e.g.
-  // weakProducts, or a product whose store lookup failed) that has no other
-  // path to the storefront at all.
+  // False for a matching-service companion rendered under its own store's
+  // StoreResultCard — that card already owns "View Store", so a second copy
+  // here would just duplicate the same link. Defaults true everywhere else
+  // (product/service search results): the vendor is indicated on this card
+  // via "Sold by …" + View Store, not a separate companion store card.
   showViewStore = true,
   // False for a matching-service companion rendered under its own store's
   // StoreResultCard — that card already owns the "chat with vendor" CTA for
@@ -186,11 +183,24 @@ export function VendorResultCard({
             See more
           </button>
         )}
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <div className="flex items-center gap-1 text-xs text-gray-500 min-w-0">
-            <ShieldCheckIcon size={13} className="shrink-0 text-orange-500" />
-            <span className="truncate">{match.vendorName}</span>
+        <div className="flex items-center gap-2 min-w-0 pt-1">
+          <div className="w-7 h-7 rounded-full bg-orange-50 overflow-hidden flex items-center justify-center shrink-0">
+            {match.avatar ? (
+              <ProtectedImage
+                src={optimizedImageUrl(match.avatar)}
+                alt={match.vendorName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <StoreIcon size={13} className="text-orange-500" />
+            )}
           </div>
+          <span className="truncate min-w-0 text-xs">
+            <span className="text-gray-400">Sold by </span>
+            <span className="font-medium text-gray-700">
+              {match.vendorName}
+            </span>
+          </span>
         </div>
         {isOwn ? (
           <OwnListingBadge label="This is your listing" />
@@ -246,6 +256,7 @@ export function VendorResultCard({
           handle: match.storeHandle,
           area: match.area,
           state: match.state,
+          avatar: match.avatar,
         }}
         chatHref={chatHref}
         chatLabel="Chat with vendor"
