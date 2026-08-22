@@ -74,6 +74,12 @@ export function ClarificationPrompt({
     return null;
   }
 
+  // Shared by "choice" and "item_pick" — long product labels (photo IDs with
+  // every attribute joined) used to wrap across 2–3 lines inside the pill;
+  // keep a single truncated line, full text still available via title.
+  const pillClassName =
+    "max-w-full min-w-0 truncate px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer";
+
   if (clarification.kind === "choice") {
     return (
       <div className="flex flex-wrap gap-2">
@@ -81,8 +87,9 @@ export function ClarificationPrompt({
           <button
             key={option}
             type="button"
+            title={option}
             onClick={() => onAnswer(option)}
-            className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
+            className={pillClassName}
           >
             {option}
           </button>
@@ -104,18 +111,20 @@ export function ClarificationPrompt({
     const [first, second] = clarification.options;
     if (!first || !second) return null;
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
         <button
           type="button"
+          title={first.label}
           onClick={() => onPickItem(first, second)}
-          className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
+          className={pillClassName}
         >
           {first.label}
         </button>
         <button
           type="button"
+          title={second.label}
           onClick={() => onPickItem(second, first)}
-          className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
+          className={pillClassName}
         >
           {second.label}
         </button>

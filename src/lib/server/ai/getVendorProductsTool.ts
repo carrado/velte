@@ -28,6 +28,7 @@ interface PublicStoreResponse {
   name: string;
   whatsapp: string | null;
   vendorId: string;
+  avatar: string | null;
   products: PublicStoreProduct[];
 }
 
@@ -69,6 +70,7 @@ export function getVendorProductsTool(push?: (candidates: string[]) => void) {
             handle: store.handle,
             whatsapp: store.whatsapp,
             vendorId: store.vendorId,
+            avatar: store.avatar ?? null,
           },
         };
       } catch {

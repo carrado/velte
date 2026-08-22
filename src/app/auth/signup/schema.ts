@@ -20,13 +20,15 @@ export const passwordStrength = (password: string) => {
   return strength;
 };
 
+// Only length is enforced as a hard gate — the strength checks above feed
+// PasswordStrengthMeter so the vendor can SEE how weak/strong their choice
+// is, but a weak password is still their call to make. Matches the backend's
+// own floor (see auth.js's changePassword / reset-password, both just
+// `password.length < 8`), so there's no server-side rejection lurking behind
+// a laxer client schema either.
 export const passwordSchema = z
   .string()
-  .min(8, "Password must be at least 8 characters")
-  .refine(hasUpperCase, "Must contain at least one uppercase letter")
-  .refine(hasLowerCase, "Must contain at least one lowercase letter")
-  .refine(hasNumber, "Must contain at least one number")
-  .refine(hasSpecialChar, "Must contain at least one special character");
+  .min(8, "Password must be at least 8 characters");
 
 export const usernameSchema = z
   .string()
