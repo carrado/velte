@@ -706,6 +706,7 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
           handle: string;
           whatsapp: string | null;
           vendorId: string;
+          avatar: string | null;
         };
       }
     | undefined;
