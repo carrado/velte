@@ -183,6 +183,7 @@ export const metadata: Metadata = {
   },
   other: {
     "mobile-web-app-capable": "yes",
+    "mitgo-verification": "21476540-d75e-4989-8cb4-3c080c2fe729",
   },
 };
 
