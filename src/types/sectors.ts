@@ -100,6 +100,14 @@ export interface ClarifierField {
   important?: boolean;
 }
 
+/** Which side of a sector's field pools clarifier selection may draw from —
+ * "retail" for a buyer BUYING an item (never ask Turnaround Time about a
+ * phone purchase), "service" for a job to be done (never ask Battery
+ * capacity about a repair), "auto" when intent is genuinely unknown (both
+ * sides allowed, the pre-redesign behavior). Derived from the scope check's
+ * SearchIntentKind, falling back to the task-keyword heuristic. */
+export type ClarifierMode = "retail" | "service" | "auto";
+
 /** Output of getSectorClarifiers(query) — a search-turn's detected sector
  * plus the 2-3 fields worth asking the buyer about, if the query is thin.
  * Never a hard filter: only ever used to pick clarifying questions and

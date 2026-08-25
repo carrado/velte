@@ -6,6 +6,7 @@ import {
   buildClarifyingQuestion,
   looksLikeServiceTask,
 } from "@/lib/server/ai/sectorClarifiers";
+import { getAttributeSchemaOverrides } from "@/lib/server/attributeSchemas";
 import {
   pickAvoiding,
   foundPossibleVendorPhrase,
@@ -37,7 +38,10 @@ export function searchItemTerm(item: SearchItemInput): string {
  * description is unconfirmed, so it becomes an "offer" instead of a plain
  * result. No LLM call anywhere in here — fully deterministic, cheap enough
  * to run from a background fetch with no buyer-visible cost beyond the
- * network round trip.
+ * network round trip. (The resolve-item ROUTE layers the Phase 3
+ * recommendation call on top of a "products" outcome — that's the route's
+ * own separately-budgeted enhancement, deliberately outside this
+ * function's deterministic contract.)
  */
 export async function resolveSearchItem(
   item: SearchItemInput,
@@ -72,7 +76,14 @@ export async function resolveSearchItem(
   // item is bare only when the earlier extraction turn found nothing
   // distinguishing to attach as `attributes`.
   if (!item.clarified) {
-    const sector = getSectorClarifiers(term);
+    // Phase 2: DB-tuned question schemas, same cached/degrading fetch the
+    // main route uses — this stays the path's only nondeterminism, and it
+    // resolves to the in-code presets whenever the overrides can't help.
+    const sector = getSectorClarifiers(
+      term,
+      undefined,
+      await getAttributeSchemaOverrides(),
+    );
     const isBare = item.type === "product" ? !item.attributes?.length : true;
     if (sector && isBare) {
       return {
@@ -101,6 +112,9 @@ export async function resolveSearchItem(
         matchTier: primary.matchTier,
         matchQuality: primary.matchQuality,
         query: term,
+        // Attached by the resolve-item route, not here — this function
+        // stays LLM-free (see its doc comment).
+        recommendation: null,
       };
     }
     const cross = await searchStoresCore(
@@ -194,6 +208,8 @@ export async function resolveSearchItem(
       matchTier: cross.matchTier,
       matchQuality: cross.matchQuality,
       query: term,
+      // Attached by the resolve-item route, not here — see above.
+      recommendation: null,
     };
   }
   const merged = Array.from(

@@ -5,6 +5,7 @@ import {
   resolveSearchItem,
   type SearchItemInput,
 } from "@/lib/server/ai/resolveSearchItem";
+import { pickRecommendation } from "@/lib/server/ai/recommendResults";
 import type { BuyerLocation } from "@/types/search";
 
 // POST /api/search/resolve-item — public (no buyer account), same reasoning
@@ -36,11 +37,26 @@ export async function POST(req: Request) {
   }
 
   try {
-    const outcome = await resolveSearchItem(
+    let outcome = await resolveSearchItem(
       body.item,
       body.location,
       body.buyerLocation,
     );
+    // The Phase 3 recommendation layer, same gate as the main /api/search
+    // path (≥2 products) — layered on HERE rather than inside
+    // resolveSearchItem so that function keeps its deliberate no-LLM
+    // contract (see its own doc comment). pickRecommendation never throws
+    // and hard-caps its own runtime, so this can't take the whole
+    // resolution down with it — a null just renders plain cards.
+    if (outcome.status === "products" && outcome.products.length >= 2) {
+      outcome = {
+        ...outcome,
+        recommendation: await pickRecommendation({
+          query: outcome.query,
+          products: outcome.products,
+        }),
+      };
+    }
     return NextResponse.json({ outcome });
   } catch (err) {
     return fail(err, "Couldn't check that in the background.");

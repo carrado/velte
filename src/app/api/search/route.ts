@@ -17,9 +17,17 @@ import { askClarifyingQuestionTool } from "@/lib/server/ai/askClarifyingQuestion
 import { createBuyerRequestTool } from "@/lib/server/ai/createBuyerRequestTool";
 import { offerBuyerRequestTool } from "@/lib/server/ai/offerBuyerRequestTool";
 import { buildRequestDescriptionTool } from "@/lib/server/ai/buildRequestDescriptionTool";
+import { pickRecommendation } from "@/lib/server/ai/recommendResults";
+import { getAttributeSchemaOverrides } from "@/lib/server/attributeSchemas";
+import {
+  fetchExternalOffers,
+  hasExternalConnectors,
+} from "@/lib/server/connectors";
 import {
   understandingRequestPhrase,
   pickAvoiding,
+  checkingElsewherePhrase,
+  comparingOptionsPhrase,
   notFoundDirectlyPhrase,
   scanningVendorsPhrase,
   foundPossibleVendorPhrase,
@@ -39,17 +47,28 @@ import { classifyScopeTool } from "@/lib/server/ai/classifyScopeTool";
 import {
   getSectorClarifiers,
   looksLikeServiceTask,
+  buildClarifyingQuestion,
 } from "@/lib/server/ai/sectorClarifiers";
 import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import {
+  ensureSearchConversation,
+  appendSearchTurn,
+  type EnsuredSearchConversation,
+} from "@/lib/server/searchConversations";
+import { buildTurnSnapshot } from "@/lib/searchTurnSnapshot";
 import type {
   BackgroundSearchItem,
   BuyerLocation,
   BuyerRequestOffer,
   Clarification,
+  ExternalOffer,
   MatchQuality,
   MatchTier,
   NearbyBusiness,
   SearchHistoryTurn,
+  RequestRelation,
+  SearchIntentKind,
+  SearchRecommendation,
   SearchRequestBody,
   SearchStreamEvent,
   StoreMatch,
@@ -68,12 +87,18 @@ import type {
 // that protocol carries its own server-side history/thread state, which
 // this deliberately doesn't have (see `history` below).
 //
-// The buyer's browser can still hold a multi-turn conversation across
-// several of these single-turn calls: SearchHome.tsx keeps prior turns in
-// plain React state and resends their text (not images, not tool results)
-// as `history` on each new call, purely so THIS turn's model call has
-// context. Nothing is persisted here or on the client (no DB write, no
-// localStorage) — a refresh loses it, by design.
+// The buyer holds a multi-turn conversation across several of these
+// single-turn calls. As of Phase 1 (docs/velte-ai-search-flow-plan.md) the
+// conversation is PERSISTED server-side in staffly-ai-backend, keyed by the
+// client's anonymous deviceId + conversationId: each turn's snapshot is
+// written right after its final event (see sendFinal), the model-facing
+// text history is rebuilt from those stored turns (see the ensure call
+// below), and SearchHome.tsx rehydrates the whole thread after a refresh.
+// This reverses the original "nothing persists beyond the tab" design — the
+// active-shopping-task/refinement loop and structured demand logging both
+// need it. The client still resends its own text-only `history` as a
+// fallback so a persistence outage (or a request with no deviceId at all)
+// degrades to exactly the old stateless behavior, never a failed search.
 //
 // Step (e): an optional `imageUrl` is turned into a `file` content part
 // (the current, non-deprecated multimodal shape — `ImagePart` is
@@ -891,16 +916,77 @@ export async function POST(req: Request) {
   if (imageUrl) {
     content.push({ type: "file", mediaType: "image", data: new URL(imageUrl) });
   }
+
+  // Persisted-conversation load (Phase 1, docs/velte-ai-search-flow-plan.md)
+  // — when the client identifies itself with a deviceId, the conversation
+  // (and the model-facing history below) lives server-side in
+  // staffly-ai-backend, surviving a refresh; the turn's snapshot is written
+  // back right after the final event (see sendFinal). Every failure mode
+  // here degrades to the old stateless behavior — the search itself never
+  // depends on persistence being up.
+  const deviceId =
+    typeof body?.deviceId === "string" && body.deviceId.trim()
+      ? body.deviceId.trim()
+      : null;
+  // Phase 5: whatever this turn knows about location, merged onto the
+  // conversation server-side (never overwriting a settled position — see
+  // mergeBuyerLocation in staffly-ai-backend). Undefined on turns where
+  // nothing about location changed, so the merge is a no-op.
+  const locationUpdate =
+    body?.buyerLocation || body?.locationDeclined || body?.locationPlaceName
+      ? {
+          lat: body?.buyerLocation?.lat,
+          lng: body?.buyerLocation?.lng,
+          placeName: body?.locationPlaceName,
+          declined: body?.locationDeclined,
+        }
+      : undefined;
+
+  let conversation: EnsuredSearchConversation | null = null;
+  if (deviceId) {
+    try {
+      conversation = await ensureSearchConversation({
+        deviceId,
+        conversationId:
+          typeof body?.conversationId === "string" ? body.conversationId : null,
+        buyerId: buyerAuth?.buyerId ?? null,
+        buyerLocation: locationUpdate,
+      });
+    } catch (err) {
+      console.error(
+        "[search] conversation ensure failed, going stateless:",
+        err,
+      );
+    }
+  }
+  // The server-side history wins whenever it's at least as complete as what
+  // the client resent — the client's copy still covers the gap where an
+  // earlier turn's persist write failed (or hasn't landed yet, for a
+  // client-persisted background turn racing this call).
+  const clientHistory = body?.history ?? [];
+  const serverHistory = conversation?.history ?? [];
+  const history =
+    serverHistory.length >= clientHistory.length
+      ? serverHistory
+      : clientHistory;
+
   // Prior turns are text-only (see SearchHistoryTurn) — never an image, and
   // never raw tool-call/result payloads, just what was said. Prepended
   // before the new turn's content so the model has conversational context
   // without the earlier photo(s) counting against this turn's token/attach
   // limits, and without needing to know its own past tool calls' shapes.
-  const historyMessages: ModelMessage[] = (body?.history ?? []).map((turn) => ({
+  const historyMessages: ModelMessage[] = history.map((turn) => ({
     role: turn.role,
     content: turn.content,
   }));
-  const messages: ModelMessage[] = [
+  // `let`, not `const`: the scope check below can narrow this to the
+  // current request alone when the buyer has moved on to a different item
+  // (requestRelation "new") — see that block for why the fix is dropping
+  // the earlier turns rather than instructing the model to ignore them.
+  // Every later callLLM in this file reads this same binding, so the
+  // narrowing applies to the main call, its retries, and the description /
+  // dual-intent reminder passes alike.
+  let messages: ModelMessage[] = [
     ...historyMessages,
     { role: "user", content },
   ];
@@ -921,9 +1007,19 @@ export async function POST(req: Request) {
       // See pickAvoiding's own comment for why the avoidance has to live
       // here rather than inside each phrase pool.
       const RECENT_STATUS_MEMORY = 8;
-      const recentStatuses: string[] = (body?.recentStatuses ?? []).slice(
-        -RECENT_STATUS_MEMORY,
-      );
+      // Seeded from BOTH copies since the Phase 1 follow-ups: the
+      // conversation's persisted list (survives a refresh — the client's
+      // resent copy is empty right after one) unioned with the client's
+      // in-memory copy (which also carries client-side pushes the server
+      // never saw, e.g. background-item phrasing), deduped in order,
+      // capped from the end. sendFinal writes the final merged+pushed list
+      // back to the conversation each turn.
+      const recentStatuses: string[] = Array.from(
+        new Set([
+          ...(conversation?.recentStatuses ?? []),
+          ...(body?.recentStatuses ?? []),
+        ]),
+      ).slice(-RECENT_STATUS_MEMORY);
       // Found live: "I need someone who can help fix my laptop. I also
       // need a plumber" — a genuine dual-intent turn — showed a "Searching
       // for 'plumber' near you…" status line before the buyer was ever
@@ -964,46 +1060,103 @@ export async function POST(req: Request) {
         controller.enqueue(encodeEvent({ type: "status", text }));
       };
 
+      // Every "final" event goes through here (Phase 1,
+      // docs/velte-ai-search-flow-plan.md): stamps the conversation id the
+      // client should carry forward, enqueues, then persists this turn's
+      // complete snapshot into the conversation — AWAITED, before the
+      // stream closes, since Vercel gives no guarantee code after a closed
+      // streaming response ever runs. A persist failure only logs: the
+      // buyer already has their answer, and the next turn's client-resent
+      // history covers the gap (see the serverHistory/clientHistory pick
+      // above).
+      // What THIS turn established about the request, read off the search
+      // the model actually ran rather than re-interpreted from its prose.
+      // Declared out here so sendFinal (below) can carry it into the goal
+      // sheet from any exit path; an early exit simply leaves it empty.
+      let goalUpdate: {
+        maxBudgetNaira?: number | null;
+        attributes?: string[];
+      } = {};
+
+      async function sendFinal(
+        event: Omit<
+          Extract<SearchStreamEvent, { type: "final" }>,
+          "conversationId"
+        >,
+      ): Promise<void> {
+        const full = {
+          ...event,
+          conversationId: conversation?.conversationId ?? null,
+        };
+        controller.enqueue(encodeEvent(full));
+        if (conversation && deviceId) {
+          try {
+            await appendSearchTurn({
+              conversationId: conversation.conversationId,
+              deviceId,
+              buyerId: buyerAuth?.buyerId ?? null,
+              turn: buildTurnSnapshot(full, message, imageUrl ?? null),
+              // The merged-then-pushed list as it stands at turn end —
+              // becomes the seed for the next turn (and the next session).
+              recentStatuses,
+              buyerLocation: locationUpdate,
+              // The goal sheet's write side. `startsFreshRequest` is the
+              // route's own already-vetoed boundary decision (structural
+              // overrides included), not the raw classifier — the backend
+              // uses it to decide whether to accumulate or wipe.
+              // `goalUpdate` carries whatever this turn established.
+              goal: {
+                startsFreshRequest,
+                itemTerm,
+                ...goalUpdate,
+              },
+            });
+          } catch (err) {
+            console.error("[search] conversation persist failed:", err);
+          }
+        }
+      }
+
       // Shared by every early-exit check below (off-topic decline, the
-      // proactive location ask) — enqueues the SAME "final" shape a
+      // proactive location ask) — sends the SAME "final" shape a
       // genuinely empty/clarifying search turn would (no results,
       // toolCalled false) so the frontend renders this exactly like any
       // other plain-text reply/clarification, then closes the stream
       // itself (rather than relying on the try/finally further below,
       // which every caller here runs before) — this is the whole turn,
       // nothing else runs after it.
-      function sendBareFinal(
+      async function sendBareFinal(
         reply: string,
         clarification: Clarification | null,
       ) {
-        controller.enqueue(
-          encodeEvent({
-            type: "final",
-            reply,
-            toolCalled: false,
-            clarification,
-            products: [],
-            weakProducts: [],
-            stores: [],
-            furtherStores: [],
-            storesQuery: null,
-            productStores: [],
-            storeServices: [],
-            productsMatchTier: null,
-            storesMatchTier: null,
-            productsMatchQuality: undefined,
-            storesMatchQuality: undefined,
-            externalStoreSuggestions: [],
-            vendorProducts: [],
-            vendorProductsStore: null,
-            buyerRequestOffer: null,
-            buyerRequestOffered: false,
-            backgroundItems: [],
-            dualIntentItemALabel: null,
-            awaitingBuyerRequestReply: false,
-            buyerRequestMatchQuery: null,
-          }),
-        );
+        await sendFinal({
+          type: "final",
+          reply,
+          toolCalled: false,
+          clarification,
+          products: [],
+          weakProducts: [],
+          stores: [],
+          furtherStores: [],
+          storesQuery: null,
+          productStores: [],
+          storeServices: [],
+          productsMatchTier: null,
+          storesMatchTier: null,
+          productsMatchQuality: undefined,
+          storesMatchQuality: undefined,
+          externalStoreSuggestions: [],
+          vendorProducts: [],
+          vendorProductsStore: null,
+          buyerRequestOffer: null,
+          buyerRequestOffered: false,
+          backgroundItems: [],
+          dualIntentItemALabel: null,
+          awaitingBuyerRequestReply: false,
+          buyerRequestMatchQuery: null,
+          recommendation: null,
+          externalOffers: [],
+        });
         controller.close();
       }
 
@@ -1013,7 +1166,7 @@ export async function POST(req: Request) {
       // (slower, real) dedicated scope check just below so the obvious
       // case never pays for a whole extra LLM round trip.
       if (!imageUrl && looksLikeGibberishInput(message)) {
-        sendBareFinal(
+        await sendBareFinal(
           "That doesn't look like something I can search for — I'm a shopping assistant for Velte, here to help you find products, food, services, or vendors. What are you looking for?",
           null,
         );
@@ -1027,11 +1180,23 @@ export async function POST(req: Request) {
       // sites for LOCATION_CLARIFY_PATTERN's own full doc comment.
       const LOCATION_CLARIFY_PATTERN =
         /\b(city|area|location|located|situated|whereabouts|neighbo(?:u)?rhood|which (?:state|town)|where (?:are|do) you|part of town)\b/i;
-      const alreadyAskedLocationThisConversation = (body?.history ?? []).some(
-        (turn) =>
-          turn.role === "assistant" &&
-          LOCATION_CLARIFY_PATTERN.test(turn.content),
-      );
+      const alreadyAskedLocationThisConversation =
+        history.some(
+          (turn) =>
+            turn.role === "assistant" &&
+            LOCATION_CLARIFY_PATTERN.test(turn.content),
+        ) ||
+        // Phase 5: the conversation's own settled location state — a
+        // structural record of the answer, not a guess at it from prose.
+        // Either a shared position or a deliberate "search without it"
+        // means this question is answered and must never be re-asked, and
+        // unlike the text scan above this stays correct even if the
+        // asking turn has since aged out of the history window.
+        Boolean(
+          conversation?.buyerLocation &&
+          (conversation.buyerLocation.declined ||
+            conversation.buyerLocation.lat != null),
+        );
 
       // The general off-topic case — see buildScopeCheckSystemPrompt's own
       // comment for why this is its OWN dedicated call, run first, before
@@ -1066,6 +1231,22 @@ export async function POST(req: Request) {
       // of defense either way.
       let namesPlace = false;
       let hasMultipleIntents = false;
+      // The scope check's own understanding of WHAT is being sought (see
+      // classifyScopeTool's own comment) — the inputs to the bare-query
+      // attribute gate further below. All three fail toward "don't ask":
+      // a missing itemTerm or a true hasSpecificDetails both mean the gate
+      // stays out of the way, which is the safe direction — a skipped
+      // question costs a slightly thinner search, a wrong or repeated one
+      // costs the buyer's patience.
+      let itemTerm: string | null = null;
+      let seekingKind: SearchIntentKind = "unclear";
+      let hasSpecificDetails = true;
+      // Defaults to "refinement" — the pre-signal behavior (full context
+      // carries over). Failing toward "new" would mean a classifier
+      // hiccup silently amputates a genuine mid-request follow-up, which
+      // is far more disruptive than the leakage this signal exists to
+      // stop.
+      let requestRelation: RequestRelation = "refinement";
       if (message) {
         try {
           const scopeCheckMessages: ModelMessage[] = imageUrl
@@ -1087,10 +1268,14 @@ export async function POST(req: Request) {
                 inScope: boolean;
                 namesPlace: boolean;
                 hasMultipleIntents: boolean;
+                itemTerm: string | null;
+                seekingKind: SearchIntentKind;
+                requestRelation: RequestRelation;
+                hasSpecificDetails: boolean;
               }
             | undefined;
           if (scopeOutput?.inScope === false && !imageUrl) {
-            sendBareFinal(
+            await sendBareFinal(
               "That doesn't look like something I can search for — I'm a shopping assistant for Velte, here to help you find products, food, services, or vendors. What are you looking for?",
               null,
             );
@@ -1098,10 +1283,82 @@ export async function POST(req: Request) {
           }
           namesPlace = scopeOutput?.namesPlace ?? false;
           hasMultipleIntents = scopeOutput?.hasMultipleIntents ?? false;
+          itemTerm = scopeOutput?.itemTerm?.trim() || null;
+          seekingKind = scopeOutput?.seekingKind ?? "unclear";
+          requestRelation = scopeOutput?.requestRelation ?? "refinement";
+          hasSpecificDetails = scopeOutput?.hasSpecificDetails ?? true;
         } catch (err) {
           console.error("[search] scope check failed, failing open:", err);
         }
       }
+
+      // A NEW request starts from a clean slate. Found live: a buyer who
+      // had answered an earlier clarifying round with "Infinix", "black",
+      // "brand new" then typed "Where can I get a phone" and got a search
+      // for "Infinix phone black brand new" — and even after correcting
+      // the brand, "black brand new" survived, because nothing ever
+      // declared the previous request finished. History is one flat
+      // transcript, and the system prompt tells the model a clarification
+      // answer is "more context for the same request", with no boundary
+      // saying where one request ends.
+      //
+      // The fix is structural rather than instructional, same as every
+      // other reliability fix in this file: the earlier turns are simply
+      // not sent, so there is nothing to inherit — a prompt asking the
+      // model to please ignore context it can still see is exactly the
+      // kind of request it has been observed to disregard. Deliberately
+      // narrow: only what the MODEL sees is reset. The conversation is
+      // still fully persisted (rehydrate and the on-screen thread are
+      // untouched), the buyer's LOCATION still stands (that describes the
+      // buyer, not the request — see the location marker computed from
+      // full history above), and a "refinement"/"answer" turn keeps
+      // everything exactly as before.
+      // Structural veto over the classifier — NOT a belt-and-braces
+      // nicety. The eval (npm run eval:search) measured requestRelation at
+      // 55%, with the "answer" cases failing hardest: "Shared my location"
+      // and "yes please" both came back "new". Slicing history on those
+      // would erase the very request the buyer is mid-way through
+      // answering — Velte would ask where they are, then forget what they
+      // wanted. The client already KNOWS structurally when a message is a
+      // continuation (SearchHome sets isContinuation for clarification
+      // answers, location shares, and name/OTP submissions), and a pending
+      // reach-out offer is recorded on the last turn itself. A known fact
+      // beats a model's reading of it, so these override the classifier.
+      const isStructuralContinuation =
+        Boolean(body?.isContinuation) ||
+        history.at(-1)?.awaitingBuyerRequestReply === true;
+      const startsFreshRequest =
+        requestRelation === "new" &&
+        historyMessages.length > 0 &&
+        !isStructuralContinuation;
+      if (startsFreshRequest) {
+        messages = [{ role: "user", content }];
+      }
+
+      // ── The goal sheet's two locks ────────────────────────────────────
+      // A remembered constraint (today: the budget ceiling) may only be
+      // applied when BOTH agree this is still the same request:
+      //   1. the boundary decision above says it isn't a new one, and
+      //   2. the sheet's own item still matches what's being asked about.
+      // Lock 2 exists because lock 1 is a model judgment measured at 91%
+      // (npm run eval:search) — a rare misread must not be able to put a
+      // ₦700k PS5 ceiling on a fridge search, where the buyer would simply
+      // see fewer results and never learn why. The check is deliberately
+      // crude and predictable: same term, or one containing the other, so
+      // "PS5" still covers "PS5 Slim" while "fridge" matches nothing about
+      // a PS5. A budget named in the CURRENT message outranks both locks,
+      // and is handled by the model's own tool call rather than here.
+      const storedGoal = conversation?.task ?? null;
+      const sameItemAsSheet = (() => {
+        const a = storedGoal?.itemTerm?.trim().toLowerCase();
+        const b = itemTerm?.trim().toLowerCase();
+        if (!a || !b) return false;
+        return a === b || a.includes(b) || b.includes(a);
+      })();
+      const sheetApplies = !startsFreshRequest && sameItemAsSheet;
+      const rememberedBudget = sheetApplies
+        ? (storedGoal?.maxBudgetNaira ?? null)
+        : null;
 
       // hasMultipleIntents overrides — the classifier alone has produced
       // false dual-intent splits (found live: photo + "where can I find
@@ -1122,7 +1379,7 @@ export async function POST(req: Request) {
         isSharedLocationMessage(message) ||
         isAcknowledgementReply(message)
       ) {
-        const priorText = lastSubstantiveUserMessage(body?.history ?? []);
+        const priorText = lastSubstantiveUserMessage(history);
         hasMultipleIntents = Boolean(
           priorText && DUAL_INTENT_TEXT_PATTERN.test(priorText),
         );
@@ -1168,7 +1425,7 @@ export async function POST(req: Request) {
           );
           const locationOutcome = extractOutcome(locationResult);
           if (locationOutcome.clarifyCandidate?.kind === "location") {
-            sendBareFinal(locationOutcome.clarifyCandidate.question, {
+            await sendBareFinal(locationOutcome.clarifyCandidate.question, {
               kind: "location",
               question: locationOutcome.clarifyCandidate.question,
             });
@@ -1183,6 +1440,83 @@ export async function POST(req: Request) {
             "[search] proactive location check failed, falling through:",
             err,
           );
+        }
+      }
+
+      // The deterministic bare-query ATTRIBUTE gate — the details sibling
+      // of the proactive location gate above, and the same lesson applied:
+      // leaving "ask about missing details" to the model's own judgment
+      // (buildSystemPrompt's sectorNote, gated to first-turn-with-location)
+      // meant a bare "laptop" usually searched immediately with nothing to
+      // rank on. Now a query naming essentially just the item
+      // (looksLikeBareQuery) with a confidently-detected sector gets ONE
+      // code-enforced clarifying round — rendered skippable (see the
+      // Clarification type): details help matching but must never be a
+      // wall, so the buyer can answer through the composer or tap
+      // "Skip — just search" and proceed. Runs AFTER the location gate on
+      // purpose (location first, then details); fires at most once per
+      // conversation (the history scan below, same technique as
+      // alreadyAskedLocationThisConversation).
+      //
+      // On a continuation turn this only ever fires for the LOCATION
+      // gate's own answers (shared or declined) — resolving the original
+      // request via lastSubstantiveUserMessage — never for a reply to any
+      // other question (including this gate's own: hijacking an answer
+      // turn to re-ask would loop the buyer).
+      const ATTRIBUTE_CLARIFY_PATTERN =
+        /mention whichever of these matter to you/i;
+      // Request-scoped, unlike the LOCATION marker above which stays
+      // buyer-scoped: having asked about the last item's details says
+      // nothing about the new one, so a fresh request earns a fresh ask
+      // (once). This is the same buyer-vs-request distinction the history
+      // reset above turns on.
+      const alreadyAskedAttributesThisConversation =
+        !startsFreshRequest &&
+        history.some(
+          (turn) =>
+            turn.role === "assistant" &&
+            ATTRIBUTE_CLARIFY_PATTERN.test(turn.content),
+        );
+      if (
+        // Every input below comes from the scope check's own reading of the
+        // request (itemTerm/seekingKind/hasSpecificDetails), not from
+        // counting tokens in the raw text: `itemTerm` is the clean noun
+        // phrase to ask about AND to detect a sector from (so a lead-in
+        // sentence is never quoted back at the buyer, and detection sees
+        // "phone", not "where can i get a phone"), and
+        // `hasSpecificDetails` is the model's judgment — with full
+        // conversation context — of whether anything distinguishing has
+        // been said yet.
+        itemTerm &&
+        !hasSpecificDetails &&
+        !imageUrl &&
+        // A multi-need message must reach the dual-intent split downstream
+        // — clarifying attributes for one of the needs would swallow the
+        // other entirely.
+        !hasMultipleIntents &&
+        !alreadyAskedAttributesThisConversation
+      ) {
+        const bareClarifiers = getSectorClarifiers(
+          itemTerm,
+          undefined,
+          await getAttributeSchemaOverrides(),
+          // Keeps the questions on the right side of a "both" sector: a
+          // buyer BUYING a phone is asked about Model/Storage, never
+          // Turnaround Time or Repair Warranty (found live — the bug this
+          // whole redesign addresses).
+          seekingKind,
+        );
+        if (bareClarifiers) {
+          const question = buildClarifyingQuestion(
+            itemTerm,
+            bareClarifiers.fields,
+          );
+          await sendBareFinal(question, {
+            kind: "text",
+            question,
+            skippable: true,
+          });
+          return;
         }
       }
 
@@ -1202,6 +1536,17 @@ export async function POST(req: Request) {
       // here (not inside the tool call) since it needs to survive past
       // callLLM to build the final event below.
       const weakResultsRef: { current: VendorMatch[] } = { current: [] };
+
+      // Phase 5: the buyer's own coordinates, named — this turn's if the
+      // client just resolved one, otherwise whatever the conversation
+      // already had stored (so it survives a refresh along with the
+      // coordinates themselves). Display only: it reaches the search tools
+      // purely so a status line can say "near Independence Layout, Enugu"
+      // rather than "your area", and never influences what is searched.
+      const locationLabel =
+        body?.locationPlaceName?.trim() ||
+        conversation?.buyerLocation?.placeName ||
+        undefined;
 
       // Computed once, server-side, before the model ever sees anything —
       // never a tool the model calls itself (see systemPrompt.ts's comment
@@ -1223,8 +1568,20 @@ export async function POST(req: Request) {
       // including from an earlier turn this session, since the client keeps
       // resending it — this reverts to computing normally.
       const sectorClarifiers =
-        message && !imageUrl && !body?.history?.length && body?.buyerLocation
-          ? getSectorClarifiers(message)
+        message && !imageUrl && !history.length && body?.buyerLocation
+          ? getSectorClarifiers(
+              // The clean noun phrase when the scope check produced one —
+              // same reasoning as the attribute gate above: detection on
+              // "phone" is far more reliable than on a whole sentence.
+              itemTerm || message,
+              undefined,
+              // Phase 2: DB-tuned question schemas — cached, hard-capped
+              // wait, degrades to the in-code presets (see
+              // attributeSchemas.ts). Fetched only on the turns that can
+              // actually ask (this exact gate), never unconditionally.
+              await getAttributeSchemaOverrides(),
+              seekingKind,
+            )
           : null;
 
       try {
@@ -1239,8 +1596,14 @@ export async function POST(req: Request) {
             Boolean(imageUrl),
             imageUrl,
             weakResultsRef,
+            locationLabel,
+            rememberedBudget,
           ),
-          searchStores: searchStoresTool(body?.buyerLocation, push),
+          searchStores: searchStoresTool(
+            body?.buyerLocation,
+            push,
+            locationLabel,
+          ),
           getVendorProducts: getVendorProductsTool(push),
           createBuyerRequest: createBuyerRequestTool(
             buyerAuth,
@@ -1253,6 +1616,17 @@ export async function POST(req: Request) {
         const system = buildSystemPrompt(
           Boolean(body?.buyerLocation),
           sectorClarifiers,
+          // Only handed over once BOTH goal-sheet locks pass — a new
+          // request, or a sheet about a different item, contributes
+          // nothing (see sheetApplies).
+          sheetApplies && storedGoal
+            ? {
+                itemTerm: storedGoal.itemTerm,
+                maxBudgetNaira: storedGoal.maxBudgetNaira,
+                cheapestSeenNaira: storedGoal.cheapestSeenNaira,
+                shownCount: storedGoal.shownProductIds?.length ?? 0,
+              }
+            : null,
         );
         // "openai-strong" (gpt-5-mini, low reasoning effort — see
         // router.ts's own PROVIDERS comment) is the primary for every call
@@ -1298,11 +1672,17 @@ export async function POST(req: Request) {
         // `!isOfferDeclineReply` — a decline belongs to the ORDINARY
         // pipeline's own already-correct decline handling (re-search,
         // reveal Places), not this one.
-        const lastHistoryTurn = body?.history?.at(-1);
+        const lastHistoryTurn = history.at(-1);
         const isAnsweringOffer =
           lastHistoryTurn?.role === "assistant" &&
           lastHistoryTurn.awaitingBuyerRequestReply === true &&
-          !isOfferDeclineReply(message);
+          !isOfferDeclineReply(message) &&
+          // Same class of leak the history reset above fixes: this treats
+          // ANY non-decline as agreement, so a buyer who ignores the offer
+          // and simply asks for something else ("where can I get a phone")
+          // would be signed up for a reach-out about the PREVIOUS item.
+          // Walking away from an offer is not agreeing to it.
+          requestRelation !== "new";
 
         if (isAnsweringOffer) {
           // Pre-check — per explicit request, verify a real vendor
@@ -1399,37 +1779,37 @@ export async function POST(req: Request) {
               status: "no_match",
               description: candidateDescription || offerMatchQuery || "that",
             };
-            controller.enqueue(
-              encodeEvent({
-                type: "final",
-                reply: buyerRequestStatusReply(offer),
-                toolCalled: false,
-                clarification: null,
-                products: [],
-                weakProducts: [],
-                stores: [],
-                furtherStores: [],
-                storesQuery: null,
-                productStores: [],
-                storeServices: [],
-                productsMatchTier: null,
-                storesMatchTier: null,
-                productsMatchQuality: undefined,
-                storesMatchQuality: undefined,
-                externalStoreSuggestions: preCheckExternalSuggestions,
-                vendorProducts: [],
-                vendorProductsStore: null,
-                buyerRequestOffer: offer,
-                buyerRequestOffered: false,
-                backgroundItems: [],
-                dualIntentItemALabel: null,
-                // Terminal — never asked for a name, so there's no open
-                // exchange for the buyer's next message to route back
-                // into.
-                awaitingBuyerRequestReply: false,
-                buyerRequestMatchQuery: null,
-              }),
-            );
+            await sendFinal({
+              type: "final",
+              reply: buyerRequestStatusReply(offer),
+              toolCalled: false,
+              clarification: null,
+              products: [],
+              weakProducts: [],
+              stores: [],
+              furtherStores: [],
+              storesQuery: null,
+              productStores: [],
+              storeServices: [],
+              productsMatchTier: null,
+              storesMatchTier: null,
+              productsMatchQuality: undefined,
+              storesMatchQuality: undefined,
+              externalStoreSuggestions: preCheckExternalSuggestions,
+              vendorProducts: [],
+              vendorProductsStore: null,
+              buyerRequestOffer: offer,
+              buyerRequestOffered: false,
+              backgroundItems: [],
+              dualIntentItemALabel: null,
+              // Terminal — never asked for a name, so there's no open
+              // exchange for the buyer's next message to route back
+              // into.
+              awaitingBuyerRequestReply: false,
+              buyerRequestMatchQuery: null,
+              recommendation: null,
+              externalOffers: [],
+            });
             return;
           }
 
@@ -1494,44 +1874,43 @@ export async function POST(req: Request) {
             }
           }
 
-          controller.enqueue(
-            encodeEvent({
-              type: "final",
-              reply: agreementReply,
-              toolCalled: false,
-              clarification: agreementOutcome.clarification,
-              products: [],
-              weakProducts: [],
-              stores: [],
-              furtherStores: [],
-              storesQuery: null,
-              productStores: [],
-              storeServices: [],
-              productsMatchTier: null,
-              storesMatchTier: null,
-              productsMatchQuality: undefined,
-              storesMatchQuality: undefined,
-              externalStoreSuggestions: agreementExternalSuggestions,
-              vendorProducts: [],
-              vendorProductsStore: null,
-              buyerRequestOffer: agreementOutcome.buyerRequestOffer,
-              buyerRequestOffered: false,
-              backgroundItems: [],
-              dualIntentItemALabel: null,
-              // True only for the intermediate name-ask (still an open
-              // exchange, the buyer's next reply needs routing back here
-              // too) — false once createBuyerRequest actually resolved
-              // (created/needs_identity/no_match/error are all terminal
-              // for THIS mechanism; needs_identity hands off to
-              // BuyerRequestOfferWidget's own phone/OTP flow instead,
-              // which never goes through another /api/search round-trip).
-              awaitingBuyerRequestReply:
-                agreementOutcome.clarification !== null,
-              // Keep the offer's short match query alive across the
-              // name-ask turn (and needs_identity) so create still uses it.
-              buyerRequestMatchQuery: offerMatchQuery || null,
-            }),
-          );
+          await sendFinal({
+            type: "final",
+            reply: agreementReply,
+            toolCalled: false,
+            clarification: agreementOutcome.clarification,
+            products: [],
+            weakProducts: [],
+            stores: [],
+            furtherStores: [],
+            storesQuery: null,
+            productStores: [],
+            storeServices: [],
+            productsMatchTier: null,
+            storesMatchTier: null,
+            productsMatchQuality: undefined,
+            storesMatchQuality: undefined,
+            externalStoreSuggestions: agreementExternalSuggestions,
+            vendorProducts: [],
+            vendorProductsStore: null,
+            buyerRequestOffer: agreementOutcome.buyerRequestOffer,
+            buyerRequestOffered: false,
+            backgroundItems: [],
+            dualIntentItemALabel: null,
+            // True only for the intermediate name-ask (still an open
+            // exchange, the buyer's next reply needs routing back here
+            // too) — false once createBuyerRequest actually resolved
+            // (created/needs_identity/no_match/error are all terminal
+            // for THIS mechanism; needs_identity hands off to
+            // BuyerRequestOfferWidget's own phone/OTP flow instead,
+            // which never goes through another /api/search round-trip).
+            awaitingBuyerRequestReply: agreementOutcome.clarification !== null,
+            // Keep the offer's short match query alive across the
+            // name-ask turn (and needs_identity) so create still uses it.
+            buyerRequestMatchQuery: offerMatchQuery || null,
+            recommendation: null,
+            externalOffers: [],
+          });
           return;
         }
 
@@ -1812,7 +2191,7 @@ export async function POST(req: Request) {
         const onlyOneSearchToolCalled =
           Boolean(outcome.productCall) !== Boolean(outcome.storeCall);
         if (onlyOneSearchToolCalled && !outcome.clarification) {
-          const priorText = lastSubstantiveUserMessage(body?.history ?? []);
+          const priorText = lastSubstantiveUserMessage(history);
           if (priorText && DUAL_INTENT_TEXT_PATTERN.test(priorText)) {
             console.warn(
               "[search] only one search tool ran on a content-free continuation turn, and the original message looks dual-intent — retrying with an explicit dual-need reminder",
@@ -1889,7 +2268,7 @@ export async function POST(req: Request) {
         // (once per shape) before being pulled out here. Always the last
         // thing a caller does — every call site immediately `return`s
         // right after.
-        function emitDualIntentSplit(
+        async function emitDualIntentSplit(
           itemA: BackgroundSearchItem,
           itemB: BackgroundSearchItem,
           labelA: string,
@@ -1910,49 +2289,49 @@ export async function POST(req: Request) {
             itemPickQuestionPhrase(labelA, labelB),
             [],
           );
-          controller.enqueue(
-            encodeEvent({
-              type: "final",
-              reply: pickQuestion,
-              // Mirrors how an ordinary askClarifyingQuestion turn behaves
-              // (see the tail of this handler below) — a plain message
-              // bubble, not the "genuine dead end" Compass card, since
-              // there's a real next step on the table (the pick itself).
-              toolCalled: false,
-              clarification: {
-                kind: "item_pick",
-                question: pickQuestion,
-                options: [
-                  { item: itemA, label: labelA },
-                  { item: itemB, label: labelB },
-                ],
-              },
-              products: [],
-              weakProducts: [],
-              stores: [],
-              furtherStores: [],
-              storesQuery: null,
-              productStores: [],
-              storeServices: [],
-              productsMatchTier: null,
-              storesMatchTier: null,
-              productsMatchQuality: undefined,
-              storesMatchQuality: undefined,
-              externalStoreSuggestions: [],
-              vendorProducts: [],
-              vendorProductsStore: null,
-              buyerRequestOffer: null,
-              buyerRequestOffered: false,
-              backgroundItems: [],
-              dualIntentItemALabel: null,
-              // Answering this never goes through /api/search at all
-              // (SearchHome.tsx resolves the pick directly) — there's no
-              // "buyer's next message" for this short-circuit to route, so
-              // this stays false, unlike a real reach-out offer.
-              awaitingBuyerRequestReply: false,
-              buyerRequestMatchQuery: null,
-            }),
-          );
+          await sendFinal({
+            type: "final",
+            reply: pickQuestion,
+            // Mirrors how an ordinary askClarifyingQuestion turn behaves
+            // (see the tail of this handler below) — a plain message
+            // bubble, not the "genuine dead end" Compass card, since
+            // there's a real next step on the table (the pick itself).
+            toolCalled: false,
+            clarification: {
+              kind: "item_pick",
+              question: pickQuestion,
+              options: [
+                { item: itemA, label: labelA },
+                { item: itemB, label: labelB },
+              ],
+            },
+            products: [],
+            weakProducts: [],
+            stores: [],
+            furtherStores: [],
+            storesQuery: null,
+            productStores: [],
+            storeServices: [],
+            productsMatchTier: null,
+            storesMatchTier: null,
+            productsMatchQuality: undefined,
+            storesMatchQuality: undefined,
+            externalStoreSuggestions: [],
+            vendorProducts: [],
+            vendorProductsStore: null,
+            buyerRequestOffer: null,
+            buyerRequestOffered: false,
+            backgroundItems: [],
+            dualIntentItemALabel: null,
+            // Answering this never goes through /api/search at all
+            // (SearchHome.tsx resolves the pick directly) — there's no
+            // "buyer's next message" for this short-circuit to route, so
+            // this stays false, unlike a real reach-out offer.
+            awaitingBuyerRequestReply: false,
+            buyerRequestMatchQuery: null,
+            recommendation: null,
+            externalOffers: [],
+          });
         }
 
         if (
@@ -2016,7 +2395,7 @@ export async function POST(req: Request) {
               location: dualLocation,
             };
 
-            emitDualIntentSplit(
+            await emitDualIntentSplit(
               productItem,
               storeItem,
               productLabel,
@@ -2105,7 +2484,7 @@ export async function POST(req: Request) {
                 businessType: inputB.businessType,
                 location: inputB.location || inputA.location || undefined,
               };
-              emitDualIntentSplit(itemA, itemB, labelA, labelB);
+              await emitDualIntentSplit(itemA, itemB, labelA, labelB);
               return;
             }
           }
@@ -2160,7 +2539,7 @@ export async function POST(req: Request) {
                 attributes: inputB.attributes,
                 location: inputB.location || inputA.location || undefined,
               };
-              emitDualIntentSplit(itemA, itemB, labelA, labelB);
+              await emitDualIntentSplit(itemA, itemB, labelA, labelB);
               return;
             }
           }
@@ -2642,58 +3021,147 @@ export async function POST(req: Request) {
         // clarifying question takes over the turn instead.
         const weakProducts = clarification ? [] : weakResultsRef.current;
 
-        controller.enqueue(
-          encodeEvent({
-            type: "final",
-            // The `|| clarification?.question` fallback matters specifically
-            // for the forced-tool retry above: some providers return a
-            // forced tool call with little or no accompanying text content,
-            // and askClarifyingQuestion's own `question` field IS meant to
-            // double as the reply either way (see that tool's own comment)
-            // — so a buyer never sees a blank bubble sitting above a
-            // perfectly good clarification widget.
-            reply:
-              replyOverride ??
-              (sanitizeReply(result.text) || clarification?.question) ??
-              "",
-            toolCalled,
-            clarification,
-            products,
-            weakProducts,
-            stores,
-            furtherStores,
-            storesQuery,
-            productStores,
-            storeServices,
-            productsMatchTier,
-            storesMatchTier,
-            productsMatchQuality,
-            storesMatchQuality,
-            externalStoreSuggestions,
-            vendorProducts,
-            vendorProductsStore,
-            buyerRequestOffer,
-            buyerRequestOffered,
-            // Empty on this, the ordinary single-item path — only the
-            // dual-intent branch further up this file (its own early
-            // `return`) ever populates this.
-            backgroundItems: [],
-            dualIntentItemALabel: null,
-            // Mirrors buyerRequestOffered — covers the rare case where the
-            // model itself still calls offerBuyerRequestTool directly
-            // (still a registered tool, even though systemPrompt.ts no
-            // longer instructs the double-empty case to reach for it — see
-            // that file's own comment) — same agreement short-circuit
-            // applies regardless of which code path produced the offer.
-            awaitingBuyerRequestReply: buyerRequestOffered,
-            buyerRequestMatchQuery: buyerRequestOffered
-              ? buyerRequestMatchQuery
-              : null,
-          }),
-        );
+        // Phase 4 (docs/velte-ai-search-flow-plan.md): external offers,
+        // and ONLY on a genuine dead end. The gate is deliberately strict
+        // — nothing on Velte at all, no clarification pending, and no
+        // reach-out offer being made — because Velte's own vendors are the
+        // business and an off-platform link is the consolation, never a
+        // competitor sitting alongside a real match. Also skipped entirely
+        // when no connector is configured, so an install without
+        // SERPER_API_KEY spends nothing and behaves exactly as before.
+        let externalOffers: ExternalOffer[] = [];
+        const nothingOnVelte =
+          !clarification &&
+          products.length === 0 &&
+          stores.length === 0 &&
+          vendorProducts.length === 0 &&
+          !buyerRequestOffered;
+        if (nothingOnVelte && hasExternalConnectors()) {
+          const productInput = productCall?.input as
+            | { product?: string }
+            | undefined;
+          const storeInput = storeCall?.input as
+            | { businessType?: string }
+            | undefined;
+          const externalQuery =
+            productInput?.product ?? storeInput?.businessType ?? message;
+          if (externalQuery?.trim()) {
+            push(checkingElsewherePhrase(externalQuery));
+            externalOffers = await fetchExternalOffers({
+              query: externalQuery,
+            });
+          }
+        }
 
-        // Recruitment-lead capture — the ONE thing worth persisting beyond
-        // the conversation itself: Velte had no vendor for this request AND
+        // Phase 3 (docs/velte-ai-search-flow-plan.md): the comparison /
+        // recommendation call — one extra structured-output LLM round,
+        // only when there are actually ≥2 product results to compare and
+        // no clarification took over the turn. Narrated by its own status
+        // line since the search itself is already done by now; on any
+        // failure pickRecommendation returns null and the cards render
+        // exactly as before.
+        // Capture what the search actually ran with, for the goal sheet —
+        // the model's own tool arguments, so the stored ceiling is exactly
+        // the one the results were filtered by. `rememberedBudget` is the
+        // fallback the tool applied when the model omitted a budget, which
+        // keeps a carried-over ceiling alive across turns instead of
+        // silently expiring the first time it isn't restated.
+        {
+          const input = productCall?.input as
+            | { maxBudgetNaira?: number; attributes?: string[] }
+            | undefined;
+          goalUpdate = {
+            maxBudgetNaira: input?.maxBudgetNaira ?? rememberedBudget,
+            attributes: Array.isArray(input?.attributes)
+              ? input.attributes
+              : undefined,
+          };
+        }
+
+        let recommendation: SearchRecommendation | null = null;
+        // The distinct-terms guard: when the model called searchProducts
+        // more than once for genuinely DIFFERENT items in one turn (a
+        // multi-need message the dual-intent interception declined to
+        // split), `products` is a merged pool of unrelated needs — a
+        // "Top pick" crowned across a laptop and a caterer is nonsense, so
+        // no recommendation at all is the honest outcome. Retries that
+        // re-search the SAME item under slightly different phrasing still
+        // pass (compared as normalized terms).
+        const distinctProductTerms = new Set(
+          outcome.productCalls
+            .map((c) =>
+              ((c.input as { product?: string } | undefined)?.product ?? "")
+                .trim()
+                .toLowerCase(),
+            )
+            .filter(Boolean),
+        );
+        if (
+          !clarification &&
+          products.length >= 2 &&
+          distinctProductTerms.size <= 1
+        ) {
+          push(comparingOptionsPhrase(products.length));
+          const productInput = productCall?.input as
+            | { product?: string }
+            | undefined;
+          recommendation = await pickRecommendation({
+            query: message || productInput?.product || "the item in the photo",
+            products,
+          });
+        }
+
+        await sendFinal({
+          type: "final",
+          // The `|| clarification?.question` fallback matters specifically
+          // for the forced-tool retry above: some providers return a
+          // forced tool call with little or no accompanying text content,
+          // and askClarifyingQuestion's own `question` field IS meant to
+          // double as the reply either way (see that tool's own comment)
+          // — so a buyer never sees a blank bubble sitting above a
+          // perfectly good clarification widget.
+          reply:
+            replyOverride ??
+            (sanitizeReply(result.text) || clarification?.question) ??
+            "",
+          toolCalled,
+          clarification,
+          products,
+          weakProducts,
+          stores,
+          furtherStores,
+          storesQuery,
+          productStores,
+          storeServices,
+          productsMatchTier,
+          storesMatchTier,
+          productsMatchQuality,
+          storesMatchQuality,
+          externalStoreSuggestions,
+          vendorProducts,
+          vendorProductsStore,
+          buyerRequestOffer,
+          buyerRequestOffered,
+          // Empty on this, the ordinary single-item path — only the
+          // dual-intent branch further up this file (its own early
+          // `return`) ever populates this.
+          backgroundItems: [],
+          dualIntentItemALabel: null,
+          // Mirrors buyerRequestOffered — covers the rare case where the
+          // model itself still calls offerBuyerRequestTool directly
+          // (still a registered tool, even though systemPrompt.ts no
+          // longer instructs the double-empty case to reach for it — see
+          // that file's own comment) — same agreement short-circuit
+          // applies regardless of which code path produced the offer.
+          awaitingBuyerRequestReply: buyerRequestOffered,
+          buyerRequestMatchQuery: buyerRequestOffered
+            ? buyerRequestMatchQuery
+            : null,
+          recommendation,
+          externalOffers,
+        });
+
+        // Recruitment-lead capture: Velte had no vendor for this request AND
         // Google Places surfaced a real, unlisted business nearby, so it's
         // worth the company following up to get that business onto Velte.
         // Deliberately not a general log of every search — a prior version

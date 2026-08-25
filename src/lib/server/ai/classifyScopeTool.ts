@@ -78,11 +78,51 @@ export function classifyScopeTool() {
         .describe(
           "true ONLY if the buyer's own words clearly name two or more separate, distinct things they need — e.g. 'fix my laptop, and I also need a caterer for Saturday' names a repair AND a caterer. false for a SINGLE need, no matter how it's phrased, hedged, or elaborated on, and false whenever a photo is attached and the caption is just referring to that one photo (e.g. 'where can I get this', 'how much is this') — that is always one intent, never two, even if the eventual search for it internally tries more than one approach to find it. When genuinely unsure, prefer false — a missed second item just means the buyer asks again; a false split shows them a confusing, made-up choice.",
         ),
+      // The 2026-08-25 redesign of the bare-query attribute gate (route.ts):
+      // these three fields replace a token-counting heuristic that judged
+      // bareness from raw text and a keyword-scored sector guess that could
+      // land on the wrong side of buy-vs-service (found live: 'Where can I
+      // get a phone' asked about Turnaround Time and Repair Warranty). The
+      // model UNDERSTANDS the request here; code keeps validating and
+      // selecting the actual questions from the schema.
+      itemTerm: z
+        .string()
+        .nullable()
+        .describe(
+          "The single core product or service the buyer is currently seeking, as a short clean noun phrase in their own words — 'phone', 'wedding caterer', 'generator repair' — stripped of lead-in phrasing ('where can I get', 'I need a'). For a continuation turn (a shared location, a bare yes/ok), take it from the still-open request earlier in the conversation. null when no identifiable item exists (a greeting, an off-topic message, or a multi-need message where no single item can be named).",
+        ),
+      seekingKind: z
+        .enum(["buy_item", "get_service", "unclear"])
+        .describe(
+          "'buy_item' when the buyer wants to BUY or obtain a physical item ('where can I get a phone' is a purchase). 'get_service' when they want a job done or a professional hired ('fix my phone', 'I need a plumber', 'someone to sew agbada'). 'unclear' only when the words genuinely support both readings.",
+        ),
+      requestRelation: z
+        .enum(["new", "refinement", "answer"])
+        .describe(
+          "How this message relates to the conversation so far. Check in order. FIRST: if the last assistant turn asked the buyer something — a clarifying question, their location, their name, or a yes/no reach-out offer — and this message responds to it in any form, it is 'answer'. Responses usually do NOT look like requests: a bare value ('Samsung', '42'), a bare 'yes'/'ok'/'no thanks', a name, the canned 'Shared my location', or a short follow-up about what was just shown ('what do they sell?') are all 'answer'. ONLY if nothing was being awaited: 'refinement' — adjusts the SAME request ('in red instead', 'something cheaper'); or 'new' — the buyer moved on to a DIFFERENT thing and the previous request is finished (a phone after a laptop is 'new'; re-asking for something already found and shown is 'new'). The first message of a conversation is always 'new'. When torn between 'new' and 'refinement', prefer 'refinement'.",
+        ),
+      hasSpecificDetails: z
+        .boolean()
+        .describe(
+          "true if the buyer has given ANY distinguishing detail about the item beyond its bare name — brand, model, size, color, material, budget, quantity, style, spec, symptom, occasion, or similar — in this message or an earlier turn about the same request. false for a bare mention with nothing distinguishing ('I need a phone', 'looking for a tailor'). A named LOCATION alone does not count as a detail — location is handled separately.",
+        ),
     }),
-    execute: async ({ inScope, namesPlace, hasMultipleIntents }) => ({
+    execute: async ({
       inScope,
       namesPlace,
       hasMultipleIntents,
+      itemTerm,
+      seekingKind,
+      requestRelation,
+      hasSpecificDetails,
+    }) => ({
+      inScope,
+      namesPlace,
+      hasMultipleIntents,
+      itemTerm,
+      seekingKind,
+      requestRelation,
+      hasSpecificDetails,
     }),
   });
 }

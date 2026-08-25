@@ -24,9 +24,37 @@ import type { SectorClarifiers } from "@/types/sectors";
 export function buildSystemPrompt(
   hasBuyerLocation: boolean,
   sectorClarifiers?: SectorClarifiers | null,
+  // The goal sheet for the request in play (route.ts, gated behind its own
+  // two locks — never passed when this turn starts a new request). Given
+  // as FACTS the model can act on, so "can you find something cheaper?"
+  // has a real number to beat instead of being re-derived from whatever
+  // the previous reply happened to say.
+  goal?: {
+    itemTerm: string | null;
+    maxBudgetNaira: number | null;
+    cheapestSeenNaira: number | null;
+    shownCount: number;
+  } | null,
 ): string {
   const locationNote = hasBuyerLocation
     ? `\n\nThe buyer's device location is already known server-side and is used automatically whenever they haven't named a different place.`
+    : "";
+
+  const goalFacts: string[] = [];
+  if (goal?.itemTerm) goalFacts.push(`they're looking for: ${goal.itemTerm}`);
+  if (goal?.maxBudgetNaira != null) {
+    goalFacts.push(`their stated budget ceiling is ₦${goal.maxBudgetNaira}`);
+  }
+  if (goal?.cheapestSeenNaira != null) {
+    goalFacts.push(
+      `the cheapest option shown to them so far is ₦${goal.cheapestSeenNaira}`,
+    );
+  }
+  if (goal?.shownCount) {
+    goalFacts.push(`${goal.shownCount} listing(s) have already been shown`);
+  }
+  const goalNote = goalFacts.length
+    ? `\n\nWhat you already know about this request (established over earlier turns, still current): ${goalFacts.join("; ")}. Use these as facts rather than re-deriving them from the conversation text. In particular, if the buyer asks for something CHEAPER, set searchProducts' maxBudgetNaira BELOW the cheapest figure above rather than repeating the same ceiling — otherwise you will hand them the same listings again and appear not to have listened. If they raise or replace the budget in their own words, their new number wins outright.`
     : "";
 
   // Only ever shapes WHICH questions askClarifyingQuestion asks and how the
@@ -123,7 +151,7 @@ After a searchStores call in an EARLIER turn actually returned a real store, an 
 A follow-up like "where can I buy it/this/one" or "what do they sell/have" after you've already shown results needs its own read of what the buyer means — check the BUYER's own original message earlier in this conversation (not your own reply, which deliberately never restates specifics) to tell which case this is:
 - If the buyer's original message named ONE specific item (a singular product, not a category) — e.g. "white sneakers", "a Tecno charger" — "it" still means that one item: call searchProducts again with that same item description, same as a fresh "where can I get this shoe" would be.
 - If the buyer's original message named a broad category (e.g. "electronics", "kitchen appliances") that could plausibly have turned up several different, unrelated things, the buyer asking where to buy isn't asking for more product options — they're asking for a PLACE. Call searchStores instead, using the general category as the business type (e.g. earlier search was "kitchen appliances" → businessType "kitchen appliance store").
-- If the earlier turn was a searchStores result (a specific store was already found) and the buyer now asks what that store sells/has/carries, that's getVendorProducts with that store's handle from the bracketed note — not searchStores again, and not a fresh searchProducts search.${sectorNote}`;
+- If the earlier turn was a searchStores result (a specific store was already found) and the buyer now asks what that store sells/has/carries, that's getVendorProducts with that store's handle from the bracketed note — not searchStores again, and not a fresh searchProducts search.${sectorNote}${goalNote}`;
 }
 
 // A deterministic short-circuit's own system prompt — see route.ts's own
@@ -186,6 +214,22 @@ Set inScope: true for anything that describes — even vaguely, ambiguously, or 
 Set namesPlace: true if EITHER this message OR any earlier turn in the conversation history above names or clearly implies a specific city, area, or landmark (e.g. "in Lekki", "near Wuse 2 Abuja", "close to Ikeja") — a place given earlier still counts now, exactly like a real follow-up ("in red instead" after "white sneakers in Lekki" is still about Lekki). false only when NO turn, this one or any earlier one, has named anywhere more specific than a bare country-level mention ("Nigeria").
 
 Set hasMultipleIntents: true ONLY if the buyer's own words clearly name two or more separate, distinct things they need this turn — e.g. "fix my laptop, and I also need a caterer for Saturday" names a repair AND a caterer. Set it false for a single need, however it's phrased or elaborated, and false whenever a photo is attached and the caption just refers back to that photo ("where can I get this", "how much is this", or no caption at all) — that is one intent about one item, never two. When unsure, prefer false.
+
+Also report three things about WHAT the buyer is seeking, used to decide whether to ask them for a little more detail before searching:
+
+itemTerm — the single core product or service they're currently after, as a short clean noun phrase in their own words, with lead-in phrasing stripped: "Where can I get a phone" → "phone", "I need someone to fix my fridge" → "fridge repair", "looking for a good tailor in Lekki" → "tailor". If this message is a continuation (a shared location, a bare "yes"/"ok"), take the term from the still-open request earlier in the conversation rather than from the continuation text itself. null when there's no identifiable single item — a greeting, an off-topic message, or a message naming several distinct needs.
+
+seekingKind — "buy_item" when they want to BUY or obtain a physical item ("where can I get a phone", "I need a generator" are purchases), "get_service" when they want a job done or a professional hired ("fix my phone", "I need a plumber", "someone to sew an agbada"), "unclear" only when the words genuinely support both readings. Judge this from what the buyer actually wants to happen, not from whether the product category happens to also have repair businesses.
+
+requestRelation — how this message relates to what came before. Decide it in TWO STEPS, in this order, and do not skip step 1:
+
+STEP 1 — Look at the LAST assistant turn in the history above. Did it ask the buyer something or put something to them: a clarifying question, a request for their location, a request for their name, or a yes/no offer to reach out to businesses? If it did, and this message is a response to it in ANY form, the answer is "answer" — full stop, do not continue to step 2. Responses to these very often do NOT look like requests at all, and that is exactly why they get misread: a bare brand or value ("Samsung", "42", "black"), a bare "yes"/"yes please"/"ok"/"sure"/"no thanks", a person's name, the canned line "Shared my location" or "Search without sharing my location" that the app sends on the buyer's behalf, or a short follow-up about something Velte just showed them ("what do they sell?", "how much is the second one?") are all "answer". A short message that would look like a brand-new topic in isolation is still "answer" when the previous turn was waiting on it.
+
+STEP 2 — Only if the last assistant turn was NOT waiting on a response, choose between: "refinement" if this adjusts the SAME request already in play ("in red instead", "something cheaper", "do you have something bigger?", "any in Lekki?"), or "new" if the buyer has moved on to a DIFFERENT thing to find and the earlier request is finished. Treat a newly named item as "new" even when it's casually phrased and even when it's related to the last one: after a laptop request, "where can I get a phone" is NEW, and asking again for something already found and shown ("I need a phone charger" after chargers were already delivered) is NEW too, because that request is over. The first message of a conversation is always "new".
+
+Why this matters: a "new" request starts from a clean slate, and nothing the buyer said about the PREVIOUS item follows them into it. So when step 2 leaves you genuinely torn between "new" and "refinement", prefer "refinement" — losing context in the middle of one request is more disruptive than carrying a little extra.
+
+hasSpecificDetails — true if they've already given ANY distinguishing detail about the item beyond its bare name (brand, model, size, colour, material, budget, quantity, style, spec, symptom, occasion, and so on), in this message or an earlier turn about this same request. false for a bare mention with nothing to narrow on ("I need a phone", "looking for a tailor"). A location on its own is NOT a detail for this purpose — location is handled separately.
 
 Call classifyScope exactly once, with no other text and no other tool call.`;
 }

@@ -34,10 +34,16 @@ export function VendorResultCard({
   // intent). Defaults true for every other context, where this card is the
   // only place a chat CTA exists at all.
   showChatButton = true,
+  // "Velte's picks" chip labels for THIS card (e.g. ["Top pick",
+  // "Nearest"]) — computed by ConversationTurnView from the turn's
+  // SearchRecommendation, empty/omitted for every card the comparison
+  // didn't single out (and on turns with no recommendation at all).
+  pickBadges,
 }: {
   match: VendorMatch;
   showViewStore?: boolean;
   showChatButton?: boolean;
+  pickBadges?: string[];
 }) {
   const symbol = match.currency === "USD" ? "$" : "₦";
   const isRange = match.priceMax != null && match.priceMax > match.price;
@@ -100,6 +106,27 @@ export function VendorResultCard({
           />
         ) : (
           <StoreIcon size={28} className="text-gray-300" />
+        )}
+        {pickBadges && pickBadges.length > 0 && (
+          // Overlaid on the photo, e-commerce style, so the content block's
+          // own tight name/price grid stays untouched. "Top pick" gets the
+          // solid accent; the rest stay quiet so a card carrying two chips
+          // doesn't shout twice.
+          <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+            {pickBadges.map((label) => (
+              <span
+                key={label}
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm",
+                  label === "Top pick"
+                    ? "bg-orange-500 text-white"
+                    : "bg-white/95 text-orange-600 border border-orange-100",
+                )}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
         )}
         {hasGallery && (
           <>

@@ -79,9 +79,15 @@ export async function searchStoresCore(
   {
     buyerLocation,
     push,
+    locationLabel,
   }: {
     buyerLocation?: BuyerLocation;
     push?: (candidates: string[]) => void;
+    // DISPLAY ONLY (Phase 5) — the reverse-geocoded name of the buyer's
+    // own coordinates, so the status line can say "near Independence
+    // Layout, Enugu" instead of "your area". Never the `location` search
+    // parameter: it doesn't re-geocode and can't change what's searched.
+    locationLabel?: string;
   } = {},
 ): Promise<
   SearchStoresCoreResult | { error: "location-not-found"; message: string }
@@ -89,7 +95,7 @@ export async function searchStoresCore(
   push?.(
     searchingPhrase(
       businessType,
-      location ?? (buyerLocation ? "your area" : undefined),
+      location ?? (buyerLocation ? (locationLabel ?? "your area") : undefined),
     ),
   );
 
@@ -190,6 +196,8 @@ export async function searchStoresCore(
 export function searchStoresTool(
   buyerLocation?: BuyerLocation,
   push?: (candidates: string[]) => void,
+  // Display-only place label for the status line — see searchStoresCore.
+  locationLabel?: string,
 ) {
   return tool({
     description:
@@ -198,7 +206,7 @@ export function searchStoresTool(
     execute: async ({ businessType, location, radiusKm }) =>
       searchStoresCore(
         { businessType, location, radiusKm },
-        { buyerLocation, push },
+        { buyerLocation, push, locationLabel },
       ),
   });
 }

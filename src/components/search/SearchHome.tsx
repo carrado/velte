@@ -9,11 +9,23 @@ import { cn } from "@/lib/utils";
 import { generateUUID } from "@/lib/uuid";
 import { buildProductTerm } from "@/lib/productTerm";
 import { runSearchStream } from "@/lib/searchStream";
+import { dedupeFinalEventStores } from "@/lib/searchTurnSnapshot";
+import {
+  getSearchDeviceId,
+  getStoredConversationId,
+  storeConversationId,
+  clearStoredConversationId,
+} from "@/lib/searchConversation";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { lookupCopiedImage, hashBlob } from "@/lib/copiedImageRegistry";
 import { VendorResultCard } from "@/components/search/VendorResultCard";
+import {
+  RecommendationPicks,
+  pickBadgesFor,
+} from "@/components/search/RecommendationPicks";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
+import { ExternalOfferCard } from "@/components/search/ExternalOfferCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
 import { CardCarousel } from "@/components/search/CardCarousel";
 import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
@@ -50,8 +62,12 @@ import type {
   MatchTier,
   NearbyBusiness,
   SearchHistoryTurn,
+  ExternalOffer,
   SearchItemOutcome,
+  SearchRecommendation,
   StoreMatch,
+  StoredConversation,
+  StoredSearchTurn,
   StoreProductItem,
   VendorMatch,
 } from "@/types/search";
@@ -327,7 +343,65 @@ function createLoadingTurn(
     awaitingBuyerRequestReply: false,
     buyerRequestMatchQuery: null,
     contextNote: null,
+    recommendation: null,
+    externalOffers: [],
     error: null,
+  };
+}
+
+// A rehydrated turn arrives fully "done" — no status shimmer, no error, no
+// live widgets' side effects (identity/name capture never resume across a
+// refresh; the buyer just types again). The stored imageUrl doubles as the
+// preview: the original blob URL died with the old tab, but the Cloudinary
+// URL renders in the same <img> slot.
+function storedTurnToConversationTurn(
+  stored: StoredSearchTurn,
+): ConversationTurn {
+  return {
+    ...stored,
+    id: generateUUID(),
+    imagePreview: stored.imageUrl,
+    phase: "done",
+    status: "",
+    error: null,
+    persisted: true,
+  };
+}
+
+// The persisted form of a CLIENT-resolved turn (background items and their
+// clarify rounds — /api/search persists its own turns server-side and never
+// sees these). An explicit field pick, not a spread: the client-only fields
+// (id, phase, status, ...) must never leak into the stored snapshot.
+function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
+  return {
+    query: turn.query,
+    imageUrl: turn.imageUrl,
+    reply: turn.reply,
+    toolCalled: turn.toolCalled,
+    clarification: turn.clarification,
+    backgroundClarifyItem: turn.backgroundClarifyItem,
+    products: turn.products,
+    weakProducts: turn.weakProducts,
+    stores: turn.stores,
+    furtherStores: turn.furtherStores,
+    storesQuery: turn.storesQuery,
+    productStores: turn.productStores,
+    storeServices: turn.storeServices,
+    productsMatchTier: turn.productsMatchTier,
+    storesMatchTier: turn.storesMatchTier,
+    productsMatchQuality: turn.productsMatchQuality,
+    storesMatchQuality: turn.storesMatchQuality,
+    externalStoreSuggestions: turn.externalStoreSuggestions,
+    vendorProducts: turn.vendorProducts,
+    vendorProductsStore: turn.vendorProductsStore,
+    buyerRequestOffer: turn.buyerRequestOffer,
+    buyerRequestOffered: turn.buyerRequestOffered,
+    interimReplies: turn.interimReplies,
+    awaitingBuyerRequestReply: turn.awaitingBuyerRequestReply,
+    buyerRequestMatchQuery: turn.buyerRequestMatchQuery,
+    contextNote: turn.contextNote,
+    recommendation: turn.recommendation,
+    externalOffers: turn.externalOffers,
   };
 }
 
@@ -597,9 +671,13 @@ function FormattedReply({ text }: { text: string }) {
 }
 
 // One exchange in the conversation: the buyer's message (+ optional photo
-// preview) and everything the search produced for it. Lives only in this
-// component's React state — never localStorage, never a database. A page
-// refresh loses the whole conversation by design (see SearchHistoryTurn).
+// preview) and everything the search produced for it. Rendered from this
+// component's React state; since Phase 1 (docs/velte-ai-search-flow-plan.md)
+// completed turns are ALSO persisted server-side (StoredSearchTurn — the
+// same shape minus the client-only fields below) and rehydrated back into
+// this state after a refresh. Main /api/search turns are persisted by the
+// route itself; client-resolved turns (background items) by this
+// component's own persist effect; ephemeral turns (see that flag) never.
 interface ConversationTurn {
   id: string;
   query: string;
@@ -698,6 +776,15 @@ interface ConversationTurn {
   // "what do they sell" back to a specific store — never rendered to the
   // buyer, and never anything beyond what's already visible on the cards.
   contextNote: string | null;
+  // "Velte's picks" over this turn's products (see SearchRecommendation) —
+  // badge chips on the matching cards + the RecommendationPicks summary
+  // above the carousel. Null on turns that didn't qualify (0–1 products)
+  // or where the comparison call failed; rendering degrades to plain cards.
+  recommendation: SearchRecommendation | null;
+  // Off-Velte offers, only ever present on a genuine dead end (Phase 4).
+  // Rendered in their own clearly-labelled section with an outbound link
+  // and NO chat CTA — there's no vendor relationship behind these.
+  externalOffers: ExternalOffer[];
   error: string | null;
   // True only when the buyer hit Stop mid-search (handleStop/onAbort) —
   // per explicit request, a stopped turn shows no wrap-up bubble of its
@@ -706,6 +793,19 @@ interface ConversationTurn {
   // flips to "done", same as it would for any other turn. Omitted/false
   // for every ordinary turn.
   stopped?: boolean;
+  // True for the identity-capture exchange's turns (appendIdentityTurn) —
+  // the buyer's own phone number and OTP code rendered as chat bubbles.
+  // NEVER persisted into the server-side conversation (the persist effect
+  // skips them): a shopping conversation is worth storing, a phone number
+  // and a one-time code are not. Omitted/false for every ordinary turn.
+  ephemeral?: boolean;
+  // True for a turn already written into the persisted conversation —
+  // either by /api/search itself (set in onFinal when the final event
+  // carries a conversationId), or by this component's own persist effect
+  // once its POST succeeds, or because the turn was rehydrated FROM the
+  // server in the first place. The persist effect only ever touches turns
+  // where this is still false.
+  persisted?: boolean;
 }
 
 function ConversationTurnView({
@@ -1014,11 +1114,28 @@ function ConversationTurnView({
                             )}
                           </h2>
                         )}
+                        {/* The WHY half of the recommendation layer — the
+                            chips on the cards below say which, this says
+                            why (see RecommendationPicks). Absent whenever
+                            the turn has no recommendation, and the cards
+                            render exactly as they always did. */}
+                        {turn.recommendation && (
+                          <RecommendationPicks
+                            recommendation={turn.recommendation}
+                            products={turn.products}
+                          />
+                        )}
                         <CardCarousel
                           items={turn.products}
                           getKey={(match) => match.productId}
                           renderItem={(match) => (
-                            <VendorResultCard match={match} />
+                            <VendorResultCard
+                              match={match}
+                              pickBadges={pickBadgesFor(
+                                match.productId,
+                                turn.recommendation,
+                              )}
+                            />
                           )}
                         />
                       </div>
@@ -1148,7 +1265,8 @@ function ConversationTurnView({
                       </div>
                     )}
                   </>
-                ) : turn.externalStoreSuggestions.length > 0 &&
+                ) : (turn.externalStoreSuggestions.length > 0 ||
+                    turn.externalOffers.length > 0) &&
                   !turn.buyerRequestOffered ? (
                   // No Velte vendor matched — real nearby businesses via Google
                   // Places (searchStores Tier 5), visibly distinct from an actual
@@ -1174,13 +1292,34 @@ function ConversationTurnView({
                     <div className={AI_MESSAGE_BUBBLE_CLASS}>
                       <FormattedReply text={turn.reply} />
                     </div>
-                    <CardCarousel
-                      items={turn.externalStoreSuggestions}
-                      getKey={(match) => match.name + match.address}
-                      renderItem={(match) => (
-                        <ExternalBusinessCard match={match} />
-                      )}
-                    />
+                    {turn.externalStoreSuggestions.length > 0 && (
+                      <CardCarousel
+                        items={turn.externalStoreSuggestions}
+                        getKey={(match) => match.name + match.address}
+                        renderItem={(match) => (
+                          <ExternalBusinessCard match={match} />
+                        )}
+                      />
+                    )}
+                    {/* Phase 4 — off-Velte offers, headed explicitly so
+                        there's no chance of reading them as Velte
+                        listings. Rendered BELOW nearby businesses when
+                        both exist: a real shop the buyer can walk into is
+                        the better answer here than an online link. */}
+                    {turn.externalOffers.length > 0 && (
+                      <div className="space-y-3">
+                        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          Available online — not on Velte
+                        </h2>
+                        <CardCarousel
+                          items={turn.externalOffers}
+                          getKey={(offer) => offer.id}
+                          renderItem={(offer) => (
+                            <ExternalOfferCard offer={offer} />
+                          )}
+                        />
+                      </div>
+                    )}
                   </>
                 ) : turn.buyerRequestOffer ? (
                   // createBuyerRequest ran this turn (see systemPrompt.ts) —
@@ -1272,10 +1411,13 @@ function ConversationTurnView({
               "text" excluded too, per explicit request — the composer's
               own big, auto-resizing textarea answers it directly now (see
               pendingTextClarification's own comment) instead of this
-              widget's separate, fixed-height input. */}
+              widget's separate, fixed-height input — EXCEPT a skippable
+              one (the bare-query attribute gate), which mounts just for
+              its skip pill; typing still answers through the composer. */}
                 {turn.clarification &&
                   turn.clarification.kind !== "name" &&
-                  turn.clarification.kind !== "text" &&
+                  (turn.clarification.kind !== "text" ||
+                    turn.clarification.skippable === true) &&
                   isLatest && (
                     <ClarificationPrompt
                       clarification={turn.clarification}
@@ -1401,6 +1543,198 @@ export function SearchHome() {
   // route.ts's own RECENT_STATUS_MEMORY cap.
   const shownStatusesRef = useRef<string[]>([]);
 
+  // Persisted-conversation identity (Phase 1,
+  // docs/velte-ai-search-flow-plan.md): the stable anonymous deviceId and
+  // the current conversationId, both mirrored from localStorage (see
+  // src/lib/searchConversation.ts). Plain refs, not state — they ride
+  // along on requests and never render. conversationIdRef is adopted from
+  // each turn's final event (the server creates/rolls conversations
+  // itself); when localStorage is unavailable both stay null and every
+  // search runs exactly like the old stateless flow.
+  const deviceIdRef = useRef<string | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
+
+  // True only while a stored conversation is known to exist AND its turns
+  // are still being fetched — the render below swaps the idle hero for a
+  // dedicated "loading your conversation" screen (the Velte avatar +
+  // shimmer) so a returning buyer never sees the fresh-start greeting
+  // flash up and then get replaced by their old thread. Starts false (the
+  // server-rendered HTML has no localStorage to check — a hydration
+  // mismatch is worse than the one-frame hero flash this accepts) and is
+  // cleared on EVERY terminal path of the rehydrate effect, success or
+  // not.
+  const [rehydrating, setRehydrating] = useState(false);
+
+  // The refresh rehydrate — runs once on mount (ref-guarded against React
+  // StrictMode's double-invoke): loads the stored conversation's turn
+  // snapshots and rebuilds the thread from them, but only into an EMPTY
+  // turns list — if the buyer already started typing/searching before this
+  // resolved, their live session wins and the old thread is left alone.
+  // Every failure here is silent: rehydrate is a convenience, and a fresh
+  // session is the graceful floor. A 404 means the conversation is stale
+  // or unknown — clear the stored id so the next search starts fresh.
+  const rehydrateStartedRef = useRef(false);
+  useEffect(() => {
+    if (rehydrateStartedRef.current) return;
+    rehydrateStartedRef.current = true;
+    deviceIdRef.current = getSearchDeviceId();
+    const deviceId = deviceIdRef.current;
+    const storedId = getStoredConversationId();
+    // chat/layout.tsx's pre-paint script may have set the resume gate
+    // attribute (static loader shown, hero hidden — see globals.css's
+    // .velte-resume-* rules). Every path below settles it: the sync
+    // returns drop it immediately (nothing to resume after all), the
+    // fetch's finally drops it once `rehydrating` state has taken over
+    // rendering.
+    const dropResumeGate = () =>
+      document.documentElement.removeAttribute("data-velte-resume");
+    if (!deviceId || !storedId) {
+      dropResumeGate();
+      return;
+    }
+    // A hero-composer handoff (?q=&auto=1 — see the mount effect below
+    // that fires it) is a FRESH shopping intent: rehydrating the old
+    // thread underneath it would race the auto-search, and either way the
+    // buyer meant to start something new. Drop the stored conversation so
+    // the auto-search opens a fresh one, instead of invisibly continuing
+    // the old thread's server-side history.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("q") && params.get("auto") === "1") {
+      clearStoredConversationId();
+      dropResumeGate();
+      return;
+    }
+    conversationIdRef.current = storedId;
+    // A stored id means there WAS a chat — hold the hero back and show the
+    // loading screen until the fetch settles (see rehydrating's comment).
+    setRehydrating(true);
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/search/conversation?id=${encodeURIComponent(storedId)}&deviceId=${encodeURIComponent(deviceId)}`,
+        );
+        if (!res.ok) {
+          if (res.status === 400 || res.status === 404) {
+            clearStoredConversationId();
+            conversationIdRef.current = null;
+          }
+          return;
+        }
+        const data = (await res.json()) as {
+          conversation?: StoredConversation;
+        };
+        const stored = data.conversation?.turns ?? [];
+        if (!stored.length) return;
+        // Repeat avoidance survives the refresh too (Phase 1 follow-up) —
+        // seeded before any new search can run, so the first post-refresh
+        // status line already steers around what this buyer just saw.
+        shownStatusesRef.current = (
+          data.conversation?.recentStatuses ?? []
+        ).slice(-RECENT_STATUS_MEMORY);
+        // Phase 5's whole point: restore the location the buyer already
+        // settled — a shared position OR a deliberate decline — so a
+        // resumed conversation never asks the same question twice. Seeded
+        // directly, NOT through rememberBuyerLocation: this is state
+        // coming back FROM the server, so re-marking it dirty (and
+        // re-geocoding a name it already has) would just echo it straight
+        // back on the next turn.
+        const storedLocation = data.conversation?.buyerLocation;
+        if (storedLocation) {
+          if (storedLocation.lat != null && storedLocation.lng != null) {
+            buyerLocationRef.current = {
+              lat: storedLocation.lat,
+              lng: storedLocation.lng,
+            };
+          }
+          locationDeclinedRef.current = storedLocation.declined;
+          locationPlaceNameRef.current = storedLocation.placeName;
+        }
+        setTurns((prev) => {
+          if (prev.length) return prev;
+          // Resume a capture mode the refresh interrupted: a conversation
+          // whose LAST stored turn is still waiting on the buyer's
+          // identity (phone/OTP always restarts at "phone" — any code in
+          // flight died with the old session) or their name swaps the
+          // composer straight back into that mode, instead of leaving the
+          // buyer to type into a textarea that routes nowhere useful.
+          // Scheduled from inside the updater — impure by the letter of
+          // the law, but it's the only place that knows rehydrate actually
+          // APPLIED (an already-started live session returns `prev`
+          // untouched above, and must not have its composer hijacked);
+          // both setters are idempotent, so StrictMode's double-invoke of
+          // this updater is harmless.
+          const last = stored[stored.length - 1];
+          queueMicrotask(() => {
+            if (last?.buyerRequestOffer?.status === "needs_identity") {
+              setIdentityCapture({
+                offer: last.buyerRequestOffer,
+                imageUrl: last.imageUrl,
+                matchQuery: last.buyerRequestMatchQuery,
+                step: "phone",
+                phone: "",
+              });
+              setIdentityValue("");
+            } else if (last?.clarification?.kind === "name") {
+              setNameCapture({ question: last.clarification.question });
+              setNameValue("");
+            }
+          });
+          return stored.map(storedTurnToConversationTurn);
+        });
+      } catch {
+        /* fresh session — see comment above */
+      } finally {
+        // Order matters only loosely here: `rehydrating` is still true, so
+        // React is rendering the state-driven loader — the static twin the
+        // attribute controls is already unmounted, making this removal
+        // invisible; the state flip right after is what actually reveals
+        // the hero/thread.
+        dropResumeGate();
+        setRehydrating(false);
+      }
+    })();
+  }, []);
+
+  // The client-side persist path (see ConversationTurn's own comment):
+  // main /api/search turns arrive already persisted (onFinal marks them),
+  // so what's left here is exactly the client-resolved turns — background
+  // items and their clarify rounds — plus any main turn whose server-side
+  // ensure failed. Turns are marked persisted BEFORE the POST resolves so
+  // a re-render mid-flight can't double-send; a failed POST just means
+  // this turn lives only in this tab's history fallback, same as before
+  // Phase 1.
+  useEffect(() => {
+    const conversationId = conversationIdRef.current;
+    const deviceId = deviceIdRef.current;
+    if (!conversationId || !deviceId) return;
+    const pending = turns.filter(
+      (t) =>
+        t.phase === "done" &&
+        !t.error &&
+        !t.stopped &&
+        !t.ephemeral &&
+        !t.persisted,
+    );
+    if (!pending.length) return;
+    const pendingIds = new Set(pending.map((t) => t.id));
+    setTurns((prev) =>
+      prev.map((t) => (pendingIds.has(t.id) ? { ...t, persisted: true } : t)),
+    );
+    for (const turn of pending) {
+      void fetch("/api/search/conversation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId,
+          deviceId,
+          turn: turnToStoredSnapshot(turn),
+        }),
+      }).catch(() => {
+        /* see comment above — the in-tab history fallback covers this */
+      });
+    }
+  }, [turns]);
+
   // The MAIN search's own in-flight controller (ChatGPT-style Stop button —
   // see handleStop/runSearchIntoTurn) — one at a time by construction: the
   // composer is disabled (isSending) for the whole time one is set, so a
@@ -1463,6 +1797,51 @@ export function SearchHome() {
   // what submitWithLocationGate checks to know location has already been
   // resolved one way or the other, so it never asks twice.
   const locationDeclinedRef = useRef(false);
+  // The reverse-geocoded label for buyerLocationRef ("Independence Layout,
+  // Enugu") — display only, never used for matching (that always uses the
+  // coordinates). Resolved once, in the background, the first time a
+  // position becomes known (see resolveLocationPlaceName), persisted with
+  // the conversation, and restored on rehydrate. Null whenever geocoding
+  // hasn't finished or couldn't name the point — every use site treats it
+  // as optional garnish.
+  const locationPlaceNameRef = useRef<string | null>(null);
+  // Set once a location change is worth persisting, cleared after the next
+  // request carries it — keeps ordinary turns from re-sending unchanged
+  // location state on every message.
+  const locationDirtyRef = useRef(false);
+
+  // Best-effort reverse geocode of a freshly-resolved position. Never
+  // awaited by anything on the search path: a name is a nicety, and the
+  // search itself has always run on coordinates alone.
+  async function resolveLocationPlaceName(location: BuyerLocation) {
+    try {
+      const res = await fetch(
+        `/api/geo/reverse?lat=${location.lat}&lng=${location.lng}`,
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as { address?: string };
+      const address = data.address?.trim();
+      if (!address) return;
+      locationPlaceNameRef.current = address;
+      locationDirtyRef.current = true;
+    } catch {
+      /* unnamed location — see comment above */
+    }
+  }
+
+  // Every place location state changes, in one helper so the "remember
+  // this" bookkeeping can't be forgotten at a call site: cache it, mark it
+  // for persistence, and start naming it.
+  function rememberBuyerLocation(location: BuyerLocation) {
+    buyerLocationRef.current = location;
+    locationDirtyRef.current = true;
+    void resolveLocationPlaceName(location);
+  }
+
+  function rememberLocationDeclined() {
+    locationDeclinedRef.current = true;
+    locationDirtyRef.current = true;
+  }
 
   // Drives the composer's own phone/OTP identity-capture mode (2026-08-19
   // redesign, replacing BuyerRequestOfferWidget's old inline
@@ -2080,6 +2459,10 @@ export function SearchHome() {
         storesMatchQuality: undefined,
         externalStoreSuggestions: [],
         buyerRequestOffered: false,
+        // Attached by the resolve-item route on ≥2 results (see that
+        // route's own comment) — a background item's picks render exactly
+        // like a main turn's, and persist with the turn the same way.
+        recommendation: outcome.recommendation,
       });
       settleBackgroundItem(turnId, "resolved", label);
       return;
@@ -2282,6 +2665,13 @@ export function SearchHome() {
     const controller = new AbortController();
     searchAbortRef.current = controller;
 
+    // Read (and clear) the location-changed flag BEFORE the call rather
+    // than after: the request body below captures its value now, and a
+    // place name that finishes geocoding mid-flight should mark itself
+    // dirty again for the NEXT turn instead of being swallowed here.
+    const sendLocationState = locationDirtyRef.current;
+    locationDirtyRef.current = false;
+
     await runSearchStream(
       {
         message,
@@ -2294,6 +2684,21 @@ export function SearchHome() {
         history,
         recentStatuses: shownStatusesRef.current,
         isContinuation,
+        // Persisted-conversation identity — undefined (stateless flow)
+        // when localStorage is unavailable. The server treats a stale or
+        // unknown conversationId as "start a fresh one," never an error.
+        deviceId: deviceIdRef.current ?? undefined,
+        conversationId: conversationIdRef.current ?? undefined,
+        // Phase 5 — only sent on the turn where location state actually
+        // changed (the flag is cleared right after), so an ordinary
+        // message doesn't re-send the same thing every time. The server
+        // merges, so a missing field never erases what's stored.
+        ...(sendLocationState
+          ? {
+              locationDeclined: locationDeclinedRef.current || undefined,
+              locationPlaceName: locationPlaceNameRef.current ?? undefined,
+            }
+          : {}),
       },
       {
         onStatus: (text) => {
@@ -2306,38 +2711,25 @@ export function SearchHome() {
           appendInterimReply(turnId, text);
         },
         onFinal: (event) => {
-          // A dual-intent query (e.g. "a phone repair shop that also sells
-          // chargers") can call both tools and return the same vendor in
-          // both lists — drop it from stores since its product card
-          // already names the vendor, rather than showing it twice with no
-          // link between the two cards.
-          const productVendorIds = new Set(
-            event.products.map((p) => p.vendorId),
-          );
-          const dedupedStores = event.stores.filter(
-            (s) => !productVendorIds.has(s.vendorId),
-          );
-          const dedupedFurtherStores = event.furtherStores.filter(
-            (s) => !productVendorIds.has(s.vendorId),
-          );
-          // A machine-only breadcrumb for a LATER turn's history — lets the
-          // model resolve a future "what do they sell" back to this exact
-          // store via getVendorProducts, without needing the buyer-facing
-          // reply text to ever name the vendor (it deliberately doesn't).
-          // Includes productStores too (guaranteed disjoint from
-          // dedupedStores by vendor) — a store surfaced only via its
-          // matched product's own card should still resolve the same way.
-          const allStoresFound = [
-            ...dedupedStores,
-            ...dedupedFurtherStores,
-            ...event.productStores,
-          ];
-          const contextNote = allStoresFound.length
-            ? `[Stores found: ${allStoresFound
-                .map((s) => `"${s.name}" (handle: ${s.handle})`)
-                .join(", ")}]`
-            : null;
+          // Same-vendor dedup between the product and store lists + the
+          // machine-only [Stores found: …] history breadcrumb — shared
+          // with route.ts's own turn persistence (which must store exactly
+          // what this renders), see dedupeFinalEventStores' comment.
+          const {
+            stores: dedupedStores,
+            furtherStores: dedupedFurtherStores,
+            contextNote,
+          } = dedupeFinalEventStores(event);
+          // The server created/continued a persisted conversation for this
+          // turn — adopt its id for every later call (and the refresh
+          // rehydrate). The turn itself was already persisted server-side,
+          // so the client persist effect must skip it.
+          if (event.conversationId) {
+            conversationIdRef.current = event.conversationId;
+            storeConversationId(event.conversationId);
+          }
           updateTurn(turnId, {
+            persisted: Boolean(event.conversationId),
             phase: "done",
             reply: event.reply,
             toolCalled: event.toolCalled,
@@ -2361,6 +2753,8 @@ export function SearchHome() {
             awaitingBuyerRequestReply: event.awaitingBuyerRequestReply,
             buyerRequestMatchQuery: event.buyerRequestMatchQuery,
             contextNote,
+            recommendation: event.recommendation,
+            externalOffers: event.externalOffers,
           });
           // A buyer who already has a verified session (a prior visit's
           // identity cookie still valid) skips the composer's own
@@ -2644,7 +3038,7 @@ export function SearchHome() {
     ]);
 
     const silentLocation = await trySilentGeolocation();
-    if (silentLocation) buyerLocationRef.current = silentLocation;
+    if (silentLocation) rememberBuyerLocation(silentLocation);
     await runSearchIntoTurn(turnId, message, currentImageUrl);
   }
 
@@ -2827,7 +3221,7 @@ export function SearchHome() {
     // own comment on why it no longer generates this clarification itself)
     // — so submitWithLocationGate never asks again this session either way.
     if (lastTurn?.clarification?.kind === "location") {
-      locationDeclinedRef.current = true;
+      rememberLocationDeclined();
     }
     // A decline of item A's own reach-out offer is just as much a
     // conclusion as an actual created request — if a deferred item is
@@ -2866,7 +3260,7 @@ export function SearchHome() {
   // moment that doesn't depend on anything staying mounted (the widget
   // itself unmounts the instant this appends a new turn).
   function handleLocationShared(location: BuyerLocation) {
-    buyerLocationRef.current = location;
+    rememberBuyerLocation(location);
     toast.success("Got your location!");
     // `isContinuation` — this canned string stands in for the buyer's
     // action, not a fresh search query (see SearchRequestBody's own
@@ -2886,7 +3280,13 @@ export function SearchHome() {
     const turnId = generateUUID();
     setTurns((prev) => [
       ...prev,
-      createLoadingTurn(turnId, query, null, null, status),
+      // `ephemeral` — the buyer's phone number / OTP code must never be
+      // written into the persisted conversation (see the flag's own
+      // comment on ConversationTurn).
+      {
+        ...createLoadingTurn(turnId, query, null, null, status),
+        ephemeral: true,
+      },
     ]);
     return turnId;
   }
@@ -3006,6 +3406,15 @@ export function SearchHome() {
             [],
           ),
           externalStoreSuggestions,
+          // The exchange's terminal turn becomes persistable (Phase 1
+          // follow-up): the buyer's typed OTP code is replaced with a
+          // sanitized line (also nicer than leaving a bare code as their
+          // bubble) and `ephemeral` is lifted so the persist effect stores
+          // it — without this, the stored conversation still ends on the
+          // needs_identity turn and a refresh would wrongly re-open
+          // phone/OTP capture for a request that already resolved.
+          query: "Verified my WhatsApp number",
+          ephemeral: false,
         });
       } else {
         updateTurn(turnId, {
@@ -3017,6 +3426,9 @@ export function SearchHome() {
             requestId: request.id,
             description: offer.description,
           },
+          // Same as the no_match branch above — see that comment.
+          query: "Verified my WhatsApp number",
+          ephemeral: false,
         });
       }
       concludeCurrentItemFlow();
@@ -3095,6 +3507,22 @@ export function SearchHome() {
     hasPendingClarification && lastTurn.clarification?.kind === "text";
 
   const collapsed = turns.length > 0;
+
+  // Shared by the state-driven resume loader AND its pre-hydration static
+  // twin below (see the render's own comments) — one definition so the
+  // hydration handover between the two is pixel-identical.
+  const resumeLoaderContent = (
+    <div className="flex flex-col items-center gap-4">
+      <img
+        src="/velte_ai_assistant.png"
+        alt="Velte"
+        className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover shadow-md shadow-gray-300/40 animate-pulse"
+      />
+      <span className="status-shimmer text-[15px] font-medium">
+        Loading your conversation…
+      </span>
+    </div>
+  );
 
   // One shared form, placed in different structural positions below —
   // centered on the idle hero screen, or pinned to the bottom of the
@@ -3337,31 +3765,57 @@ export function SearchHome() {
     <div className="h-full bg-white flex flex-col overflow-hidden relative">
       <BuyerInstallPrompt />
 
-      {!collapsed ? (
+      {rehydrating ? (
+        // A stored conversation exists and its turns are still loading (see
+        // rehydrating's own comment) — a returning buyer sees Velte
+        // "remembering" their chat, never the fresh-start greeting flashing
+        // up first. Same avatar asset and status-shimmer treatment every
+        // in-progress moment in this app already uses, so it reads as one
+        // more of those, not a distinct splash screen.
         <main className="flex-1 flex flex-col items-center justify-center px-5">
-          {/* The idle screen reads as Velte itself greeting the buyer — same
+          {resumeLoaderContent}
+        </main>
+      ) : !collapsed ? (
+        <>
+          {/* The PRE-HYDRATION twin of the loader above: this <main> is in
+              the server-rendered HTML (display:none by default) purely so
+              chat/layout.tsx's pre-paint script + globals.css's
+              .velte-resume-* rules can swap it in for the hero before
+              React ever loads — the state-driven branch above takes over
+              seamlessly at hydration (identical content, so nothing
+              visibly changes), and the rehydrate effect removes the root
+              attribute once the fetch settles. Deliberately no `flex`
+              utility here: the two CSS gate rules own `display` for this
+              element outright, and a competing utility would turn which
+              one wins into a stylesheet-order question. */}
+          <main className="velte-resume-loader flex-1 flex-col items-center justify-center px-5">
+            {resumeLoaderContent}
+          </main>
+          <main className="velte-resume-hero flex-1 flex flex-col items-center justify-center px-5">
+            {/* The idle screen reads as Velte itself greeting the buyer — same
               avatar-left, bubble-right chat layout as a real conversation
               turn (see ConversationTurnView's own `items-start gap-3` row),
               not a centered marketing headline. Everything Velte "says" —
               the greeting AND the explanation — lives inside the one
               bubble, same as a single real chat message would hold both. */}
-          <div className="flex items-start gap-3 sm:gap-4 mb-6 max-w-xl w-full text-left">
-            <img
-              src="/velte_ai_assistant.png"
-              alt="Velte"
-              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover shadow-md shadow-gray-300/40 shrink-0"
-            />
-            <div className="bg-white border border-gray-100 shadow-sm rounded-3xl rounded-tl-lg px-4 py-3 sm:px-5 sm:py-4 flex-1 min-w-0">
-              <h1 className="text-[16px] sm:text-lg font-semibold text-[#023337] leading-snug">
-                {VELUX_GREETING}
-              </h1>
-              <p className="text-gray-500 text-sm sm:text-[15px] leading-relaxed mt-1.5">
-                {VELUX_SUBTEXT}
-              </p>
+            <div className="flex items-start gap-3 sm:gap-4 mb-6 max-w-xl w-full text-left">
+              <img
+                src="/velte_ai_assistant.png"
+                alt="Velte"
+                className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover shadow-md shadow-gray-300/40 shrink-0"
+              />
+              <div className="bg-white border border-gray-100 shadow-sm rounded-3xl rounded-tl-lg px-4 py-3 sm:px-5 sm:py-4 flex-1 min-w-0">
+                <h1 className="text-[16px] sm:text-lg font-semibold text-[#023337] leading-snug">
+                  {VELUX_GREETING}
+                </h1>
+                <p className="text-gray-500 text-sm sm:text-[15px] leading-relaxed mt-1.5">
+                  {VELUX_SUBTEXT}
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="w-full max-w-3xl">{inputForm}</div>
-        </main>
+            <div className="w-full max-w-3xl">{inputForm}</div>
+          </main>
+        </>
       ) : (
         <>
           {/* Newest content stays pinned to the bottom (bottomRef) as the

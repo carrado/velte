@@ -5,6 +5,19 @@ export interface BuyerLocation {
   lng: number;
 }
 
+// The conversation's settled location state (Phase 5,
+// docs/velte-ai-search-flow-plan.md) — persisted server-side so a refresh
+// never re-asks for something the buyer already answered, either way they
+// answered it. `lat`/`lng` are null when they chose to search without
+// sharing (`declined`), `placeName` is the reverse-geocoded label for
+// display only (matching always uses the coordinates).
+export interface StoredBuyerLocation {
+  lat: number | null;
+  lng: number | null;
+  placeName: string | null;
+  declined: boolean;
+}
+
 // "local" = within the tight radiusKm of the buyer's coordinates (the
 // common case). "nearby" = a wider same-city radius, only reached when
 // "local" came up empty. "state" = the wider fallback tier still — nothing
@@ -26,9 +39,12 @@ export type MatchQuality = "direct" | "similar" | undefined;
 // result payloads. Kept deliberately lightweight: enough for the model to
 // follow a conversational refinement ("cheaper", "in red instead"), not a
 // full replay of previous results (the assistant's own reply text already
-// avoids restating those, per its system prompt). This lives only in the
-// browser tab's in-memory state (see SearchHome.tsx) — never localStorage,
-// never a database; a refresh loses it entirely, by design.
+// avoids restating those, per its system prompt). Since Phase 1
+// (docs/velte-ai-search-flow-plan.md) the authoritative copy is rebuilt
+// server-side from the persisted conversation's stored turns
+// (staffly-ai-backend, same field shape); the client still sends its own
+// in-memory copy as the fallback the route uses when persistence is
+// unavailable or the client copy is more complete.
 export interface SearchHistoryTurn {
   role: "user" | "assistant";
   content: string;
@@ -55,6 +71,34 @@ export interface SearchHistoryTurn {
   // no_match after an offer that already found sector vendors.
   buyerRequestMatchQuery?: string | null;
 }
+
+// The scope check's read of WHAT the buyer is trying to do (classifyScope's
+// seekingKind) — drives which side of a sector's field pools the bare-query
+// attribute gate asks from, and which sectors detection even considers.
+// "unclear" falls back to the deterministic task-keyword heuristic.
+export type SearchIntentKind = "buy_item" | "get_service" | "unclear";
+
+// How this turn relates to what came before it — the diagram's own "New
+// request or follow-up?" box, made a real signal (2026-08-25). Without it
+// the model saw one flat transcript and folded EVERY earlier answer into
+// every later search: found live, a buyer who had answered "Infinix",
+// "black", "brand new" for one item then asked "Where can I get a phone"
+// and got a search for "Infinix phone black brand new" — attributes from a
+// finished request leaking into a fresh one, and surviving even an
+// explicit correction.
+//
+// "new"        — a different thing is being sought now; the previous
+//                request is over. Attributes/details from it must NOT
+//                carry over (route.ts drops the earlier turns from what
+//                the model sees, rather than trusting it not to reuse
+//                them). Location is deliberately NOT reset: it describes
+//                the buyer, not the request.
+// "refinement" — the same request, adjusted ("in red instead", "cheaper",
+//                "any in Lekki?"). Full context carries over.
+// "answer"     — a direct reply to something Velte just asked (a
+//                clarifying question, a location ask, a reach-out offer).
+//                Full context carries over.
+export type RequestRelation = "new" | "refinement" | "answer";
 
 export interface SearchRequestBody {
   // Either message or imageUrl must be present — a bare photo with no
@@ -87,6 +131,26 @@ export interface SearchRequestBody {
   // from the string alone. Omitted (falsy) for an ordinary composer
   // submission.
   isContinuation?: boolean;
+  // Anonymous per-browser id (localStorage, generateUUID — see
+  // src/lib/searchConversation.ts) — the ownership token for the persisted
+  // conversation. Omitted when localStorage is unavailable, in which case
+  // the whole turn runs exactly like the old stateless flow (no
+  // conversation is created, `history` below is what the model sees).
+  deviceId?: string;
+  // The persisted conversation to continue — absent on the first turn of a
+  // fresh session (the server creates one and hands its id back on the
+  // final event). A stale/unknown id is not an error: the server just
+  // starts a new conversation and returns the new id the same way.
+  conversationId?: string;
+  // Phase 5 — location state to persist onto the conversation alongside
+  // this turn. `locationDeclined` records a deliberate "search without
+  // it" (just as worth remembering as a shared position: it's what stops
+  // the gate re-asking after a refresh), `locationPlaceName` is the
+  // reverse-geocoded label for `buyerLocation` when the client has
+  // resolved one. Both omitted on turns where nothing about location
+  // changed — the server merges rather than overwrites.
+  locationDeclined?: boolean;
+  locationPlaceName?: string;
 }
 
 // Mirrors the shape searchProducts() returns in velte-backend's
@@ -188,6 +252,31 @@ export interface NearbyBusiness {
   distanceKm: number | null;
 }
 
+// A product offer from OUTSIDE Velte (Phase 4,
+// docs/velte-ai-search-flow-plan.md) — surfaced only when Velte itself has
+// nothing, so a dead end ends with somewhere to go instead of an apology.
+// Structurally separate from VendorMatch and never mixed into it: these
+// carry no vendor relationship, no WhatsApp handoff, no wallet lead, and
+// no trust signal of any kind. The UI must always label them as off-Velte.
+//
+// Every field is either taken verbatim from the upstream source or null —
+// `priceText` in particular stays the source's own STRING ("₦620,000",
+// "From ₦89,500") rather than a parsed number, because a mis-parsed price
+// shown next to a real vendor's real price is exactly the kind of confident
+// wrongness the rest of this system is built to prevent.
+export interface ExternalOffer {
+  /** Stable within a turn; used for React keys and dedup only. */
+  id: string;
+  title: string;
+  priceText: string | null;
+  imageUrl: string | null;
+  /** The shop selling it ("Jumia", "Konga", …) as the source reported it. */
+  merchant: string | null;
+  /** Which connector produced this (see ExternalConnector.name). */
+  source: string;
+  url: string;
+}
+
 // One item from getVendorProductsTool — a SPECIFIC, already-identified
 // vendor's own catalog (via the existing public /store/:handle data), not a
 // ranked nearby search. No area/state/distanceKm/vendorName: unlike
@@ -261,7 +350,12 @@ export interface IdentityCapture {
 // always has >=2 options (downgrading to "text" server-side otherwise), so
 // the frontend never has to re-validate that itself.
 export type Clarification =
-  | { kind: "text"; question: string }
+  // `skippable` — set by route.ts's deterministic bare-query attribute gate
+  // (its own code-enforced ask, mirroring the location gate): the buyer can
+  // answer through the composer as usual, OR tap the rendered skip pill to
+  // search immediately with what they already said — details help matching
+  // but must never be a wall (same flexibility the location ask has).
+  | { kind: "text"; question: string; skippable?: boolean }
   | { kind: "choice"; question: string; options: string[] }
   // No options — the frontend renders a one-tap "share my location" action
   // (real browser geolocation) plus a plain decline, not buttons built from
@@ -298,6 +392,38 @@ export type Clarification =
       question: string;
       options: { item: BackgroundSearchItem; label: string }[];
     };
+
+// "Velte's picks" over one turn's product results (Phase 3,
+// docs/velte-ai-search-flow-plan.md) — produced by pickRecommendation
+// (src/lib/server/ai/recommendResults.ts) ONLY when a turn has ≥2 real
+// product results. The model chooses bestOverall/bestValue and writes the
+// one-line whys; `nearestId` is CODE-computed from distanceKm, never the
+// model's call. Ids are verified against the actual result set before this
+// ever leaves the server — a null field just means that pick doesn't apply
+// this turn (e.g. bestValue duplicating bestOverall is dropped as
+// redundant). Null as a whole when the turn doesn't qualify or the extra
+// LLM call failed — rendering must degrade to plain cards, never block on
+// this.
+export interface SearchRecommendation {
+  // The model's own short conversational lead-in for the picks block
+  // ("Between these, here's where I'd lean:") — written fresh each turn so
+  // it reads like the same voice as the reply, never a canned label.
+  // Sanitized server-side like the reasons; null falls back to a small
+  // client-side pool (see RecommendationPicks).
+  leadIn: string | null;
+  bestOverallId: string | null;
+  bestOverallReason: string | null;
+  bestValueId: string | null;
+  bestValueReason: string | null;
+  nearestId: string | null;
+  // A candidate that's tempting for one reason but carries a real catch —
+  // the "cheaper, but it's a different edition" moment. Held to a stricter
+  // bar than the picks above: a pick is a judgment, this is a CLAIM about a
+  // difference, so the server verifies the id is real AND that the flagged
+  // listing actually differs from the top pick before this survives (see
+  // differsMeaningfully). Null whenever there's no honest catch to name.
+  tradeoff: { productId: string; note: string } | null;
+}
 
 // Build-order step d — /api/search streams a sequence of these as
 // newline-delimited JSON: zero or more "status" events while the model +
@@ -466,6 +592,25 @@ export type SearchStreamEvent =
       // exchange with a name-ask) — the short term create matching should
       // reuse. Null/omitted otherwise.
       buyerRequestMatchQuery: string | null;
+      // Non-null only on a turn with ≥2 product results where the
+      // comparison call succeeded — see SearchRecommendation's own
+      // comment. Renders as badge chips on the matching cards plus a
+      // compact "Velte's picks" summary; plain cards when null.
+      recommendation: SearchRecommendation | null;
+      // Off-Velte product offers (Phase 4) — populated ONLY on a genuine
+      // dead end, and only when a connector is configured. Always rendered
+      // as clearly not-Velte, with no chat handoff: there's no vendor
+      // relationship behind these. Empty on every turn that found anything
+      // on Velte at all.
+      externalOffers: ExternalOffer[];
+      // The persisted conversation this turn was written into (Phase 1 of
+      // docs/velte-ai-search-flow-plan.md) — the client stores this and
+      // sends it back as SearchRequestBody.conversationId on every later
+      // turn, and uses it to rehydrate the conversation after a refresh.
+      // Null when the request carried no deviceId or persistence was
+      // unavailable — the turn still completed normally, it just wasn't
+      // saved.
+      conversationId: string | null;
     }
   | { type: "error"; message: string };
 
@@ -501,6 +646,12 @@ export type SearchItemOutcome =
       products: VendorMatch[];
       matchTier: MatchTier;
       matchQuality: MatchQuality;
+      // Same recommendation layer the main /api/search path runs (Phase 3)
+      // — attached by the resolve-item ROUTE on ≥2 results, never by
+      // resolveSearchItem itself, which stays deliberately LLM-free (see
+      // its own doc comment). Null on thin results or when the comparison
+      // call failed; rendering degrades to plain cards either way.
+      recommendation: SearchRecommendation | null;
       // The term this item actually searched for (searchItemTerm's own
       // output) — mirrors "stores"' own storesQuery below. Lets
       // SearchHome.tsx's resolveBackgroundItem say what was found ("Found a
@@ -551,3 +702,109 @@ export type BackgroundSearchItem =
       location?: string;
       clarified?: boolean;
     };
+
+// ── Persisted conversations (Phase 1, docs/velte-ai-search-flow-plan.md) ──
+//
+// One completed exchange, as stored in staffly-ai-backend's
+// SearchConversation collection: everything SearchHome.tsx needs to
+// re-render the turn after a refresh, which is deliberately the same shape
+// as its own ConversationTurn minus the client-only ephemera (id, phase,
+// status shimmer, blob-URL image preview, error/stopped flags — a failed or
+// stopped turn is never persisted at all). Two writers conform to this one
+// shape: /api/search/route.ts persists its own turn server-side right after
+// emitting the final event (via buildTurnSnapshot), and SearchHome.tsx
+// persists the client-resolved turns the route never sees (background
+// items, their clarify rounds) through the BFF conversation route.
+// Identity-capture turns (phone/OTP) are deliberately NEVER persisted in
+// either direction — see SearchHome.tsx's ephemeral flag.
+export interface StoredSearchTurn {
+  query: string;
+  imageUrl: string | null;
+  reply: string;
+  toolCalled: boolean;
+  clarification: Clarification | null;
+  backgroundClarifyItem: BackgroundSearchItem | null;
+  products: VendorMatch[];
+  weakProducts: VendorMatch[];
+  stores: StoreMatch[];
+  furtherStores: StoreMatch[];
+  storesQuery: string | null;
+  productStores: StoreMatch[];
+  storeServices: VendorMatch[];
+  productsMatchTier: MatchTier;
+  storesMatchTier: MatchTier;
+  productsMatchQuality: MatchQuality;
+  storesMatchQuality: MatchQuality;
+  externalStoreSuggestions: NearbyBusiness[];
+  vendorProducts: StoreProductItem[];
+  vendorProductsStore: {
+    name: string;
+    handle: string;
+    whatsapp: string | null;
+    vendorId: string;
+    avatar: string | null;
+  } | null;
+  buyerRequestOffer: BuyerRequestOffer | null;
+  buyerRequestOffered: boolean;
+  interimReplies: string[];
+  awaitingBuyerRequestReply: boolean;
+  buyerRequestMatchQuery: string | null;
+  contextNote: string | null;
+  recommendation: SearchRecommendation | null;
+  externalOffers: ExternalOffer[];
+}
+
+// The active shopping task's lifecycle — derived server-side (staffly-ai-
+// backend's appendTurn controller, the single writer) from each appended
+// turn's snapshot, never set directly by a client. "handed_off" is part of
+// the contract but nothing sets it yet — wiring it to the WhatsApp-click
+// lead beacon is follow-up work noted in the Phase 1 plan.
+export type ConversationTaskStatus =
+  | "gathering"
+  | "presented"
+  | "dead_end"
+  | "handed_off";
+
+// The structured "what is this buyer currently trying to get done" record
+// (Phase 1 keeps it thin — the raw query + counts; Phase 2's DB-backed
+// attribute schemas are what make it richly structured).
+export interface ConversationTask {
+  status: ConversationTaskStatus;
+  // The buyer's most recent non-continuation message text.
+  query: string;
+  storesQuery: string | null;
+  productCount: number;
+  storeCount: number;
+  // ── The goal sheet ──────────────────────────────────────────────────
+  // What this request is actually after, accumulated across its turns and
+  // wiped when a new request begins. It's what lets "can you find
+  // something cheaper?" work off a real number instead of the model
+  // re-reading its own last reply.
+  //
+  // `itemTerm` is the second of two locks (the first is requestRelation):
+  // a remembered budget only applies while the sheet's own item still
+  // matches what's being asked about, so a ₦700k PS5 ceiling can never
+  // quietly narrow a later fridge search. A price named in the current
+  // message outranks both.
+  itemTerm: string | null;
+  maxBudgetNaira: number | null;
+  attributes: string[];
+  shownProductIds: string[];
+  cheapestSeenNaira: number | null;
+  updatedAt: string;
+}
+
+// GET /api/search/conversation's payload — what SearchHome.tsx rehydrates
+// from after a refresh.
+export interface StoredConversation {
+  conversationId: string;
+  turns: StoredSearchTurn[];
+  task: ConversationTask | null;
+  // Seeds SearchHome's shownStatusesRef on rehydrate so status-phrase
+  // repeat avoidance survives the refresh too.
+  recentStatuses: string[];
+  // Seeds buyerLocationRef/locationDeclinedRef on rehydrate — the Phase 5
+  // payoff: a resumed conversation never re-asks for location.
+  buyerLocation: StoredBuyerLocation | null;
+  lastActiveAt: string;
+}

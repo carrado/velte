@@ -500,6 +500,33 @@ export function noVendorMatchPhrase(hasExternal: boolean): string[] {
 // Sole status line for createBuyerRequestTool's "created" path — the
 // "needs_identity" path shows no status line at all (the frontend takes
 // over with the inline phone+OTP capture instead of a spinner).
+// Shown while route.ts's extra comparison call (pickRecommendation, Phase 3
+// of docs/velte-ai-search-flow-plan.md) is in flight — the search itself is
+// already done at that point, so this narrates the one thing genuinely
+// still happening before the results land.
+export function comparingOptionsPhrase(count: number): string[] {
+  return [
+    `Comparing the ${count} options I found…`,
+    "Weighing up the best options for you…",
+    `Sizing up these ${count} finds against what you asked for…`,
+    "Picking out the strongest matches…",
+    "Comparing prices and distance for you…",
+    "Working out which of these fits you best…",
+  ];
+}
+
+// Shown while Phase 4's external connectors run — only ever on a genuine
+// dead end, so this narrates the honest thing: Velte itself came up empty
+// and we're looking further afield before giving up.
+export function checkingElsewherePhrase(what: string): string[] {
+  return [
+    `Nothing on Velte yet — checking what's available online for "${what}"…`,
+    `Looking beyond Velte for "${what}"…`,
+    `Seeing where else you could get "${what}"…`,
+    `Checking other stores online for "${what}"…`,
+  ];
+}
+
 export function sendingRequestPhrase(): string[] {
   return [
     "Sending your request to businesses that may be able to help…",

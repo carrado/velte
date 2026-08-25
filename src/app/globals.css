@@ -202,6 +202,25 @@ button {
   animation: status-shimmer-sweep 2.2s ease-in-out infinite;
 }
 
+/* ── /chat resume gate — pre-paint hero/loader swap ────────────────────────
+   Keyed off the data-velte-resume root attribute that chat/layout.tsx's
+   inline script sets BEFORE first paint when a stored conversation exists
+   in localStorage (see that script's comment). Until React hydrates and
+   SearchHome's own `rehydrating` state takes over, these rules are what
+   decide which of the two server-rendered <main>s is visible: a returning
+   buyer sees the static resume loader immediately (never the fresh-start
+   greeting flashing first), everyone else sees the hero exactly as before.
+   SearchHome removes the attribute once the rehydrate fetch settles. */
+.velte-resume-loader {
+  display: none;
+}
+html[data-velte-resume] .velte-resume-loader {
+  display: flex;
+}
+html[data-velte-resume] .velte-resume-hero {
+  display: none;
+}
+
 /* ── PWA: splash animation + installed-app chrome ──────────────────────────── */
 
 @keyframes splash-pop {

@@ -58,6 +58,15 @@ const inputSchema = z.object({
     .number()
     .optional()
     .describe("Search radius in km. Defaults to 10 if not specified."),
+  // The diagram's "extract budget" box made structural (Phase 2 follow-on):
+  // a stated ceiling becomes a real, code-enforced price filter in the
+  // retrieval backend — never just prose riding along in the query text.
+  maxBudgetNaira: z
+    .number()
+    .optional()
+    .describe(
+      "The buyer's stated maximum budget, converted to plain Naira — ONLY when their own words state one ('under 200k' → 200000, 'below ₦1.5m' → 1500000, 'between 100k and 150k' → 150000, '50-70k budget' → 70000). Omit entirely when no budget is mentioned — never guess one from the product category, and never treat a target price the buyer hopes to NEGOTIATE DOWN TO as a hard cap unless they phrase it as a limit.",
+    ),
 });
 
 export interface SearchProductsCoreInput {
@@ -65,6 +74,7 @@ export interface SearchProductsCoreInput {
   attributes?: string[];
   location?: string;
   radiusKm?: number;
+  maxBudgetNaira?: number;
 }
 
 export interface SearchProductsCoreResult {
@@ -90,19 +100,33 @@ export interface SearchProductsCoreResult {
  * listing ("Web & Mobile App development") matched the same query directly.
  */
 export async function searchProductsCore(
-  { product, attributes, location, radiusKm }: SearchProductsCoreInput,
+  {
+    product,
+    attributes,
+    location,
+    radiusKm,
+    maxBudgetNaira,
+  }: SearchProductsCoreInput,
   {
     buyerLocation,
     push,
     isImageQuery = false,
     imageUrl,
     weakResultsOut,
+    locationLabel,
   }: {
     buyerLocation?: BuyerLocation;
     push?: (candidates: string[]) => void;
     isImageQuery?: boolean;
     imageUrl?: string;
     weakResultsOut?: { current: VendorMatch[] };
+    // DISPLAY ONLY (Phase 5) — the reverse-geocoded name of the buyer's
+    // own coordinates, used to say "near Independence Layout, Enugu"
+    // instead of the vague "your area" in the status line. Deliberately
+    // NOT the `location` search parameter: this never re-geocodes and
+    // never influences what gets searched, so a wrong or stale label can
+    // only ever cost a slightly-off status phrase, never a wrong search.
+    locationLabel?: string;
   } = {},
 ): Promise<
   SearchProductsCoreResult | { error: "location-not-found"; message: string }
@@ -113,7 +137,7 @@ export async function searchProductsCore(
   push?.(
     searchingPhrase(
       product,
-      location ?? (buyerLocation ? "your area" : undefined),
+      location ?? (buyerLocation ? (locationLabel ?? "your area") : undefined),
     ),
   );
 
@@ -149,6 +173,7 @@ export async function searchProductsCore(
           radiusKm: radiusKm ?? 10,
           isImageQuery,
           imageUrl,
+          maxBudgetNaira,
         },
       }));
   } catch (err) {
@@ -258,15 +283,44 @@ export function searchProductsTool(
   isImageQuery = false,
   imageUrl?: string,
   weakResultsOut?: { current: VendorMatch[] },
+  // Display-only place label for the status line — see searchProductsCore.
+  locationLabel?: string,
+  // The ceiling already established for THIS request (route.ts's goal
+  // sheet, applied only once both its locks pass). Used ONLY when the
+  // model's own call omits a budget: a buyer who set ₦700k three turns ago
+  // shouldn't have it silently forgotten just because this turn's phrasing
+  // didn't repeat it. A budget the model DOES pass always wins — that's
+  // either the buyer restating one or deliberately tightening it ("find me
+  // something cheaper").
+  rememberedBudgetNaira?: number | null,
 ) {
   return tool({
     description:
       "Search the live catalog for a SPECIFIC PRODUCT OR SERVICE by meaning, proximity, and trust — use this when the buyer names an item they want to buy (e.g. 'white sneakers', 'Tecno fast charger'). For a buyer describing a kind of business/vendor/shop instead of an item, use searchStores. Returns real listings only — never invent a vendor, price, or stock level beyond what this tool returns.",
     inputSchema,
-    execute: async ({ product, attributes, location, radiusKm }) =>
+    execute: async ({
+      product,
+      attributes,
+      location,
+      radiusKm,
+      maxBudgetNaira,
+    }) =>
       searchProductsCore(
-        { product, attributes, location, radiusKm },
-        { buyerLocation, push, isImageQuery, imageUrl, weakResultsOut },
+        {
+          product,
+          attributes,
+          location,
+          radiusKm,
+          maxBudgetNaira: maxBudgetNaira ?? rememberedBudgetNaira ?? undefined,
+        },
+        {
+          buyerLocation,
+          push,
+          isImageQuery,
+          imageUrl,
+          weakResultsOut,
+          locationLabel,
+        },
       ),
   });
 }
