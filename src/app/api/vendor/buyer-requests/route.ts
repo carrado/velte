@@ -14,7 +14,16 @@ export async function GET() {
       "/vendor/buyer-requests",
       { cookie: gate.cookie },
     );
-    return NextResponse.json({ requests });
+    // Same strip as the detail route (2026-08-27): the backend already gates
+    // buyerPhone on this vendor having accepted, but it never reaches the
+    // browser either way. `canChat` is the one bit the list needs, and
+    // chatting goes through /api/vendor/buyer-requests/:id/chat.
+    return NextResponse.json({
+      requests: requests.map(({ buyerPhone, ...rest }) => ({
+        ...rest,
+        canChat: Boolean(buyerPhone),
+      })),
+    });
   } catch (err) {
     return fail(err, "Failed to load buyer requests.");
   }

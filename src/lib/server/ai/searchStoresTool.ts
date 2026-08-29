@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
+import { allowsNearbyBusinesses } from "@/lib/server/ai/sectorClarifiers";
 import {
   searchingPhrase,
   foundCountPhrase,
@@ -80,6 +81,7 @@ export async function searchStoresCore(
     buyerLocation,
     push,
     locationLabel,
+    allowNearbyBusinesses,
   }: {
     buyerLocation?: BuyerLocation;
     push?: (candidates: string[]) => void;
@@ -88,6 +90,11 @@ export async function searchStoresCore(
     // Layout, Enugu" instead of "your area". Never the `location` search
     // parameter: it doesn't re-geocode and can't change what's searched.
     locationLabel?: string;
+    // Google Places (Tier 5) — service requests only. See
+    // allowsNearbyBusinesses. A store search reads as a service one when
+    // its own businessType does ("phone repair shop" yes, "electronics
+    // store" no); route.ts overrides that with the scope check's intent.
+    allowNearbyBusinesses?: boolean;
   } = {},
 ): Promise<
   SearchStoresCoreResult | { error: "location-not-found"; message: string }
@@ -108,6 +115,10 @@ export async function searchStoresCore(
   }
   const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
+  const includeNearbyBusinesses = allowsNearbyBusinesses(
+    businessType,
+    allowNearbyBusinesses,
+  );
   let results: StoreMatch[],
     furtherResults: StoreMatch[],
     matchTier: MatchTier,
@@ -128,6 +139,9 @@ export async function searchStoresCore(
           lat: coords?.lat,
           lng: coords?.lng,
           radiusKm: radiusKm ?? 10,
+          // See searchProductsCore's own comment — the backend skips the
+          // Places call outright when this is false.
+          includeNearbyBusinesses,
         },
       }));
   } catch (err) {
@@ -138,6 +152,10 @@ export async function searchStoresCore(
     );
     throw err;
   }
+
+  // Dropped here as well as at the backend flag, so an older backend that
+  // doesn't know the flag yet still can't leak Places into a product turn.
+  if (!includeNearbyBusinesses) externalSuggestions = null;
 
   if (results.length) {
     push?.(foundCountPhrase(results.length, "vendor", matchTier));
@@ -198,6 +216,9 @@ export function searchStoresTool(
   push?: (candidates: string[]) => void,
   // Display-only place label for the status line — see searchStoresCore.
   locationLabel?: string,
+  // See allowsNearbyBusinesses — route.ts resolves this from the scope
+  // check's seekingKind; omitted means "decide from the query text".
+  allowNearbyBusinesses?: boolean,
 ) {
   return tool({
     description:
@@ -206,7 +227,7 @@ export function searchStoresTool(
     execute: async ({ businessType, location, radiusKm }) =>
       searchStoresCore(
         { businessType, location, radiusKm },
-        { buyerLocation, push, locationLabel },
+        { buyerLocation, push, locationLabel, allowNearbyBusinesses },
       ),
   });
 }

@@ -1,6 +1,7 @@
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
 import type {
   ConversationTask,
+  SearchConversationList,
   SearchHistoryTurn,
   StoredBuyerLocation,
   StoredConversation,
@@ -119,12 +120,38 @@ export async function markSearchConversationHandoff(params: {
   );
 }
 
-/** Full snapshots for the client's refresh rehydrate — 404s when stale. */
+/** Full snapshots for the client's refresh rehydrate — 404s when stale,
+ *  which is how the client learns to drop a finished thread's id and start
+ *  clean. `buyerId` widens ownership so a signed-in buyer can open their own
+ *  conversation from a browser that didn't create it; `includeStale` is for
+ *  a thread deliberately picked from the history list, where an old thread
+ *  is the point rather than a problem. */
 export async function getSearchConversation(params: {
   conversationId: string;
   deviceId: string;
+  buyerId?: string | null;
+  includeStale?: boolean;
 }): Promise<StoredConversation> {
+  const query = new URLSearchParams({ deviceId: params.deviceId });
+  if (params.buyerId) query.set("buyerId", params.buyerId);
+  if (params.includeStale) query.set("includeStale", "true");
   return aiSearchData<StoredConversation>(
-    `/search/conversations/${encodeURIComponent(params.conversationId)}?deviceId=${encodeURIComponent(params.deviceId)}`,
+    `/search/conversations/${encodeURIComponent(params.conversationId)}?${query.toString()}`,
+  );
+}
+
+/** The chat-history list for a signed-in buyer, newest first. Titles and
+ *  counts only — never turns, which carry whole result sets (see the
+ *  backend's own listConversations comment). */
+export async function listSearchConversations(params: {
+  buyerId: string;
+  limit?: number;
+  before?: string | null;
+}): Promise<SearchConversationList> {
+  const query = new URLSearchParams({ buyerId: params.buyerId });
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.before) query.set("before", params.before);
+  return aiSearchData<SearchConversationList>(
+    `/search/conversations?${query.toString()}`,
   );
 }

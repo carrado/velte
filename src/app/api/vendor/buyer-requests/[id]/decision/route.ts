@@ -30,7 +30,17 @@ export async function POST(req: Request, { params }: Ctx) {
       body: { decision },
       cookie: gate.cookie,
     });
-    return NextResponse.json(data, { status: 201 });
+    // The number is dropped here rather than passed on (2026-08-27) — see
+    // the detail route's own note. Accepting unlocks the ability to chat, and
+    // `canChat` is the whole of what the UI needs to know; the number itself
+    // is resolved server-side by /api/vendor/buyer-requests/:id/chat.
+    return NextResponse.json(
+      {
+        decision: data.decision,
+        canChat: Boolean(data.whatsappNumber),
+      },
+      { status: 201 },
+    );
   } catch (err) {
     return fail(err, "Failed to record your decision.");
   }

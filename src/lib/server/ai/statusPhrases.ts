@@ -423,6 +423,24 @@ export function similarMatchPhrase(count: number): string[] {
   ];
 }
 
+// Shown while the kind-of-item gate (verifyMatches.ts) is in flight — for
+// Velte's own results and, on a dead-end turn, for the external offers
+// too. Either way it lands after the listings are back but before any are
+// shown, so it narrates the one thing genuinely still happening: looking at
+// the photos to confirm these are actually the right kind of item. Never
+// says "removing" or "rejecting" — nothing has been judged yet at this
+// point, and most turns end with every candidate kept.
+export function checkingPhotosPhrase(what: string): string[] {
+  return [
+    `Checking the photos to be sure these are really ${snippet(what)}…`,
+    "Looking at each listing's photo to confirm the match…",
+    `Making sure these are actually ${snippet(what)}…`,
+    "Double-checking the photos against what you asked for…",
+    "Having a proper look at these before showing you…",
+    `Confirming each one is really ${snippet(what)}…`,
+  ];
+}
+
 // No `hasExternal` branch here on purpose: a zero-result searchProducts
 // ALWAYS falls through to a searchStores call next (see systemPrompt.ts's
 // zero-result rule) — a real, still-on-Velte vendor can easily turn up there
@@ -695,6 +713,25 @@ export function noVendorEvenBySectorPhrase(
         `Couldn't find a match on Velte or anything nearby for "${w}".`,
         `No results here for "${w}" — nothing on Velte, and nothing close by either.`,
       ];
+}
+
+// The dead-end line when Velte has nothing AND there are no nearby
+// businesses to point at, but the external connectors DID find the item on
+// sale online (Phase 4). Split out from noVendorEvenBySectorPhrase because
+// that function is chosen before the connectors have run: its "nothing
+// nearby either" branch would otherwise sit directly above six real
+// online offers, telling the buyer there was nowhere to go while showing
+// them somewhere to go. Deliberately names the offers as OFF-Velte and as
+// online — they carry no vendor relationship, no distance and no trust
+// signal, and the reply must never imply otherwise.
+export function noVendorButOnlineOffersPhrase(what: string): string[] {
+  const w = snippet(what, 60);
+  return [
+    `No vendor on Velte has "${w}" yet — but here's where it's selling online right now.`,
+    `Nothing on Velte matches "${w}" yet. These online stores have it, though — they're not Velte vendors, so you'd be buying from them directly.`,
+    `Couldn't find "${w}" on Velte at all — the closest I can get you is these online listings.`,
+    `No Velte vendor for "${w}" yet. Off Velte, these stores are listing it.`,
+  ];
 }
 
 // BuyerRequestOfferWidget's own "no vendor to notify" message (see that

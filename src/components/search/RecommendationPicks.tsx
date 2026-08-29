@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { fmt } from "@/lib/product-price";
-import type { SearchRecommendation, VendorMatch } from "@/types/search";
+import type {
+  ExternalOffer,
+  SearchRecommendation,
+  VendorMatch,
+} from "@/types/search";
 
 // The actual, factual differences between two listings — computed here in
 // the browser from the two products' own fields, never written by the
@@ -73,6 +77,66 @@ function buildDifferenceRows(
   return rows;
 }
 
+// The external analogue of buildDifferenceRows. Same principle as the Velte
+// version: the model's sentence names the catch, this lets the buyer check
+// it against the data.
+//
+// Was three rows — title, price, shop — back when that was genuinely all an
+// off-Velte offer carried. Since 2026-08-27 these also carry the listing's
+// full photo set, and the photo count earns a row for the same reason it
+// does on the Velte side: the tradeoff note can now say "the third photo
+// shows a cracked screen", and a buyer who reads that should be able to see
+// at a glance that there WERE three photos to look at.
+function buildOfferDifferenceRows(
+  tradeoff: ExternalOffer,
+  topPick: ExternalOffer,
+): { label: string; tradeoff: string; topPick: string }[] {
+  const rows: { label: string; tradeoff: string; topPick: string }[] = [];
+  if (tradeoff.title.trim() !== topPick.title.trim()) {
+    rows.push({
+      label: "Listing",
+      tradeoff: tradeoff.title,
+      topPick: topPick.title,
+    });
+  }
+  if (tradeoff.priceText !== topPick.priceText) {
+    rows.push({
+      label: "Price",
+      tradeoff: tradeoff.priceText ?? "Not shown",
+      topPick: topPick.priceText ?? "Not shown",
+    });
+  }
+  if (tradeoff.merchant !== topPick.merchant) {
+    rows.push({
+      label: "Shop",
+      tradeoff: tradeoff.merchant ?? "Unknown",
+      topPick: topPick.merchant ?? "Unknown",
+    });
+  }
+  const photos = (o: ExternalOffer) =>
+    (o.imageUrl ? 1 : 0) + o.galleryUrls.length;
+  if (photos(tradeoff) !== photos(topPick)) {
+    rows.push({
+      label: "Photos",
+      tradeoff: `${photos(tradeoff)}`,
+      topPick: `${photos(topPick)}`,
+    });
+  }
+  return rows;
+}
+
+// One row's worth of resolved candidate, whichever kind it came from. The
+// picks block only ever needs a name and (for the Nearest row) a distance,
+// so both sources collapse to this and the render below stops caring which
+// it is. A turn is only ever one or the other in practice — external offers
+// exist solely on turns where Velte found nothing — but nothing here
+// depends on that.
+interface PickItem {
+  id: string;
+  name: string;
+  distanceKm: number | null;
+}
+
 // The chip labels one product card earns from a turn's recommendation —
 // the WHICH half, worn on the card itself (VendorResultCard's pickBadges
 // prop). A product can genuinely earn more than one ("Top pick" that's
@@ -81,11 +145,17 @@ function buildDifferenceRows(
 export function pickBadgesFor(
   productId: string,
   recommendation: SearchRecommendation | null,
+  // "Best value" is a judgment the model makes over Velte listings, where
+  // it weighs price against what the seller actually offers. Over external
+  // offers the same field holds a code-computed CHEAPEST (see
+  // pickExternalRecommendation), and calling that "Best value" would claim
+  // more than the arithmetic supports.
+  valueLabel: string = "Best value",
 ): string[] | undefined {
   if (!recommendation) return undefined;
   const badges: string[] = [];
   if (recommendation.bestOverallId === productId) badges.push("Top pick");
-  if (recommendation.bestValueId === productId) badges.push("Best value");
+  if (recommendation.bestValueId === productId) badges.push(valueLabel);
   if (recommendation.nearestId === productId) badges.push("Nearest");
   return badges.length ? badges : undefined;
 }
@@ -137,11 +207,32 @@ function fallbackLeadIn(recommendation: SearchRecommendation): string {
 export function RecommendationPicks({
   recommendation,
   products,
+  offers = [],
+  valueLabel = "Best value",
 }: {
   recommendation: SearchRecommendation;
   products: VendorMatch[];
+  // See pickBadgesFor — the chip and this block's row must agree.
+  valueLabel?: string;
+  // Off-Velte offers from a dead-end turn (2026-08-26) — the same picks
+  // block, over the only candidates that turn has. Empty on every ordinary
+  // turn, which leaves the behaviour below byte-for-byte what it was.
+  offers?: ExternalOffer[];
 }) {
-  const byId = new Map(products.map((p) => [p.productId, p]));
+  const byId = new Map<string, PickItem>([
+    ...products.map(
+      (p) =>
+        [
+          p.productId,
+          { id: p.productId, name: p.name, distanceKm: p.distanceKm },
+        ] as const,
+    ),
+    // An online listing has no distance to anything, hence null — which is
+    // also why pickExternalRecommendation never returns a nearestId.
+    ...offers.map(
+      (o) => [o.id, { id: o.id, name: o.title, distanceKm: null }] as const,
+    ),
+  ]);
 
   const rows: { label: string; name: string; reason: string | null }[] = [];
 
@@ -161,7 +252,7 @@ export function RecommendationPicks({
     : undefined;
   if (bestValue) {
     rows.push({
-      label: "Best value",
+      label: valueLabel,
       name: bestValue.name,
       reason: recommendation.bestValueReason,
     });
@@ -188,16 +279,29 @@ export function RecommendationPicks({
   }
 
   // Server-verified before it ever reaches here (see SearchRecommendation's
-  // own comment) — this just has to resolve both products to render the
-  // factual comparison beneath it.
-  const tradeoffProduct = recommendation.tradeoff
-    ? byId.get(recommendation.tradeoff.productId)
-    : undefined;
-  const topPickForDiff = recommendation.bestOverallId
-    ? byId.get(recommendation.bestOverallId)
-    : undefined;
+  // own comment) — this just has to resolve both candidates to render the
+  // factual comparison beneath it. Each kind brings its own comparable
+  // fields, so the ROWS are built here and TradeoffNote just renders them.
+  const tradeoffId = recommendation.tradeoff?.productId;
+  const tradeoffItem = tradeoffId ? byId.get(tradeoffId) : undefined;
+  const topPickId = recommendation.bestOverallId;
 
-  if (rows.length === 0 && !tradeoffProduct) return null;
+  const productById = new Map(products.map((p) => [p.productId, p]));
+  const offerById = new Map(offers.map((o) => [o.id, o]));
+  let differenceRows: { label: string; tradeoff: string; topPick: string }[] =
+    [];
+  if (tradeoffId && topPickId) {
+    const tp = productById.get(tradeoffId);
+    const op = topPickId ? productById.get(topPickId) : undefined;
+    if (tp && op) differenceRows = buildDifferenceRows(tp, op);
+    else {
+      const to = offerById.get(tradeoffId);
+      const oo = offerById.get(topPickId);
+      if (to && oo) differenceRows = buildOfferDifferenceRows(to, oo);
+    }
+  }
+
+  if (rows.length === 0 && !tradeoffItem) return null;
 
   return (
     // Deliberately container-less — same text treatment as FormattedReply's
@@ -231,11 +335,11 @@ export function RecommendationPicks({
           </div>
         ))}
       </div>
-      {tradeoffProduct && recommendation.tradeoff && (
+      {tradeoffItem && recommendation.tradeoff && (
         <TradeoffNote
           note={recommendation.tradeoff.note}
-          product={tradeoffProduct}
-          topPick={topPickForDiff}
+          name={tradeoffItem.name}
+          rows={differenceRows}
         />
       )}
     </div>
@@ -249,15 +353,14 @@ export function RecommendationPicks({
 // than take it on trust. No extra model call is involved in expanding it.
 function TradeoffNote({
   note,
-  product,
-  topPick,
+  name,
+  rows,
 }: {
   note: string;
-  product: VendorMatch;
-  topPick: VendorMatch | undefined;
+  name: string;
+  rows: { label: string; tradeoff: string; topPick: string }[];
 }) {
   const [open, setOpen] = useState(false);
-  const rows = topPick ? buildDifferenceRows(product, topPick) : [];
 
   return (
     <div className="space-y-1.5">
@@ -266,7 +369,7 @@ function TradeoffNote({
           Worth knowing
         </span>
         <span className="min-w-0 text-[15px] sm:text-base font-semibold text-[#023337] leading-snug">
-          {product.name}
+          {name}
         </span>
       </div>
       <p className="text-sm leading-relaxed text-gray-600">{note}</p>

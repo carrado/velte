@@ -224,6 +224,15 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         listingConfig: {
           presetGroups: ["Fashion & Tailoring"],
           productCategoryId: "tailoring-fashion",
+          // The retail half's attribute pool. Without this the sector's
+          // own productCategoryId ("tailoring-fashion") has no entry in
+          // PRODUCT_PRESETS_BY_CATEGORY, so buyer clarifying questions
+          // silently fell through to the General pool (Brand / Color /
+          // Condition) — found 2026-08-26 while fixing a "power bank"
+          // search that asked nothing useful. See attributeCategoryId's
+          // own doc comment: content id, deliberately allowed to differ
+          // from the vendor-selectable category id.
+          attributeCategoryId: "fashion",
           serviceNamePlaceholder: "e.g., Custom agbada — sewn to measure",
           serviceDescriptionPlaceholder:
             "Describe what you sew, fittings included, and turnaround time…",
@@ -262,6 +271,10 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         listingConfig: {
           presetGroups: ["Computer & IT Repairs"],
           productCategoryId: "electronics",
+          // Its own attribute table — `electronics`' examples are phones
+          // ("Spark 10 Pro", "5000mAh") and were being shown to laptop
+          // buyers. See attribute-presets.ts's computers-laptops entry.
+          attributeCategoryId: "computers-laptops",
         },
       },
       {
@@ -271,6 +284,15 @@ export const SECTOR_TAXONOMY: SectorCategory[] = [
         listingConfig: {
           presetGroups: ["Appliance & Generator Repair"],
           productCategoryId: "home-electronics",
+          // The retail half's attribute pool. Without this the sector's
+          // own productCategoryId ("home-electronics") has no entry in
+          // PRODUCT_PRESETS_BY_CATEGORY, so buyer clarifying questions
+          // silently fell through to the General pool (Brand / Color /
+          // Condition) — found 2026-08-26 while fixing a "power bank"
+          // search that asked nothing useful. See attributeCategoryId's
+          // own doc comment: content id, deliberately allowed to differ
+          // from the vendor-selectable category id.
+          attributeCategoryId: "home-electronics",
         },
       },
       {

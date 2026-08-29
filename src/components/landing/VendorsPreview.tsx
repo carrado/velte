@@ -7,8 +7,7 @@ import { cn } from "@/lib/utils";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
-import { buildWhatsappLink } from "@/lib/whatsapp";
-import { reportLead } from "@/lib/reportLead";
+import { buildChatLink } from "@/lib/chatLink";
 import type { VendorPreviewItem } from "@/types/store";
 import { ArrowRightIcon, BadgeCheckIcon, StoreIcon } from "@/components/icons";
 
@@ -90,10 +89,11 @@ export function SlidingCover({
 // reasoning as MarketplacePreview's MarketplaceCard export: one card, not a
 // second copy that drifts).
 export function VendorCard({ item }: { item: VendorPreviewItem }) {
-  const chatHref = buildWhatsappLink(
-    item.whatsapp,
-    `Hi ${item.name}! I found your store on Velte.`,
-  );
+  const chatHref = buildChatLink({
+    vendorId: item.vendorId,
+    source: "browse",
+    message: `Hi ${item.name}! I found your store on Velte.`,
+  });
   // "+N more" is a real toggle, not a static label — clicking it reveals
   // the rest of the vendor's sectors in place rather than sending the
   // buyer anywhere else. Once expanded, extraSectors is 0 so the button
@@ -217,7 +217,6 @@ export function VendorCard({ item }: { item: VendorPreviewItem }) {
               href={chatHref}
               label="Chat"
               className="flex-1 !py-2 !text-xs"
-              onClick={() => reportLead(item.vendorId, undefined, "browse")}
             />
           )}
         </div>

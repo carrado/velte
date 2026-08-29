@@ -8,8 +8,7 @@ import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { reportLead } from "@/lib/reportLead";
-import { buildWhatsappLink } from "@/lib/whatsapp";
+import { buildChatLink } from "@/lib/chatLink";
 import type {
   PublicStoreProduct,
   PublicStoreProductProps,
@@ -28,31 +27,22 @@ import {
 // a prop itself, but it CAN render an already-client component that owns
 // its own handler internally, which is exactly what this is for.
 
-/** Wraps WhatsAppButton with the same lead-billing beacon the search
- * result cards use (see reportLead) — every "chat with vendor" touchpoint
- * on the public store page should bill the same way theirs does.
- * `productId` omitted = a store-level enquiry, not tied to one listing. */
+/** Was a WhatsAppButton plus a lead-billing beacon; the beacon is gone
+ * (2026-08-27 — billing moved server-side into /api/chat, which the href now
+ * points at), leaving nothing but the button. Kept as a named re-export
+ * rather than deleted so the store page's own call sites keep reading as
+ * "the store's chat button", and so there's one obvious place to add
+ * store-specific behaviour back if it's ever wanted. */
 export function StoreWhatsAppButton({
   href,
   label,
   className,
-  vendorId,
-  productId,
 }: {
   href: string;
   label: string;
   className?: string;
-  vendorId: string;
-  productId?: string;
 }) {
-  return (
-    <WhatsAppButton
-      href={href}
-      label={label}
-      className={className}
-      onClick={() => reportLead(vendorId, productId, "browse")}
-    />
-  );
+  return <WhatsAppButton href={href} label={label} className={className} />;
 }
 
 // Shared, non-interactive pieces used by both the server page (header CTAs,
@@ -87,16 +77,17 @@ export function Price({ product }: { product: PublicStoreProduct }) {
 function enquireHrefFor(
   product: PublicStoreProduct,
   storeName: string,
-  whatsapp: string | null,
+  vendorId: string,
 ): string | null {
   const isService = product.kind === "service";
-  return buildWhatsappLink(
-    whatsapp,
-    isService
+  return buildChatLink({
+    vendorId,
+    productId: product.mainImageUrl ? product.id : undefined,
+    source: "browse",
+    message: isService
       ? `Hi ${storeName}! I'm interested in your "${product.name}" service. I found you on Velte.`
       : `Hi ${storeName}! Is "${product.name}" still available? I found you on Velte.`,
-    product.mainImageUrl ? product.id : undefined,
-  );
+  });
 }
 
 /** Image "post" for the compact card — just the main image, no carousel
@@ -138,7 +129,6 @@ function OfferingMedia({
 export function OfferingCard({
   product,
   storeName,
-  whatsapp,
   vendorId,
   isOwn,
 }: PublicStoreProductProps) {
@@ -148,7 +138,7 @@ export function OfferingCard({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
-  const enquireHref = enquireHrefFor(product, storeName, whatsapp);
+  const enquireHref = enquireHrefFor(product, storeName, vendorId);
   const images = resolveGalleryImages(
     product.mainImageUrl,
     product.thumbnailUrls,
@@ -222,7 +212,6 @@ export function OfferingCard({
             <a
               href={enquireHref}
               rel="noreferrer"
-              onClick={() => reportLead(vendorId, product.id, "browse")}
               className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[12px] sm:text-[13px] font-semibold rounded-lg transition-colors w-full sm:w-auto shrink-0"
             >
               <MessageCircleIcon size={13} />
@@ -249,7 +238,6 @@ export function OfferingCard({
         isOwn={isOwn}
         chatHref={enquireHref}
         chatLabel={isService ? "Enquire about this service" : "Enquire"}
-        onChatClick={() => reportLead(vendorId, product.id, "browse")}
       />
 
       <ImageLightbox

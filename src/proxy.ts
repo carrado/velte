@@ -45,6 +45,19 @@ const publicRegardlessOfAuth = [
   "/chat",
   "/marketplace",
   "/updates",
+  // The installed PWA's entry point (2026-08-29, see app/launch/page.tsx).
+  // MUST be listed here: it is a single-segment path, so without this it
+  // falls all the way through to the "/:id" branch at the bottom — a
+  // logged-out buyer would be bounced to /auth/login (a login wall on app
+  // open, for people who have no vendor account at all) and a vendor would
+  // be redirected to /products before the route could decide anything.
+  "/launch",
+  // Buyer plans (2026-08-29, app/plans/page.tsx). Same single-segment trap as
+  // /launch, and the same reason it can't be a marketing route: a signed-in
+  // VENDOR must be able to open it too, and marketingRoutes bounces them
+  // straight to their dashboard. Distinct from /pricing, which is the
+  // vendor-facing pay-per-lead page and stays marketing.
+  "/plans",
   // No /buyer/auth entry anymore (2026-08-18) — there's no buyer-facing
   // page tree left at all. A buyer's only touchpoint is the inline
   // phone+OTP capture inside /chat itself (already covered by the /chat
@@ -142,13 +155,16 @@ export async function proxy(request: NextRequest) {
   // UNLESS this is the installed PWA launching (manifest start_url is
   // "/?source=pwa", see site.webmanifest): redirect server-side, before any
   // HTML ships, straight to /welcome instead of the marketing homepage.
-  // StandaloneHomeRedirect used to be the only guard against this and could
-  // only act client-side after hydration — by then the browser had already
-  // painted the SSR'd marketing page, so a logged-out PWA launch visibly
-  // flashed it before bouncing to /welcome. This redirect removes that
-  // flash entirely for the launch path; StandaloneHomeRedirect stays in
-  // place for in-app navigation back to "/" (e.g. the logo Link) while
-  // already running standalone.
+  // A client-side guard alone could only act after hydration — by then the
+  // browser had already painted the SSR'd marketing page, so a logged-out PWA
+  // launch visibly flashed it before bouncing to /welcome. This removes that
+  // flash for the launch path.
+  //
+  // Still here even though start_url now points at /launch (2026-08-29): an
+  // app installed before that change has "/?source=pwa" cached in its own
+  // manifest until the browser re-fetches it, so this is what serves those
+  // installs. In-app navigation to "/" — and to every OTHER marketing page —
+  // is handled by the root layout's pre-paint script + StandalonePublicGuard.
   if (pathname === "/") {
     if (!userId) {
       if (request.nextUrl.searchParams.get("source") === "pwa") {

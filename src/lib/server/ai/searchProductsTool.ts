@@ -4,14 +4,22 @@ import { z } from "zod";
 import { buildProductTerm } from "@/lib/productTerm";
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
-import { looksLikeServiceTask } from "@/lib/server/ai/sectorClarifiers";
+import {
+  allowsNearbyBusinesses,
+  looksLikeServiceTask,
+} from "@/lib/server/ai/sectorClarifiers";
 import {
   searchingPhrase,
   foundCountPhrase,
   directMatchPhrase,
   similarMatchPhrase,
   noProductMatchPhrase,
+  checkingPhotosPhrase,
 } from "@/lib/server/ai/statusPhrases";
+import {
+  rejectedMatchesNote,
+  verifyItemMatches,
+} from "@/lib/server/ai/verifyMatches";
 import type {
   BuyerLocation,
   MatchTier,
@@ -69,6 +77,33 @@ const inputSchema = z.object({
     ),
 });
 
+// Attribute values that describe the ABSENCE of an attribute. The tool
+// schema already tells the model at length not to invent attributes, and it
+// mostly obeys — but measured live on "I need a good laptop for my
+// business", gpt-5-mini returned:
+//
+//   ["business laptop", "reliable", "durable", "good performance",
+//    "suitable for business use", "Windows or macOS, buyer didn't specify"]
+//
+// That last entry is not an attribute, it is the model narrating its own
+// uncertainty — and it goes straight into buildProductTerm, so the text
+// that gets embedded and matched against real listings ends with "buyer
+// didn't specify". A stronger model produces cleaner attributes (verified:
+// gpt-5 returned just ["20000mAh"] where gpt-5-mini returned
+// ["20000mAh", "powerbank", "portable charger"]), but it costs 4.5x the
+// latency — and this is the same defect for free, caught in code where a
+// prompt instruction was never going to be reliable.
+const NON_ATTRIBUTE =
+  /\b(did ?n[o']?t specify|not specified|unspecified|no preference|any (brand|colour|color|size|type)|n\/a|none specified|buyer did)\b/i;
+
+function usableAttributes(attributes?: string[]): string[] | undefined {
+  if (!attributes?.length) return attributes;
+  const kept = attributes
+    .map((a) => a.trim())
+    .filter((a) => a.length > 0 && a.length <= 60 && !NON_ATTRIBUTE.test(a));
+  return kept.length ? kept : undefined;
+}
+
 export interface SearchProductsCoreInput {
   product: string;
   attributes?: string[];
@@ -83,6 +118,13 @@ export interface SearchProductsCoreResult {
   matchQuality: MatchQuality;
   externalSuggestions: NearbyBusiness[];
   locationNote?: string;
+  // Present only when the photo/kind-of-item check actually dropped
+  // something (see verifyMatches.ts) — a factual note for the model about
+  // WHY the result set is thinner (or empty) than the catalog's own hit
+  // count, plus an explicit ban on offering what was dropped. Shaped
+  // exactly like locationNote: a resolved fact handed over, never something
+  // for the model to re-derive.
+  filteredNote?: string;
 }
 
 /**
@@ -114,6 +156,7 @@ export async function searchProductsCore(
     imageUrl,
     weakResultsOut,
     locationLabel,
+    allowNearbyBusinesses,
   }: {
     buyerLocation?: BuyerLocation;
     push?: (candidates: string[]) => void;
@@ -127,6 +170,13 @@ export async function searchProductsCore(
     // never influences what gets searched, so a wrong or stale label can
     // only ever cost a slightly-off status phrase, never a wrong search.
     locationLabel?: string;
+    // Google Places (the retrieval backend's Tier 5) — SERVICE requests
+    // only, per explicit product decision (2026-08-26). See
+    // allowsNearbyBusinesses below for the full reasoning. `undefined`
+    // falls back to the text heuristic; route.ts passes the scope check's
+    // own read of buyer intent instead, which is a far better signal than
+    // keyword-matching the query.
+    allowNearbyBusinesses?: boolean;
   } = {},
 ): Promise<
   SearchProductsCoreResult | { error: "location-not-found"; message: string }
@@ -150,7 +200,12 @@ export async function searchProductsCore(
   }
   const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
-  const queryText = buildProductTerm(product, attributes);
+  const cleanAttributes = usableAttributes(attributes);
+  const queryText = buildProductTerm(product, cleanAttributes);
+  const includeNearbyBusinesses = allowsNearbyBusinesses(
+    queryText,
+    allowNearbyBusinesses,
+  );
   let results: VendorMatch[],
     weakResults: VendorMatch[],
     matchTier: MatchTier,
@@ -174,6 +229,10 @@ export async function searchProductsCore(
           isImageQuery,
           imageUrl,
           maxBudgetNaira,
+          // Honored by staffly-ai-backend's retrieval service, which skips
+          // the Places call entirely when false — so a product dead end
+          // costs nothing at Google, not just "fetched and thrown away".
+          includeNearbyBusinesses,
         },
       }));
   } catch (err) {
@@ -186,6 +245,85 @@ export async function searchProductsCore(
       err,
     );
     throw err;
+  }
+
+  // The kind-of-item gate (verifyMatches.ts). Retrieval matches on MEANING,
+  // which puts sneakers right next to a corporate shoe and a phone case
+  // right next to a phone — so a candidate clearing the relevance floor is
+  // not yet evidence that it's the thing the buyer asked for. This asks
+  // that question directly, with the vendor's own photo as the evidence,
+  // and drops what fails.
+  //
+  // Placed HERE, not in route.ts, on purpose: everything downstream of this
+  // function reads from what it returns — the status line below, the
+  // model's own reply text, the recommendation picks, the dead-end/
+  // reach-out fallback, the demand log. Filtering at the source is what
+  // makes all of them correct at once; filtering later would still leave
+  // the reply describing a listing that's no longer on screen (which is the
+  // exact bug this fixes, in a new place).
+  //
+  // Both buckets go in together: `weakResults` is rendered to the buyer too
+  // ("A couple more options — not an exact match"), and a wrong KIND of item
+  // is wrong there as well — "not an exact match" is a claim about degree,
+  // not a license to show a different product entirely.
+  // Gated to "similar" only (2026-08-26, same day it was added). Running it
+  // on every search put a fourth blocking LLM round trip — one that also
+  // fetches vendor images before it can answer — between retrieval and the
+  // reply, and the added latency was immediately noticeable on searches
+  // that were never at risk in the first place.
+  //
+  // "direct" is the backend's own statement that it found a close/exact
+  // hit, and it DISCARDS the merely-similar candidates whenever one exists
+  // (see MatchQuality). "similar" is the opposite statement: nothing
+  // cleared that bar, so here are the closest things that cleared the base
+  // relevance floor — which is exactly the state the reported sneaker was
+  // returned in, and exactly where a near-neighbour of the wrong kind can
+  // survive. Spending the round trip only there keeps the fix pointed at
+  // the failure and off the ordinary path.
+  //
+  // The trade-off, stated plainly: a wrong-kind item that retrieval rated
+  // "direct" now gets through unchecked, and so do the weak matches on a
+  // "direct" turn (they ride along with whichever quality the main set
+  // got). That is a deliberate latency-for-coverage trade, not an
+  // oversight — revisit it if a "direct" mismatch is ever actually seen.
+  let filteredNote: string | undefined;
+  const verifiable =
+    matchQuality === "similar" ? [...results, ...weakResults] : [];
+  if (verifiable.length) {
+    push?.(checkingPhotosPhrase(product));
+    const { rejected } = await verifyItemMatches({
+      product,
+      attributes: cleanAttributes,
+      candidates: verifiable,
+      isImageQuery,
+    });
+    if (rejected.length) {
+      const droppedIds = new Set(rejected.map((r) => r.match.productId));
+      results = results.filter((r) => !droppedIds.has(r.productId));
+      weakResults = weakResults.filter((w) => !droppedIds.has(w.productId));
+      filteredNote = rejectedMatchesNote(rejected, product) ?? undefined;
+      // Worth a log line either way: this is the one place a real vendor's
+      // listing gets removed from a buyer's results, so a bad gate has to
+      // be diagnosable from the server logs rather than only from a
+      // complaint.
+      console.info(
+        `[search] dropped ${rejected.length} wrong-kind match(es) for "${product}":`,
+        rejected.map((r) => `${r.match.name} → ${r.actualItem}`),
+      );
+      if (!results.length) {
+        // Tier and quality describe a result set that no longer exists.
+        // Leaving "similar" behind would put the "No exact match, but N
+        // similar items" heading over an empty section.
+        matchTier = null;
+        matchQuality = undefined;
+        // And weak matches can't stand alone: they're framed as a
+        // supplement to real results ("a couple MORE options"), and the
+        // frontend's own turn shape treats them as always-empty-when-
+        // products-is. An empty set here is a genuine dead end, which the
+        // zero-result path below already handles properly.
+        weakResults = [];
+      }
+    }
   }
 
   if (results.length) {
@@ -240,8 +378,14 @@ export async function searchProductsCore(
     results,
     matchTier,
     matchQuality,
-    externalSuggestions: externalSuggestions ?? [],
+    // Belt to the backend flag's braces: an older backend that doesn't
+    // know the flag yet still can't put shops-that-sell-things in front of
+    // a buyer who asked for a THING.
+    externalSuggestions: includeNearbyBusinesses
+      ? (externalSuggestions ?? [])
+      : [],
     ...(locationNote ? { locationNote } : {}),
+    ...(filteredNote ? { filteredNote } : {}),
   };
 }
 
@@ -293,6 +437,10 @@ export function searchProductsTool(
   // either the buyer restating one or deliberately tightening it ("find me
   // something cheaper").
   rememberedBudgetNaira?: number | null,
+  // The scope check's own read of buyer intent, resolved to a yes/no by
+  // route.ts — see allowsNearbyBusinesses. Omitted means "decide from the
+  // query text".
+  allowNearbyBusinesses?: boolean,
 ) {
   return tool({
     description:
@@ -320,6 +468,7 @@ export function searchProductsTool(
           imageUrl,
           weakResultsOut,
           locationLabel,
+          allowNearbyBusinesses,
         },
       ),
   });

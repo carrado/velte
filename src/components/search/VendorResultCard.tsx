@@ -7,10 +7,10 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
-import { buildWhatsappLink } from "@/lib/whatsapp";
+import { buildChatLink } from "@/lib/chatLink";
+import { WatchPriceButton } from "@/components/search/WatchPriceButton";
 import type { VendorMatch } from "@/types/search";
 import {
   ChevronLeftIcon,
@@ -52,11 +52,16 @@ export function VendorResultCard({
   const currentUserId = useUserStore((s) => s.user?.id);
   const isOwn = currentUserId != null && currentUserId === match.vendorId;
 
-  const chatHref = buildWhatsappLink(
-    match.whatsapp,
-    `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
-    match.mainImageUrl ? match.productId : undefined,
-  );
+  // Points at /api/chat, which resolves the number and bills the lead
+  // server-side — the number is never in this page (2026-08-27, see
+  // chatLink.ts). Billing moved with it, so there's no onClick beacon any
+  // more: following the link IS the billable event.
+  const chatHref = buildChatLink({
+    vendorId: match.vendorId,
+    productId: match.mainImageUrl ? match.productId : undefined,
+    source: "search",
+    message: `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
+  });
 
   // Main image first, then whatever else the vendor uploaded — a buyer
   // shouldn't be stuck with just whichever single photo was set as "main"
@@ -239,9 +244,6 @@ export function VendorResultCard({
                 href={chatHref}
                 label="Chat with vendor"
                 className="w-full"
-                onClick={() =>
-                  reportLead(match.vendorId, match.productId, "search")
-                }
               />
             )}
             {showViewStore && match.storeHandle && (
@@ -256,6 +258,27 @@ export function VendorResultCard({
             )}
           </div>
         ) : null}
+
+        {/* Offered on Velte's own listings as well as off-Velte ones — a
+            vendor changing their price is exactly the moment a buyer who
+            hesitated wants to hear from us. Null price for a
+            quote-on-request service, which makes the button hide itself:
+            there is no number to watch, so there could never be a drop.
+
+            The AI search pipeline normalises price to NAIRA server-side (see
+            the ListingDetailModal note below), so *100 is the kobo the watch
+            API expects. */}
+        <WatchPriceButton
+          kind="velte"
+          productId={match.productId}
+          label={match.name}
+          imageUrl={match.mainImageUrl}
+          merchant={match.vendorName}
+          priceKobo={
+            match.quoteOnRequest ? null : Math.round(match.price * 100)
+          }
+          className="mt-1"
+        />
       </div>
 
       <ListingDetailModal
@@ -287,9 +310,6 @@ export function VendorResultCard({
         }}
         chatHref={chatHref}
         chatLabel="Chat with vendor"
-        onChatClick={() =>
-          reportLead(match.vendorId, match.productId, "search")
-        }
       />
 
       <ImageLightbox

@@ -10,8 +10,7 @@ import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { buildWhatsappLink } from "@/lib/whatsapp";
-import { reportLead } from "@/lib/reportLead";
+import { buildChatLink } from "@/lib/chatLink";
 import { MARKETPLACE_SCROLL_FLAG } from "@/lib/scrollToMarketplace";
 import type { MarketplacePreviewItem } from "@/types/store";
 import {
@@ -68,13 +67,14 @@ export function MarketplaceCard({
   const isService = item.kind === "service";
   const KindIcon = isService ? WrenchIcon : PackageIcon;
 
-  const chatHref = buildWhatsappLink(
-    item.whatsapp,
-    isService
+  const chatHref = buildChatLink({
+    vendorId: item.vendorId,
+    productId: item.mainImageUrl ? item.id : undefined,
+    source: "browse",
+    message: isService
       ? `Hi ${item.storeName}! I'm interested in your "${item.name}" service. I found you on Velte.`
       : `Hi ${item.storeName}! Is "${item.name}" still available? I found you on Velte.`,
-    item.mainImageUrl ? item.id : undefined,
-  );
+  });
 
   const images = resolveGalleryImages(item.mainImageUrl, item.thumbnailUrls);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -202,7 +202,6 @@ export function MarketplaceCard({
             href={chatHref}
             label="Chat"
             className="w-full mt-auto !py-2 !text-xs"
-            onClick={() => reportLead(item.vendorId, item.id, "browse")}
           />
         )}
       </div>
@@ -227,7 +226,6 @@ export function MarketplaceCard({
         isOwn={false}
         chatHref={chatHref}
         chatLabel="Chat"
-        onChatClick={() => reportLead(item.vendorId, item.id, "browse")}
       />
 
       <ImageLightbox

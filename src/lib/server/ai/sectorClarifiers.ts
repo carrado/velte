@@ -96,6 +96,12 @@ const SYNONYMS: Record<string, string[]> = {
   // This map stays the intended extension point for that gap — add a word
   // here when a real query detects no sector and should have.
   electrician: ["electrical", "installation"],
+  // The agent nouns that used to reach their sector through a stem
+  // collision (see STEM_COLLISIONS) — declared as the inferred matches
+  // they always were.
+  engineer: ["engineering", "architecture", "design"],
+  painter: ["painting", "decorating"],
+  autoparts: ["auto", "parts", "accessories"],
   fridge: ["appliances", "electronics", "home"],
   freezer: ["appliances", "electronics", "home"],
   cake: ["bakery", "pastries", "confectionery"],
@@ -115,7 +121,154 @@ const SYNONYMS: Record<string, string[]> = {
   pizza: ["restaurants", "food", "quick"],
   bread: ["bakery", "pastries"],
   snacks: ["confectionery", "snacks"],
+  // The ITEM long tail. Sector labels name business types ("Phones &
+  // Accessories", "Home Electronics & Appliances"); buyers name objects
+  // ("power bank", "blender", "wig"). Nothing in the label vocabulary
+  // bridges those, so an ordinary shopping query scored ZERO and the
+  // attribute gate went silent — found live on "I need a power bank",
+  // which asked nothing and went straight to a dead end. A spot check of
+  // 50 everyday items had 40 detecting no sector at all, which is why
+  // this list exists AND why getGeneralClarifierFields below is the real
+  // safety net: no hand-written list ever finishes covering this.
+  powerbank: ["phones", "accessories", "electronics"],
+  charger: ["phones", "accessories", "electronics"],
+  charg: ["phones", "accessories", "electronics"],
+  earbuds: ["phones", "accessories", "electronics"],
+  earphone: ["phones", "accessories", "electronics"],
+  earphon: ["phones", "accessories", "electronics"],
+  headphone: ["phones", "accessories", "electronics"],
+  headphon: ["phones", "accessories", "electronics"],
+  airpods: ["phones", "accessories", "electronics"],
+  airpod: ["phones", "accessories", "electronics"],
+  tablet: ["phones", "accessories", "electronics"],
+  ipad: ["phones", "accessories", "electronics"],
+  smartwatch: ["phones", "accessories", "electronics"],
+  memorycard: ["phones", "accessories", "electronics"],
+  macbook: ["computers", "laptops", "electronics"],
+  // Peripherals are deliberately NOT mapped to Computers & Laptops. That
+  // sector's questions are laptop questions — a printer asked for its
+  // Processor is the same error as a laptop asked for its 5000mAh battery,
+  // one level down — and the taxonomy has no peripherals sector to send
+  // them to instead. Detecting nothing routes them to the general pool
+  // (Brand / Condition / Color), which is vaguer but true of all of them.
+  // Give them a home here the moment the taxonomy grows one.
+  ps: ["gaming", "consoles"],
+  playstation: ["gaming", "consoles"],
+  xbox: ["gaming", "consoles"],
+  console: ["gaming", "consoles"],
+  tv: ["home", "electronics", "appliances"],
+  television: ["home", "electronics", "appliances"],
+  televis: ["home", "electronics", "appliances"],
+  airconditioner: ["home", "electronics", "appliances"],
+  microwave: ["home", "electronics", "appliances"],
+  blender: ["kitchenware", "appliances"],
+  blend: ["kitchenware", "appliances"],
+  cooker: ["kitchenware", "appliances"],
+  cctv: ["home", "electronics", "appliances"],
+  speaker: ["home", "electronics", "appliances"],
+  speak: ["home", "electronics", "appliances"],
+  inverter: ["solar", "panel", "electrical"],
+  invert: ["solar", "panel", "electrical"],
+  sofa: ["furniture"],
+  bed: ["furniture", "bedding"],
+  curtain: ["decor", "furnishings", "home"],
+  rug: ["decor", "furnishings", "home"],
+  wig: ["hairdressing", "barbing", "beauty"],
+  handbag: ["bags", "accessories"],
+  wristwatch: ["jewelry", "watches"],
+  ankara: ["textile", "fabric", "clothing"],
+  gele: ["textile", "fabric", "clothing"],
+  slippers: ["shoes", "footwear", "fashion"],
+  slipper: ["shoes", "footwear", "fashion"],
+  jersey: ["clothing", "apparel", "fashion"],
+  tyre: ["tyre", "vulcanizing", "auto"],
+  tyres: ["tyre", "vulcanizing", "auto"],
 };
+
+// Multi-word item names that tokenize into words the taxonomy never uses
+// ("power bank" -> power, bank). Collapsed to ONE token before tokenizing
+// so SYNONYMS above can carry them like any other word. Same extension
+// rule as SYNONYMS: add a phrase here when a real query detects nothing
+// and should have.
+const PHRASE_SYNONYMS: Array<[RegExp, string]> = [
+  [/\bpower\s*banks?\b/gi, " powerbank "],
+  [/\bflash\s*drives?\b/gi, " flashdrive "],
+  [/\bmemory\s*cards?\b/gi, " memorycard "],
+  [/\bsmart\s*watch(es)?\b/gi, " smartwatch "],
+  [/\bair\s*conditioners?\b/gi, " airconditioner "],
+  [/\bplay\s*station\b/gi, " playstation "],
+  [/\bps\s*[345]\b/gi, " playstation "],
+  [/\bgas\s*cookers?\b/gi, " cooker "],
+  [/\bwashing\s*machines?\b/gi, " appliances "],
+  // Not groceries, despite `oil` being a staple (see STAPLE_FOODS): the
+  // whole phrase is the product, and it belongs to a shop selling car
+  // parts.
+  [/\b(engine|motor|gear|brake|hydraulic)\s*oils?\b/gi, " autoparts "],
+];
+
+// A QUANTITY, not a product. "bag of rice" was read as Bags & Accessories
+// the moment literal matches started outweighing inferred ones, because
+// "bag" is a literal hit on that sector's own vocabulary — but a measure
+// word followed by "of" is never the thing being bought. Dropped from the
+// text before tokenizing, which is safe precisely because of the "of": a
+// bare "bag", "crate" or "carton" is left alone and still matches normally.
+const MEASURE_PHRASE =
+  /\b(bags?|sacks?|cartons?|crates?|kegs?|tins?|sachets?|packs?|packets?|bottles?|baskets?|dozens?|tubers?|bunch(?:es)?|paints?|congos?|mudus?|dericas?|rubbers?|cups?|portions?|plates?)\s+of\b/gi;
+
+// The subset that means SHOPPING rather than SERVING. A plate, a portion
+// and a cup are how cooked food is ordered, not how a staple is bought, so
+// they're stripped from the text like any other measure (above) but must
+// never vote for a supermarket — "plate of rice" is a restaurant.
+const RETAIL_MEASURE_PHRASE =
+  /\b(bags?|sacks?|cartons?|crates?|kegs?|tins?|sachets?|packs?|packets?|bottles?|baskets?|dozens?|tubers?|bunch(?:es)?|paints?|congos?|mudus?|dericas?|rubbers?)\s+of\b/i;
+
+// Nigerian retail quantities, the other half of the same signal: "50kg
+// rice", "4 litres of oil", "half bag of garri".
+const BULK_QUANTITY =
+  /\b(\d+\s?(?:kg|kilos?|litres?|liters?|paint|congo|mudu|derica)s?|half\s+(?:a\s+)?bag|full\s+bag)\b/i;
+
+// Staples a Nigerian buyer buys BY MEASURE from a shop, as opposed to
+// ordering cooked on a plate. The distinction this file has to make is
+// exactly that one: "jollof rice" is a restaurant, "bag of rice" is a
+// supermarket, and the word "rice" alone cannot tell you which. The
+// measure is what disambiguates, so both signals are required together —
+// see detectGroceryPurchase.
+const STAPLE_FOODS =
+  /\b(rice|beans|garri|gari|semo|semovita|semolina|yam|yams|oil|flour|sugar|salt|noodles|indomie|spaghetti|macaroni|milk|milo|bournvita|tomatoes?|pepper|onions?|eggs?|crayfish|stockfish|melon|egusi|ogbono|maize|corn|millet|plantain|cassava|fufu|wheat|groundnuts?|honey|butter|cereal|beverages?|provisions?|foodstuffs?)\b/i;
+
+/**
+ * "bag of rice" -> Groceries & Supermarket, decided before scoring rather
+ * than through it.
+ *
+ * Scoring cannot reach this on its own: `rice` is a synonym for the
+ * restaurant sectors (added for "jollof rice", where it's right), and the
+ * groceries sector's entire vocabulary is two words, so the dish reading
+ * outscores the shop reading no matter how the weights are tuned. The
+ * honest fix is to recognise the SHAPE of the request instead — a staple
+ * named together with a retail measure is somebody buying food to cook,
+ * never somebody ordering a plate — and both halves are required, so a
+ * bare "rice" still reaches the restaurants it should.
+ *
+ * Skipped for service intent: nobody hires a bag of rice.
+ */
+function detectGroceryPurchase(
+  query: string,
+  prefer?: "retail" | "service",
+): SectorLeaf | null {
+  if (prefer === "service") return null;
+  const hasMeasure =
+    RETAIL_MEASURE_PHRASE.test(query) || BULK_QUANTITY.test(query);
+  if (!hasMeasure || !STAPLE_FOODS.test(query)) return null;
+  return SECTOR_BY_VALUE["groceries_supermarket"] ?? null;
+}
+
+function normalizePhrases(text: string): string {
+  const withoutMeasures = text.replace(MEASURE_PHRASE, " ");
+  return PHRASE_SYNONYMS.reduce(
+    (out, [pattern, word]) => out.replace(pattern, word),
+    withoutMeasures,
+  );
+}
 
 // A buyer phrase carrying an explicit task/service verb ("laptop repair",
 // "fix my sink", "phone screen replacement") — OR naming a service
@@ -139,6 +292,34 @@ const TASK_KEYWORDS =
 
 export function looksLikeServiceTask(query: string): boolean {
   return TASK_KEYWORDS.test(query);
+}
+
+/**
+ * Whether Google Places (the retrieval backend's Tier 5 "real businesses
+ * near you" fallback) may be surfaced for this search.
+ *
+ * PRODUCT SEARCHES: NO — explicit product decision, 2026-08-26. Places
+ * answers "what businesses exist around here", which is a genuinely useful
+ * answer to "I need a plumber" and a bad one to "I need a power bank":
+ * a Places row carries no stock, no price and no way to know the shop has
+ * the item, so a buyer asking for a THING got a wall of shop addresses
+ * across five states that had never been checked for it. Found live on
+ * "I need a power bank" — twenty businesses, one of them a curtain shop,
+ * under a line promising somewhere to "find it close by".
+ *
+ * SERVICE SEARCHES: YES — a nearby tailor, mechanic or electrician IS the
+ * deliverable, and "there is a real one at this address" is exactly the
+ * information a buyer can act on.
+ *
+ * `explicit` (route.ts's scope check: seekingKind) wins outright when
+ * known; the keyword heuristic is only the fallback for call sites that
+ * have no intent signal of their own.
+ */
+export function allowsNearbyBusinesses(
+  query: string,
+  explicit?: boolean,
+): boolean {
+  return explicit ?? looksLikeServiceTask(query);
 }
 
 // 2026-08-25 redesign note: bareness is no longer judged here by token
@@ -199,31 +380,125 @@ function stem(word: string): string {
 
 // Query side: the token, its stem, and any synonyms (themselves stemmed —
 // the vocabulary they're matched against is stemmed too).
-function expand(tokens: string[]): Set<string> {
-  const out = new Set<string>();
-  for (const t of tokens) {
-    out.add(t);
-    out.add(stem(t));
-    for (const syn of SYNONYMS[t] ?? SYNONYMS[stem(t)] ?? []) {
-      out.add(syn);
-      out.add(stem(syn));
-    }
-  }
-  return out;
+// One entry PER ORIGINAL QUERY WORD, not one flat bag of tokens. The
+// distinction is the whole point: flattening let a single synonym-rich
+// word outvote a literal match, because every synonym it expanded into
+// scored separately. Found 2026-08-26 on "house cleaning" — `house`
+// expands to real/estate/property, all three of which hit "Real Estate &
+// Property Sales", so a buyer asking to have their house CLEANED was
+// asked about Property Type, Documentation and Transaction Type while
+// "Cleaning Services" (a literal, exact match on the other word) sat at
+// one point. Grouping caps what one word can contribute and lets the
+// literal/synonym distinction be scored (see scoreOver).
+interface QueryTerm {
+  /** The word itself and its stem — a hit here is a LITERAL match. */
+  literal: Set<string>;
+  /** Everything the synonym table adds — a weaker, inferred match. */
+  inferred: Set<string>;
 }
 
+// Words that name WHERE work happens rather than what is wanted, once the
+// request is a service. "house", "apartment" and "flat" map to real estate
+// (right for "house for rent"), and each expands to three property words
+// that all hit the same sector — enough, from one modifier, to outweigh
+// the actual head noun. "house cleaning" landed on Real Estate & Property
+// Sales, and "painting my house" on it too, so a buyer wanting their walls
+// painted was asked about Property Type, Documentation and Transaction
+// Type. For a service the premises are context, never the subject, so the
+// expansion is simply withheld — the literal word still matches anything
+// it genuinely matches.
+const PREMISES_WORDS = new Set([
+  "house",
+  "houses",
+  "apartment",
+  "apartments",
+  "flat",
+  "flats",
+  "home",
+  "office",
+  "shop",
+  "compound",
+]);
+
+function expand(tokens: string[], prefer?: "retail" | "service"): QueryTerm[] {
+  return tokens.map((t) => {
+    const literal = new Set([t, stem(t)]);
+    const inferred = new Set<string>();
+    if (prefer === "service" && PREMISES_WORDS.has(t)) {
+      return { literal, inferred };
+    }
+    for (const syn of SYNONYMS[t] ?? SYNONYMS[stem(t)] ?? []) {
+      // Never both: several synonym lists restate the word itself in
+      // another form ("phone" -> "phones"), and counting that as evidence
+      // twice let a word quietly earn triple weight.
+      if (!literal.has(syn)) inferred.add(syn);
+      if (!literal.has(stem(syn))) inferred.add(stem(syn));
+    }
+    return { literal, inferred };
+  });
+}
+
+// Stems that are ordinary standalone words in their own right, with no
+// relation to the vocabulary word that produced them. Stemming is
+// deliberately crude (see stem's own comment) and mostly that is harmless —
+// "tailoring" -> "tail" and "ushering" -> "ush" collide with nothing a
+// buyer would ever type. These seven do collide, found by auditing every
+// stem the whole sector taxonomy produces:
+//
+//   engineering  -> engine   "engine oil" read as Architecture &
+//                            Engineering Design
+//   painting     -> paint    buckets of paint vs a painting SERVICE
+//   marketing    -> market   a market vs Marketing & Advertising
+//   stationery   -> station  a petrol station vs Stationery & Books
+//   training     -> train    a train vs Training
+//   short-lets   -> let      the ordinary English verb
+//   ride-hailing -> hail
+//
+// Only the STEM is withheld — every vocabulary word still registers itself
+// in full, so "engineering", "painting" and "marketing" all still match
+// exactly. What is lost is the agent-noun route in ("engineer",
+// "painter"), which SYNONYMS now covers explicitly: an inferred match is
+// what those always were, and scoring them as such is more honest than
+// reaching them through a coincidence.
+const STEM_COLLISIONS = new Set([
+  "engine",
+  "paint",
+  "market",
+  "station",
+  "train",
+  "let",
+  "hail",
+]);
+
 // Vocabulary side: both the raw token and its stem, so a match can happen
-// on either form (see stem's own comment).
+// on either form (see stem's own comment) — except where that stem is a
+// collision (above), in which case only the raw token is registered.
 function sectorVocabulary(sector: SectorLeaf): Set<string> {
   const out = new Set<string>();
   for (const t of tokenize(`${sector.label} ${sector.value}`)) {
     out.add(t);
-    out.add(stem(t));
+    const stemmed = stem(t);
+    if (stemmed !== t && STEM_COLLISIONS.has(stemmed)) continue;
+    out.add(stemmed);
   }
   return out;
 }
 
-const MIN_SCORE = 1;
+// A word the buyer actually said, matching a sector's own vocabulary, is
+// worth double one this file INFERRED on their behalf via SYNONYMS. Before
+// this they counted the same, so a synonym-rich word could outvote an
+// exact one outright — "house cleaning" read as Real Estate (three points
+// from `house` -> real/estate/property) over Cleaning Services (one point
+// from the literal word "cleaning"), and a buyer wanting their house
+// cleaned was asked about Property Type and Documentation.
+const LITERAL_WEIGHT = 2;
+const INFERRED_WEIGHT = 1;
+
+// An inferred-only match still qualifies, exactly as before: this is the
+// weakest score a single matching word can produce, so the set of queries
+// that detect SOMETHING is unchanged by the weighting — only which sector
+// wins when several match.
+const MIN_SCORE = INFERRED_WEIGHT;
 
 function isServiceCapableSector(sector: SectorLeaf): boolean {
   return (
@@ -278,17 +553,50 @@ export function detectSector(
   query: string,
   prefer?: "retail" | "service",
 ): SectorLeaf | null {
-  const queryTokens = expand(tokenize(query));
-  if (queryTokens.size === 0) return null;
+  // Shape-based, ahead of scoring — see detectGroceryPurchase for why this
+  // one case can't be settled by weights.
+  const grocery = detectGroceryPurchase(query, prefer);
+  if (grocery) return grocery;
+
+  const queryTerms = expand(tokenize(normalizePhrases(query)), prefer);
+  if (queryTerms.length === 0) return null;
 
   const scoreOver = (candidates: SectorLeaf[]): SectorLeaf | null => {
-    let best: { sector: SectorLeaf; score: number } | null = null;
+    let best: { sector: SectorLeaf; score: number; literal: number } | null =
+      null;
     for (const sector of candidates) {
       if (sector.value === "other") continue;
       const vocab = sectorVocabulary(sector);
       let score = 0;
-      for (const t of queryTokens) if (vocab.has(t)) score += 1;
-      if (score > 0 && (!best || score > best.score)) best = { sector, score };
+      let literalScore = 0;
+      for (const term of queryTerms) {
+        // How MUCH of the sector's vocabulary each word reaches still
+        // counts — a synonym set matching three of a sector's own words is
+        // genuinely stronger evidence than one matching a single generic
+        // word ("Legal Services" vs "Event Planning Services" for
+        // "lawyer"). What changed is the exchange rate: a word the buyer
+        // actually said is worth double one this file inferred for them.
+        for (const t of term.literal) {
+          if (vocab.has(t)) literalScore += LITERAL_WEIGHT;
+        }
+        for (const t of term.inferred) {
+          if (vocab.has(t)) score += INFERRED_WEIGHT;
+        }
+      }
+      score += literalScore;
+      // Ties go to the sector the buyer's OWN words reached, not the one
+      // that happens to be declared first in the taxonomy. "house
+      // cleaning" scored 4 for both Real Estate (entirely inferred, from
+      // `house`) and Cleaning Services (entirely literal), and file order
+      // handed it to Real Estate.
+      if (
+        score > 0 &&
+        (!best ||
+          score > best.score ||
+          (score === best.score && literalScore > best.literal))
+      ) {
+        best = { sector, score, literal: literalScore };
+      }
     }
     return best && best.score >= MIN_SCORE ? best.sector : null;
   };
@@ -504,6 +812,47 @@ export function getSectorClarifiers(
     businessType: sector.classification,
     fields,
   };
+}
+
+/**
+ * The SECTOR-LESS fallback pool — what to ask about when detection came up
+ * empty but the buyer clearly named an item ("a power bank", "a blender",
+ * "an inverter"). Added 2026-08-26 after a live report that a plain "I need
+ * a power bank" asked nothing at all and went straight to a dead end: the
+ * gate's whole "ask before searching" stage silently no-op'd because
+ * detectSector returned null, and returning null there was — by design —
+ * read by callers as "skip clarification entirely".
+ *
+ * That default is right for the parts of this module that FOLD a sector's
+ * own vocabulary into a search, and wrong for the attribute gate, whose job
+ * is simply to get SOME distinguishing detail before searching. Sector
+ * detection matches a buyer's word against business-type LABELS, so the
+ * item long tail misses constantly (a spot check of 50 everyday items:
+ * 40 detected nothing) — no synonym list finishes that job, so the gate
+ * needs a floor that doesn't depend on detection succeeding at all.
+ *
+ * Brand / Color / Condition (retail) and the General service group are
+ * genuinely useful for ANY item or job, which is exactly why they're the
+ * shared General pools in the first place — this just reaches for them
+ * directly instead of only as a per-sector shortfall filler.
+ */
+export function getGeneralClarifierFields(
+  intent?: SearchIntentKind,
+  count = DEFAULT_FIELD_COUNT,
+  overrides?: AttributeSchemaOverrides,
+): ClarifierField[] {
+  const fields: ClarifierField[] = [];
+  if (intent !== "buy_item") {
+    const general = SERVICE_DETAIL_PRESETS.find((g) => g.group === "General");
+    const items = overrides?.serviceGroups.get("General") ?? general?.items;
+    if (items) fields.push(...items);
+  }
+  if (intent !== "get_service") {
+    fields.push(
+      ...(overrides?.productGeneral ?? GENERAL_PRODUCT_PRESETS.items),
+    );
+  }
+  return prioritizeImportant(dedupeByName(fields)).slice(0, count);
 }
 
 // Some preset examples already bake in their own "e.g. " prefix (the

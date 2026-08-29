@@ -2,14 +2,16 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { generateUUID } from "@/lib/uuid";
 import { buildProductTerm } from "@/lib/productTerm";
 import { runSearchStream } from "@/lib/searchStream";
+import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { dedupeFinalEventStores } from "@/lib/searchTurnSnapshot";
+import { useChatHistoryStore } from "@/store/chatHistoryStore";
 import {
   getSearchDeviceId,
   getStoredConversationId,
@@ -31,7 +33,7 @@ import { CardCarousel } from "@/components/search/CardCarousel";
 import { ClarificationPrompt } from "@/components/search/ClarificationPrompt";
 import { CopyMessageButton } from "@/components/search/CopyMessageButton";
 import { BuyerRequestOfferWidget } from "@/components/search/BuyerRequestOfferWidget";
-import { BuyerInstallPrompt } from "@/components/search/BuyerInstallPrompt";
+import { InstallSuggestion } from "@/components/search/InstallSuggestion";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { useUserStore } from "@/store/userStore";
@@ -95,13 +97,19 @@ import { ArrowUp, Camera, Loader2, Pencil, Square, X } from "lucide-react";
 // comment below for why the client tracks this at all.
 const RECENT_STATUS_MEMORY = 8;
 
-// Shared background for every pure-text AI message — clarifying questions,
-// the "nothing found" dead end, the buyer-request offer/confirmation — but
-// deliberately NOT the result cards (products/stores/vendors stay exactly
-// as they render today, unboxed). Matches slate-100/#F1F5F9, the app's
-// existing light-surface token, so it reads as "a message from Velte" set
-// against the plain white chat background, not a competing card style.
-const AI_MESSAGE_BUBBLE_CLASS = "bg-slate-100 rounded-2xl px-4 py-3 max-w-md";
+// Shared wrapper for every pure-text AI message — clarifying questions, the
+// "nothing found" dead end, the buyer-request offer/confirmation.
+//
+// Plain, with no fill of its own (2026-08-26): the slate-100 bubble this
+// used to be is gone, and with it the rounding and padding, which only
+// existed to shape that fill. Velte's messages now read as plain text in
+// the thread — which is what the reply above a result grid ALWAYS did (it
+// renders a bare FormattedReply), so this closes a split where the same
+// assistant voice was boxed on some turns and not on others.
+//
+// `max-w-md` stays, but purely as a reading-width cap for the longer
+// dead-end and offer messages — it's a measure, not a box.
+const AI_MESSAGE_CLASS = "max-w-md";
 
 // Found live: the gate used to fire even when the buyer's OWN message
 // already named a place ("...in Lekki") — it only ever checked device
@@ -346,6 +354,7 @@ function createLoadingTurn(
     recommendation: null,
     externalOffers: [],
     error: null,
+    quota: null,
   };
 }
 
@@ -364,6 +373,7 @@ function storedTurnToConversationTurn(
     phase: "done",
     status: "",
     error: null,
+    quota: null,
     persisted: true,
   };
 }
@@ -786,6 +796,19 @@ interface ConversationTurn {
   // and NO chat CTA — there's no vendor relationship behind these.
   externalOffers: ExternalOffer[];
   error: string | null;
+  // The turn was refused on quota or plan (2026-08-29) — see
+  // SearchStreamEvent's "quota" case. Kept SEPARATE from `error` on purpose:
+  // nothing failed, and rendering it in the red error style would put a
+  // failure state on what is the single best conversion moment in the
+  // product (a guest reaching for photo search). Null on every ordinary
+  // turn.
+  quota: {
+    message: string;
+    isGuest: boolean;
+    actorType: "guest" | "buyer" | "vendor";
+    // "unavailable" = never on this plan; "exhausted" = used up this month.
+    reason: "unavailable" | "exhausted";
+  } | null;
   // True only when the buyer hit Stop mid-search (handleStop/onAbort) —
   // per explicit request, a stopped turn shows no wrap-up bubble of its
   // own at all, just whatever status/interim-reply text already arrived
@@ -806,6 +829,98 @@ interface ConversationTurn {
   // server in the first place. The persist effect only ever touches turns
   // where this is still false.
   persisted?: boolean;
+}
+
+// Display name only. plans.ts is server-only (it feeds the enforcement
+// path), so it can't be imported into a client component — if the tier is
+// ever renamed there, rename it here too. Nothing but this label duplicates.
+const PLUS_PLAN_NAME = "Velte Plus";
+
+/**
+ * What a buyer sees when a turn is refused on quota or plan.
+ *
+ * Two different endings on purpose, because they are two different people:
+ * a GUEST has no account to attach a plan to and almost certainly just needs
+ * the free tier, so they get sign-in and never see a price. Only a
+ * signed-in buyer who has genuinely run out is worth quoting money at —
+ * showing a price to someone who hasn't tried the free tier yet is how you
+ * lose them.
+ *
+ * Owns its own state rather than lifting it to SearchHome: nothing outside
+ * this card cares whether a checkout is opening, and a refused turn is
+ * terminal so there is no interaction to coordinate with.
+ */
+function QuotaCard({
+  quota,
+}: {
+  quota: NonNullable<ConversationTurn["quota"]>;
+}) {
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
+  const startUpgrade = useCallback(async () => {
+    if (upgrading) return;
+    setUpgrading(true);
+    setUpgradeError(null);
+    try {
+      const res = await fetch("/api/buyer-billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Monthly is the deliberate default: it's the smallest commitment,
+        // and the annual saving is better argued on a real pricing page
+        // than in a card that interrupted what someone was doing.
+        body: JSON.stringify({ planId: "plus", cycle: "monthly" }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        authorizationUrl?: string;
+        error?: string;
+      } | null;
+      if (!res.ok || !data?.authorizationUrl) {
+        throw new Error(data?.error ?? "Couldn't start the upgrade.");
+      }
+      // Full-page redirect, not a popup — same reasoning as the pay page:
+      // popups are unreliable for buyers arriving from WhatsApp on mobile.
+      window.location.href = data.authorizationUrl;
+    } catch (err) {
+      setUpgradeError(
+        err instanceof Error ? err.message : "Couldn't start the upgrade.",
+      );
+      setUpgrading(false);
+    }
+  }, [upgrading]);
+
+  return (
+    // AI_MESSAGE_CLASS, not a filled card: this IS one of Velte's messages,
+    // and every other one reads as plain text in the thread (see that
+    // constant's own comment). An orange panel here would have re-boxed the
+    // assistant's voice on exactly the turns where it is asking for
+    // something, which is the wrong turn to look like an advert.
+    <div className={AI_MESSAGE_CLASS}>
+      <p className="text-sm leading-relaxed text-[#023337]">{quota.message}</p>
+      {/* A VENDOR gets no call to action at all. They are already signed in,
+          and Velte Plus is a buyer subscription — offering it to an account
+          that already pays for leads is both meaningless and slightly
+          insulting. The message alone (what they used, when it resets) is
+          the whole of what's useful to them. */}
+      <div className={cn("mt-3", quota.actorType === "vendor" && "hidden")}>
+        {quota.isGuest ? (
+          <GoogleSignInButton />
+        ) : (
+          <button
+            type="button"
+            onClick={startUpgrade}
+            disabled={upgrading}
+            className="inline-flex items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:opacity-60"
+          >
+            {upgrading ? "Opening checkout…" : `Upgrade to ${PLUS_PLAN_NAME}`}
+          </button>
+        )}
+      </div>
+      {upgradeError && (
+        <p className="mt-2 text-xs text-red-600">{upgradeError}</p>
+      )}
+    </div>
+  );
 }
 
 function ConversationTurnView({
@@ -1035,7 +1150,7 @@ function ConversationTurnView({
             {turn.interimReplies.length > 0 && (
               <div className="space-y-3 mb-3">
                 {turn.interimReplies.map((text, i) => (
-                  <div key={i} className={AI_MESSAGE_BUBBLE_CLASS}>
+                  <div key={i} className={AI_MESSAGE_CLASS}>
                     <FormattedReply text={text} />
                   </div>
                 ))}
@@ -1054,352 +1169,389 @@ function ConversationTurnView({
               <p className="text-sm text-red-600">{turn.error}</p>
             )}
 
+            {/* A quota/plan refusal. Warm rather than alarming, and it says
+                what to DO — a guest hitting photo search is the best-placed
+                signup prompt in the product, so it gets the accent styling
+                a call to action deserves instead of an error's red. The
+                buyer's own words are still in the composer, so signing in
+                and sending again costs them nothing. */}
+            {turn.phase === "done" && turn.quota && (
+              <QuotaCard quota={turn.quota} />
+            )}
+
             {/* A stopped turn (onAbort) never reaches onFinal, so products/
               stores/etc. all stay at their initial empty state — nothing
               real to show, and per explicit request no synthetic wrap-up
               bubble either. The status shimmer above already stopped the
               instant `phase` flipped to "done"; this is what keeps nothing
               else from appearing in its place. */}
-            {turn.phase === "done" && !turn.error && !turn.stopped && (
-              <div className="space-y-6">
-                {turn.products.length > 0 ||
-                turn.stores.length > 0 ||
-                turn.vendorProducts.length > 0 ? (
-                  <>
-                    <FormattedReply text={turn.reply} />
-                    {turn.vendorProducts.length > 0 &&
-                      turn.vendorProductsStore && (
-                        <div className="space-y-3">
-                          <h2 className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                            {turn.vendorProductsStore.avatar ? (
-                              <span className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-orange-50">
-                                <ProtectedImage
-                                  src={optimizedImageUrl(
-                                    turn.vendorProductsStore.avatar,
-                                  )}
-                                  alt=""
-                                  className="w-full h-full object-cover"
+            {/* `!turn.quota` for the same reason as `!turn.stopped`: a
+                refused turn never reached onFinal, so products/stores/etc.
+                are all still empty and this block would render a
+                "nothing found" dead end underneath the quota prompt. */}
+            {turn.phase === "done" &&
+              !turn.error &&
+              !turn.stopped &&
+              !turn.quota && (
+                <div className="space-y-6">
+                  {turn.products.length > 0 ||
+                  turn.stores.length > 0 ||
+                  turn.vendorProducts.length > 0 ? (
+                    <>
+                      <FormattedReply text={turn.reply} />
+                      {turn.vendorProducts.length > 0 &&
+                        turn.vendorProductsStore && (
+                          <div className="space-y-3">
+                            <h2 className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                              {turn.vendorProductsStore.avatar ? (
+                                <span className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-orange-50">
+                                  <ProtectedImage
+                                    src={optimizedImageUrl(
+                                      turn.vendorProductsStore.avatar,
+                                    )}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                  />
+                                </span>
+                              ) : null}
+                              From {turn.vendorProductsStore.name}
+                            </h2>
+                            <CardCarousel
+                              items={turn.vendorProducts}
+                              getKey={(item) => item.productId}
+                              renderItem={(item) => (
+                                <StoreProductCard
+                                  match={item}
+                                  storeName={turn.vendorProductsStore!.name}
+                                  vendorId={turn.vendorProductsStore!.vendorId}
                                 />
-                              </span>
-                            ) : null}
-                            From {turn.vendorProductsStore.name}
-                          </h2>
+                              )}
+                            />
+                          </div>
+                        )}
+                      {turn.products.length > 0 && (
+                        <div className="space-y-3">
+                          {(turn.stores.length > 0 ||
+                            (turn.productsMatchTier &&
+                              turn.productsMatchTier !== "local") ||
+                            turn.productsMatchQuality) && (
+                            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                              {productsHeading(
+                                turn.productsMatchTier,
+                                turn.productsMatchQuality,
+                                turn.products,
+                              )}
+                            </h2>
+                          )}
+                          {/* The WHY half of the recommendation layer — the
+                            chips on the cards below say which, this says
+                            why (see RecommendationPicks). Absent whenever
+                            the turn has no recommendation, and the cards
+                            render exactly as they always did. */}
+                          {turn.recommendation && (
+                            <RecommendationPicks
+                              recommendation={turn.recommendation}
+                              products={turn.products}
+                            />
+                          )}
                           <CardCarousel
-                            items={turn.vendorProducts}
-                            getKey={(item) => item.productId}
-                            renderItem={(item) => (
-                              <StoreProductCard
-                                match={item}
-                                storeName={turn.vendorProductsStore!.name}
-                                storeWhatsapp={
-                                  turn.vendorProductsStore!.whatsapp
-                                }
-                                vendorId={turn.vendorProductsStore!.vendorId}
+                            items={turn.products}
+                            getKey={(match) => match.productId}
+                            renderItem={(match) => (
+                              <VendorResultCard
+                                match={match}
+                                pickBadges={pickBadgesFor(
+                                  match.productId,
+                                  turn.recommendation,
+                                )}
                               />
                             )}
                           />
                         </div>
                       )}
-                    {turn.products.length > 0 && (
-                      <div className="space-y-3">
-                        {(turn.stores.length > 0 ||
-                          (turn.productsMatchTier &&
-                            turn.productsMatchTier !== "local") ||
-                          turn.productsMatchQuality) && (
+                      {turn.weakProducts.length > 0 && (
+                        <div className="space-y-3">
                           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                            {productsHeading(
-                              turn.productsMatchTier,
-                              turn.productsMatchQuality,
-                              turn.products,
-                            )}
+                            A couple more options — not an exact match
                           </h2>
-                        )}
-                        {/* The WHY half of the recommendation layer — the
-                            chips on the cards below say which, this says
-                            why (see RecommendationPicks). Absent whenever
-                            the turn has no recommendation, and the cards
-                            render exactly as they always did. */}
-                        {turn.recommendation && (
-                          <RecommendationPicks
-                            recommendation={turn.recommendation}
-                            products={turn.products}
+                          <CardCarousel
+                            items={turn.weakProducts}
+                            getKey={(match) => match.productId}
+                            renderItem={(match) => (
+                              <VendorResultCard match={match} />
+                            )}
                           />
-                        )}
-                        <CardCarousel
-                          items={turn.products}
-                          getKey={(match) => match.productId}
-                          renderItem={(match) => (
-                            <VendorResultCard
-                              match={match}
-                              pickBadges={pickBadgesFor(
-                                match.productId,
-                                turn.recommendation,
+                        </div>
+                      )}
+                      {turn.stores.length > 0 && (
+                        <div className="space-y-3">
+                          {(turn.products.length > 0 ||
+                            (turn.storesMatchTier &&
+                              turn.storesMatchTier !== "local") ||
+                            turn.storesMatchQuality) && (
+                            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                              {storesHeading(
+                                turn.storesMatchTier,
+                                turn.storesMatchQuality,
                               )}
-                            />
+                            </h2>
                           )}
-                        />
-                      </div>
-                    )}
-                    {turn.weakProducts.length > 0 && (
-                      <div className="space-y-3">
-                        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          A couple more options — not an exact match
-                        </h2>
-                        <CardCarousel
-                          items={turn.weakProducts}
-                          getKey={(match) => match.productId}
-                          renderItem={(match) => (
-                            <VendorResultCard match={match} />
-                          )}
-                        />
-                      </div>
-                    )}
-                    {turn.stores.length > 0 && (
-                      <div className="space-y-3">
-                        {(turn.products.length > 0 ||
-                          (turn.storesMatchTier &&
-                            turn.storesMatchTier !== "local") ||
-                          turn.storesMatchQuality) && (
-                          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                            {storesHeading(
-                              turn.storesMatchTier,
-                              turn.storesMatchQuality,
+                          <CardCarousel
+                            items={turn.stores}
+                            getKey={(store) => store.storeId}
+                            renderItem={(store) => (
+                              <StoreWithServices
+                                store={store}
+                                services={turn.storeServices.filter(
+                                  (s) => s.vendorId === store.vendorId,
+                                )}
+                                // Only when this is a pure vendor/store result
+                                // (no product attached) — a dual-intent turn
+                                // already has a product for the buyer to
+                                // reference instead.
+                                searchQuery={
+                                  turn.products.length === 0
+                                    ? turn.storesQuery
+                                    : null
+                                }
+                                isServicesOpen={
+                                  expandedServicesVendorId === store.vendorId
+                                }
+                                onToggleServices={() =>
+                                  onToggleServices(store.vendorId)
+                                }
+                              />
                             )}
+                          />
+                          {(() => {
+                            const activeStore = turn.stores.find(
+                              (s) => s.vendorId === expandedServicesVendorId,
+                            );
+                            const activeServices = activeStore
+                              ? turn.storeServices.filter(
+                                  (s) => s.vendorId === activeStore.vendorId,
+                                )
+                              : [];
+                            if (!activeStore || activeServices.length === 0)
+                              return null;
+                            return (
+                              <MatchingServicesThread
+                                storeName={activeStore.name}
+                                services={activeServices}
+                                panelRef={servicesThreadRef}
+                              />
+                            );
+                          })()}
+                        </div>
+                      )}
+                      {turn.furtherStores.length > 0 && (
+                        <div className="space-y-3">
+                          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                            Also available further out
                           </h2>
-                        )}
+                          <CardCarousel
+                            items={turn.furtherStores}
+                            getKey={(store) => store.storeId}
+                            renderItem={(store) => (
+                              <StoreWithServices
+                                store={store}
+                                services={turn.storeServices.filter(
+                                  (s) => s.vendorId === store.vendorId,
+                                )}
+                                searchQuery={
+                                  turn.products.length === 0
+                                    ? turn.storesQuery
+                                    : null
+                                }
+                                isServicesOpen={
+                                  expandedServicesVendorId === store.vendorId
+                                }
+                                onToggleServices={() =>
+                                  onToggleServices(store.vendorId)
+                                }
+                              />
+                            )}
+                          />
+                          {(() => {
+                            const activeStore = turn.furtherStores.find(
+                              (s) => s.vendorId === expandedServicesVendorId,
+                            );
+                            const activeServices = activeStore
+                              ? turn.storeServices.filter(
+                                  (s) => s.vendorId === activeStore.vendorId,
+                                )
+                              : [];
+                            if (!activeStore || activeServices.length === 0)
+                              return null;
+                            return (
+                              <MatchingServicesThread
+                                storeName={activeStore.name}
+                                services={activeServices}
+                                panelRef={servicesThreadRef}
+                              />
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </>
+                  ) : (turn.externalStoreSuggestions.length > 0 ||
+                      turn.externalOffers.length > 0) &&
+                    !turn.buyerRequestOffered ? (
+                    // No Velte vendor matched — real nearby businesses via Google
+                    // Places (searchStores Tier 5), visibly distinct from an actual
+                    // Velte listing (see ExternalBusinessCard). `!buyerRequestOffered`
+                    // is the "Buyer Requests come first" gate (2026-08-16, see
+                    // offerBuyerRequestTool's own comment): Tier 5 can come back in
+                    // the SAME tool result as an otherwise-empty search, but on the
+                    // turn where the model is making the reach-out offer instead,
+                    // these stay hidden and this falls through to the dead-end
+                    // Compass card below — visually identical whether or not Places
+                    // secretly found something, so the offer is always what the
+                    // buyer sees first. They only render once a later turn
+                    // re-searches with the offer declined (buyerRequestOffered
+                    // false again that time).
+                    //
+                    // 2026-08-19: `reply` wrapped in the same AI_MESSAGE_CLASS
+                    // every other pure-text reply gets, rather than being the
+                    // one branch in this chain rendering a loose fragment.
+                    // (That wrapper carries only a reading-width cap now — see
+                    // AI_MESSAGE_CLASS — but the point stands: every branch
+                    // here renders its reply the same way.)
+                    <>
+                      <div className={AI_MESSAGE_CLASS}>
+                        <FormattedReply text={turn.reply} />
+                      </div>
+                      {turn.externalStoreSuggestions.length > 0 && (
                         <CardCarousel
-                          items={turn.stores}
-                          getKey={(store) => store.storeId}
-                          renderItem={(store) => (
-                            <StoreWithServices
-                              store={store}
-                              services={turn.storeServices.filter(
-                                (s) => s.vendorId === store.vendorId,
-                              )}
-                              // Only when this is a pure vendor/store result
-                              // (no product attached) — a dual-intent turn
-                              // already has a product for the buyer to
-                              // reference instead.
-                              searchQuery={
-                                turn.products.length === 0
-                                  ? turn.storesQuery
-                                  : null
-                              }
-                              isServicesOpen={
-                                expandedServicesVendorId === store.vendorId
-                              }
-                              onToggleServices={() =>
-                                onToggleServices(store.vendorId)
-                              }
-                            />
+                          items={turn.externalStoreSuggestions}
+                          getKey={(match) => match.name + match.address}
+                          renderItem={(match) => (
+                            <ExternalBusinessCard match={match} />
                           )}
                         />
-                        {(() => {
-                          const activeStore = turn.stores.find(
-                            (s) => s.vendorId === expandedServicesVendorId,
-                          );
-                          const activeServices = activeStore
-                            ? turn.storeServices.filter(
-                                (s) => s.vendorId === activeStore.vendorId,
-                              )
-                            : [];
-                          if (!activeStore || activeServices.length === 0)
-                            return null;
-                          return (
-                            <MatchingServicesThread
-                              storeName={activeStore.name}
-                              services={activeServices}
-                              panelRef={servicesThreadRef}
-                            />
-                          );
-                        })()}
-                      </div>
-                    )}
-                    {turn.furtherStores.length > 0 && (
-                      <div className="space-y-3">
-                        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          Also available further out
-                        </h2>
-                        <CardCarousel
-                          items={turn.furtherStores}
-                          getKey={(store) => store.storeId}
-                          renderItem={(store) => (
-                            <StoreWithServices
-                              store={store}
-                              services={turn.storeServices.filter(
-                                (s) => s.vendorId === store.vendorId,
-                              )}
-                              searchQuery={
-                                turn.products.length === 0
-                                  ? turn.storesQuery
-                                  : null
-                              }
-                              isServicesOpen={
-                                expandedServicesVendorId === store.vendorId
-                              }
-                              onToggleServices={() =>
-                                onToggleServices(store.vendorId)
-                              }
-                            />
-                          )}
-                        />
-                        {(() => {
-                          const activeStore = turn.furtherStores.find(
-                            (s) => s.vendorId === expandedServicesVendorId,
-                          );
-                          const activeServices = activeStore
-                            ? turn.storeServices.filter(
-                                (s) => s.vendorId === activeStore.vendorId,
-                              )
-                            : [];
-                          if (!activeStore || activeServices.length === 0)
-                            return null;
-                          return (
-                            <MatchingServicesThread
-                              storeName={activeStore.name}
-                              services={activeServices}
-                              panelRef={servicesThreadRef}
-                            />
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </>
-                ) : (turn.externalStoreSuggestions.length > 0 ||
-                    turn.externalOffers.length > 0) &&
-                  !turn.buyerRequestOffered ? (
-                  // No Velte vendor matched — real nearby businesses via Google
-                  // Places (searchStores Tier 5), visibly distinct from an actual
-                  // Velte listing (see ExternalBusinessCard). `!buyerRequestOffered`
-                  // is the "Buyer Requests come first" gate (2026-08-16, see
-                  // offerBuyerRequestTool's own comment): Tier 5 can come back in
-                  // the SAME tool result as an otherwise-empty search, but on the
-                  // turn where the model is making the reach-out offer instead,
-                  // these stay hidden and this falls through to the dead-end
-                  // Compass card below — visually identical whether or not Places
-                  // secretly found something, so the offer is always what the
-                  // buyer sees first. They only render once a later turn
-                  // re-searches with the offer declined (buyerRequestOffered
-                  // false again that time).
-                  //
-                  // 2026-08-19: `reply` now wrapped in the same
-                  // AI_MESSAGE_BUBBLE_CLASS every other pure-text reply gets —
-                  // this was a bare fragment before, the one place in this
-                  // whole chain a plain-text reply didn't get bubble
-                  // treatment (BuyerRequestOfferWidget's own no_match message
-                  // had the identical gap — see that file's matching fix).
-                  <>
-                    <div className={AI_MESSAGE_BUBBLE_CLASS}>
-                      <FormattedReply text={turn.reply} />
-                    </div>
-                    {turn.externalStoreSuggestions.length > 0 && (
-                      <CardCarousel
-                        items={turn.externalStoreSuggestions}
-                        getKey={(match) => match.name + match.address}
-                        renderItem={(match) => (
-                          <ExternalBusinessCard match={match} />
-                        )}
-                      />
-                    )}
-                    {/* Phase 4 — off-Velte offers, headed explicitly so
+                      )}
+                      {/* Phase 4 — off-Velte offers, headed explicitly so
                         there's no chance of reading them as Velte
                         listings. Rendered BELOW nearby businesses when
                         both exist: a real shop the buyer can walk into is
                         the better answer here than an online link. */}
-                    {turn.externalOffers.length > 0 && (
-                      <div className="space-y-3">
-                        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                          Available online — not on Velte
-                        </h2>
-                        <CardCarousel
-                          items={turn.externalOffers}
-                          getKey={(offer) => offer.id}
-                          renderItem={(offer) => (
-                            <ExternalOfferCard offer={offer} />
+                      {turn.externalOffers.length > 0 && (
+                        <div className="space-y-3">
+                          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                            Available online — not on Velte
+                          </h2>
+                          {/* The same picks block the Velte results get
+                            (2026-08-26). A turn only ever carries one kind
+                            of candidate — externalOffers exist solely when
+                            Velte found nothing — so the turn's single
+                            `recommendation` belongs to whichever is on
+                            screen, and RecommendationPicks resolves its
+                            ids against both lists. */}
+                          {turn.recommendation && (
+                            <RecommendationPicks
+                              recommendation={turn.recommendation}
+                              products={[]}
+                              offers={turn.externalOffers}
+                              valueLabel="Best price"
+                            />
                           )}
-                        />
-                      </div>
-                    )}
-                  </>
-                ) : turn.buyerRequestOffer ? (
-                  // createBuyerRequest ran this turn (see systemPrompt.ts) —
-                  // real agent action, not a dead end, so this gets the same
-                  // message-bubble treatment as every other pure-text reply,
-                  // never the "nothing found anywhere" Compass treatment.
-                  <div className={AI_MESSAGE_BUBBLE_CLASS}>
-                    <FormattedReply text={turn.reply} />
-                  </div>
-                ) : turn.buyerRequestOffered ? (
-                  // offerBuyerRequest ran this turn (see offerBuyerRequestTool's
-                  // own comment) — the model is actively making the reach-out
-                  // offer in `reply`'s text right now. There's a real next step
-                  // on the table, so this is NOT a dead end either — same
-                  // message-bubble treatment, not the "nothing found anywhere"
-                  // Compass case below. The Yes/No pair turns that next step
-                  // into an actual click instead of the buyer having to type
-                  // "yes" — both just submit canned text as the next message,
-                  // same mechanism ClarificationPrompt's "choice" pills already
-                  // use (see handleClarificationAnswer), so no new plumbing
-                  // was needed for this. Only rendered on the latest turn, same
-                  // gate every other still-actionable widget in this thread
-                  // uses — an answered offer shouldn't still show buttons on
-                  // scrollback.
-                  <div className={cn(AI_MESSAGE_BUBBLE_CLASS, "space-y-3")}>
-                    <FormattedReply text={turn.reply} />
-                    {isLatest && (
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onAnswerClarification("Yes, find someone")
-                          }
-                          className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
-                        >
-                          Yes, find someone
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onAnswerClarification("No thanks, that's okay")
-                          }
-                          className="text-sm text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-                        >
-                          No thanks
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : !turn.toolCalled ? (
-                  // The model asked a clarifying question instead of searching
-                  // (see systemPrompt.ts) — same message-bubble treatment as
-                  // the text above a result grid, never the "nothing found
-                  // anywhere" case below: the conversation is still open, not
-                  // a dead end.
-                  <div className={AI_MESSAGE_BUBBLE_CLASS}>
-                    <FormattedReply text={turn.reply} />
-                  </div>
-                ) : (
-                  // A real search ran and came up completely empty, with no
-                  // further move on the table (no reach-out offer, no
-                  // clarification) — genuinely nothing to show. Still just a
-                  // message, not product/vendor cards, so it gets the same
-                  // message-bubble treatment as every other pure-text reply
-                  // (see AI_MESSAGE_BUBBLE_CLASS) rather than sitting bare —
-                  // only the actual result cards stay unboxed.
-                  <div
-                    className={cn(
-                      AI_MESSAGE_BUBBLE_CLASS,
-                      "flex items-start gap-2.5",
-                    )}
-                  >
-                    <CompassIcon
-                      size={18}
-                      className="text-orange-400 shrink-0 mt-0.5"
-                    />
-                    <FormattedReply text={turn.reply} />
-                  </div>
-                )}
-                {/* Sits after, not inside, the chain above — so the rare turn
+                          <CardCarousel
+                            items={turn.externalOffers}
+                            getKey={(offer) => offer.id}
+                            renderItem={(offer) => (
+                              <ExternalOfferCard
+                                offer={offer}
+                                pickBadges={pickBadgesFor(
+                                  offer.id,
+                                  turn.recommendation,
+                                  "Best price",
+                                )}
+                              />
+                            )}
+                          />
+                        </div>
+                      )}
+                    </>
+                  ) : turn.buyerRequestOffer ? (
+                    // createBuyerRequest ran this turn (see systemPrompt.ts) —
+                    // real agent action, not a dead end, so this gets the same
+                    // plain-message treatment as every other pure-text reply,
+                    // never the "nothing found anywhere" Compass treatment.
+                    <div className={AI_MESSAGE_CLASS}>
+                      <FormattedReply text={turn.reply} />
+                    </div>
+                  ) : turn.buyerRequestOffered ? (
+                    // offerBuyerRequest ran this turn (see offerBuyerRequestTool's
+                    // own comment) — the model is actively making the reach-out
+                    // offer in `reply`'s text right now. There's a real next step
+                    // on the table, so this is NOT a dead end either — same
+                    // plain-message treatment, not the "nothing found anywhere"
+                    // Compass case below. The Yes/No pair turns that next step
+                    // into an actual click instead of the buyer having to type
+                    // "yes" — both just submit canned text as the next message,
+                    // same mechanism ClarificationPrompt's "choice" pills already
+                    // use (see handleClarificationAnswer), so no new plumbing
+                    // was needed for this. Only rendered on the latest turn, same
+                    // gate every other still-actionable widget in this thread
+                    // uses — an answered offer shouldn't still show buttons on
+                    // scrollback.
+                    <div className={cn(AI_MESSAGE_CLASS, "space-y-3")}>
+                      <FormattedReply text={turn.reply} />
+                      {isLatest && (
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onAnswerClarification("Yes, find someone")
+                            }
+                            className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
+                          >
+                            Yes, find someone
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onAnswerClarification("No thanks, that's okay")
+                            }
+                            className="text-sm text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                          >
+                            No thanks
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : !turn.toolCalled ? (
+                    // The model asked a clarifying question instead of searching
+                    // (see systemPrompt.ts) — same plain-message treatment as
+                    // the text above a result grid, never the "nothing found
+                    // anywhere" case below: the conversation is still open, not
+                    // a dead end.
+                    <div className={AI_MESSAGE_CLASS}>
+                      <FormattedReply text={turn.reply} />
+                    </div>
+                  ) : (
+                    // A real search ran and came up completely empty, with no
+                    // further move on the table (no reach-out offer, no
+                    // clarification) — genuinely nothing to show. Still just a
+                    // message, not product/vendor cards, so it gets the same
+                    // plain-message treatment as every other pure-text reply
+                    // (see AI_MESSAGE_CLASS). The Compass icon is what marks
+                    // this branch as the dead end — it's the only signal now
+                    // that no fill distinguishes it.
+                    <div
+                      className={cn(
+                        AI_MESSAGE_CLASS,
+                        "flex items-start gap-2.5",
+                      )}
+                    >
+                      <CompassIcon
+                        size={18}
+                        className="text-orange-400 shrink-0 mt-0.5"
+                      />
+                      <FormattedReply text={turn.reply} />
+                    </div>
+                  )}
+                  {/* Sits after, not inside, the chain above — so the rare turn
               where the model both ran a real search AND asked a follow-up
               question still shows the results AND this widget, rather than
               one silently suppressing the other. Only actionable (rendered
@@ -1414,32 +1566,32 @@ function ConversationTurnView({
               widget's separate, fixed-height input — EXCEPT a skippable
               one (the bare-query attribute gate), which mounts just for
               its skip pill; typing still answers through the composer. */}
-                {turn.clarification &&
-                  turn.clarification.kind !== "name" &&
-                  (turn.clarification.kind !== "text" ||
-                    turn.clarification.skippable === true) &&
-                  isLatest && (
-                    <ClarificationPrompt
-                      clarification={turn.clarification}
-                      onAnswer={onAnswerClarification}
-                      onLocationShared={onLocationShared}
-                      onPickItem={onPickItem}
-                    />
-                  )}
-                {/* "needs_identity" excluded — SearchHome.tsx's own composer
+                  {turn.clarification &&
+                    turn.clarification.kind !== "name" &&
+                    (turn.clarification.kind !== "text" ||
+                      turn.clarification.skippable === true) &&
+                    isLatest && (
+                      <ClarificationPrompt
+                        clarification={turn.clarification}
+                        onAnswer={onAnswerClarification}
+                        onLocationShared={onLocationShared}
+                        onPickItem={onPickItem}
+                      />
+                    )}
+                  {/* "needs_identity" excluded — SearchHome.tsx's own composer
                   (see IdentityCapture) takes over the phone/OTP exchange
                   entirely now, narrated as ordinary follow-up turns
                   instead of an inline form widget here. This only ever
                   renders the "created" confirmation card now — see that
                   component's own comment for why "no_match"/"error" have
                   nothing left to render here either. */}
-                {turn.buyerRequestOffer &&
-                  turn.buyerRequestOffer.status !== "needs_identity" &&
-                  isLatest && (
-                    <BuyerRequestOfferWidget offer={turn.buyerRequestOffer} />
-                  )}
-              </div>
-            )}
+                  {turn.buyerRequestOffer &&
+                    turn.buyerRequestOffer.status !== "needs_identity" &&
+                    isLatest && (
+                      <BuyerRequestOfferWidget offer={turn.buyerRequestOffer} />
+                    )}
+                </div>
+              )}
           </div>
         </div>
       )}
@@ -1553,6 +1705,11 @@ export function SearchHome() {
   // search runs exactly like the old stateless flow.
   const deviceIdRef = useRef<string | null>(null);
   const conversationIdRef = useRef<string | null>(null);
+  // Bumped whenever a session COMPLETES with something to show. The install
+  // suggestion watches this rather than a timer: the app is worth offering
+  // right after Velte has just proved useful, never 30 seconds after arrival
+  // (see InstallSuggestion for the timing rules).
+  const [sessionsCompleted, setSessionsCompleted] = useState(0);
 
   // True only while a stored conversation is known to exist AND its turns
   // are still being fetched — the render below swaps the idle hero for a
@@ -1861,6 +2018,10 @@ export function SearchHome() {
   // composer's own text) so switching back afterward never leaves stray
   // leftover text in either box.
   const [identityValue, setIdentityValue] = useState("");
+  // The verified-phone proof from verify-otp, for a buyer with no account.
+  // A ref, not state: nothing renders from it, and it must not outlive the
+  // tab (see where it's set).
+  const phoneTokenRef = useRef<string | null>(null);
   const [identitySubmitting, setIdentitySubmitting] = useState(false);
   // Seconds left before "Resend code" is tappable again — 0 means it's
   // live. SMS delivery has a real, sometimes-lagging round trip to the
@@ -1942,6 +2103,150 @@ export function SearchHome() {
       setNameSubmitting(false);
     }
   }
+
+  // ── Opening a conversation from the history drawer (2026-08-26) ─────────
+  //
+  // The sibling of the mount rehydrate above, and deliberately a separate
+  // effect rather than a parameter on it: that one is a one-shot that must
+  // NOT clobber a live session (a buyer who started typing before it
+  // resolved keeps their thread), while this one is an explicit instruction
+  // to switch threads and therefore always replaces what's on screen.
+  //
+  // `includeStale=true` because a thread picked out of a history list is
+  // very often older than the 24h staleness window — see the backend's
+  // getConversation. Continuing it afterwards is safe: ensure now revives a
+  // stale thread and clears only its goal sheet, rather than silently
+  // starting a new conversation underneath the one being looked at.
+  const requestedConversationId = useChatHistoryStore(
+    (s) => s.requestedConversationId,
+  );
+  const clearHistoryRequest = useChatHistoryStore((s) => s.clearRequest);
+  useEffect(() => {
+    if (!requestedConversationId) return;
+
+    const deviceId = deviceIdRef.current ?? getSearchDeviceId();
+    // Nothing to load, or it's already on screen — drop the request so a
+    // later click on a DIFFERENT row still registers as a change.
+    if (!deviceId || requestedConversationId === conversationIdRef.current) {
+      clearHistoryRequest();
+      return;
+    }
+    deviceIdRef.current = deviceId;
+
+    // The request is cleared at the END of the load, never here. Clearing
+    // it up front looks harmless and is not: it mutates this effect's own
+    // dependency, so React tears the effect down (setting `cancelled`) and
+    // re-runs it with null while the fetch is still in flight. The reply
+    // then lands in a dead closure — the turns are dropped by the
+    // `cancelled` guard AND `setRehydrating(false)` is skipped, leaving the
+    // loader up forever. That was a real bug (2026-08-26): clicking a
+    // conversation spun indefinitely and never opened it.
+    let cancelled = false;
+    setRehydrating(true);
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/search/conversation?id=${encodeURIComponent(requestedConversationId)}&deviceId=${encodeURIComponent(deviceId)}&includeStale=true`,
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          conversation?: StoredConversation;
+        };
+        const stored = data.conversation?.turns ?? [];
+        if (cancelled) return;
+
+        // Only adopt the thread once its turns are actually in hand — a
+        // failed load must leave the buyer where they were, not on a blank
+        // screen pointing at a conversation that never arrived.
+        conversationIdRef.current = requestedConversationId;
+        storeConversationId(requestedConversationId);
+
+        // Same seeding the mount rehydrate does, for the same reasons —
+        // status-repeat avoidance and the location already settled in THIS
+        // thread, so switching to it doesn't re-ask what it already knows.
+        shownStatusesRef.current = (
+          data.conversation?.recentStatuses ?? []
+        ).slice(-RECENT_STATUS_MEMORY);
+        const storedLocation = data.conversation?.buyerLocation;
+        buyerLocationRef.current =
+          storedLocation?.lat != null && storedLocation?.lng != null
+            ? { lat: storedLocation.lat, lng: storedLocation.lng }
+            : null;
+        locationDeclinedRef.current = storedLocation?.declined ?? false;
+        locationPlaceNameRef.current = storedLocation?.placeName ?? null;
+
+        // Any capture the PREVIOUS thread had open belongs to that thread,
+        // not this one — a phone/OTP or name prompt left standing here
+        // would post the buyer's answer into a conversation they've since
+        // navigated away from.
+        setIdentityCapture(null);
+        setIdentityValue("");
+        setNameCapture(null);
+        setNameValue("");
+        setTurns(stored.map(storedTurnToConversationTurn));
+
+        // Resume whichever capture THIS thread was waiting on, mirroring
+        // the mount rehydrate's own rule (phone/OTP always restarts at
+        // "phone" — any code in flight died with the old session).
+        const last = stored[stored.length - 1];
+        if (last?.buyerRequestOffer?.status === "needs_identity") {
+          setIdentityCapture({
+            offer: last.buyerRequestOffer,
+            imageUrl: last.imageUrl,
+            matchQuery: last.buyerRequestMatchQuery,
+            step: "phone",
+            phone: "",
+          });
+        } else if (last?.clarification?.kind === "name") {
+          setNameCapture({ question: last.clarification.question });
+        }
+      } catch {
+        /* left where they were — see the comment above */
+      } finally {
+        // Both guarded on `cancelled`, and the clear especially: if this
+        // run was superseded by a click on another row, that newer request
+        // is sitting in the store right now and clearing it here would
+        // silently cancel the load the buyer is actually waiting on. The
+        // run that supersedes this one owns both flags from then on.
+        if (!cancelled) {
+          setRehydrating(false);
+          clearHistoryRequest();
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedConversationId, clearHistoryRequest]);
+
+  // "New chat" from the history drawer. Deliberately does NOT touch the
+  // location refs: location describes the BUYER, not the request, and
+  // re-asking someone for their area because they started a new search is
+  // exactly the friction Phase 5 exists to remove (route.ts makes the same
+  // distinction when a turn starts a fresh request).
+  const newChatNonce = useChatHistoryStore((s) => s.newChatNonce);
+  const clearNewChatRequest = useChatHistoryStore((s) => s.clearNewChatRequest);
+  useEffect(() => {
+    if (!newChatNonce) return;
+    conversationIdRef.current = null;
+    clearStoredConversationId();
+    // Status-phrase memory is per-conversation, same as the seeding both
+    // load paths do — carrying it into a brand new thread would suppress
+    // lines this conversation has never shown.
+    shownStatusesRef.current = [];
+    setIdentityCapture(null);
+    setIdentityValue("");
+    setNameCapture(null);
+    setNameValue("");
+    setTurns([]);
+    // Cleared LAST, for the same reason the history-open effect above
+    // clears last: this call mutates the dependency this effect keys on, so
+    // React tears the effect down the moment it lands. Everything here is
+    // synchronous, so doing it first happened to work — but it left the
+    // reset one `await` away from the wedge that bug had.
+    clearNewChatRequest();
+  }, [newChatNonce, clearNewChatRequest]);
 
   // A queue of every not-yet-resolved item deferred off a dual-intent turn
   // (see route.ts's own comment on where this branches off the normal
@@ -2780,13 +3085,22 @@ export function SearchHome() {
           // carrying the offer), never a later one, since the composer's
           // own `imageUrl` state may have already moved on to a fresh
           // photo by the time the buyer actually finishes verifying.
-          if (event.buyerRequestOffer?.status === "needs_identity") {
+          if (
+            event.buyerRequestOffer?.status === "needs_identity" ||
+            event.buyerRequestOffer?.status === "needs_phone_choice"
+          ) {
+            const saved =
+              event.buyerRequestOffer.status === "needs_phone_choice"
+                ? event.buyerRequestOffer.phone
+                : "";
             setIdentityCapture({
               offer: event.buyerRequestOffer,
               imageUrl: currentImageUrl,
               matchQuery: event.buyerRequestMatchQuery,
-              step: "phone",
-              phone: "",
+              // A saved number goes to the choose step (show it, offer to
+              // swap); no number at all goes straight to asking for one.
+              step: saved ? "choose" : "phone",
+              phone: saved,
             });
             setIdentityValue("");
           }
@@ -2835,9 +3149,33 @@ export function SearchHome() {
               scheduleNextBackgroundItem();
             }
           }
+
+          // A COMPLETED session, for install-suggestion purposes: the turn
+          // finished and put something in front of the buyer. A clarifying
+          // question or a dead end is not a moment to ask for anything else
+          // — the product hasn't proved itself yet on that turn.
+          const delivered =
+            (event.products?.length ?? 0) > 0 ||
+            (event.stores?.length ?? 0) > 0 ||
+            (event.externalOffers?.length ?? 0) > 0;
+          if (delivered) setSessionsCompleted((n) => n + 1);
         },
         onError: (errorMessage) => {
           updateTurn(turnId, { phase: "done", error: errorMessage });
+        },
+        // Refused on quota/plan — terminal, and deliberately not routed
+        // through onError: this is the pricing model working, not a
+        // failure, and it renders as a prompt rather than red text.
+        onQuota: (event) => {
+          updateTurn(turnId, {
+            phase: "done",
+            quota: {
+              message: event.message,
+              isGuest: event.isGuest,
+              actorType: event.actorType,
+              reason: event.reason,
+            },
+          });
         },
         // The buyer hit Stop (handleStop) — a deliberate cancel, not a
         // failure. Per explicit request, this shows NO wrap-up bubble of
@@ -3301,6 +3639,123 @@ export function SearchHome() {
   // BuyerPhoneVerifyForm used to make on its own (request-otp/verify-otp/
   // POST buyer-requests), just narrated as conversation instead of a
   // silent form.
+  // The half of the reach-out flow that runs once the buyer's NUMBER is
+  // settled — extracted (2026-08-26) because two paths now reach it: the
+  // OTP verification below, and "use my saved number" from the choose step.
+  // It was inline in the OTP handler while that was the only way through.
+  async function finishBuyerRequest(capture: IdentityCapture, turnId: string) {
+    const { offer } = capture;
+    const { created, request } = await buyerApi.post<{
+      created: boolean;
+      request: { id: string } | null;
+    }>("/api/buyer-requests", {
+      description: offer.description,
+      name: offer.buyerName,
+      imageUrl: capture.imageUrl,
+      // Proves the number for a buyer with no account; absent (and ignored)
+      // when a session already identifies them.
+      ...(phoneTokenRef.current && { phoneToken: phoneTokenRef.current }),
+      ...(capture.matchQuery && {
+        matchQuery: capture.matchQuery,
+      }),
+      ...(buyerLocationRef.current && { location: buyerLocationRef.current }),
+    });
+    if (!created || !request) {
+      // Mirrors BuyerRequestOfferWidget's own (now-inert for this
+      // specific path — see that file's own comment) selfResolvedNoMatch
+      // behavior: no AI turn runs for this REST-only flow, so the
+      // normal "no_match re-searches and reveals Google Places in the
+      // same turn" behavior (systemPrompt.ts) has nothing to attach to
+      // — this is that same reveal, done deterministically via the same
+      // dedicated route, rendered through the turn's own ordinary
+      // externalStoreSuggestions branch (ConversationTurnView) rather
+      // than a separate widget.
+      let externalStoreSuggestions: NearbyBusiness[] = [];
+      try {
+        const { externalSuggestions } = await buyerApi.post<{
+          externalSuggestions: NearbyBusiness[];
+        }>("/api/buyer-requests/nearby", {
+          description: offer.description,
+          ...(buyerLocationRef.current && {
+            location: buyerLocationRef.current,
+          }),
+        });
+        externalStoreSuggestions = externalSuggestions;
+      } catch {
+        // Best-effort — an empty list still resolves the turn cleanly.
+      }
+      updateTurn(turnId, {
+        phase: "done",
+        reply: pickAvoiding(
+          noMatchRequestPhrase(externalStoreSuggestions.length > 0),
+          [],
+        ),
+        externalStoreSuggestions,
+        // The exchange's terminal turn becomes persistable (Phase 1
+        // follow-up): the buyer's typed OTP code is replaced with a
+        // sanitized line (also nicer than leaving a bare code as their
+        // bubble) and `ephemeral` is lifted so the persist effect stores
+        // it — without this, the stored conversation still ends on the
+        // needs_identity turn and a refresh would wrongly re-open
+        // phone/OTP capture for a request that already resolved.
+        query: "Verified my WhatsApp number",
+        ephemeral: false,
+      });
+    } else {
+      updateTurn(turnId, {
+        phase: "done",
+        reply:
+          "I've reached out to a few businesses about this — if anyone's interested, they'll message you directly on WhatsApp. You'll also get an SMS confirming this went out.",
+        buyerRequestOffer: {
+          status: "created",
+          requestId: request.id,
+          description: offer.description,
+        },
+        // Same as the no_match branch above — see that comment.
+        query: "Verified my WhatsApp number",
+        ephemeral: false,
+      });
+    }
+    concludeCurrentItemFlow();
+    setIdentityCapture(null);
+  }
+
+  // "Use this number" on the choose step — the buyer's saved, already-
+  // verified phone, so there is nothing to send or check: straight to
+  // creating the request. No OTP round-trip, which is the entire point of
+  // retaining the number in the first place.
+  async function handleUseSavedNumber() {
+    if (!identityCapture || identitySubmitting) return;
+    setIdentitySubmitting(true);
+    const turnId = appendIdentityTurn(
+      `Use ${identityCapture.phone}`,
+      pickAvoiding(creatingRequestPhrase(), []),
+    );
+    try {
+      await finishBuyerRequest(identityCapture, turnId);
+    } catch (err) {
+      updateTurn(turnId, {
+        phase: "done",
+        error: err instanceof Error ? err.message : "Something went wrong.",
+      });
+      // Stays on the choose step so they can try again or switch numbers.
+    } finally {
+      setIdentitySubmitting(false);
+    }
+  }
+
+  // "Use a different number" — a pure client-side switch to the phone step.
+  // Nothing server-side has happened for a number not yet entered, and the
+  // saved one is left untouched on the account until a NEW one is actually
+  // verified (see the backend's pendingPhone).
+  function handleUseDifferentNumber() {
+    if (identitySubmitting) return;
+    setIdentityCapture((cur) =>
+      cur ? { ...cur, step: "phone", phone: "" } : cur,
+    );
+    setIdentityValue("");
+  }
+
   async function handleIdentitySubmit() {
     if (!identityCapture || identitySubmitting) return;
     const value = identityValue.trim();
@@ -3352,87 +3807,28 @@ export function SearchHome() {
       pickAvoiding(checkingOtpPhrase(), []),
     );
     try {
-      const { buyer } = await buyerApi.post<{ buyer: Buyer }>(
-        "/api/buyer-auth/verify-otp",
-        { phone: identityCapture.phone, otp: value },
-      );
-      useBuyerStore.getState().setBuyer(buyer);
+      // Two shapes back (2026-08-27, see the route's own comment): a signed-in
+      // buyer gets `buyer`, with the number now attached to their account; an
+      // anonymous one gets `phoneToken`, a short-lived proof of that number
+      // and nothing else — no session, no account, nothing stored about them.
+      const { buyer, phoneToken } = await buyerApi.post<{
+        buyer: Buyer | null;
+        phoneToken: string | null;
+      }>("/api/buyer-auth/verify-otp", {
+        phone: identityCapture.phone,
+        otp: value,
+      });
+      if (buyer) useBuyerStore.getState().setBuyer(buyer);
+      // Held in a ref, deliberately never persisted: it proves one number for
+      // one request and expires in minutes. localStorage would outlive its
+      // usefulness and leave a credential lying around on a shared phone.
+      if (phoneToken) phoneTokenRef.current = phoneToken;
       // Same turn, still "loading" — the shimmer just switches to a new
       // line, per explicit request ("the status phrase should also
       // indicate that it is creating the request now before displaying
       // that the request has been created").
       updateTurn(turnId, { status: pickAvoiding(creatingRequestPhrase(), []) });
-      const { offer } = identityCapture;
-      const { created, request } = await buyerApi.post<{
-        created: boolean;
-        request: { id: string } | null;
-      }>("/api/buyer-requests", {
-        description: offer.description,
-        name: offer.buyerName,
-        imageUrl: identityCapture.imageUrl,
-        ...(identityCapture.matchQuery && {
-          matchQuery: identityCapture.matchQuery,
-        }),
-        ...(buyerLocationRef.current && { location: buyerLocationRef.current }),
-      });
-      if (!created || !request) {
-        // Mirrors BuyerRequestOfferWidget's own (now-inert for this
-        // specific path — see that file's own comment) selfResolvedNoMatch
-        // behavior: no AI turn runs for this REST-only flow, so the
-        // normal "no_match re-searches and reveals Google Places in the
-        // same turn" behavior (systemPrompt.ts) has nothing to attach to
-        // — this is that same reveal, done deterministically via the same
-        // dedicated route, rendered through the turn's own ordinary
-        // externalStoreSuggestions branch (ConversationTurnView) rather
-        // than a separate widget.
-        let externalStoreSuggestions: NearbyBusiness[] = [];
-        try {
-          const { externalSuggestions } = await buyerApi.post<{
-            externalSuggestions: NearbyBusiness[];
-          }>("/api/buyer-requests/nearby", {
-            description: offer.description,
-            ...(buyerLocationRef.current && {
-              location: buyerLocationRef.current,
-            }),
-          });
-          externalStoreSuggestions = externalSuggestions;
-        } catch {
-          // Best-effort — an empty list still resolves the turn cleanly.
-        }
-        updateTurn(turnId, {
-          phase: "done",
-          reply: pickAvoiding(
-            noMatchRequestPhrase(externalStoreSuggestions.length > 0),
-            [],
-          ),
-          externalStoreSuggestions,
-          // The exchange's terminal turn becomes persistable (Phase 1
-          // follow-up): the buyer's typed OTP code is replaced with a
-          // sanitized line (also nicer than leaving a bare code as their
-          // bubble) and `ephemeral` is lifted so the persist effect stores
-          // it — without this, the stored conversation still ends on the
-          // needs_identity turn and a refresh would wrongly re-open
-          // phone/OTP capture for a request that already resolved.
-          query: "Verified my WhatsApp number",
-          ephemeral: false,
-        });
-      } else {
-        updateTurn(turnId, {
-          phase: "done",
-          reply:
-            "I've reached out to a few businesses about this — if anyone's interested, they'll message you directly on WhatsApp. You'll also get an SMS confirming this went out.",
-          buyerRequestOffer: {
-            status: "created",
-            requestId: request.id,
-            description: offer.description,
-          },
-          // Same as the no_match branch above — see that comment.
-          query: "Verified my WhatsApp number",
-          ephemeral: false,
-        });
-      }
-      concludeCurrentItemFlow();
-      setIdentityCapture(null);
+      await finishBuyerRequest(identityCapture, turnId);
     } catch (err) {
       updateTurn(turnId, {
         phase: "done",
@@ -3586,6 +3982,38 @@ export function SearchHome() {
               ) : (
                 <ArrowUp size={18} />
               )}
+            </button>
+          </div>
+        </div>
+      ) : identityCapture?.step === "choose" ? (
+        // The saved-number confirmation (2026-08-26). Shown instead of the
+        // input composer because there is nothing to type — the number is
+        // already known and verified; the only question is whether it's
+        // still the right one to give a vendor.
+        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
+          <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+            <PhoneIcon size={12} className="text-orange-400 shrink-0" />A vendor
+            will reach you on WhatsApp — use this number?
+          </label>
+          <p className="text-base font-semibold text-[#023337] tracking-wide">
+            {identityCapture.phone}
+          </p>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => void handleUseSavedNumber()}
+              disabled={identitySubmitting}
+              className="px-4 py-2 rounded-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors cursor-pointer"
+            >
+              {identitySubmitting ? "Sending…" : "Yes, use this number"}
+            </button>
+            <button
+              type="button"
+              onClick={handleUseDifferentNumber}
+              disabled={identitySubmitting}
+              className="px-4 py-2 rounded-full border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-sm font-medium text-gray-600 transition-colors cursor-pointer"
+            >
+              Use a different number
             </button>
           </div>
         </div>
@@ -3763,8 +4191,6 @@ export function SearchHome() {
     // the actual viewport-height boundary now; ChatHeader replaced the
     // <header> that used to live here). See chat/layout.tsx's own comment.
     <div className="h-full bg-white flex flex-col overflow-hidden relative">
-      <BuyerInstallPrompt />
-
       {rehydrating ? (
         // A stored conversation exists and its turns are still loading (see
         // rehydrating's own comment) — a returning buyer sees Velte
@@ -3851,6 +4277,13 @@ export function SearchHome() {
                   />
                 </div>
               ))}
+              {/* Part of the thread, not an overlay on top of it — it sits
+                  after the last turn and scrolls with everything else, so a
+                  buyer mid-read is never interrupted by it. Renders nothing
+                  at all until a session has actually completed; see
+                  InstallSuggestion for the 48h rule. */}
+              <InstallSuggestion sessionsCompleted={sessionsCompleted} />
+
               <div ref={bottomRef} />
             </div>
           </div>

@@ -269,7 +269,27 @@ export interface ExternalOffer {
   id: string;
   title: string;
   priceText: string | null;
+  /** The listing's primary photo — the one the card shows. */
   imageUrl: string | null;
+  /** Every OTHER photo on the listing, beyond `imageUrl`. Same role as
+   *  VendorMatch.thumbnailUrls; named differently because these arrive at
+   *  whatever size the merchant published rather than as thumbnails. Empty
+   *  is normal and never an error — the source published one photo, or the
+   *  page couldn't be read.
+   *
+   *  Why a gallery at all (2026-08-27): one photo is not enough to judge a
+   *  listing. Reported live on a phone search — the top pick was a Jiji
+   *  listing whose FIRST photo was clean and whose later photos showed a
+   *  broken screen. Seller-declared condition can't cover for it: all seven
+   *  Jiji iPhone 12 listings sampled that day declared "No cracks", so the
+   *  photos are the only honest evidence of condition there is. */
+  galleryUrls: string[];
+  /** The listing's own description as the page published it (og:description
+   *  on Jumia, Konga and Jiji alike) — unescaped and clipped, never
+   *  rewritten. Null when the page published none. Read for the same reason
+   *  as the gallery: it's where a seller's own "UK used", "Grade A" or
+   *  "for parts" actually shows up. */
+  description: string | null;
   /** The shop selling it ("Jumia", "Konga", …) as the source reported it. */
   merchant: string | null;
   /** Which connector produced this (see ExternalConnector.name). */
@@ -309,6 +329,19 @@ export type BuyerRequestOffer =
   // and gotten a name — see systemPrompt.ts) and is carried through so that
   // later POST can send it along with the now-verified phone.
   | { status: "needs_identity"; description: string; buyerName: string }
+  // A buyer session exists AND the account already carries a verified phone
+  // (2026-08-26). The number is shown back to them rather than silently
+  // reused: it may be an old one, or a shared phone, and a vendor replying
+  // on WhatsApp to the wrong number is a dead lead the buyer never learns
+  // about. `phone` is their own verified number — safe to display to them,
+  // and never sent to the model (this outcome is read by the frontend, not
+  // narrated).
+  | {
+      status: "needs_phone_choice";
+      description: string;
+      buyerName: string;
+      phone: string;
+    }
   // A buyer session already existed — the tool created the request
   // immediately, server-side, same turn.
   | { status: "created"; requestId: string; description: string }
@@ -320,6 +353,22 @@ export type BuyerRequestOffer =
   // out" confirmation.
   | { status: "no_match"; description: string }
   | { status: "error"; description: string };
+
+// The strict subset createBuyerRequestTool can actually return (2026-08-26).
+// The tool stopped creating anything — the buyer's number has to be settled
+// first and only the browser can do that — so it only ever decides which of
+// the two capture flows the frontend must run. The other three statuses
+// still exist on BuyerRequestOffer above because the FRONTEND produces them
+// from its own POST /api/buyer-requests, and they ride along on the stored
+// turn; they simply never come back from a tool call any more.
+//
+// A separate type rather than a comment, so the compiler enforces it: the
+// deterministic reply text for this turn switches on the status, and a
+// silently unhandled case there would render an empty reply.
+export type BuyerRequestToolOutcome = Extract<
+  BuyerRequestOffer,
+  { status: "needs_identity" | "needs_phone_choice" }
+>;
 
 // Drives SearchHome.tsx's own composer-based phone/OTP identity-capture
 // flow (2026-08-19 redesign, replacing BuyerRequestOfferWidget's old
@@ -335,11 +384,19 @@ export type BuyerRequestOffer =
 // /buyer-requests); `imageUrl` is read once off the ORIGIN turn's own
 // image, if any.
 export interface IdentityCapture {
-  offer: Extract<BuyerRequestOffer, { status: "needs_identity" }>;
+  // Either outcome that hands the turn to this capture — both carry the
+  // same `description`/`buyerName` the eventual POST needs.
+  offer: Extract<
+    BuyerRequestOffer,
+    { status: "needs_identity" | "needs_phone_choice" }
+  >;
   imageUrl: string | null;
   // Same short match query the offer turn used — see SearchHistoryTurn.
   matchQuery: string | null;
-  step: "phone" | "otp";
+  // "choose" — the account's saved number is on screen with a use-it /
+  // use-another pair; the composer stays a plain textarea for it, since
+  // there is nothing to type. "phone" and "otp" are the original two.
+  step: "choose" | "phone" | "otp";
   phone: string;
 }
 
@@ -441,6 +498,33 @@ export type SearchStreamEvent =
   // line), each `reply` is kept and rendered as its own permanent bubble —
   // see SearchHome.tsx's `interimReplies`.
   | { type: "reply"; text: string }
+  // The turn was refused before any work happened because the buyer is out
+  // of quota, or the kind of search isn't on their plan at all (2026-08-29,
+  // see lib/server/ai/plans.ts). Deliberately NOT an `error`: nothing failed
+  // — this is the pricing model working — and it must render as a sign-in or
+  // upgrade prompt, never as a red failure state. Terminal for the turn: it
+  // arrives alone, with no `final` after it.
+  //
+  // `reason` decides the wording, and the distinction is worth keeping:
+  // "unavailable" means this tier never had it (a guest reaching for photo
+  // search — the single best-placed signup prompt in the product),
+  // "exhausted" means they used it up and it returns on the 1st.
+  | {
+      type: "quota";
+      message: string;
+      kind: "text" | "photo";
+      used: number;
+      limit: number;
+      planId: string;
+      planName: string;
+      isGuest: boolean;
+      /** Which kind of account hit the limit. Drives the CTA: a guest is
+       *  offered sign-in, a buyer an upgrade, and a VENDOR neither — they are
+       *  already signed in, and Velte Plus is a buyer product they cannot
+       *  meaningfully buy. */
+      actorType: "guest" | "buyer" | "vendor";
+      reason: "unavailable" | "exhausted";
+    }
   | {
       type: "final";
       reply: string;
@@ -792,6 +876,31 @@ export interface ConversationTask {
   shownProductIds: string[];
   cheapestSeenNaira: number | null;
   updatedAt: string;
+}
+
+// One row of the buyer's chat history (2026-08-26) — GET
+// /api/search/conversations. Deliberately NOT a StoredConversation: a
+// stored turn carries the whole denormalised result set it rendered, so a
+// list of them would be megabytes to draw a sidebar of titles. Opening a
+// row still goes through the by-id endpoint, which returns the real thing.
+export interface SearchConversationSummary {
+  conversationId: string;
+  // The buyer's own first message, or "[sent a photo]" for a bare photo
+  // turn — whatever they'd recognise the thread by. Never model-authored.
+  title: string;
+  turnCount: number;
+  // The shopping task's terminal state, when one was recorded — lets the
+  // list mark a thread that ended in a real vendor handoff.
+  status: ConversationTaskStatus | null;
+  lastActiveAt: string;
+  createdAt: string | null;
+}
+
+export interface SearchConversationList {
+  conversations: SearchConversationSummary[];
+  // Cursor for the next page (keyset on lastActiveAt), or null when this
+  // page didn't fill — i.e. there is nothing more to ask for.
+  nextBefore: string | null;
 }
 
 // GET /api/search/conversation's payload — what SearchHome.tsx rehydrates

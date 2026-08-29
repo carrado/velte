@@ -36,6 +36,10 @@ interface BackendOptions {
   body?: unknown;
   /** Raw `Cookie` header value to forward (carries the session). */
   cookie?: string;
+  /** Extra headers. Added for the price-watch checker, which authenticates
+   *  to the backend with a shared secret rather than a buyer session — a
+   *  cron tick has no cookie to forward. */
+  headers?: Record<string, string>;
 }
 
 // Pulls a human-readable string out of an upstream error field — the field
@@ -82,13 +86,16 @@ function fieldsFrom(data: unknown): Record<string, string> | undefined {
 
 async function doFetch(
   path: string,
-  { method = "GET", body, cookie }: BackendOptions,
+  { method = "GET", body, cookie, headers }: BackendOptions,
 ): Promise<{ res: Response; data: unknown }> {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
       ...(cookie ? { Cookie: cookie } : {}),
+      // Last, so a caller-supplied header wins over the defaults above —
+      // but note Cookie is set from its own option, not from here.
+      ...(headers ?? {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",

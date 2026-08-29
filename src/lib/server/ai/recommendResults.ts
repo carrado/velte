@@ -1,8 +1,14 @@
 import { tool } from "ai";
 import { z } from "zod";
+import type { UserContent } from "ai";
 
 import { callLLM } from "@/lib/server/ai/router";
-import type { SearchRecommendation, VendorMatch } from "@/types/search";
+import { parseOfferPrice } from "@/lib/priceText";
+import type {
+  ExternalOffer,
+  SearchRecommendation,
+  VendorMatch,
+} from "@/types/search";
 
 // Phase 3 (docs/velte-ai-search-flow-plan.md): the comparison /
 // recommendation layer — ONE extra structured-output LLM call after the
@@ -28,6 +34,13 @@ import type { SearchRecommendation, VendorMatch } from "@/types/search";
 // so a hung provider must never eat meaningfully into the route's 60s
 // budget for the sake of two badges.
 const RECOMMEND_TIMEOUT_MS = 8000;
+
+// The external twin's own cap. Longer than the Velte one because that call
+// is text-only while this one hands the provider up to a dozen listing
+// photos, which it FETCHES itself before it can answer — the same reason
+// verifyMatches runs a wider window than this file's original 8s. Still far
+// inside the route's 60s budget, and a timeout here costs only the badges.
+const EXTERNAL_RECOMMEND_TIMEOUT_MS = 12_000;
 
 // Reasons render inside a small chip/summary line — a paragraph would
 // break the layout, and the model is told to stay short anyway; the slice
@@ -225,6 +238,7 @@ export async function pickRecommendation(params: {
           toolChoice: "required",
         },
         ["openai", "groq"],
+        "recommend-velte",
       ),
       new Promise<never>((_, reject) =>
         setTimeout(
@@ -305,5 +319,329 @@ export async function pickRecommendation(params: {
   } catch (err) {
     console.error("[search] recommendation call failed, skipping:", err);
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------
+// The same layer, for OFF-VELTE offers (2026-08-26).
+//
+// Reported: the picks and the badges only ever appeared on Velte results,
+// so a dead-end turn — the one turn where the buyer has least to go on, and
+// is choosing between six unfamiliar shops — got a bare grid with no help
+// at all. That was never a decision, just a gap: pickRecommendation is
+// built entirely around VendorMatch (distance, seller completeness, vendor
+// attributes), none of which an external offer has.
+//
+// So this is a deliberately SMALLER comparison, sized to what these offers
+// honestly carry — a title, a price string and a merchant name:
+//
+//   - "Best price" is computed IN CODE from the prices, never asked of the
+//     model. It's a fact when it's a fact, and dropped entirely when fewer
+//     than two offers carry a comparable price.
+//   - "Top pick" is the model's judgment of which listing best matches what
+//     the buyer described — the one genuinely useful thing a model adds
+//     over six near-identical titles.
+//   - "Nearest" is always null. There is no distance to an online listing,
+//     and inventing one is exactly what this codebase doesn't do.
+//   - The tradeoff survives under the same rule as the Velte version: it's
+//     a CLAIM, so the flagged offer must actually differ from the top pick.
+//
+// Prices are parsed ONLY to order them. What the buyer sees stays the
+// source's own string, untouched — see ExternalOffer's own comment.
+// ---------------------------------------------------------------------
+
+// Moved to lib/priceText.ts (2026-08-29) so the price-watch checker and
+// the "Watch price" button — one of them a client component — can read a
+// price the exact same way this comparison does. Re-exported rather than
+// relocated outright so existing importers of this module keep working.
+export { parseOfferPrice };
+
+// A cheapness superlative. The model is told not to rank on price (that is
+// computed separately) and still reaches for it: found live on "20000mah
+// power bank", where the Top pick's reason ended "...at the lowest price"
+// while a ₦7,499 listing sat two rows below its ₦14,510. Price order is one
+// of the few things here that IS checkable, so a claim that contradicts it
+// is dropped rather than shown.
+const CHEAPEST_CLAIM =
+  /\b(cheapest|lowest\s+price|best\s+price|most\s+affordable|least\s+expensive|lowest\s+cost)\b/i;
+
+// How many photos of ONE listing go to the model. The whole point is to see
+// past the flattering first shot, and a defect is usually in the first few
+// that follow; past that the cost is real (every image is fetched by the
+// provider) and the return is not.
+const MAX_PHOTOS_PER_OFFER = 4;
+
+// Bounds the whole call rather than one listing: six offers each carrying
+// four photos is 24 image fetches in front of a waiting buyer. When a turn
+// exceeds this, photos are spread across offers (see collectOfferPhotos) so
+// no listing is judged blind while another gets four.
+const MAX_PHOTOS_TOTAL = 12;
+
+function offerSummary(offer: ExternalOffer, photoCount: number) {
+  return {
+    id: offer.id,
+    title: offer.title,
+    price: offer.priceText ?? "not shown",
+    merchant: offer.merchant ?? "unknown shop",
+    // The listing's own words. Worth including specifically because a
+    // seller's "UK used", "Grade A" or "for parts" lands here — but it is
+    // the seller talking, which the prompt says out loud.
+    description: offer.description ?? null,
+    // Announced so the model knows whether silence about condition means
+    // "nothing visible" or "nothing was shown to me".
+    photoCount,
+  };
+}
+
+/** Photos to send for each offer, primary first, fairly rationed.
+ *
+ *  Fairness matters more than depth here: judging listing 1 from four
+ *  photos and listing 5 from none would systematically favour whichever
+ *  listing happened to be fetched first, which is exactly the bias this
+ *  whole change exists to remove. So offers take one photo each in turn
+ *  until the budget runs out, rather than the first offers taking all of
+ *  it. */
+function collectOfferPhotos(offers: ExternalOffer[]): Map<string, string[]> {
+  const available = new Map<string, string[]>();
+  for (const offer of offers) {
+    const photos = [
+      ...(offer.imageUrl ? [offer.imageUrl] : []),
+      ...offer.galleryUrls,
+    ].slice(0, MAX_PHOTOS_PER_OFFER);
+    available.set(offer.id, photos);
+  }
+
+  const chosen = new Map<string, string[]>(offers.map((o) => [o.id, []]));
+  let budget = MAX_PHOTOS_TOTAL;
+  for (let round = 0; round < MAX_PHOTOS_PER_OFFER && budget > 0; round++) {
+    for (const offer of offers) {
+      if (budget <= 0) break;
+      const photo = available.get(offer.id)?.[round];
+      if (!photo) continue;
+      chosen.get(offer.id)!.push(photo);
+      budget -= 1;
+    }
+  }
+  return chosen;
+}
+
+/** Do two offers differ in anything a buyer could act on? The external
+ *  analogue of differsMeaningfully — the axes are just far fewer. */
+function offersDiffer(a: ExternalOffer, b: ExternalOffer): boolean {
+  return (
+    a.priceText !== b.priceText ||
+    a.merchant !== b.merchant ||
+    a.title.trim().toLowerCase() !== b.title.trim().toLowerCase() ||
+    // Added with the photo/description pass (2026-08-27): two listings can
+    // carry the same title, price and shop and still differ in the only way
+    // that now matters — what their photos and their seller's own words
+    // show. Without this, a "the third photo shows a cracked screen" note
+    // on an otherwise identical-looking listing would be discarded as a
+    // fabricated difference, which is precisely backwards.
+    a.description !== b.description ||
+    a.galleryUrls.length !== b.galleryUrls.length
+  );
+}
+
+/** Drops a reason that claims a listing is the cheapest when the prices say
+ *  otherwise. Only the claim is dropped, never the pick itself — the model
+ *  may well be right about FIT and merely wrong about price, and the card
+ *  is better with a silent chip than a false sentence. */
+function verifyPriceClaim(
+  reason: string | null,
+  pickId: string,
+  cheapestId: string | null,
+): string | null {
+  if (!reason || !CHEAPEST_CLAIM.test(reason)) return reason;
+  return pickId === cheapestId ? reason : null;
+}
+
+/** The model failed but the arithmetic didn't. A lone, code-verified "Best
+ *  price" chip is still worth showing — unlike the Velte version's lone
+ *  "Nearest", it's the single most useful thing about a row of unfamiliar
+ *  shops. */
+function cheapestOnly(cheapestId: string | null): SearchRecommendation | null {
+  if (!cheapestId) return null;
+  return {
+    leadIn: null,
+    bestOverallId: null,
+    bestOverallReason: null,
+    bestValueId: cheapestId,
+    bestValueReason: "Lowest price of the listings shown.",
+    nearestId: null,
+    tradeoff: null,
+  };
+}
+
+const EXTERNAL_SYSTEM_PROMPT = [
+  "You compare online shopping listings for a buyer on Velte, a Nigerian vendor-discovery service.",
+  "Velte itself had no vendor for this request, so these are OFF-PLATFORM listings from ordinary online shops — the buyer would be buying from those shops directly, not through Velte.",
+  "You get the buyer's request and a JSON list of listings, each with a title, the price as the shop displayed it, the shop's name, the listing's own description where it published one, and how many of its photos you were given.",
+  "The photos follow the list, each labelled with the listing number it belongs to. A listing often has several — they are the SAME item shown from different angles, not different items.",
+  "",
+  "Judge which listing best fits what the buyer actually asked for, and whether one of them carries a real catch worth flagging.",
+  "",
+  "LOOK AT EVERY PHOTO BEFORE YOU PICK. Sellers lead with their most flattering shot, so damage shows up in the later ones: a cracked or shattered screen, a deep scratch or dent, a missing part, heavy wear, an item clearly opened or used when sold as new. A listing whose later photos show damage must NOT be your top pick when a comparable undamaged one is available, however good its title and price look.",
+  "Say what you actually saw. If you flag damage, name it and say which photo it was in — 'the third photo shows a cracked screen', never a vague 'may have issues'. If the photos show nothing wrong, do not invent a concern, and do not describe condition you could not see.",
+  "Treat the description as the SELLER's own claim, not fact — 'no cracks', 'perfect condition' and 'grade A' are written by whoever is selling it. Where a photo and the description disagree, believe the photo and say so.",
+  "",
+  "Judge only from what you were given — the titles, prices, descriptions and photos. You know nothing about delivery, stock, warranty, authenticity, or how good any of these shops are — never imply otherwise, and never call a shop trusted, verified, official, reputable or reliable.",
+  "Do NOT pick a best-value listing: that is computed from the prices separately, so pass null for bestValueId and bestValueReason.",
+  "Keep the lead-in honest about what these are — they are not Velte vendors.",
+  "",
+  "Call the recommendResults tool exactly once with your verdict.",
+].join("\n");
+
+/**
+ * The comparison for a dead-end turn's external offers. Same contract as
+ * pickRecommendation: never throws, and any failure degrades to either the
+ * code-computed price chip alone or plain cards.
+ */
+export async function pickExternalRecommendation(params: {
+  query: string;
+  offers: ExternalOffer[];
+}): Promise<SearchRecommendation | null> {
+  const { query, offers } = params;
+  if (offers.length < 2) return null;
+
+  // Code's half, computed first so it survives a failed model call.
+  const priced = offers
+    .map((o) => ({ offer: o, value: parseOfferPrice(o.priceText) }))
+    .filter(
+      (p): p is { offer: ExternalOffer; value: number } => p.value != null,
+    );
+  let cheapestId: string | null = null;
+  if (priced.length >= 2) {
+    const sorted = [...priced].sort((a, b) => a.value - b.value);
+    // Only a claim when it's genuinely cheaper than the next one — two
+    // listings at the same price have no "best price" to point at.
+    if (sorted[0].value < sorted[1].value) cheapestId = sorted[0].offer.id;
+  }
+
+  // One photo budget for the whole call, rationed across the offers.
+  const photosByOffer = collectOfferPhotos(offers);
+
+  // The listing list, then each listing's photos announced by the same
+  // number it carries in that list. The label before each image is what
+  // makes a per-listing judgment possible at all — a bare run of images is
+  // unattributable (same reasoning as verifyMatches' own layout).
+  const content: UserContent = [];
+  content.push({
+    type: "text",
+    text: `Buyer's request: "${query}"\n\nOnline listings:\n${JSON.stringify(
+      offers.map((o) => offerSummary(o, photosByOffer.get(o.id)?.length ?? 0)),
+      null,
+      2,
+    )}`,
+  });
+
+  let imageCount = 0;
+  for (const [index, offer] of offers.entries()) {
+    const photos = photosByOffer.get(offer.id) ?? [];
+    for (const [photoIndex, photo] of photos.entries()) {
+      let url: URL;
+      try {
+        url = new URL(photo);
+      } catch {
+        continue;
+      }
+      content.push({
+        type: "text",
+        text: `Listing ${index + 1} ("${offer.title.slice(0, 60)}") — photo ${
+          photoIndex + 1
+        } of ${photos.length}:`,
+      });
+      // The same non-deprecated multimodal shape verifyMatches and route.ts
+      // use — `ImagePart` is deprecated in this SDK version.
+      content.push({ type: "file", mediaType: "image", data: url });
+      imageCount += 1;
+    }
+  }
+
+  try {
+    const result = await Promise.race([
+      callLLM(
+        {
+          system: EXTERNAL_SYSTEM_PROMPT,
+          messages: [{ role: "user", content }],
+          tools: { recommendResults: recommendResultsTool() },
+          toolChoice: "required",
+        },
+        // Groq is text-only, so it stays a fallback only while this
+        // particular call carries no images — handing it one misbehaves
+        // silently rather than failing loudly (verifyMatches' same note).
+        imageCount > 0 ? ["openai"] : ["openai", "groq"],
+        "recommend-external",
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("external recommendation timed out")),
+          EXTERNAL_RECOMMEND_TIMEOUT_MS,
+        ),
+      ),
+    ]);
+
+    const verdict = result.toolResults.find(
+      (r) => r.toolName === "recommendResults",
+    )?.output as
+      | {
+          leadIn: string;
+          bestOverallId: string;
+          bestOverallReason: string;
+          tradeoffId: string | null;
+          tradeoffNote: string | null;
+        }
+      | undefined;
+    if (!verdict) return cheapestOnly(cheapestId);
+
+    const byId = new Map(offers.map((o) => [o.id, o]));
+    const bestOverallId = byId.has(verdict.bestOverallId)
+      ? verdict.bestOverallId
+      : null;
+
+    const tradeoffCandidate =
+      verdict.tradeoffId && verdict.tradeoffId !== bestOverallId
+        ? byId.get(verdict.tradeoffId)
+        : undefined;
+    const tradeoffNote = tradeoffCandidate
+      ? sanitizeReason(verdict.tradeoffNote)
+      : null;
+    const topPick = bestOverallId ? byId.get(bestOverallId) : undefined;
+    const tradeoffIsReal =
+      Boolean(tradeoffCandidate) &&
+      Boolean(tradeoffNote) &&
+      (!topPick || offersDiffer(tradeoffCandidate!, topPick));
+
+    // The cheapest listing also being the best fit is the ordinary case,
+    // not two findings — the card wears both chips and the picks block
+    // shows one row, mirroring the Velte version's own bestValue rule.
+    const bestValueId = cheapestId === bestOverallId ? null : cheapestId;
+    if (!bestOverallId && !bestValueId) return null;
+
+    return {
+      leadIn: sanitizeReason(verdict.leadIn),
+      bestOverallId,
+      bestOverallReason: bestOverallId
+        ? verifyPriceClaim(
+            sanitizeReason(verdict.bestOverallReason),
+            bestOverallId,
+            cheapestId,
+          )
+        : null,
+      bestValueId,
+      // Written here, not by the model: this row exists because the numbers
+      // say so, so it says exactly that and nothing more.
+      bestValueReason: bestValueId
+        ? "Lowest price of the listings shown."
+        : null,
+      nearestId: null,
+      tradeoff:
+        tradeoffIsReal && tradeoffCandidate && tradeoffNote
+          ? { productId: tradeoffCandidate.id, note: tradeoffNote }
+          : null,
+    };
+  } catch (err) {
+    console.error("[search] external recommendation failed, skipping:", err);
+    return cheapestOnly(cheapestId);
   }
 }

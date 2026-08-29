@@ -1,6 +1,7 @@
 import type { SearchRequestBody, SearchStreamEvent } from "@/types/search";
 
 type FinalEvent = Extract<SearchStreamEvent, { type: "final" }>;
+type QuotaEvent = Extract<SearchStreamEvent, { type: "quota" }>;
 
 interface SearchStreamHandlers {
   onStatus: (text: string) => void;
@@ -9,6 +10,13 @@ interface SearchStreamHandlers {
   onReply: (text: string) => void;
   onFinal: (event: FinalEvent) => void;
   onError: (message: string) => void;
+  // The turn was refused on quota / plan (2026-08-29) — terminal, arrives
+  // alone, and is NOT a failure: see SearchStreamEvent's own "quota"
+  // comment. Optional, but a caller that omits it still shows the buyer
+  // something: dispatch falls back to onError rather than dropping the
+  // event, because a silently ignored refusal looks to the buyer like the
+  // Send button is broken.
+  onQuota?: (event: QuotaEvent) => void;
   // Called instead of onError when `signal` fired (the buyer hit Stop) —
   // a deliberate cancel, not a real failure, so SearchHome.tsx can give it
   // its own quiet "Stopped generating." wrap-up rather than the scarier
@@ -35,7 +43,14 @@ interface SearchStreamHandlers {
  */
 export async function runSearchStream(
   body: SearchRequestBody,
-  { onStatus, onReply, onFinal, onError, onAbort }: SearchStreamHandlers,
+  {
+    onStatus,
+    onReply,
+    onFinal,
+    onError,
+    onQuota,
+    onAbort,
+  }: SearchStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
   let res: Response;
@@ -100,6 +115,10 @@ export async function runSearchStream(
     else if (event.type === "reply") onReply(event.text);
     else if (event.type === "final") onFinal(event);
     else if (event.type === "error") onError(event.message);
+    else if (event.type === "quota") {
+      if (onQuota) onQuota(event);
+      else onError(event.message);
+    }
   }
 }
 

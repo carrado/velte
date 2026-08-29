@@ -36,10 +36,22 @@ export async function GET(req: Request) {
     );
   }
 
+  // `includeStale` is set only by the history list's own open action — a
+  // thread picked deliberately from the sidebar, where being a day old is
+  // the point. The mount-time rehydrate leaves it off and keeps relying on
+  // the 404 to drop a finished thread's id (see getSearchConversation).
+  const includeStale = searchParams.get("includeStale") === "true";
+  // Widens ownership to the account, so a buyer opens their own thread on a
+  // browser that never created it. Optional by design: an anonymous buyer
+  // still reaches their own conversations by deviceId exactly as before.
+  const buyerAuth = await getOptionalBuyerAuth();
+
   try {
     const conversation = await getSearchConversation({
       conversationId,
       deviceId,
+      buyerId: buyerAuth?.buyerId ?? null,
+      includeStale,
     });
     return NextResponse.json({ conversation });
   } catch (err) {

@@ -39,7 +39,10 @@ export default function VendorBuyerRequestDetailPage() {
   // waiting on the detail query to refetch — the mutation response already
   // carries the number, no reason to make the vendor wait a round trip
   // longer for the one thing they just paid for.
-  const [revealedWhatsapp, setRevealedWhatsapp] = useState<string | null>(null);
+  // Whether this vendor may chat — NOT the number itself (2026-08-27). The
+  // number never reaches the browser now; the CTA points at a server-side
+  // redirect that resolves it. See /api/vendor/buyer-requests/[id]/chat.
+  const [canChatNow, setCanChatNow] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["vendor-buyer-requests", params.requestId],
@@ -58,7 +61,7 @@ export default function VendorBuyerRequestDetailPage() {
     mutationFn: (decision: BuyerRequestDecision) =>
       api.post<{
         decision: BuyerRequestDecision;
-        whatsappNumber: string | null;
+        canChat: boolean;
       }>(`/api/vendor/buyer-requests/${params.requestId}/decision`, {
         decision,
       }),
@@ -67,7 +70,7 @@ export default function VendorBuyerRequestDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["wallet"] });
       setConfirmingAccept(false);
       if (result.decision === "accepted") {
-        setRevealedWhatsapp(result.whatsappNumber);
+        setCanChatNow(result.canChat);
         toast.success("Accepted — here's their WhatsApp number.");
       } else {
         toast.success("Declined.");
@@ -90,8 +93,17 @@ export default function VendorBuyerRequestDetailPage() {
 
   const decision = request.myDecision;
   const accepted = decision === "accepted";
-  const whatsappNumber =
-    revealedWhatsapp ?? (accepted ? request.buyerPhone : null);
+  // Chat is available once this vendor has accepted — either just now
+  // (canChatNow) or on an earlier visit (request.canChat, computed
+  // server-side from a number the browser never receives).
+  //
+  // The CTA is a link to our OWN redirect route, deliberately: a wa.me href
+  // would put the buyer's number in the DOM, in the hover status bar, and in
+  // "copy link address". Accepting buys a way to chat, not a number to keep.
+  const canChat = canChatNow || request.canChat;
+  const chatHref = canChat
+    ? `/api/vendor/buyer-requests/${params.requestId}/chat`
+    : null;
   const balanceKobo = wallet?.balanceKobo ?? null;
   // Tiered now, not flat — this previews whatever rate the vendor's OWN
   // current balance actually lands in (see leadCostForBalance's own
@@ -183,11 +195,9 @@ export default function VendorBuyerRequestDetailPage() {
             Message {request.buyerName} directly on WhatsApp — they&apos;re
             expecting to hear from vendors.
           </p>
-          {whatsappNumber ? (
+          {chatHref ? (
             <a
-              href={`https://wa.me/${whatsappNumber.replace(/[^\d]/g, "")}?text=${encodeURIComponent(
-                `Hi ${request.buyerName}, I saw your request on Velte for: ${request.description}`,
-              )}`}
+              href={chatHref}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 bg-[#25D366] hover:bg-[#1ebe57] text-white font-semibold text-sm rounded-lg px-4 py-2.5 transition-colors"

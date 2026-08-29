@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { reportLead } from "@/lib/reportLead";
-import { buildWhatsappLink } from "@/lib/whatsapp";
+import { buildChatLink } from "@/lib/chatLink";
 import type { PublicStoreTab, StoreTabsProps } from "@/types/store";
 import { OfferingCard } from "./shared";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -27,10 +26,11 @@ export default function StoreTabs({
   const [active, setActive] = useState<PublicStoreTab>(defaultTab);
   const isEmpty = goods.length === 0 && services.length === 0;
 
-  const whatsappHref = buildWhatsappLink(
-    whatsapp,
-    `Hi ${storeName}! I found your store on Velte.`,
-  );
+  const whatsappHref = buildChatLink({
+    vendorId,
+    source: "browse",
+    message: `Hi ${storeName}! I found your store on Velte.`,
+  });
 
   if (isEmpty) {
     return (
@@ -56,7 +56,6 @@ export default function StoreTabs({
                 href={whatsappHref}
                 label="Ask on WhatsApp"
                 className="mt-5"
-                onClick={() => reportLead(vendorId, undefined, "browse")}
               />
             </>
           ) : (
