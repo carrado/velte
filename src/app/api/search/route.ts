@@ -4,7 +4,13 @@ import { buildProductTerm } from "@/lib/productTerm";
 import { generateUUID } from "@/lib/uuid";
 import { callLLM } from "@/lib/server/ai/router";
 import { withTurnUsage, annotateTurn } from "@/lib/server/ai/usage";
-import { consumeSearchQuota, quotaMessage } from "@/lib/server/usage";
+import {
+  affordCredits,
+  chargeCredits,
+  creditMessage,
+} from "@/lib/server/creditLedger";
+import type { CreditAction } from "@/lib/credits";
+import { buildPriceBand, isBandableQuery } from "@/lib/server/ai/priceBand";
 import { backendData } from "@/lib/server/backend";
 import { aiSearchFetch } from "@/lib/server/aiSearchBackend";
 import {
@@ -52,6 +58,11 @@ import {
   buildScopeCheckSystemPrompt,
 } from "@/lib/server/ai/systemPrompt";
 import { classifyScopeTool } from "@/lib/server/ai/classifyScopeTool";
+import { watchCandidatesFor } from "@/lib/server/ai/watchCandidates";
+import {
+  buildWatchIntentPrompt,
+  classifyWatchIntentTool,
+} from "@/lib/server/ai/classifyWatchIntentTool";
 import { verifyOfferMatches } from "@/lib/server/ai/verifyMatches";
 import { generateItemClarifiers } from "@/lib/server/ai/generateItemClarifiers";
 import {
@@ -88,6 +99,7 @@ import type {
   StoreMatch,
   StoreProductItem,
   VendorMatch,
+  WatchCandidate,
 } from "@/types/search";
 
 // POST /api/search   (public — no buyer account, mirrors the public
@@ -218,10 +230,22 @@ function sanitizeReply(text: string): string {
 function buyerRequestStatusReply(
   offer: Extract<
     BuyerRequestOffer,
-    { status: "needs_identity" | "needs_phone_choice" | "no_match" }
+    {
+      status:
+        | "needs_signin"
+        | "needs_identity"
+        | "needs_phone_choice"
+        | "no_match";
+    }
   >,
 ): string {
   switch (offer.status) {
+    // Says WHY an account is needed rather than just demanding one: a
+    // vendor replies to this request personally, so there has to be a real
+    // person on the other end for them to reply to. The Google button
+    // renders below the reply — never ask them to type anything here.
+    case "needs_signin":
+      return "To send this to vendors I'll need you signed in first — that's how a vendor knows who they're replying to, and how you get their reply back. It takes one tap.";
     case "needs_identity":
       return "To reach out on your behalf, I'll just need your WhatsApp number — make sure it's one vendors can actually reach you on there, since that's how they'll get back to you.";
     // Never writes the number out — the confirmation below the reply
@@ -989,11 +1013,27 @@ async function handleSearch(req: Request) {
   // already signed in. Buyer wins when both cookies exist — on /chat they are
   // acting as a buyer, and only a buyer account carries a plan.
   const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
-  const usage = await consumeSearchQuota({
-    actorType: buyerAuth ? "buyer" : vendorAuth ? "vendor" : "guest",
-    cookie: buyerAuth?.cookie ?? vendorAuth?.cookie ?? null,
-    kind: imageUrl ? "photo" : "text",
+  const actorType = buyerAuth ? "buyer" : vendorAuth ? "vendor" : "guest";
+  const actorCookie = buyerAuth?.cookie ?? vendorAuth?.cookie ?? null;
+  // The turn's action, and therefore its price: a photo turn costs 5 credits
+  // where a text turn costs 1, because it genuinely costs that multiple to
+  // serve (see CREDIT_COST).
+  //
+  // CHECKED here, CHARGED on success (see sendFinal). Nothing is taken up
+  // front: a buyer should never pay for a turn that failed, or for one
+  // answered from the nearby-business path, which never reaches Serper and so
+  // costs nothing to have run. The check still happens first, because
+  // otherwise an empty balance could trigger a real model call and simply not
+  // pay for it.
+  const turnAction: CreditAction = imageUrl ? "photo" : "text";
+  const usage = await affordCredits({
+    actorType,
+    cookie: actorCookie,
+    action: turnAction,
   });
+  // Set once the turn has been charged — see sendFinal. Guards against the
+  // several early-exit paths billing one turn twice.
+  let turnCharged = false;
   if (!usage.allowed) {
     // A `quota` event, not an `error`: the client renders it as an upgrade /
     // sign-in prompt rather than a failure, and nothing went wrong here —
@@ -1002,15 +1042,19 @@ async function handleSearch(req: Request) {
     return new Response(
       JSON.stringify({
         type: "quota",
-        message: quotaMessage(usage),
-        kind: usage.kind,
-        used: usage.used,
-        limit: usage.limit,
-        planId: usage.plan.id,
-        planName: usage.plan.name,
+        message: creditMessage(usage),
+        kind: turnAction === "photo" ? "photo" : "text",
+        // `used`/`limit` carry balance and cost — the same two numbers a
+        // meter needs, in the terms the credit model actually has.
+        used: usage.balance,
+        limit: usage.cost,
+        planId: usage.isGuest ? "guest" : "credits",
+        planName: "Velte credits",
         isGuest: usage.isGuest,
-        actorType: usage.actorType,
-        reason: usage.reason,
+        actorType,
+        // Always "exhausted": there is no tier for a feature to be absent
+        // from any more, only a balance that does or doesn't cover it.
+        reason: "exhausted",
       } satisfies SearchStreamEvent) + "\n",
       { status: 200, headers: { "Content-Type": "application/x-ndjson" } },
     );
@@ -1196,14 +1240,124 @@ async function handleSearch(req: Request) {
         attributes?: string[];
       } = {};
 
+      // Same reasoning as goalUpdate above: declared out here so sendFinal
+      // can read it from ANY exit path, including the early ones that run
+      // before the real assignment below (the off-topic decline fires at the
+      // scope check, well before this is kicked off). An early exit simply
+      // resolves to an empty list and the band falls back to Velte's own
+      // prices — which is exactly the behaviour it had before.
+      let bandOffersPromise: Promise<ExternalOffer[]> = Promise.resolve([]);
+
+      // The fair-price band for a completed turn, or null.
+      //
+      // Attached HERE, in sendFinal, rather than at each of the four places
+      // that build a final event: every exit path funnels through this
+      // function, so one implementation covers the clarification path, the
+      // dead-end path and the ordinary result path without any of them
+      // having to remember. It also keeps the whole feature off the critical
+      // path of producing an answer — by the time this runs the reply is
+      // already written.
+      //
+      // ORDER MATTERS. The band is computed first (deterministic, free, no
+      // network) and the quota is only spent once we know there is something
+      // to show. Metering first would charge a buyer for turns that produced
+      // no band at all, which is the kind of quiet unfairness nobody reports
+      // and everybody feels.
+      async function priceBandFor(
+        event: Omit<
+          Extract<SearchStreamEvent, { type: "final" }>,
+          "conversationId" | "priceBand"
+        >,
+      ) {
+        // Land, property, services: the band's core assumption (the same
+        // object whoever sells it) is false, so there is no honest band to
+        // draw. See priceBand.ts's UNBANDABLE_SECTOR.
+        if (!isBandableQuery(message)) return null;
+        // Two sources, merged, and they arrive by different routes:
+        //   event.externalOffers — the listings the buyer can SEE and click,
+        //     which only exist on a genuine dead end.
+        //   bandOffersPromise   — the reference prices fetched in parallel
+        //     purely to measure against, never rendered.
+        // On a dead end the first is populated and the second usually is
+        // too; deduped by url so the same listing can't be counted twice and
+        // skew its own channel.
+        const referenceOffers = await bandOffersPromise;
+        const seen = new Set(event.externalOffers.map((o) => o.url));
+        const offers = [
+          ...event.externalOffers,
+          ...referenceOffers.filter((o) => !seen.has(o.url)),
+        ];
+        const band = buildPriceBand({
+          products: [...event.products, ...event.weakProducts],
+          offers,
+          query: itemTerm ?? message,
+          // The buyer's own words, scanned for a price they say they were
+          // quoted — "should I buy this?" answered off the same band, for no
+          // extra call and no extra allowance. Passed raw rather than
+          // pre-parsed: see buildPriceBand's own note on why the extraction
+          // rules have to live beside the market they are measured against.
+          message,
+        });
+        if (!band) return null;
+        // Charged only once there is something to show — the band is
+        // computed first (deterministic, free, no network) and the credit is
+        // taken after. Charging first would bill turns that produced no band
+        // at all, which is the kind of quiet unfairness nobody reports and
+        // everybody feels.
+        //
+        // A refusal drops the BLOCK and nothing else: never an error, never a
+        // quota event, never a failed turn. The buyer's answer already
+        // succeeded and is already on its way to them.
+        const paid = await chargeCredits({
+          actorType,
+          cookie: actorCookie,
+          action: "band",
+        });
+        return paid.allowed ? band : null;
+      }
+
       async function sendFinal(
         event: Omit<
           Extract<SearchStreamEvent, { type: "final" }>,
-          "conversationId"
+          "conversationId" | "priceBand"
         >,
       ): Promise<void> {
+        // ── Charging, once the turn has actually delivered ─────────────
+        //
+        // Here rather than up front, so nothing is billed for work that
+        // didn't happen: a turn that errors never reaches this function at
+        // all, and one answered from the NEARBY-BUSINESS path is free —
+        // `allowsNearbyBusinesses` is exactly the condition that skips the
+        // external price lookup, so no Serper call was made and there is
+        // nothing to have paid for.
+        //
+        // A dead end IS charged, deliberately: it still called Serper looking
+        // for somewhere else to buy, which is the expensive part and is
+        // genuinely useful work even when the answer is "not on Velte".
+        //
+        // Read off the event rather than a flag set upstream, because every
+        // exit path funnels through here — the same reason the price band is
+        // attached here. Guarded so the several early-exit callers can't bill
+        // one turn twice.
+        const answeredFromPlaces =
+          event.externalStoreSuggestions.length > 0 &&
+          event.externalOffers.length === 0;
+        if (!turnCharged && !answeredFromPlaces) {
+          turnCharged = true;
+          // Not awaited into the reply's critical path and never able to
+          // throw: a charge that failed costs Velte one credit's revenue,
+          // where a charge that could fail the turn costs the buyer their
+          // answer.
+          void chargeCredits({
+            actorType,
+            cookie: actorCookie,
+            action: turnAction,
+          });
+        }
+
         const full = {
           ...event,
+          priceBand: await priceBandFor(event),
           conversationId: conversation?.conversationId ?? null,
         };
         controller.enqueue(encodeEvent(full));
@@ -1246,6 +1400,9 @@ async function handleSearch(req: Request) {
       async function sendBareFinal(
         reply: string,
         clarification: Clarification | null,
+        // Set only by the watch short-circuit below. Every other caller of
+        // this helper is answering with words alone.
+        watchRequest: WatchCandidate[] | null = null,
       ) {
         await sendFinal({
           type: "final",
@@ -1273,6 +1430,8 @@ async function handleSearch(req: Request) {
           awaitingBuyerRequestReply: false,
           buyerRequestMatchQuery: null,
           recommendation: null,
+          watchOffer: [],
+          watchRequest,
           externalOffers: [],
         });
         controller.close();
@@ -1347,6 +1506,81 @@ async function handleSearch(req: Request) {
       // (buildSystemPrompt's own paragraph) and the downstream
       // isGenuineDualIntent heuristic are both still there as a second line
       // of defense either way.
+      // ── Did they just take up a watch offer? ───────────────────────
+      //
+      // Runs BEFORE the scope check on purpose. "The first one" and "yes
+      // please" are not shopping requests in their own right — the scope
+      // check would rightly call them out of scope and answer with the
+      // "I'm a shopping assistant" line, which would be a dead end on the
+      // one turn where Velte itself asked the question.
+      //
+      // Gated on structured state, never on the text: `watchOffer` is only
+      // present because SearchHome rendered that offer on the previous turn
+      // (see SearchHistoryTurn). No live offer, no call, no cost.
+      const liveWatchOffer = (() => {
+        for (let i = history.length - 1; i >= 0; i--) {
+          const turn = history[i];
+          if (turn.role !== "assistant") continue;
+          // Only the MOST RECENT assistant turn counts. An offer the buyer
+          // has already talked past is not one a bare "yes" belongs to.
+          return turn.watchOffer?.length ? turn.watchOffer : null;
+        }
+        return null;
+      })();
+
+      if (message && liveWatchOffer) {
+        try {
+          const watchResult = await callLLM(
+            {
+              system: buildWatchIntentPrompt(liveWatchOffer),
+              messages: [{ role: "user", content: message }],
+              tools: { classifyWatchIntent: classifyWatchIntentTool() },
+              toolChoice: "required",
+            },
+            ["openai", "groq"],
+            "watch-intent",
+          );
+          const verdict = watchResult.toolResults.find(
+            (r) => r.toolName === "classifyWatchIntent",
+          )?.output as
+            | { wantsWatch: boolean; selectedNumbers: number[] }
+            | undefined;
+
+          if (verdict?.wantsWatch) {
+            // Numbers back to real candidates, in code. An out-of-range or
+            // duplicated number is simply dropped rather than trusted — the
+            // model never touches the ids, so it cannot invent a target.
+            const chosen: WatchCandidate[] = [];
+            const seenNumbers = new Set<number>();
+            for (const n of verdict.selectedNumbers ?? []) {
+              if (!Number.isInteger(n) || seenNumbers.has(n)) continue;
+              const candidate = liveWatchOffer[n - 1];
+              if (!candidate) continue;
+              seenNumbers.add(n);
+              chosen.push(candidate);
+            }
+            // "Watch them" with nothing resolved means all of them — the
+            // buyer said yes to the offer as a whole, and the offer was at
+            // most three items they had just been shown.
+            const selected = chosen.length ? chosen : liveWatchOffer;
+
+            // The reply is deliberately EMPTY. Everything the buyer sees on
+            // this turn is narrated by the frontend as the flow actually
+            // progresses (signing in, checking the plan, creating each
+            // watch) — a canned "sure, watching those" written here would be
+            // a promise made before any of it had happened, and wrong the
+            // moment their plan refuses.
+            await sendBareFinal("", null, selected);
+            return;
+          }
+        } catch (err) {
+          // Fails toward the ordinary pipeline: an unavailable classifier
+          // must never swallow a message. Worst case the buyer's "yes" is
+          // read as a fresh search and they say it again.
+          console.error("[watch-intent] classify failed:", err);
+        }
+      }
+
       let namesPlace = false;
       let hasMultipleIntents = false;
       // The scope check's own understanding of WHAT is being sought (see
@@ -1423,6 +1657,53 @@ async function handleSearch(req: Request) {
           : seekingKind === "buy_item"
             ? false
             : undefined;
+
+      // ── Outside prices, for the FAIR-PRICE BAND only (2026-08-31) ───────
+      //
+      // Started here, unawaited, and that placement is the whole point: this
+      // runs in parallel with retrieval, so by the time sendFinal needs it
+      // the answer is usually already back and the buyer waits no longer
+      // than before. Awaiting it down in priceBandFor would add a Serper
+      // round trip to every turn's critical path.
+      //
+      // TWO THINGS THIS IS NOT, both deliberate:
+      //
+      // 1. NOT rendered. These never reach `externalOffers` on the final
+      //    event, which is what draws the "buy it on Jumia" cards. Those
+      //    still appear on genuine dead ends ONLY (see offersForDeadEnd).
+      //    On a search that found Velte vendors, showing outside sellers as
+      //    clickable options would route the buyer away from the vendor who
+      //    pays for the lead — the objection that shaped this design. The
+      //    prices are used as a REFERENCE to measure against, nothing more.
+      //
+      // 2. NOT a general search log. Nothing is persisted; the offers live
+      //    for the length of this request and are then gone.
+      //
+      // Before this, the band could only ever see Velte's own vendors on a
+      // successful search — one column, no comparison, and the "buying local
+      // saves you ₦25,000" line (the entire point) could never fire except
+      // on turns that found nothing.
+      //
+      // COST LEVER: this is one Serper call per bandable product search, and
+      // that quota is 2,500/month across the whole platform. If it starts
+      // running out, narrow the gate here — not the band itself.
+      const bandQuery = (itemTerm || message).trim();
+      bandOffersPromise =
+        bandQuery &&
+        hasExternalConnectors() &&
+        isBandableQuery(bandQuery) &&
+        // Services have no comparable market price — a plumber is not a
+        // commodity — so they are excluded here for the same reason
+        // priceBand.ts excludes land.
+        !allowsNearbyBusinesses(bandQuery, allowNearbyBusinesses)
+          ? fetchExternalOffers({ query: bandQuery }).catch((err) => {
+              // Never surfaced and never fatal: the band simply falls back
+              // to whatever channels it does have, exactly as it behaved
+              // before this existed.
+              console.error("[search] band price lookup failed:", err);
+              return [] as ExternalOffer[];
+            })
+          : Promise.resolve([]);
 
       // A NEW request starts from a clean slate. Found live: a buyer who
       // had answered an earlier clarifying round with "Infinix", "black",
@@ -2001,6 +2282,8 @@ async function handleSearch(req: Request) {
               awaitingBuyerRequestReply: false,
               buyerRequestMatchQuery: null,
               recommendation: null,
+              watchOffer: [],
+              watchRequest: null,
               externalOffers: preCheckOffers,
             });
             return;
@@ -2088,6 +2371,8 @@ async function handleSearch(req: Request) {
             // name-ask turn (and needs_identity) so create still uses it.
             buyerRequestMatchQuery: offerMatchQuery || null,
             recommendation: null,
+            watchOffer: [],
+            watchRequest: null,
             externalOffers: agreementOffers,
           });
           return;
@@ -2514,6 +2799,8 @@ async function handleSearch(req: Request) {
             awaitingBuyerRequestReply: false,
             buyerRequestMatchQuery: null,
             recommendation: null,
+            watchOffer: [],
+            watchRequest: null,
             externalOffers: [],
           });
         }
@@ -3382,6 +3669,16 @@ async function handleSearch(req: Request) {
           });
         }
 
+        // Which of this turn's picks Velte will offer to keep an eye on.
+        // Computed from the recommendation just made, so the offer can never
+        // name something the buyer wasn't shown — and empty whenever there is
+        // no recommendation or nothing watchable in it.
+        const watchOffer = watchCandidatesFor(
+          recommendation,
+          products,
+          externalOffers,
+        );
+
         await sendFinal({
           type: "final",
           // The `|| clarification?.question` fallback matters specifically
@@ -3429,6 +3726,10 @@ async function handleSearch(req: Request) {
             ? buyerRequestMatchQuery
             : null,
           recommendation,
+          watchOffer,
+          // A search turn is never itself a watch request — the classifier
+          // short-circuits those long before any tool runs.
+          watchRequest: null,
           externalOffers,
         });
 

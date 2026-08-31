@@ -1,3 +1,9 @@
+import {
+  guestCanAfford,
+  guestCredits,
+  spendGuestCredits,
+} from "@/lib/guestCredits";
+import { CREDIT_COST, GUEST_CREDITS } from "@/lib/credits";
 import type { SearchRequestBody, SearchStreamEvent } from "@/types/search";
 
 type FinalEvent = Extract<SearchStreamEvent, { type: "final" }>;
@@ -25,6 +31,45 @@ interface SearchStreamHandlers {
   // not SearchHome-specific) isn't forced to handle a case it never
   // triggers by never passing a signal.
   onAbort?: () => void;
+  /** Whether NOBODY is signed in — neither a buyer nor a vendor.
+   *
+   *  Required, not optional with a safe default, and that is the whole point:
+   *  a default of `false` would silently leave a future call site ungated,
+   *  which is the exact bug this field exists to fix. A default of `true`
+   *  would meter signed-in buyers against a browser counter. Neither default
+   *  is safe, so every caller has to say. */
+  isGuest: boolean;
+}
+
+/**
+ * What a signed-out browser sees once its free searches are gone (2026-08-31).
+ *
+ * Builds the same `quota` event shape the SERVER sends, so SearchHome's
+ * existing QuotaCard renders a client-side refusal and a server-side one
+ * identically — no new UI, and no second way for a refusal to look.
+ */
+function guestRefusal(cost: number): QuotaEvent {
+  return {
+    type: "quota",
+    // Deliberately the same sentence creditLedger.ts's creditMessage
+    // produces for a guest. Duplicated because that module is server-only,
+    // and the whole point of this gate is not to call the server. Only the
+    // wording is duplicated — the numbers come from credits.ts, which both
+    // halves import, so they cannot disagree about the allowance itself.
+    message: `You've used your ${GUEST_CREDITS} free credits. Create a free account and you'll get 15 more — enough for a proper shopping session.`,
+    kind: "text",
+    // Balance and cost, the two numbers a credit meter needs.
+    used: guestCredits(),
+    limit: cost,
+    planId: "guest",
+    planName: "Velte credits",
+    isGuest: true,
+    actorType: "guest",
+    // "exhausted", never "unavailable": search IS on this tier, they have
+    // used it up. The distinction drives the CTA — see the quota event's own
+    // comment in types/search.ts.
+    reason: "exhausted",
+  };
 }
 
 /**
@@ -50,9 +95,39 @@ export async function runSearchStream(
     onError,
     onQuota,
     onAbort,
+    isGuest,
   }: SearchStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
+  // Before anything is spent, and gated HERE rather than at the call site
+  // because this is the single door every search goes through — a gate a
+  // caller has to remember is one a future caller forgets, and the bug being
+  // fixed is precisely an allowance nobody enforced. Signed-in callers pass
+  // `isGuest: false` and skip it entirely; they are metered properly on their
+  // own row by /api/search.
+  //
+  // CHECKED here, CHARGED when the turn delivers — the same rule the server
+  // follows for an account. A guest must not pay for a turn that failed, nor
+  // for one answered from the nearby-business path, which costs nothing to
+  // have run. The check still comes first, or an empty balance could set a
+  // real model call going and never pay for it.
+  //
+  // A photo turn costs five credits where a text turn costs one — the same
+  // ratio the server charges, from the same table. A guest starts with five,
+  // so anyone who has searched even once can no longer afford a photo search:
+  // photo stays the sign-in hook it has always been, enforced by the pricing
+  // rather than by a rule saying so.
+  const guestCost = CREDIT_COST[body.imageUrl ? "photo" : "text"];
+  if (isGuest && !guestCanAfford(guestCost)) {
+    const refusal = guestRefusal(guestCost);
+    // Falls back to onError like every other dispatch of this event, so a
+    // caller that forgot the handler still shows the buyer something rather
+    // than a Send button that appears broken.
+    if (onQuota) onQuota(refusal);
+    else onError(refusal.message);
+    return;
+  }
+
   let res: Response;
   try {
     res = await fetch("/api/search", {
@@ -113,8 +188,22 @@ export async function runSearchStream(
     }
     if (event.type === "status") onStatus(event.text);
     else if (event.type === "reply") onReply(event.text);
-    else if (event.type === "final") onFinal(event);
-    else if (event.type === "error") onError(event.message);
+    else if (event.type === "final") {
+      // The guest's charge, mirroring the server's rule exactly (see
+      // /api/search's sendFinal): a turn is billable once it has delivered,
+      // and one answered from the nearby-business path never reached Serper,
+      // so it is free. A turn that errors never gets here at all.
+      //
+      // Charged client-side because a guest has no row on the server to
+      // charge — their balance lives in their own browser.
+      if (isGuest) {
+        const answeredFromPlaces =
+          event.externalStoreSuggestions.length > 0 &&
+          event.externalOffers.length === 0;
+        if (!answeredFromPlaces) spendGuestCredits(guestCost);
+      }
+      onFinal(event);
+    } else if (event.type === "error") onError(event.message);
     else if (event.type === "quota") {
       if (onQuota) onQuota(event);
       else onError(event.message);

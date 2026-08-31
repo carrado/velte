@@ -3,22 +3,24 @@ import { NextResponse } from "next/server";
 import { backendData } from "@/lib/server/backend";
 import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
 import { getOptionalVendorAuth } from "@/lib/server/guards";
-import { isHighestPlan } from "@/lib/server/ai/plans";
+import { GUEST_CREDITS } from "@/lib/credits";
 
-// GET /api/usage — what plan this caller is on, what they've spent, and
-// whether there is anything above them to upgrade to.
+// GET /api/usage — this caller's credit balance.
 //
-// Read-only and never increments (that is /usage/consume's job, called from
-// the search route). Safe to render on, safe to poll.
+// Kept at /usage rather than renamed to /credits (2026-08-31) because the
+// header and the chat both already poll this path; the SHAPE changed, not the
+// address. What it used to return — a plan id and a monthly counter — no
+// longer exists: there are no tiers, only a balance.
 //
-// Answers for a GUEST too, rather than 401ing: the upgrade CTA and the plans
-// page both ask this on every load, and a signed-out visitor is a normal,
-// expected caller — not an error. They get the guest shape with no round trip.
+// Read-only and never spends (that is /credits/consume's job, called from the
+// search route). Safe to render on, safe to poll.
 //
-// `canUpgrade` is computed HERE rather than in the client, because the plan
-// table is server-only and deciding "is this the top tier?" from a hardcoded
-// id in a component is exactly how that decision goes stale when a tier is
-// added. See isHighestPlan.
+// Answers for a GUEST too, rather than 401ing: a signed-out visitor is a
+// normal, expected caller, and the credit gauge renders for them as well. The
+// balance they get back is the STARTING allowance, not their real one — a
+// guest's true balance lives in their own browser storage (guestCredits.ts)
+// and the server has no way to know it. The client overrides this value with
+// the local one; sending it at all keeps the response shape uniform.
 export async function GET() {
   const buyerAuth = await getOptionalBuyerAuth();
   const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
@@ -26,41 +28,27 @@ export async function GET() {
 
   if (!cookie) {
     return NextResponse.json({
-      plan: "anonymous",
+      balance: GUEST_CREDITS,
       ownerType: "guest",
-      periodKey: null,
-      text: 0,
-      photo: 0,
-      // A guest has the most to gain from seeing what's on offer, so they
-      // are upgradeable like anyone else who isn't already at the top.
-      canUpgrade: !isHighestPlan("anonymous"),
+      isGuest: true,
     });
   }
 
   try {
     const data = await backendData<{
-      plan: string;
+      balance: number;
       ownerType: "buyer" | "vendor";
-      periodKey: string | null;
-      text: number;
-      photo: number;
-    }>("/usage", { cookie });
-    return NextResponse.json({
-      ...data,
-      canUpgrade: !isHighestPlan(data.plan),
-    });
+    }>("/credits", { cookie });
+    return NextResponse.json({ ...data, isGuest: false });
   } catch {
-    // Fail SOFT, same instinct as the metering itself: a usage read that
-    // can't reach the backend must not break the header it renders in. The
-    // caller sees a free-tier shape, which at worst shows an upgrade CTA to
-    // someone who already upgraded — recoverable, unlike a broken navbar.
+    // Fail SOFT, the same instinct as the charging path: a balance read that
+    // can't reach the backend must not break the header it renders in. Zero
+    // is the honest fallback — it shows "top up" to someone who may not need
+    // to, which is recoverable, where a broken navbar is not.
     return NextResponse.json({
-      plan: "free",
+      balance: 0,
       ownerType: buyerAuth ? "buyer" : "vendor",
-      periodKey: null,
-      text: 0,
-      photo: 0,
-      canUpgrade: true,
+      isGuest: false,
     });
   }
 }

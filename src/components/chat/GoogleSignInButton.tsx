@@ -5,6 +5,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 import { buyerApi } from "@/lib/buyer-api-client";
+import {
+  clearBuyerReferralCode,
+  storedBuyerReferralCode,
+} from "@/lib/buyerReferralCode";
 import { firebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
 import { useBuyerStore } from "@/store/buyerStore";
 import type { Buyer } from "@/types/buyer";
@@ -81,8 +85,15 @@ export function GoogleSignInButton({
 
       const { buyer } = await buyerApi.post<{ buyer: Buyer }>(
         "/api/buyer-auth/firebase",
-        { idToken },
+        // The referral code, if they arrived through someone's link — see
+        // lib/buyerReferralCode.ts for why it comes from storage rather than
+        // the URL. Undefined for everyone else, which the backend reads as
+        // "not referred" rather than as an error.
+        { idToken, referralCode: storedBuyerReferralCode() },
       );
+      // Only once the account actually exists. Clearing before this would
+      // lose the referrer their bonus on any sign-in that failed partway.
+      clearBuyerReferralCode();
       setBuyer(buyer);
 
       // No claim step: conversations are only ever created for a signed-in

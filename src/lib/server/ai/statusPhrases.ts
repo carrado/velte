@@ -887,3 +887,58 @@ export function fetchingCatalogPhrase(): string[] {
     "Checking what this vendor offers…",
   ];
 }
+
+// ── Price watches (2026-08-29) ───────────────────────────────────────────
+//
+// The watch flow runs entirely in the browser (signing in and returning from
+// Paystack both need it), so unlike every phrase above these are consumed by
+// SearchHome rather than pushed from the route. They live here anyway, with
+// the rest of Velte's voice, so the whole product sounds like one thing.
+//
+// Each step gets its own pool for the same reason the OTP steps do: a buyer
+// watching one generic "Working on it…" sit there learns nothing, whereas
+// "Checking what your plan allows…" explains the pause it is covering.
+
+export function startingWatchPhrase(count: number): string[] {
+  const it = count === 1 ? "that" : "those";
+  return [
+    `Setting ${it} up…`,
+    `Right — getting ${it} on your watchlist…`,
+    `On it — saving ${it} to watch…`,
+    `Adding ${it} to the prices I'm tracking…`,
+  ];
+}
+
+// Shown while /api/usage is read, between signing in and creating anything.
+// Named for what the buyer is waiting on, not for the request being made.
+export function checkingPlanPhrase(): string[] {
+  return [
+    "Checking what your plan allows…",
+    "Just seeing how many watches you have…",
+    "Looking at your plan…",
+    "One moment — checking your watch allowance…",
+  ];
+}
+
+export function savingWatchPhrase(label: string): string[] {
+  // The label is the buyer's own product, so the line is specific rather than
+  // a spinner: they can see WHICH one is being saved when several are.
+  const short = label.length > 32 ? `${label.slice(0, 32).trimEnd()}…` : label;
+  return [
+    `Saving ${short}…`,
+    `Adding ${short}…`,
+    `Setting up the watch on ${short}…`,
+  ];
+}
+
+// After an upgrade lands mid-conversation and the held selection resumes.
+// Deliberately acknowledges the upgrade — the buyer just paid, and silently
+// continuing would make the money feel unnoticed.
+export function resumingAfterUpgradePhrase(): string[] {
+  return [
+    "You're upgraded — picking up where we left off…",
+    "Got it, your plan is live. Setting those up now…",
+    "Upgrade went through — adding the rest…",
+    "All set on the plan. Back to your watches…",
+  ];
+}

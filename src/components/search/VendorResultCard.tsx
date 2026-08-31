@@ -10,7 +10,6 @@ import { ImageLightbox } from "@/components/ImageLightbox";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
 import { buildChatLink } from "@/lib/chatLink";
-import { WatchPriceButton } from "@/components/search/WatchPriceButton";
 import type { VendorMatch } from "@/types/search";
 import {
   ChevronLeftIcon,
@@ -258,27 +257,6 @@ export function VendorResultCard({
             )}
           </div>
         ) : null}
-
-        {/* Offered on Velte's own listings as well as off-Velte ones — a
-            vendor changing their price is exactly the moment a buyer who
-            hesitated wants to hear from us. Null price for a
-            quote-on-request service, which makes the button hide itself:
-            there is no number to watch, so there could never be a drop.
-
-            The AI search pipeline normalises price to NAIRA server-side (see
-            the ListingDetailModal note below), so *100 is the kobo the watch
-            API expects. */}
-        <WatchPriceButton
-          kind="velte"
-          productId={match.productId}
-          label={match.name}
-          imageUrl={match.mainImageUrl}
-          merchant={match.vendorName}
-          priceKobo={
-            match.quoteOnRequest ? null : Math.round(match.price * 100)
-          }
-          className="mt-1"
-        />
       </div>
 
       <ListingDetailModal

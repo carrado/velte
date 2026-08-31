@@ -70,6 +70,16 @@ export interface SearchHistoryTurn {
   // use this, not only the long vendor-facing description, or Yes can
   // no_match after an offer that already found sector vendors.
   buyerRequestMatchQuery?: string | null;
+  // The products this assistant turn offered to watch the price of, if any
+  // (2026-08-29). Set by SearchHome from the turn it actually RENDERED —
+  // structured client state, never inferred from the text — for exactly the
+  // reason awaitingBuyerRequestReply above is: the route has to know, with
+  // certainty, whether a "yes please" has a live offer to attach itself to.
+  //
+  // Its presence is what gates the watch-intent classifier (see
+  // classifyWatchIntentTool.ts). No offer live → that call never runs → the
+  // message flows through the ordinary pipeline. Omitted on every other turn.
+  watchOffer?: WatchCandidate[];
 }
 
 // The scope check's read of WHAT the buyer is trying to do (classifyScope's
@@ -151,6 +161,160 @@ export interface SearchRequestBody {
   // changed — the server merges rather than overwrites.
   locationDeclined?: boolean;
   locationPlaceName?: string;
+}
+
+// One product Velte is offering to watch the price of (2026-08-29).
+//
+// A flattened, already-eligible candidate: whichever kind of listing it came
+// from, everything a watch needs is on it, so the UI and the create call stop
+// caring which. Built ONLY by watchCandidates.ts, which is where the
+// eligibility rules live — nothing else should construct one, or the rules
+// stop being one thing.
+//
+// `priceKobo` is non-null by construction. A listing with no usable starting
+// price is not a candidate at all (PriceWatch requires startPriceKobo), so
+// the absence is handled by exclusion rather than by a nullable field every
+// consumer would have to re-check.
+/** Which market a price came from. Online and offline are not one market —
+ *  see priceBand.ts's header for why blending them is actively harmful. */
+export type PriceBandChannelId = "local" | "informal" | "formal";
+
+/** One market's price range for the thing being searched. */
+export interface PriceBandChannel {
+  id: PriceBandChannelId;
+  /** How many listings this range was drawn from. Always surfaced — it is
+   *  what makes the band a measurement rather than an oracle. */
+  count: number;
+  /** Kobo. 25th percentile, middle, 75th percentile. */
+  lowKobo: number;
+  midKobo: number;
+  highKobo: number;
+  /** False when there were too few listings to claim a range; the UI shows a
+   *  single figure instead of a span it can't support. */
+  ranged: boolean;
+}
+
+/** A single named price, shown when there is too little to draw a band. */
+export interface PriceBandListing {
+  label: string;
+  priceKobo: number;
+  channel: PriceBandChannelId;
+  condition: "new" | "used";
+  merchant: string | null;
+  url: string | null;
+}
+
+/** Where a price the buyer NAMED sits against the market (2026-08-31).
+ *
+ *  "Should I buy this?" — the question that lets Velte be useful to somebody
+ *  who already knows what they want and is standing in front of it. Produced
+ *  only when the buyer actually quoted a figure; see extractQuotedPrice for
+ *  the (deliberately strict) rules on what counts as one. */
+export interface PriceVerdict {
+  /** The figure the buyer said they were quoted, in kobo. */
+  quotedKobo: number;
+  /** `good` — at or under the cheap end. `fair` — inside the normal range.
+   *  `high` — above it but not wildly. `overpriced` — outside any range we
+   *  can explain. Four rungs rather than a good/bad flip because the middle
+   *  two are where most real quotes land, and collapsing them would make the
+   *  verdict either alarmist or useless. */
+  status: "good" | "fair" | "high" | "overpriced";
+  /** Which market it was measured against. ALWAYS surfaced: "high for a
+   *  Computer Village price" and "high for Jumia" are different claims, and
+   *  a verdict that hides which one it made is not checkable. */
+  against: PriceBandChannelId;
+  /** Kobo above that channel's middle. Negative when the quote is below it. */
+  deltaKobo: number;
+}
+
+/** What to open at, settle for, and walk away from (2026-08-31).
+ *
+ *  The Nigerian half of the fair-price feature. A band tells a buyer what
+ *  something costs; it does not tell them what to SAY, and in a market where
+ *  the posted price is an opening bid and what you pay depends on whether the
+ *  trader reads you as knowing the market, that gap is most of the value.
+ *
+ *  Every number here is arithmetic over the band — no model call, same rule
+ *  as priceBand.ts. The model does not phrase it either: the copy is fixed
+ *  templates, because advice about someone's money should not be re-improvised
+ *  on each render. */
+export interface NegotiationBrief {
+  /** What is being negotiated, for the block's heading. */
+  query: string;
+  /** The market these numbers describe, named for the same reason
+   *  PriceVerdict.against is. */
+  channel: PriceBandChannelId;
+  /** Kobo. The opening offer — under the target, so there is room to be
+   *  talked up to it. */
+  openKobo: number;
+  /** Kobo. A good, genuinely achievable outcome. */
+  targetKobo: number;
+  /** Kobo. Above this, walk — it is outside what this market charges. */
+  walkKobo: number;
+  /** Why these numbers, in the buyer's terms. Ordered most useful first;
+   *  every line is derived from a fact in the band, never invented. */
+  points: string[];
+  /** One line the buyer can say word for word.
+   *
+   *  Its own field rather than another `points` entry because it is a
+   *  different kind of thing — the points are facts to know, this is a script
+   *  to use — and the UI needs to be able to set it apart. It is also the
+   *  part people screenshot. */
+  openingLine: string;
+}
+
+/** The fair-price answer for one turn (2026-08-30). Built by
+ *  server/ai/priceBand.ts, which is deterministic — no model call, so this
+ *  can never be hallucinated and costs nothing extra to produce. */
+export interface PriceBand {
+  /** What was priced, for the block's own heading. */
+  query: string;
+  /** How much we are willing to claim. `band` is the full answer, `rough`
+   *  means the spread was wide enough to warrant hedging in the copy, and
+   *  `listings` means we found one or two prices and are showing them
+   *  rather than pretending to know a market. */
+  confidence: "band" | "rough" | "listings";
+  /** Per-market ranges, cheapest-first ordering left to the UI. Empty on
+   *  `listings`. */
+  channels: PriceBandChannel[];
+  /** Populated only on `listings`. */
+  listings: PriceBandListing[];
+  /** Comparable listings behind the whole thing. */
+  totalCount: number;
+  /** Used/refurb listings seen and deliberately NOT folded in — surfaced as
+   *  a caution, since a suspiciously cheap quote is usually one of these. */
+  usedCount: number;
+  /** Kobo saved by buying from `cheapestChannel` instead of the dearest.
+   *  Null when there aren't two comparable markets, or the gap is noise. */
+  gapKobo: number | null;
+  cheapestChannel: PriceBandChannelId | null;
+  /** Where the buyer's own quoted price sits, when they named one.
+   *
+   *  OPTIONAL, unlike every field above it, and that is about stored turns
+   *  rather than taste: conversations persisted before 2026-08-31 have a
+   *  `priceBand` with no such key, and they rehydrate into this same type.
+   *  Declaring it required would be a lie the UI could crash on. */
+  verdict?: PriceVerdict | null;
+  /** Whether a negotiation brief can be built from this band at all — it
+   *  needs one market with a real range behind it. Decided here rather than
+   *  in the component so the rule sits next to the data it judges, and so the
+   *  offer can never appear over a band that could not answer it.
+   *
+   *  Optional for the same rehydration reason as `verdict`. */
+  negotiable?: boolean;
+}
+
+export interface WatchCandidate {
+  kind: "velte" | "external";
+  /** productId for a Velte listing, the offer's own id for an external one —
+   *  unique within the turn, and what a buyer's selection refers to. */
+  id: string;
+  productId: string | null;
+  url: string | null;
+  label: string;
+  imageUrl: string | null;
+  merchant: string | null;
+  priceKobo: number;
 }
 
 // Mirrors the shape searchProducts() returns in velte-backend's
@@ -329,6 +493,13 @@ export type BuyerRequestOffer =
   // and gotten a name — see systemPrompt.ts) and is carried through so that
   // later POST can send it along with the now-verified phone.
   | { status: "needs_identity"; description: string; buyerName: string }
+  // No buyer session at all (2026-08-29, per explicit product direction).
+  // Distinct from "needs_identity", which now only ever means "signed in,
+  // number not proven yet": posting a Buyer Request requires a real account
+  // first, so a stranger has to sign up BEFORE the phone step rather than
+  // instead of it. Carries the same `description`/`buyerName` through, so the
+  // flow resumes into the phone capture the moment sign-in lands.
+  | { status: "needs_signin"; description: string; buyerName: string }
   // A buyer session exists AND the account already carries a verified phone
   // (2026-08-26). The number is shown back to them rather than silently
   // reused: it may be an old one, or a shared phone, and a vendor replying
@@ -357,7 +528,8 @@ export type BuyerRequestOffer =
 // The strict subset createBuyerRequestTool can actually return (2026-08-26).
 // The tool stopped creating anything — the buyer's number has to be settled
 // first and only the browser can do that — so it only ever decides which of
-// the two capture flows the frontend must run. The other three statuses
+// the three capture flows the frontend must run (three since 2026-08-29,
+// when signing up became a precondition rather than an alternative). The other three statuses
 // still exist on BuyerRequestOffer above because the FRONTEND produces them
 // from its own POST /api/buyer-requests, and they ride along on the stored
 // turn; they simply never come back from a tool call any more.
@@ -367,7 +539,7 @@ export type BuyerRequestOffer =
 // silently unhandled case there would render an empty reply.
 export type BuyerRequestToolOutcome = Extract<
   BuyerRequestOffer,
-  { status: "needs_identity" | "needs_phone_choice" }
+  { status: "needs_signin" | "needs_identity" | "needs_phone_choice" }
 >;
 
 // Drives SearchHome.tsx's own composer-based phone/OTP identity-capture
@@ -388,15 +560,18 @@ export interface IdentityCapture {
   // same `description`/`buyerName` the eventual POST needs.
   offer: Extract<
     BuyerRequestOffer,
-    { status: "needs_identity" | "needs_phone_choice" }
+    { status: "needs_signin" | "needs_identity" | "needs_phone_choice" }
   >;
   imageUrl: string | null;
   // Same short match query the offer turn used — see SearchHistoryTurn.
   matchQuery: string | null;
+  // "signin" — no account yet: the Google button is on screen and the
+  // composer is inert, since there is nothing to type. Advances to "phone"
+  // the moment a session lands (2026-08-29).
   // "choose" — the account's saved number is on screen with a use-it /
   // use-another pair; the composer stays a plain textarea for it, since
   // there is nothing to type. "phone" and "otp" are the original two.
-  step: "choose" | "phone" | "otp";
+  step: "signin" | "choose" | "phone" | "otp";
   phone: string;
 }
 
@@ -519,9 +694,9 @@ export type SearchStreamEvent =
       planName: string;
       isGuest: boolean;
       /** Which kind of account hit the limit. Drives the CTA: a guest is
-       *  offered sign-in, a buyer an upgrade, and a VENDOR neither — they are
-       *  already signed in, and Velte Plus is a buyer product they cannot
-       *  meaningfully buy. */
+       *  offered sign-in, and everyone with an account is offered the
+       *  upgrade — vendors included since 2026-08-29, when a plan stopped
+       *  requiring a separate buyer account. */
       actorType: "guest" | "buyer" | "vendor";
       reason: "unavailable" | "exhausted";
     }
@@ -681,12 +856,32 @@ export type SearchStreamEvent =
       // comment. Renders as badge chips on the matching cards plus a
       // compact "Velte's picks" summary; plain cards when null.
       recommendation: SearchRecommendation | null;
+      // The products Velte is offering to watch the price of, if any
+      // (2026-08-29). Drawn from this turn's own recommendation and filtered
+      // to what is actually watchable — see watchCandidates.ts. Empty on
+      // every turn with no recommendation, and empty is the normal case:
+      // an offer with no eligible target is worse than no offer.
+      watchOffer: WatchCandidate[];
+      // Set ONLY on a turn where the buyer took up a watch offer — the
+      // candidates they actually selected (2026-08-29). Non-null is the
+      // signal that this turn IS the watch request: the frontend runs the
+      // auth/plan/create flow off it, because none of those steps can happen
+      // server-side (signing in needs the browser, and so does coming back
+      // from Paystack having upgraded mid-conversation).
+      watchRequest: WatchCandidate[] | null;
       // Off-Velte product offers (Phase 4) — populated ONLY on a genuine
       // dead end, and only when a connector is configured. Always rendered
       // as clearly not-Velte, with no chat handoff: there's no vendor
       // relationship behind these. Empty on every turn that found anything
       // on Velte at all.
       externalOffers: ExternalOffer[];
+      // The fair-price check for this turn (2026-08-30) — what the thing
+      // SHOULD cost, per market, drawn from the same listings the cards
+      // above came from. Null when there was nothing honest to say, when
+      // the category isn't one a band works for (land, services), or when
+      // the account's band allowance is spent — a refusal here never fails
+      // the turn, it just leaves the block off. See server/ai/priceBand.ts.
+      priceBand: PriceBand | null;
       // The persisted conversation this turn was written into (Phase 1 of
       // docs/velte-ai-search-flow-plan.md) — the client stores this and
       // sends it back as SearchRequestBody.conversationId on every later
@@ -835,7 +1030,15 @@ export interface StoredSearchTurn {
   buyerRequestMatchQuery: string | null;
   contextNote: string | null;
   recommendation: SearchRecommendation | null;
+  // See the stream event's own note — the same list, carried on the stored
+  // turn so a reopened conversation can still act on an offer it made.
+  watchOffer: WatchCandidate[];
+  watchRequest: WatchCandidate[] | null;
   externalOffers: ExternalOffer[];
+  // Persisted like every other block so a reopened conversation renders
+  // exactly what the live turn rendered — the invariant searchTurnSnapshot.ts
+  // exists to hold.
+  priceBand: PriceBand | null;
 }
 
 // The active shopping task's lifecycle — derived server-side (staffly-ai-

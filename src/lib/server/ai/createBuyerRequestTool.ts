@@ -32,10 +32,14 @@ const inputSchema = z.object({
  * Identity is the one thing a tool call can't settle mid-execute() — it
  * needs a live phone/OTP round-trip, or at minimum the buyer confirming
  * which number to use, and only the browser can do either. So this tool
- * NEVER creates the request itself. It decides which of two things the
+ * NEVER creates the request itself. It decides which of three things the
  * frontend must collect and returns that:
  *
- *   needs_identity     — no session, or a session with no verified phone:
+ *   needs_signin       — no session at all: sign in with Google, which then
+ *                        continues into the phone step below (2026-08-29 —
+ *                        an account is now a precondition for posting a
+ *                        request, not an alternative to one).
+ *   needs_identity     — a session whose account has no verified phone yet:
  *                        the inline phone + OTP capture.
  *   needs_phone_choice — a session whose account already has a verified
  *                        phone: show it back and let them use it or give
@@ -62,8 +66,14 @@ export function createBuyerRequestTool(
       description,
       buyerName,
     }): Promise<BuyerRequestToolOutcome> => {
+      // No account at all — sign-up comes FIRST now (2026-08-29, per
+      // explicit product direction). This used to return "needs_identity",
+      // sending a stranger straight into phone + OTP and creating the
+      // request off a bare proof-of-number with no account behind it. That
+      // path is gone on the backend too: POST /buyer-requests requires a
+      // session, and the OTP endpoints are behind one as well.
       if (!buyerAuth) {
-        return { status: "needs_identity", description, buyerName };
+        return { status: "needs_signin", description, buyerName };
       }
 
       // A session alone isn't enough any more (2026-08-26). A buyer signed

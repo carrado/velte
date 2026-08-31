@@ -204,6 +204,47 @@ function fallbackLeadIn(recommendation: SearchRecommendation): string {
   }
   return FALLBACK_LEAD_INS[seed];
 }
+// Scrolls the card this row is talking about into view, and flashes it so
+// the eye lands on the right one (2026-08-29, per explicit request: the
+// picks should be clickable and move to the respective card).
+//
+// Scoped by walking UP from the clicked row to its own results group rather
+// than querying the document: the same product can legitimately appear in
+// two different turns of one conversation, and a bare document query would
+// scroll to whichever rendered first — usually the older turn, off-screen
+// above. `data-results-group` marks the wrapper that holds this block and
+// its carousel together.
+//
+// `block: "nearest"` keeps the page from jumping vertically when the card is
+// already in view — the horizontal move is the point; a vertical one would
+// feel like the thread lost its place.
+function scrollToCard(from: HTMLElement, id: string) {
+  const group = from.closest("[data-results-group]");
+  if (!group) return;
+  // CSS.escape because a product id is arbitrary data in a selector.
+  // Guarded: older Safari and some in-app WebViews lack it, and a missing
+  // scroll is a far better outcome than a thrown error mid-conversation.
+  const selector =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? `[data-slide-id="${CSS.escape(id)}"]`
+      : null;
+  if (!selector) return;
+  const slide = group.querySelector<HTMLElement>(selector);
+  if (!slide) return;
+
+  slide.scrollIntoView({
+    behavior: "smooth",
+    inline: "center",
+    block: "nearest",
+  });
+
+  // A brief ring rather than a persistent selected state: this is a "look
+  // here" gesture, not a selection the buyer has to undo. Applied to the
+  // slide so it frames the whole card without touching the card component.
+  slide.classList.add("velte-pick-flash");
+  window.setTimeout(() => slide.classList.remove("velte-pick-flash"), 1600);
+}
+
 export function RecommendationPicks({
   recommendation,
   products,
@@ -234,7 +275,14 @@ export function RecommendationPicks({
     ),
   ]);
 
-  const rows: { label: string; name: string; reason: string | null }[] = [];
+  const rows: {
+    label: string;
+    name: string;
+    reason: string | null;
+    // The card this row points at. Every row has one — the row only exists
+    // because its candidate resolved — so the whole block is clickable.
+    id: string;
+  }[] = [];
 
   const bestOverall = recommendation.bestOverallId
     ? byId.get(recommendation.bestOverallId)
@@ -244,6 +292,7 @@ export function RecommendationPicks({
       label: "Top pick",
       name: bestOverall.name,
       reason: recommendation.bestOverallReason,
+      id: bestOverall.id,
     });
   }
 
@@ -255,6 +304,7 @@ export function RecommendationPicks({
       label: valueLabel,
       name: bestValue.name,
       reason: recommendation.bestValueReason,
+      id: bestValue.id,
     });
   }
 
@@ -275,6 +325,7 @@ export function RecommendationPicks({
         nearest.distanceKm != null
           ? `Closest to you — ${nearest.distanceKm}km away.`
           : null,
+      id: nearest.id,
     });
   }
 
@@ -312,8 +363,20 @@ export function RecommendationPicks({
       </p>
       <div className="space-y-2.5">
         {rows.map((row) => (
-          <div key={row.label}>
-            <div className="flex items-start gap-2">
+          // A button, not a div (2026-08-29): naming a product and then
+          // making the buyer hunt for it in the row below is the one place
+          // this block was asking for work instead of saving it. Keyboard-
+          // and screen-reader-addressable for free by being a real button;
+          // `text-left` because a button centres its text by default and
+          // this is a paragraph, not a label.
+          <button
+            key={row.label}
+            type="button"
+            onClick={(e) => scrollToCard(e.currentTarget, row.id)}
+            title={`Show ${row.name}`}
+            className="block w-full text-left rounded-lg -mx-1.5 px-1.5 py-1 transition-colors hover:bg-orange-50/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400 cursor-pointer"
+          >
+            <span className="flex items-start gap-2">
               <span
                 className={
                   row.label === "Top pick"
@@ -323,16 +386,16 @@ export function RecommendationPicks({
               >
                 {row.label}
               </span>
-              <span className="min-w-0 text-[15px] sm:text-base font-semibold text-[#023337] leading-snug">
+              <span className="min-w-0 text-[15px] sm:text-base font-semibold text-[#023337] leading-snug underline decoration-transparent underline-offset-2 transition-colors group-hover:decoration-orange-300">
                 {row.name}
               </span>
-            </div>
+            </span>
             {row.reason && (
-              <p className="mt-0.5 text-sm leading-relaxed text-gray-600">
+              <span className="mt-0.5 block text-sm leading-relaxed text-gray-600">
                 {row.reason}
-              </p>
+              </span>
             )}
-          </div>
+          </button>
         ))}
       </div>
       {tradeoffItem && recommendation.tradeoff && (

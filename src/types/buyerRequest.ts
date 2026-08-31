@@ -48,3 +48,56 @@ export interface BuyerRequest {
   // decline (see GET /api/vendor/buyer-requests and its /:id counterpart).
   myDecision: BuyerRequestDecision | null;
 }
+
+// ── The BUYER's own view of a request (2026-08-30) ──────────────────────────
+// GET /api/buyer-requests/mine. A different shape from the vendor-facing
+// BuyerRequest above, deliberately, because the two audiences need opposite
+// halves of the same row: a vendor needs the buyer's identity and this
+// vendor's own decision; a buyer needs who accepted and what to do next.
+// Neither is a subset of the other, so they stay separate types rather than
+// one with half its fields optional.
+
+/** A vendor who ACCEPTED — i.e. paid for the lead and now has the buyer's
+ *  number. Declines never appear here; they release nothing and cost the
+ *  vendor nothing, so showing them would only read as a rejection. */
+export interface BuyerRequestResponder {
+  vendorId: string;
+  /** Store name where there is one, business name otherwise. */
+  name: string;
+  avatar: string | null;
+  /** null when the vendor has no Store row yet (created lazily on their
+   *  first dashboard visit) — the card then shows them without a link
+   *  rather than dropping them. */
+  storeHandle: string | null;
+  area: string | null;
+  state: string | null;
+  respondedAt: string;
+}
+
+export interface MyBuyerRequest {
+  id: string;
+  buyerName: string;
+  description: string;
+  imageUrl: string | null;
+  location?: { type: "Point"; coordinates: [number, number] } | null;
+  /** Already aged forward server-side: an "active" row past its expiresAt
+   *  comes back as "expired" even before the expiry cron has swept it. */
+  status: BuyerRequestStatus;
+  /** How many businesses the request was sent to. `matchedVendorIds` itself
+   *  is stripped by the backend — a buyer has no use for vendor ids, and it
+   *  is the vendor network laid bare. */
+  matchedVendorCount: number;
+  /** Accepted only — the number the page actually acts on. Distinct from
+   *  `responseCount`, which counts declines too. */
+  acceptedCount: number;
+  responders: BuyerRequestResponder[];
+  responseCount: number;
+  lastResponseAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+}
+
+export interface MyBuyerRequestList {
+  requests: MyBuyerRequest[];
+}

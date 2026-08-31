@@ -7,19 +7,22 @@ import type { BuyerRequest } from "@/types/buyerRequest";
 
 // POST /api/buyer-requests
 //
-// Guarded by getOptionalBuyerAuth, not requireBuyerAuth (2026-08-27).
-// Verifying a phone stopped creating a Buyer or a session — `buyer_auth_token`
-// now means "signed in with Google" and nothing else — so most buyers posting
-// a request legitimately have no session at all. They carry a `phoneToken`
-// from verify-otp in the body instead, proving the one number a vendor will
-// reply to, and the backend accepts either (see requireBuyerOrVerifiedPhone).
+// Requires a session (2026-08-29, per explicit product direction). It was
+// briefly open to anyone holding a `phoneToken` from verify-otp — a bare
+// proof of one number from someone with no account — on the reasoning that
+// reaching out was the single thing an anonymous buyer most needed to do.
+// Posting a request now requires a real account, so that token is gone from
+// both ends: the backend guards this route with verifyBuyerAuth, and the OTP
+// endpoints that minted it are behind a session too.
 //
-// Requiring a session here would shut anonymous buyers out of the reach-out
-// flow entirely, which is the single thing on Velte an anonymous buyer most
-// needs to do. The backend still rejects a request carrying neither, so this
-// being open doesn't make it unauthenticated.
+// Refused HERE as well as upstream, rather than relying on the backend's
+// 401: this saves a round trip on a state the browser already knows it is
+// in, and the message is the one the UI acts on.
 export async function POST(req: Request) {
   const auth = await getOptionalBuyerAuth();
+  if (!auth) {
+    return jsonError(401, "Sign in to send this request.");
+  }
 
   const body = await req.json().catch(() => null);
   if (!body) return jsonError(400, "A request payload is required.");
@@ -34,8 +37,7 @@ export async function POST(req: Request) {
     }>("/buyer-requests", {
       method: "POST",
       body,
-      // Forwarded only when one exists; the phoneToken travels in `body`.
-      ...(auth ? { cookie: auth.cookie } : {}),
+      cookie: auth.cookie,
     });
     return NextResponse.json(
       { created, request: request ?? null },

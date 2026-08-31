@@ -6,8 +6,6 @@ import {
   ExternalLinkIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
-import { koboFromPriceText } from "@/lib/priceText";
-import { WatchPriceButton } from "@/components/search/WatchPriceButton";
 import type { ExternalOffer } from "@/types/search";
 
 // An off-Velte product offer (Phase 4) — shown only when Velte itself had
@@ -184,19 +182,6 @@ export function ExternalOfferCard({
           View on {offer.merchant ?? "site"}
           <ExternalLinkIcon size={12} className="shrink-0" />
         </span>
-        {/* Offered right where a buyer is weighing an off-Velte listing they
-            aren't ready to buy — the moment the feature is worth most, and
-            so the moment the upgrade prompt lands best. Hides itself when
-            the listing shows no usable price (see the component). */}
-        <WatchPriceButton
-          kind="external"
-          url={offer.url}
-          label={offer.title}
-          imageUrl={offer.imageUrl}
-          merchant={offer.merchant}
-          priceKobo={koboFromPriceText(offer.priceText)}
-          className="pt-2"
-        />
       </div>
     </a>
   );

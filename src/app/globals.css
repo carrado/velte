@@ -288,3 +288,38 @@ html[data-velte-resume] .velte-resume-hero {
     pointer-events: none;
   }
 }
+
+/* The "look at this one" flash, applied for ~1.6s by RecommendationPicks'
+   scrollToCard when a buyer taps a pick row (2026-08-29). A ring rather than
+   a background so it frames whatever card is inside without touching the
+   card's own colours, and on the SLIDE so it works for product cards and
+   external offer cards alike.
+
+   `box-shadow`, not `outline` or a border: it draws outside the box without
+   affecting layout, so nothing shifts as it fades — a card that nudged
+   sideways as the eye arrived would defeat the point of pointing at it. */
+@keyframes velte-pick-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgb(249 115 22 / 0);
+  }
+  25% {
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0);
+  }
+}
+
+.velte-pick-flash {
+  border-radius: 1rem;
+  animation: velte-pick-flash 1.6s ease-out forwards;
+}
+
+/* Someone who has asked the OS for less motion still gets the scroll (that
+   is the navigation, not decoration) but a steady ring instead of a pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .velte-pick-flash {
+    animation: none;
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0.45);
+  }
+}

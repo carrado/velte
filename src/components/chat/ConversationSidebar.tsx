@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { buyerApi } from "@/lib/buyer-api-client";
@@ -10,7 +12,10 @@ import { logoutBuyer } from "@/services/buyerAuth";
 import { SEARCH_CONVERSATION_ID_STORAGE_KEY } from "@/lib/searchConversation";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { UpgradeCta } from "@/components/chat/UpgradeCta";
 import {
+  BellIcon,
+  ClipboardListIcon,
   CloseIcon,
   MenuIcon,
   MessageSquareIcon,
@@ -34,12 +39,59 @@ import type { Buyer } from "@/types/buyer";
 // expressible in `lg:` classes. See chatHistoryStore for why the open and
 // collapsed flags are separate.
 //
+// TWO sections once signed in (2026-08-30): the app's own surfaces (Your
+// requests, Watching, Upgrade) above a divider, the conversation list below
+// it.
+// Signed OUT there is deliberately no division — the menu section would be
+// empty of anything an anonymous visitor can act on, and the column's whole
+// body is already the sign-in prompt, so a divider there would separate a
+// heading from nothing.
+//
+// Those menu rows are a MOVE, not a copy: ChatHeader drops its own Watching
+// link and Upgrade pill for exactly the visitors who see them here (see its
+// `menuInSidebar`), so the same action never sits in two places at once.
+//
 // Rows are titles and timestamps only — the list endpoint deliberately
 // never returns turns (see the backend's listConversations). Opening a row
 // hands the id to SearchHome through the store; this component never
 // touches the thread itself.
 
 const SIDEBAR_WIDTH = 280;
+
+// Shared by every menu row, including UpgradeCta's — passing it in is what
+// keeps the CTA looking like a row here and a pill in the header without
+// either place knowing about the other.
+const MENU_ROW_CLASS =
+  "flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-200/50 hover:text-[#023337]";
+
+function MenuLink({
+  href,
+  icon,
+  label,
+  active,
+  onNavigate,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onNavigate: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        MENU_ROW_CLASS,
+        active && "border-gray-200 bg-white text-[#023337]",
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </Link>
+  );
+}
 
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
@@ -65,6 +117,11 @@ export function ConversationSidebar() {
   const requestConversation = useChatHistoryStore((s) => s.requestConversation);
   const requestNewChat = useChatHistoryStore((s) => s.requestNewChat);
   const buyer = useBuyerStore((s) => s.buyer);
+  const pathname = usePathname();
+
+  // Mobile only in effect: on desktop the slide-over flag is already false
+  // and setting it again changes nothing, so one handler covers both.
+  const closeOnMobile = () => setOpen(false);
 
   // Fetched whenever a buyer exists — unlike the drawer this replaced, the
   // sidebar is VISIBLE by default on desktop, so gating the query on "open"
@@ -126,7 +183,7 @@ export function ConversationSidebar() {
         <div className="flex flex-col h-full" style={{ width: SIDEBAR_WIDTH }}>
           <header className="flex items-center justify-between gap-2 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-2 shrink-0">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">
-              Your chats
+              {buyer ? "Menu" : "Your chats"}
             </h2>
             {/* Two controls, one per breakpoint — see the store's own note
                 on why the two states are separate. */}
@@ -147,6 +204,47 @@ export function ConversationSidebar() {
               <MenuIcon size={17} />
             </button>
           </header>
+
+          {/* Section one — the app's surfaces that aren't a conversation.
+              Signed-in only, per the note at the top of this file. */}
+          {buyer && (
+            <>
+              <nav className="px-3 pb-3 shrink-0 space-y-0.5">
+                <MenuLink
+                  href="/chat/requests"
+                  icon={<ClipboardListIcon size={16} className="shrink-0" />}
+                  label="Your requests"
+                  active={pathname === "/chat/requests"}
+                  onNavigate={closeOnMobile}
+                />
+                <MenuLink
+                  href="/chat/watches"
+                  icon={<BellIcon size={16} className="shrink-0" />}
+                  label="Watching"
+                  active={pathname === "/chat/watches"}
+                  onNavigate={closeOnMobile}
+                />
+                {/* Renders nothing on the highest tier — the decision is the
+                    server's, not this component's (see UpgradeCta). Which is
+                    also why the divider below stays put regardless: this
+                    section still has a row when the CTA is gone. */}
+                <UpgradeCta
+                  className={cn(
+                    MENU_ROW_CLASS,
+                    "text-orange-600 hover:bg-orange-50 hover:text-orange-700",
+                  )}
+                  iconSize={16}
+                  onClick={closeOnMobile}
+                />
+              </nav>
+
+              <div className="mx-3 mb-3 border-t border-gray-200/70 shrink-0" />
+
+              <h2 className="px-4 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 shrink-0">
+                Your chats
+              </h2>
+            </>
+          )}
 
           {/* Always available, signed in or not — without it there's no way
               back to a fresh thread once an old one is open, which is the

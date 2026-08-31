@@ -23,6 +23,11 @@ export async function GET(req: Request) {
   const before = searchParams.get("before");
 
   try {
+    // No retention window any more (2026-08-31). It existed to enforce
+    // `Plan.historyDays`, a tier differentiator, and the tiers are gone —
+    // under credits you pay for ACTIONS, not for how long Velte remembers
+    // what you asked. Everyone keeps everything, which is also the only
+    // version of this a buyer would ever have to think about.
     const list = await listSearchConversations({
       buyerId: auth.buyerId,
       limit: Number.isInteger(rawLimit) && rawLimit > 0 ? rawLimit : undefined,

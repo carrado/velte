@@ -21,6 +21,10 @@ import {
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { lookupCopiedImage, hashBlob } from "@/lib/copiedImageRegistry";
 import { VendorResultCard } from "@/components/search/VendorResultCard";
+import { WatchOffer } from "@/components/search/WatchOffer";
+import { PriceBand } from "@/components/search/PriceBand";
+import { NegotiationBrief } from "@/components/search/NegotiationBrief";
+import { PlansButton } from "@/components/plans/PlansModal";
 import {
   RecommendationPicks,
   pickBadgesFor,
@@ -40,6 +44,7 @@ import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import { buyerApi } from "@/lib/buyer-api-client";
+import { useQueryClient } from "@tanstack/react-query";
 import { useBuyerStore } from "@/store/buyerStore";
 import type { Buyer } from "@/types/buyer";
 import {
@@ -53,6 +58,10 @@ import {
   initiatingBackgroundItemPhrase,
   backgroundItemPendingPhrase,
   backgroundItemResolvedPhrase,
+  startingWatchPhrase,
+  checkingPlanPhrase,
+  savingWatchPhrase,
+  resumingAfterUpgradePhrase,
 } from "@/lib/server/ai/statusPhrases";
 import type {
   BackgroundSearchItem,
@@ -63,6 +72,7 @@ import type {
   MatchQuality,
   MatchTier,
   NearbyBusiness,
+  PriceBand as PriceBandData,
   SearchHistoryTurn,
   ExternalOffer,
   SearchItemOutcome,
@@ -72,6 +82,7 @@ import type {
   StoredSearchTurn,
   StoreProductItem,
   VendorMatch,
+  WatchCandidate,
 } from "@/types/search";
 import {
   CompassIcon,
@@ -79,6 +90,7 @@ import {
   PhoneIcon,
   ShieldCheckIcon,
   UserIcon,
+  BellIcon,
 } from "@/components/icons";
 // Composer icons only (upload spinner, remove-photo, camera, send) are
 // lucide-react, not the custom set — reverted 2026-08-17 per explicit
@@ -313,6 +325,58 @@ function extractBulletLines(text: string): string[] {
 // silent geolocation BEFORE appending anything at all, which left the
 // whole screen blank (not even the buyer's own typed message showing) for
 // up to several seconds on a slow/no GPS fix.
+// What Velte says once the watch flow lands. Pure, and module-level, so the
+// exact wording of a refusal is readable in one place rather than assembled
+// across a component.
+//
+// The two refusals are genuinely different situations and must not share a
+// sentence:
+//
+//   plan_required — their tier allows ZERO watches. The honest answer names
+//                   the feature and what unlocks it, and the CTA is an
+//                   upgrade. This is the one moment a plan pitch is welcome,
+//                   because they just asked for the thing it buys.
+//   limit_reached — they PAY for watches and have used them all. Pitching
+//                   them the feature they already bought would read as not
+//                   knowing who they are; the useful answer is that they can
+//                   free one up, or move up for more room.
+function watchReply(
+  saved: string[],
+  blocked: string[],
+  reason: "plan_required" | "limit_reached" | null,
+): string {
+  const list = (items: string[]) =>
+    items.length === 1
+      ? items[0]
+      : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+
+  if (saved.length && !blocked.length) {
+    return saved.length === 1
+      ? `Done — I'm watching ${list(saved)}. If the price drops, you'll get an email and a text.`
+      : `Done — I'm watching ${list(saved)}. If any of them drops, you'll get an email and a text.`;
+  }
+
+  if (saved.length && blocked.length) {
+    const tail =
+      reason === "limit_reached"
+        ? `That's your plan full, so I couldn't add ${list(blocked)} — free one up in Watching, or move up a plan for more room.`
+        : reason === "plan_required"
+          ? `I couldn't add ${list(blocked)} on your current plan.`
+          : `I couldn't add ${list(blocked)} — something went wrong on my side.`;
+    return `I've set up ${list(saved)} — you'll get an email and a text if the price drops. ${tail}`;
+  }
+
+  if (reason === "plan_required") {
+    return blocked.length === 1
+      ? `Price watching is part of Velte Plus — I'd need you on that before I can track ${list(blocked)} for you.`
+      : `Price watching is part of Velte Plus — I'd need you on that before I can track those for you.`;
+  }
+  if (reason === "limit_reached") {
+    return `You're already using all the watches your plan allows. Free one up in Watching and I'll add ${list(blocked)}, or move up a plan for more room.`;
+  }
+  return "I couldn't set that up just now — worth trying again in a moment.";
+}
+
 function createLoadingTurn(
   id: string,
   query: string,
@@ -352,6 +416,10 @@ function createLoadingTurn(
     buyerRequestMatchQuery: null,
     contextNote: null,
     recommendation: null,
+    priceBand: null,
+    watchOffer: [],
+    watchRequest: null,
+    watchResult: null,
     externalOffers: [],
     error: null,
     quota: null,
@@ -374,6 +442,10 @@ function storedTurnToConversationTurn(
     status: "",
     error: null,
     quota: null,
+    // Client-only and deliberately not persisted (see the field's own note):
+    // a reopened conversation still reads what Velte said, it just doesn't
+    // re-render the upgrade button, which the header carries anyway.
+    watchResult: null,
     persisted: true,
   };
 }
@@ -411,6 +483,9 @@ function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
     buyerRequestMatchQuery: turn.buyerRequestMatchQuery,
     contextNote: turn.contextNote,
     recommendation: turn.recommendation,
+    priceBand: turn.priceBand,
+    watchOffer: turn.watchOffer,
+    watchRequest: turn.watchRequest,
     externalOffers: turn.externalOffers,
   };
 }
@@ -791,6 +866,30 @@ interface ConversationTurn {
   // above the carousel. Null on turns that didn't qualify (0–1 products)
   // or where the comparison call failed; rendering degrades to plain cards.
   recommendation: SearchRecommendation | null;
+  // What this thing SHOULD cost, per market (2026-08-30) — the fair-price
+  // check. Null when the category isn't one a band is honest for, when there
+  // was nothing priced to compare, or when the account's allowance is spent.
+  // Never an error state: a missing band just means no block.
+  priceBand: PriceBandData | null;
+  // The products Velte offered to keep an eye on this turn (2026-08-29).
+  // Empty on most turns; see watchCandidates.ts for what qualifies.
+  watchOffer: WatchCandidate[];
+  // Non-null only on a turn where the buyer took up that offer — the
+  // selection the watch flow below acts on. See the flow in this file.
+  watchRequest: WatchCandidate[] | null;
+  // How the watch flow ENDED, for the parts of the answer that are more than
+  // prose: the upgrade CTA, and which products were actually saved.
+  //
+  // Client-only, deliberately not persisted. Every fact a returning buyer
+  // needs is already in the turn's reply text; what is lost on reopen is a
+  // button to /plans, which the header carries anyway. Persisting it would
+  // mean threading a field through five server-side finals that can never
+  // set it.
+  watchResult: {
+    saved: string[];
+    blocked: string[];
+    reason: "plan_required" | "limit_reached" | null;
+  } | null;
   // Off-Velte offers, only ever present on a genuine dead end (Phase 4).
   // Rendered in their own clearly-labelled section with an outbound link
   // and NO chat CTA — there's no vendor relationship behind these.
@@ -897,12 +996,13 @@ function QuotaCard({
     // something, which is the wrong turn to look like an advert.
     <div className={AI_MESSAGE_CLASS}>
       <p className="text-sm leading-relaxed text-[#023337]">{quota.message}</p>
-      {/* A VENDOR gets no call to action at all. They are already signed in,
-          and Velte Plus is a buyer subscription — offering it to an account
-          that already pays for leads is both meaningless and slightly
-          insulting. The message alone (what they used, when it resets) is
-          the whole of what's useful to them. */}
-      <div className={cn("mt-3", quota.actorType === "vendor" && "hidden")}>
+      {/* A vendor used to get no call to action here, on the reasoning that
+          Velte Plus was a buyer product they couldn't meaningfully buy. They
+          can now (2026-08-29) — against their vendor identity, no second
+          account — so the refusal names its own fix like every other one.
+          Only a GUEST still gets something different, because signing in is
+          the step in front of buying anything. */}
+      <div className="mt-3">
         {quota.isGuest ? (
           <GoogleSignInButton />
         ) : (
@@ -1230,7 +1330,12 @@ function ConversationTurnView({
                           </div>
                         )}
                       {turn.products.length > 0 && (
-                        <div className="space-y-3">
+                        // data-results-group scopes the picks block's own
+                        // scroll-to-card lookup to THIS turn's carousel — the
+                        // same product can appear in two turns of one
+                        // conversation, and a document-wide query would jump
+                        // to the older one (see RecommendationPicks).
+                        <div className="space-y-3" data-results-group>
                           {(turn.stores.length > 0 ||
                             (turn.productsMatchTier &&
                               turn.productsMatchTier !== "local") ||
@@ -1243,6 +1348,29 @@ function ConversationTurnView({
                               )}
                             </h2>
                           )}
+                          {/* The anchor, above everything else it frames:
+                              what this SHOULD cost before we argue about
+                              which one to buy. Unlike the watch offer it
+                              renders on every turn that has one, not just
+                              the latest — a band is a fact about that
+                              moment's market, and scrolling back to it is
+                              the point. */}
+                          {turn.priceBand && (
+                            <PriceBand band={turn.priceBand} />
+                          )}
+                          {/* The DO half of the band — what to open at, aim
+                              for and walk away from. Only on the LATEST
+                              turn, unlike the band itself: the band is a
+                              fact worth scrolling back to, but this is a
+                              call to action that SPENDS an allowance, and a
+                              CTA repeated down the whole thread is exactly
+                              the advert-in-the-conversation this surface
+                              avoids everywhere else. The last turn is still
+                              there when a reopened conversation is the
+                              buyer coming back to it before going out. */}
+                          {isLatest && turn.priceBand && (
+                            <NegotiationBrief band={turn.priceBand} />
+                          )}
                           {/* The WHY half of the recommendation layer — the
                             chips on the cards below say which, this says
                             why (see RecommendationPicks). Absent whenever
@@ -1253,6 +1381,15 @@ function ConversationTurnView({
                               recommendation={turn.recommendation}
                               products={turn.products}
                             />
+                          )}
+                          {/* Sits with the picks, not the cards — it offers
+                              to watch exactly the products just argued for,
+                              and reads as the same thought continuing. Only
+                              on the LATEST turn: an offer further up the
+                              thread is one the buyer has already moved past,
+                              and the composer can only act on one. */}
+                          {isLatest && turn.watchOffer.length > 0 && (
+                            <WatchOffer candidates={turn.watchOffer} />
                           )}
                           <CardCarousel
                             items={turn.products}
@@ -1436,7 +1573,7 @@ function ConversationTurnView({
                         both exist: a real shop the buyer can walk into is
                         the better answer here than an online link. */}
                       {turn.externalOffers.length > 0 && (
-                        <div className="space-y-3">
+                        <div className="space-y-3" data-results-group>
                           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                             Available online — not on Velte
                           </h2>
@@ -1585,8 +1722,18 @@ function ConversationTurnView({
                   renders the "created" confirmation card now — see that
                   component's own comment for why "no_match"/"error" have
                   nothing left to render here either. */}
+                  {/* The one control a watch refusal needs. Only on a
+                      PLAN refusal — "your allowance is full" is not an
+                      upgrade pitch, it's a different problem with a
+                      different fix (see watchReply). */}
+                  {turn.watchResult?.reason === "plan_required" && (
+                    <PlansButton className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600">
+                      See what Velte Plus includes
+                    </PlansButton>
+                  )}
                   {turn.buyerRequestOffer &&
                     turn.buyerRequestOffer.status !== "needs_identity" &&
+                    turn.buyerRequestOffer.status !== "needs_signin" &&
                     isLatest && (
                       <BuyerRequestOfferWidget offer={turn.buyerRequestOffer} />
                     )}
@@ -1822,12 +1969,23 @@ export function SearchHome() {
           // this updater is harmless.
           const last = stored[stored.length - 1];
           queueMicrotask(() => {
-            if (last?.buyerRequestOffer?.status === "needs_identity") {
+            if (
+              last?.buyerRequestOffer?.status === "needs_identity" ||
+              last?.buyerRequestOffer?.status === "needs_signin"
+            ) {
               setIdentityCapture({
                 offer: last.buyerRequestOffer,
                 imageUrl: last.imageUrl,
                 matchQuery: last.buyerRequestMatchQuery,
-                step: "phone",
+                // Re-derived from the STORED status rather than remembered:
+                // the buyer may well have signed in since this turn was
+                // written, and resuming them onto a sign-in button they no
+                // longer need would be a dead end.
+                step:
+                  last.buyerRequestOffer.status === "needs_signin" &&
+                  !useBuyerStore.getState().buyer
+                    ? "signin"
+                    : "phone",
                 phone: "",
               });
               setIdentityValue("");
@@ -2018,11 +2176,19 @@ export function SearchHome() {
   // composer's own text) so switching back afterward never leaves stray
   // leftover text in either box.
   const [identityValue, setIdentityValue] = useState("");
-  // The verified-phone proof from verify-otp, for a buyer with no account.
-  // A ref, not state: nothing renders from it, and it must not outlive the
-  // tab (see where it's set).
-  const phoneTokenRef = useRef<string | null>(null);
   const [identitySubmitting, setIdentitySubmitting] = useState(false);
+  // A watch request waiting on the buyer to sign in (2026-08-29). Held
+  // rather than re-asked, per explicit product direction: they already said
+  // which products they wanted, and making them say it again after signing
+  // in is the kind of small indignity that loses the sale.
+  const [watchCapture, setWatchCapture] = useState<{
+    candidates: WatchCandidate[];
+    turnId: string;
+  } | null>(null);
+  // The plan is granted by a Paystack webhook, so a buyer returning from
+  // checkout has a cached plan read that is now wrong. Invalidated on the
+  // upgrade-return path below.
+  const queryClient = useQueryClient();
   // Seconds left before "Resend code" is tappable again — 0 means it's
   // live. SMS delivery has a real, sometimes-lagging round trip to the
   // buyer's phone that has nothing to do with how fast our own
@@ -2189,12 +2355,21 @@ export function SearchHome() {
         // the mount rehydrate's own rule (phone/OTP always restarts at
         // "phone" — any code in flight died with the old session).
         const last = stored[stored.length - 1];
-        if (last?.buyerRequestOffer?.status === "needs_identity") {
+        if (
+          last?.buyerRequestOffer?.status === "needs_identity" ||
+          last?.buyerRequestOffer?.status === "needs_signin"
+        ) {
           setIdentityCapture({
             offer: last.buyerRequestOffer,
             imageUrl: last.imageUrl,
             matchQuery: last.buyerRequestMatchQuery,
-            step: "phone",
+            // Same rule as the mount rehydrate — a buyer who signed in since
+            // this turn was stored resumes straight into the phone step.
+            step:
+              last.buyerRequestOffer.status === "needs_signin" &&
+              !useBuyerStore.getState().buyer
+                ? "signin"
+                : "phone",
             phone: "",
           });
         } else if (last?.clarification?.kind === "name") {
@@ -2950,6 +3125,12 @@ export function SearchHome() {
           // exchange).
           awaitingBuyerRequestReply: t.awaitingBuyerRequestReply,
           buyerRequestMatchQuery: t.buyerRequestMatchQuery,
+          // Same kind of structural signal, for the same reason: the route
+          // must know with certainty whether a bare "yes please" has a live
+          // watch offer to attach itself to, and inferring that from prose
+          // is exactly what failed twice for the reach-out flow above.
+          // Only the most recent assistant turn's is ever read server-side.
+          watchOffer: t.watchOffer.length ? t.watchOffer : undefined,
         },
       ]);
 
@@ -3006,6 +3187,19 @@ export function SearchHome() {
           : {}),
       },
       {
+        // Read at send time rather than from a subscribed value: a buyer can
+        // sign in mid-conversation (the composer's own Google button does
+        // exactly that), and the turn being sent right now should be metered
+        // against whoever they are NOW.
+        //
+        // Both stores, like every other signed-in check in this file — a
+        // vendor browsing /chat holds a different cookie and is metered
+        // server-side on their own row, so treating them as a guest would
+        // count them against a browser counter they never should have been
+        // on.
+        isGuest: !(
+          useBuyerStore.getState().buyer || useUserStore.getState().user
+        ),
         onStatus: (text) => {
           updateTurn(turnId, { status: text });
           shownStatusesRef.current = [...shownStatusesRef.current, text].slice(
@@ -3060,6 +3254,7 @@ export function SearchHome() {
             contextNote,
             recommendation: event.recommendation,
             externalOffers: event.externalOffers,
+            priceBand: event.priceBand,
           });
           // A buyer who already has a verified session (a prior visit's
           // identity cookie still valid) skips the composer's own
@@ -3074,6 +3269,13 @@ export function SearchHome() {
           // concludeCurrentItemFlow handles both cases: advances the queue
           // if anything's left in it, otherwise clears a "pending" pill
           // that this exact answer just resolved.
+          // A watch request short-circuits everything else on this turn —
+          // the route ran no search and sent an empty reply precisely so the
+          // flow below can narrate what actually happens.
+          if (event.watchRequest?.length) {
+            void runWatchFlow(event.watchRequest, turnId);
+            return;
+          }
           const offerAlreadyTerminal =
             event.buyerRequestOffer?.status === "created" ||
             event.buyerRequestOffer?.status === "no_match" ||
@@ -3086,6 +3288,7 @@ export function SearchHome() {
           // own `imageUrl` state may have already moved on to a fresh
           // photo by the time the buyer actually finishes verifying.
           if (
+            event.buyerRequestOffer?.status === "needs_signin" ||
             event.buyerRequestOffer?.status === "needs_identity" ||
             event.buyerRequestOffer?.status === "needs_phone_choice"
           ) {
@@ -3097,9 +3300,17 @@ export function SearchHome() {
               offer: event.buyerRequestOffer,
               imageUrl: currentImageUrl,
               matchQuery: event.buyerRequestMatchQuery,
+              // No account at all goes to the sign-in step first
+              // (2026-08-29) — posting a request needs a real account, and
+              // the phone step is what happens AFTER that, not instead.
               // A saved number goes to the choose step (show it, offer to
               // swap); no number at all goes straight to asking for one.
-              step: saved ? "choose" : "phone",
+              step:
+                event.buyerRequestOffer.status === "needs_signin"
+                  ? "signin"
+                  : saved
+                    ? "choose"
+                    : "phone",
               phone: saved,
             });
             setIdentityValue("");
@@ -3639,6 +3850,222 @@ export function SearchHome() {
   // BuyerPhoneVerifyForm used to make on its own (request-otp/verify-otp/
   // POST buyer-requests), just narrated as conversation instead of a
   // silent form.
+  // Picks a held watch selection back up after the buyer upgraded mid-flow
+  // (2026-08-29, per explicit product direction).
+  //
+  // NOT a poll and not a subscription: upgrading leaves the site entirely for
+  // Paystack, which returns the buyer to `/chat?upgrade=done` — velte-backend
+  // has always sent them there (buyerBilling.controller.js CALLBACK_PATH), so
+  // the arrival IS the signal, and a mount effect is the whole detector.
+  //
+  // Deliberately runs once, on mount. `takePendingWatch` clears the held
+  // selection as it reads it, so a refresh can't replay it, and the marker is
+  // stripped from the URL so a bookmarked link never re-fires it either.
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("upgrade") !== "done") return;
+      params.delete("upgrade");
+      const qs = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${qs ? `?${qs}` : ""}`,
+      );
+
+      const pending = takePendingWatch();
+      if (!pending) return;
+
+      // A fresh turn rather than reviving the old one: the buyer has been to
+      // Paystack and back, the thread was rebuilt from storage, and appending
+      // reads as Velte picking the thread up — which is what happened.
+      const turnId = generateUUID();
+      setTurns((prev) => [
+        ...prev,
+        createLoadingTurn(
+          turnId,
+          "",
+          null,
+          null,
+          pickAvoiding(resumingAfterUpgradePhrase(), []),
+        ),
+      ]);
+      // The plan was granted by a webhook, so the read that decides what this
+      // buyer may now do must not come from cache.
+      queryClient.invalidateQueries({ queryKey: ["current-plan"] });
+      if (!cancelled) void createWatches(pending, turnId, true);
+    } catch {
+      /* no URL access (or malformed) — nothing held, nothing to resume */
+    }
+    return () => {
+      cancelled = true;
+    };
+    // Mount only: this reacts to how the page was ARRIVED at, which cannot
+    // change without another page load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Price watches (2026-08-29) ─────────────────────────────────────────
+  //
+  // Runs in the BROWSER, not the route, for the same reason the reach-out
+  // flow does: two of its steps can only happen here. Signing in needs a
+  // popup, and coming back from Paystack having upgraded mid-conversation is
+  // a page load. The route's job ended when it decided this message was a
+  // watch request (see classifyWatchIntentTool); everything below is the
+  // doing of it, narrated as ordinary conversation.
+  //
+  // The whole flow is written to survive being interrupted, because it
+  // routinely is — a buyer signs in halfway, or leaves to pay and comes back.
+
+  /** Where a held selection lives across the Paystack round trip. localStorage
+   *  rather than state, because upgrading LEAVES the page entirely: the buyer
+   *  is redirected to Paystack and returns to a fresh /chat?upgrade=done. */
+  const PENDING_WATCH_KEY = "velte-pending-watch";
+
+  function holdPendingWatch(candidates: WatchCandidate[]) {
+    try {
+      localStorage.setItem(PENDING_WATCH_KEY, JSON.stringify(candidates));
+    } catch {
+      /* private mode — the buyer simply asks again, which is recoverable */
+    }
+  }
+
+  function takePendingWatch(): WatchCandidate[] | null {
+    try {
+      const raw = localStorage.getItem(PENDING_WATCH_KEY);
+      // Cleared on READ, not on success: a held selection that somehow fails
+      // to resume must not sit there re-firing on every future page load.
+      localStorage.removeItem(PENDING_WATCH_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Creates the watches, one at a time, and narrates what happened.
+   *
+   *  Sequential rather than parallel ON PURPOSE. The plan gate is enforced
+   *  per-request by the backend, so firing three at once against a plan with
+   *  room for one produces two racing refusals and no way to say which
+   *  succeeded. One at a time means the first refusal is authoritative and
+   *  everything before it is genuinely saved. */
+  async function createWatches(
+    candidates: WatchCandidate[],
+    turnId: string,
+    afterUpgrade = false,
+  ) {
+    updateTurn(turnId, {
+      status: pickAvoiding(
+        afterUpgrade ? resumingAfterUpgradePhrase() : checkingPlanPhrase(),
+        [],
+      ),
+    });
+
+    const saved: string[] = [];
+    const blocked: string[] = [];
+    let reason: "plan_required" | "limit_reached" | null = null;
+
+    for (const candidate of candidates) {
+      if (reason) {
+        // Once the plan has refused, everything after it is blocked for the
+        // same reason — asking again per product would be three identical
+        // refusals and three pointless round trips.
+        blocked.push(candidate.label);
+        continue;
+      }
+      updateTurn(turnId, {
+        status: pickAvoiding(savingWatchPhrase(candidate.label), []),
+      });
+      try {
+        const res = await fetch("/api/price-watch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: candidate.kind,
+            productId: candidate.productId ?? undefined,
+            url: candidate.url ?? undefined,
+            label: candidate.label,
+            imageUrl: candidate.imageUrl,
+            merchant: candidate.merchant,
+            startPriceKobo: candidate.priceKobo,
+          }),
+        });
+        if (res.ok) {
+          saved.push(candidate.label);
+          continue;
+        }
+        const body = (await res.json().catch(() => null)) as {
+          code?: string;
+          error?: string;
+        } | null;
+        if (res.status === 402) {
+          // Two different gates share this status and mean opposite things —
+          // see the price-watch route, which lifts the discriminator out of
+          // the upstream body precisely so this branch can exist.
+          reason =
+            body?.code === "limit_reached" ? "limit_reached" : "plan_required";
+          blocked.push(candidate.label);
+          continue;
+        }
+        if (res.status === 401) {
+          // Session expired mid-flow. Hand back to the sign-in step with the
+          // rest of the selection still held.
+          holdPendingWatch(candidates.slice(candidates.indexOf(candidate)));
+          setWatchCapture({ candidates, turnId });
+          updateTurn(turnId, {
+            phase: "done",
+            status: "",
+            reply:
+              "Looks like you got signed out — sign back in and I'll finish setting those up.",
+          });
+          return;
+        }
+        blocked.push(candidate.label);
+      } catch {
+        blocked.push(candidate.label);
+      }
+    }
+
+    updateTurn(turnId, {
+      phase: "done",
+      status: "",
+      reply: watchReply(saved, blocked, reason),
+      watchResult: { saved, blocked, reason },
+    });
+  }
+
+  /** Entry point from a turn the route flagged as a watch request. */
+  async function runWatchFlow(candidates: WatchCandidate[], turnId: string) {
+    updateTurn(turnId, {
+      status: pickAvoiding(startingWatchPhrase(candidates.length), []),
+    });
+
+    // Signed in? Read the store rather than a prop — a buyer may have signed
+    // in earlier in this same conversation.
+    const buyer = useBuyerStore.getState().buyer;
+    if (!buyer) {
+      // Held, not re-asked (per explicit product direction). The sign-in
+      // button renders in the composer, and the selection is picked straight
+      // back up the moment a session exists.
+      holdPendingWatch(candidates);
+      setWatchCapture({ candidates, turnId });
+      updateTurn(turnId, {
+        phase: "done",
+        status: "",
+        reply:
+          candidates.length === 1
+            ? "I can keep an eye on that for you — I'll just need you signed in first, so I know where to send the alert."
+            : "I can keep an eye on those for you — I'll just need you signed in first, so I know where to send the alerts.",
+      });
+      return;
+    }
+
+    await createWatches(candidates, turnId);
+  }
+
   // The half of the reach-out flow that runs once the buyer's NUMBER is
   // settled — extracted (2026-08-26) because two paths now reach it: the
   // OTP verification below, and "use my saved number" from the choose step.
@@ -3652,9 +4079,6 @@ export function SearchHome() {
       description: offer.description,
       name: offer.buyerName,
       imageUrl: capture.imageUrl,
-      // Proves the number for a buyer with no account; absent (and ignored)
-      // when a session already identifies them.
-      ...(phoneTokenRef.current && { phoneToken: phoneTokenRef.current }),
       ...(capture.matchQuery && {
         matchQuery: capture.matchQuery,
       }),
@@ -3807,22 +4231,15 @@ export function SearchHome() {
       pickAvoiding(checkingOtpPhrase(), []),
     );
     try {
-      // Two shapes back (2026-08-27, see the route's own comment): a signed-in
-      // buyer gets `buyer`, with the number now attached to their account; an
-      // anonymous one gets `phoneToken`, a short-lived proof of that number
-      // and nothing else — no session, no account, nothing stored about them.
-      const { buyer, phoneToken } = await buyerApi.post<{
-        buyer: Buyer | null;
-        phoneToken: string | null;
-      }>("/api/buyer-auth/verify-otp", {
-        phone: identityCapture.phone,
-        otp: value,
-      });
+      // One shape back (2026-08-29): `buyer`, with the number now attached to
+      // their account. The anonymous `phoneToken` — a bare proof of one
+      // number for someone with no account — is gone from every layer, since
+      // a Buyer Request requires a real account first.
+      const { buyer } = await buyerApi.post<{ buyer: Buyer | null }>(
+        "/api/buyer-auth/verify-otp",
+        { phone: identityCapture.phone, otp: value },
+      );
       if (buyer) useBuyerStore.getState().setBuyer(buyer);
-      // Held in a ref, deliberately never persisted: it proves one number for
-      // one request and expires in minutes. localStorage would outlive its
-      // usefulness and leave a credential lying around on a shared phone.
-      if (phoneToken) phoneTokenRef.current = phoneToken;
       // Same turn, still "loading" — the shimmer just switches to a new
       // line, per explicit request ("the status phrase should also
       // indicate that it is creating the request now before displaying
@@ -3903,6 +4320,16 @@ export function SearchHome() {
     hasPendingClarification && lastTurn.clarification?.kind === "text";
 
   const collapsed = turns.length > 0;
+  // A live watch offer on the latest turn (2026-08-29). Drives the composer
+  // placeholder below: the WatchOffer strip deliberately has no buttons, so
+  // the placeholder is the affordance that tells a buyer they can just SAY
+  // which one — without it, a list of thumbnails is a dead end.
+  //
+  // Scoped to the latest turn only. A hint pointing at products three turns
+  // up would be worse than none: the buyer would name one and the classifier
+  // would have nothing live to attach it to.
+  const liveWatchOffer =
+    lastTurn && lastTurn.watchOffer.length > 0 ? lastTurn.watchOffer : null;
 
   // Shared by the state-driven resume loader AND its pre-hydration static
   // twin below (see the render's own comments) — one definition so the
@@ -3984,6 +4411,70 @@ export function SearchHome() {
               )}
             </button>
           </div>
+        </div>
+      ) : watchCapture ? (
+        // A watch request waiting on sign-in (2026-08-29). Same shape as the
+        // reach-out flow's own sign-in step, and the same reasoning: there is
+        // nothing to type, so the composer is replaced rather than disabled.
+        //
+        // Resumes IN PLACE — the products they already chose are picked
+        // straight back up, never re-asked.
+        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
+          <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+            <BellIcon size={12} className="text-orange-400 shrink-0" />
+            Sign in and I&apos;ll start watching
+            {watchCapture.candidates.length === 1 ? " it" : " them"} for you.
+          </label>
+          <GoogleSignInButton
+            onSignedIn={() => {
+              const pending = watchCapture;
+              setWatchCapture(null);
+              // Clear the localStorage copy too: this session is finishing the
+              // job, so the Paystack-return path must not fire it a second
+              // time on the next page load.
+              takePendingWatch();
+              if (pending) {
+                updateTurn(pending.turnId, { phase: "loading" });
+                void createWatches(pending.candidates, pending.turnId);
+              }
+            }}
+          />
+        </div>
+      ) : identityCapture?.step === "signin" ? (
+        // Sign-in, before anything else (2026-08-29). Shown instead of the
+        // input composer because there is nothing to type — the whole step
+        // is one tap, and asking for a phone number before there is an
+        // account to attach it to is what this replaces.
+        //
+        // Advances IN PLACE rather than closing: the buyer is mid-request,
+        // and dropping them back to a blank composer would lose the thread
+        // they were told this was for. Straight to "choose" when the account
+        // they just signed into already has a proven number.
+        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
+          <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+            <PhoneIcon size={12} className="text-orange-400 shrink-0" />
+            Sign in so a vendor knows who they&apos;re replying to.
+          </label>
+          <GoogleSignInButton
+            onSignedIn={(signedIn) => {
+              setIdentityCapture((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      step:
+                        signedIn.phoneVerified && signedIn.phone
+                          ? "choose"
+                          : "phone",
+                      phone:
+                        signedIn.phoneVerified && signedIn.phone
+                          ? signedIn.phone
+                          : "",
+                    }
+                  : prev,
+              );
+              setIdentityValue("");
+            }}
+          />
         </div>
       ) : identityCapture?.step === "choose" ? (
         // The saved-number confirmation (2026-08-26). Shown instead of the
@@ -4125,9 +4616,17 @@ export function SearchHome() {
                   ? "Type your answer…"
                   : hasPendingClarification
                     ? "Answer the question above to continue…"
-                    : collapsed
-                      ? "Ask a follow-up, or search for something else…"
-                      : "e.g. 'Tecno fast charger near me'"
+                    : liveWatchOffer
+                      ? // Names a REAL product from the offer above rather
+                        // than a generic "watch a price" — the specific
+                        // example is what makes it obvious the reply can be
+                        // conversational ("watch the Tecno one") instead of
+                        // a command. First word of the label keeps it short
+                        // enough for a phone-width placeholder.
+                        `e.g. 'watch the ${liveWatchOffer[0].label.split(/\s+/)[0]} one', or ask a follow-up…`
+                      : collapsed
+                        ? "Ask a follow-up, or search for something else…"
+                        : "e.g. 'Tecno fast charger near me'"
             }
             className="w-full resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 disabled:opacity-50"
           />
@@ -4277,11 +4776,13 @@ export function SearchHome() {
                   />
                 </div>
               ))}
-              {/* Part of the thread, not an overlay on top of it — it sits
-                  after the last turn and scrolls with everything else, so a
-                  buyer mid-read is never interrupted by it. Renders nothing
-                  at all until a session has actually completed; see
-                  InstallSuggestion for the 48h rule. */}
+              {/* Portals itself to <body> as a bottom-anchored card
+                  (2026-08-29, per explicit request — back to the modal it
+                  briefly stopped being). Left mounted HERE, inside the
+                  thread, purely so it stays next to the `sessionsCompleted`
+                  counter that drives it; it renders nothing in place. Still
+                  nothing at all until a session has actually completed —
+                  see InstallSuggestion for the 48h rule. */}
               <InstallSuggestion sessionsCompleted={sessionsCompleted} />
 
               <div ref={bottomRef} />

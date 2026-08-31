@@ -45,7 +45,12 @@ const EXTERNAL_RECOMMEND_TIMEOUT_MS = 12_000;
 // Reasons render inside a small chip/summary line — a paragraph would
 // break the layout, and the model is told to stay short anyway; the slice
 // is just the guarantee.
-const MAX_REASON_LENGTH = 160;
+//
+// Raised from 160 with the 2026-08-29 prompt change: a reason now has to
+// cite a concrete fact AND say how it beats the alternatives, which does not
+// fit in 160 characters. Left well under a paragraph — this is still a
+// summary line, and the cap is still the guarantee rather than the target.
+const MAX_REASON_LENGTH = 220;
 
 // Same shape of leak sanitizeReply (route.ts) guards the main reply
 // against: the card's WhatsApp button is the only contact channel, so a
@@ -85,7 +90,7 @@ function recommendResultsTool() {
       bestOverallReason: z
         .string()
         .describe(
-          "ONE short sentence (under 20 words) telling the buyer why this is the best fit — concrete and specific to this candidate, never generic filler. Never include contact details of any kind.",
+          "ONE sentence (under 28 words) that would actually persuade this buyer, not just label the choice. It MUST cite at least one concrete fact from THIS candidate's own data — its price, distance, condition, edition/model, an attribute, or how much the seller has documented it — and where the comparison makes it obvious, say how that beats the others ('₦8,000 less than the next closest, and it's the 256GB one you asked for'). Never generic filler like 'great option' or 'best overall choice', never a fact the candidate data doesn't show, and never contact details of any kind.",
         ),
       bestValueId: z
         .string()
@@ -97,7 +102,7 @@ function recommendResultsTool() {
         .string()
         .nullable()
         .describe(
-          "ONE short sentence (under 20 words) on why it's the best value, or null when bestValueId is null. Never include contact details of any kind.",
+          "ONE sentence (under 28 words) on why it's the best value, or null when bestValueId is null. Value is a RATIO, so the sentence has to show both halves: what it costs AND what that money gets, relative to the others ('₦12,000 cheaper than the top pick and still the same model, just further out'). A price alone is not a value argument. Never generic filler, never a fact the data doesn't show, and never contact details of any kind.",
         ),
       tradeoffId: z
         .string()

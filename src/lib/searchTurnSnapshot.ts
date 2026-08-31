@@ -84,6 +84,14 @@ export function buildTurnSnapshot(
     buyerRequestMatchQuery: event.buyerRequestMatchQuery,
     contextNote,
     recommendation: event.recommendation,
+    // Carried through so a reopened conversation can still act on an offer
+    // it made — the buyer may sign in or upgrade between turns.
+    watchOffer: event.watchOffer,
+    watchRequest: event.watchRequest,
     externalOffers: event.externalOffers,
+    // Persisted rather than recomputed on rehydrate: the listings behind it
+    // are a snapshot of that moment's market, and re-deriving it later would
+    // silently rewrite what the buyer was actually told.
+    priceBand: event.priceBand,
   };
 }

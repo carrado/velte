@@ -164,16 +164,22 @@ export function WatchesPage() {
 
   if (!signedIn) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-16 text-center">
-        <BellIcon size={28} className="mx-auto text-gray-300" />
-        <h1 className="mt-4 text-lg font-bold text-[#023337]">
-          Sign in to see your watches
-        </h1>
-        <p className="mt-2 text-sm text-gray-500">
-          Velte can watch a price for you and let you know when it drops.
-        </p>
-        <div className="mt-6 flex justify-center">
-          <GoogleSignInButton />
+      // Its own scroller: the chat shell (chat/layout.tsx) is
+      // `overflow-hidden` and hands its children a fixed-height box, so a
+      // page under it that doesn't scroll itself is simply clipped at the
+      // fold — which a long watch list reaches quickly.
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-lg px-4 py-16 text-center">
+          <BellIcon size={28} className="mx-auto text-gray-300" />
+          <h1 className="mt-4 text-lg font-bold text-[#023337]">
+            Sign in to see your watches
+          </h1>
+          <p className="mt-2 text-sm text-gray-500">
+            Velte can watch a price for you and let you know when it drops.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <GoogleSignInButton />
+          </div>
         </div>
       </div>
     );
@@ -182,63 +188,65 @@ export function WatchesPage() {
   const watches = data?.watches ?? [];
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <header className="mb-6">
-        <h1 className="text-xl font-bold text-[#023337]">Watching</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          We check these regularly and email you when the price drops.
-        </p>
-      </header>
-
-      {isLoading && (
-        <ul className="space-y-2">
-          {[0, 1, 2].map((i) => (
-            <li
-              key={i}
-              className="h-20 animate-pulse rounded-2xl border border-gray-100 bg-gray-50"
-            />
-          ))}
-        </ul>
-      )}
-
-      {isError && (
-        <p className="rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-500">
-          Couldn&apos;t load your watches just now. Refresh to try again.
-        </p>
-      )}
-
-      {!isLoading && !isError && watches.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-200 p-8 text-center">
-          <BellIcon size={24} className="mx-auto text-gray-300" />
-          <p className="mt-3 text-sm font-semibold text-[#023337]">
-            You&apos;re not watching anything yet
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <header className="mb-6">
+          <h1 className="text-xl font-bold text-[#023337]">Watching</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            We check these regularly and email you when the price drops.
           </p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
-            Search for something, then tap{" "}
-            <span className="font-semibold">Watch price</span> on any result.
-            We&apos;ll take it from there.
-          </p>
-          <Link
-            href="/chat"
-            className="mt-5 inline-flex items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
-          >
-            Start a search
-          </Link>
-        </div>
-      )}
+        </header>
 
-      {watches.length > 0 && (
-        <ul className="space-y-2">
-          {watches.map((watch) => (
-            <WatchRow
-              key={watch._id}
-              watch={watch}
-              onRemove={(id) => remove.mutate(id)}
-              removing={remove.isPending && remove.variables === watch._id}
-            />
-          ))}
-        </ul>
-      )}
+        {isLoading && (
+          <ul className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <li
+                key={i}
+                className="h-20 animate-pulse rounded-2xl border border-gray-100 bg-gray-50"
+              />
+            ))}
+          </ul>
+        )}
+
+        {isError && (
+          <p className="rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-500">
+            Couldn&apos;t load your watches just now. Refresh to try again.
+          </p>
+        )}
+
+        {!isLoading && !isError && watches.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-gray-200 p-8 text-center">
+            <BellIcon size={24} className="mx-auto text-gray-300" />
+            <p className="mt-3 text-sm font-semibold text-[#023337]">
+              You&apos;re not watching anything yet
+            </p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
+              Search for something, then tap{" "}
+              <span className="font-semibold">Watch price</span> on any result.
+              We&apos;ll take it from there.
+            </p>
+            <Link
+              href="/chat"
+              className="mt-5 inline-flex items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+            >
+              Start a search
+            </Link>
+          </div>
+        )}
+
+        {watches.length > 0 && (
+          <ul className="space-y-2">
+            {watches.map((watch) => (
+              <WatchRow
+                key={watch._id}
+                watch={watch}
+                onRemove={(id) => remove.mutate(id)}
+                removing={remove.isPending && remove.variables === watch._id}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

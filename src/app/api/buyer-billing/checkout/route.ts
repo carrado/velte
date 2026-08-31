@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { backendData } from "@/lib/server/backend";
 import { fail } from "@/lib/server/guards";
 import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalVendorAuth } from "@/lib/server/guards";
 
 // POST /api/buyer-billing/checkout — starts a plan purchase.
 //
@@ -16,8 +17,15 @@ import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
 // the same reason: popups are unreliable for buyers arriving from WhatsApp
 // on mobile, which is most of them.
 export async function POST(req: Request) {
+  // Either session may buy a plan (2026-08-29). Buyer wins when both cookies
+  // are present — on /chat they are acting as a buyer, and that is the
+  // account their history and saved items already hang off. A vendor with no
+  // buyer session buys against their vendor identity instead of being sent
+  // away to open a second account.
   const buyerAuth = await getOptionalBuyerAuth();
-  if (!buyerAuth) {
+  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  const cookie = buyerAuth?.cookie ?? vendorAuth?.cookie;
+  if (!cookie) {
     return NextResponse.json({ error: "Sign in to upgrade." }, { status: 401 });
   }
 
@@ -34,8 +42,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    // getOptionalBuyerAuth hands back just the buyer cookie, already
-    // formatted — a vendor session never travels with a buyer's purchase.
+    // One cookie, already formatted, and only ever the one the actor was
+    // resolved from — a buyer's purchase never travels with a vendor session
+    // attached, or the backend's own resolveActor would pick the wrong one.
     const data = await backendData<{
       authorizationUrl: string;
       reference: string;
@@ -43,7 +52,7 @@ export async function POST(req: Request) {
     }>("/buyer-billing/checkout", {
       method: "POST",
       body: { planId: body.planId, cycle: body.cycle },
-      cookie: buyerAuth.cookie,
+      cookie,
     });
 
     return NextResponse.json(data);

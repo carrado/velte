@@ -1,25 +1,33 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "motion/react";
 
 import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { installPromptStore } from "@/lib/installPromptStore";
 import { cn } from "@/lib/utils";
-import { DownloadIcon } from "@/components/icons";
+import { CloseIcon, DownloadIcon } from "@/components/icons";
 
-// The install nudge, offered INSIDE the conversation (2026-08-29).
+// The install nudge for /chat.
 //
-// Replaces BuyerInstallPrompt, a fixed-position card that portalled itself
-// over the thread 30 seconds after arrival. That version interrupted: it
-// appeared mid-thought, on top of what someone was reading, before they had
-// any reason to want the app. This one arrives as part of the conversation,
-// after a search has actually finished and delivered something — the moment
-// the product has just proved itself, which is the only moment "keep this
-// one tap away" is a reasonable thing to say.
+// Two swings at this, and the current shape takes the good half of each:
 //
-// TIMING RULES (per explicit request):
-//   - Suggested only after a COMPLETED session — a turn that finished and
-//     produced results, never mid-search and never after an empty one.
+//   BuyerInstallPrompt (until 2026-08-29) was a portalled card that appeared
+//   30 seconds after arrival. Right FORM, wrong MOMENT — it interrupted
+//   mid-thought, before the product had given anyone a reason to want it.
+//
+//   The in-thread text that replaced it fixed the moment and lost the form:
+//   as a line of Velte's own prose it read as the assistant talking about
+//   itself, and it scrolled away with the conversation like any other
+//   message — easy to miss entirely.
+//
+// So: the card is back (per explicit request, 2026-08-29), with the timing
+// rules the in-thread version introduced.
+//
+// TIMING RULES:
+//   - Shown only after a COMPLETED session — a turn that finished and
+//     produced something, never mid-search and never after an empty one.
 //   - Dismissed or ignored → nothing for 48 HOURS.
 //   - Once that window passes, the next completed session offers it again.
 //
@@ -82,6 +90,11 @@ export function InstallSuggestion({
 
   const [visible, setVisible] = useState(false);
   const [installing, setInstalling] = useState(false);
+  // Portals need a DOM to portal INTO, which the server render doesn't have.
+  // Gating on mount rather than reaching for `document` during render is what
+  // keeps this safe to include in a server-rendered tree.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (isInstalled) installPromptStore.clear();
@@ -96,18 +109,16 @@ export function InstallSuggestion({
     if (!cooledDown()) return;
 
     // Stamped as soon as it is SHOWN, not when dismissed — someone who
-    // scrolls past without engaging has effectively declined, and should get
-    // the same 48 hours of quiet as someone who taps "Not now".
+    // ignores the card has effectively declined, and should get the same 48
+    // hours of quiet as someone who taps "Not now".
     markSuggested();
     setVisible(true);
   }, [sessionsCompleted, isInstalled, canInstall, isIOS]);
 
-  if (!visible || isInstalled) return null;
-
   const handleInstall = async () => {
     if (!prompt) {
       // iOS, or the prompt expired — the text already explains the manual
-      // route, so there is nothing to do but acknowledge.
+      // route, so the button is just an acknowledgement.
       setVisible(false);
       return;
     }
@@ -115,63 +126,105 @@ export function InstallSuggestion({
     try {
       await prompt.prompt();
     } catch {
-      /* declined at the OS level, or blocked — leave the message in place */
+      /* declined at the OS level, or blocked — leave the card in place */
     } finally {
       setInstalling(false);
     }
   };
 
-  return (
-    // No fill, no border, no icon tile — this is Velte speaking, and every
-    // one of Velte's messages reads as plain text in the thread (see
-    // AI_MESSAGE_CLASS in SearchHome, which this deliberately mirrors:
-    // `max-w-md` is a reading measure, not a box). A tinted panel would have
-    // made the one message that asks for something look like an advert
-    // dropped into the conversation.
-    <div className="mt-4 max-w-md">
-      <p className="text-sm leading-relaxed text-[#023337]">
-        {canInstall
-          ? "By the way — you can keep Velte one tap away. Want me to add it to your home screen?"
-          : isIOS
-            ? 'By the way — you can keep Velte one tap away. In Safari, tap the Share icon, then "Add to Home Screen."'
-            : "By the way — you can keep Velte one tap away by adding it to your home screen from your browser menu."}
-      </p>
-      <div className="mt-2 flex items-center gap-3">
-        {canInstall && (
+  if (!mounted || !visible || isInstalled) return null;
+
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        key="velte-install-card"
+        initial={{ y: 24, opacity: 0, scale: 0.97 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        exit={{ y: 24, opacity: 0, scale: 0.97 }}
+        transition={{ type: "spring", stiffness: 360, damping: 28 }}
+        // Bottom-anchored, and on a phone it sits ABOVE the composer's safe
+        // area rather than over it — the composer is what someone is reaching
+        // for, and a card covering it would make the app feel broken at the
+        // exact moment it is asking for a favour.
+        className="fixed z-50 bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-4 right-4 md:left-auto md:right-6 md:w-[360px]"
+        role="dialog"
+        aria-label="Add Velte to your home screen"
+      >
+        <div className="relative overflow-hidden rounded-2xl bg-white shadow-[0_12px_40px_-8px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.06]">
           <button
             type="button"
-            onClick={handleInstall}
-            disabled={installing}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full bg-orange-500 px-3.5 py-1.5",
-              "text-xs font-semibold text-white transition-colors",
-              "hover:bg-orange-600 disabled:opacity-60",
-            )}
+            onClick={() => setVisible(false)}
+            aria-label="Dismiss"
+            className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
           >
-            {installing ? (
-              <>
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                Adding…
-              </>
-            ) : (
-              <>
-                <DownloadIcon className="h-3 w-3" />
-                Add to home screen
-              </>
-            )}
+            <CloseIcon className="h-4 w-4" />
           </button>
-        )}
-        {/* A plain text link, not an icon button in the corner — there is no
-            panel left for it to sit in, and "Not now" reads as part of the
-            same sentence rather than as chrome. */}
-        <button
-          type="button"
-          onClick={() => setVisible(false)}
-          className="text-xs font-medium text-gray-500 transition-colors hover:text-gray-700"
-        >
-          Not now
-        </button>
-      </div>
-    </div>
+
+          <div className="px-5 pb-5 pt-4">
+            <div className="mb-3 flex items-center gap-3 pr-6">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 shadow-sm shadow-orange-200">
+                <DownloadIcon className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-orange-500">
+                  Velte
+                </p>
+                <h3 className="text-[15px] font-semibold leading-tight text-slate-900">
+                  Keep Velte one tap away
+                </h3>
+              </div>
+            </div>
+
+            {/* Earns the ask by pointing at what just happened, rather than
+                pitching an app in the abstract — this only ever appears after
+                a search that actually delivered something. */}
+            <p className="text-[13px] leading-relaxed text-slate-500">
+              {canInstall
+                ? "Add Velte to your home screen and your next search is one tap away — no app store needed."
+                : isIOS
+                  ? 'Add Velte to your home screen: tap the Share icon in Safari, then "Add to Home Screen."'
+                  : "Add Velte to your home screen from your browser menu, and your next search is one tap away."}
+            </p>
+
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleInstall}
+                disabled={installing}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-2 rounded-xl",
+                  "bg-orange-500 px-4 py-2.5 text-[13px] font-semibold text-white",
+                  "shadow-sm shadow-orange-200/80 transition-all",
+                  "hover:bg-orange-600 active:scale-[0.97]",
+                  "disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer",
+                )}
+              >
+                {installing ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                    Adding…
+                  </>
+                ) : canInstall ? (
+                  <>
+                    <DownloadIcon className="h-3.5 w-3.5" />
+                    Add to home screen
+                  </>
+                ) : (
+                  "Got it"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisible(false)}
+                className="shrink-0 text-[13px] font-medium text-slate-400 transition-colors hover:text-slate-600 cursor-pointer"
+              >
+                Not now
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body,
   );
 }

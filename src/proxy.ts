@@ -52,12 +52,11 @@ const publicRegardlessOfAuth = [
   // open, for people who have no vendor account at all) and a vendor would
   // be redirected to /products before the route could decide anything.
   "/launch",
-  // Buyer plans (2026-08-29, app/plans/page.tsx). Same single-segment trap as
-  // /launch, and the same reason it can't be a marketing route: a signed-in
-  // VENDOR must be able to open it too, and marketingRoutes bounces them
-  // straight to their dashboard. Distinct from /pricing, which is the
-  // vendor-facing pay-per-lead page and stays marketing.
-  "/plans",
+  // No /plans entry since 2026-08-31: buyer plans became a full-screen modal
+  // inside /chat (components/plans/PlansModal.tsx) and the route was deleted,
+  // so there is nothing left here to make public. /chat above already covers
+  // every surface that can open it. Not to be confused with /pricing, which
+  // is the vendor-facing pay-per-lead page and stays a marketing route.
   // No /buyer/auth entry anymore (2026-08-18) — there's no buyer-facing
   // page tree left at all. A buyer's only touchpoint is the inline
   // phone+OTP capture inside /chat itself (already covered by the /chat
