@@ -1,7 +1,9 @@
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { ReferralCapture } from "@/components/chat/ReferralCapture";
-import { PlansModalProvider } from "@/components/plans/PlansModal";
+import { VendorSessionSync } from "@/components/chat/VendorSessionSync";
+import { CreditsFab } from "@/components/credits/CreditsFab";
+import { CreditsModalProvider } from "@/components/credits/CreditsModal";
 import { SEARCH_CONVERSATION_ID_STORAGE_KEY } from "@/lib/searchConversation";
 
 // Runs synchronously during HTML parsing, BEFORE the page below ever
@@ -46,10 +48,11 @@ export default function ChatLayout({
     // provider wraps the WHOLE shell, header included, because the CTA that
     // opens it lives in ChatHeader. It fetches its own balance on open; the
     // cost table it renders is a plain client-safe import.
-    <PlansModalProvider>
+    <CreditsModalProvider>
       <div className="h-dvh flex overflow-hidden bg-white">
         <script dangerouslySetInnerHTML={{ __html: PRE_PAINT_RESUME_CHECK }} />
         <ReferralCapture />
+        <VendorSessionSync />
         <ConversationSidebar />
         {/* `min-w-0` matters: without it this flex child refuses to shrink
           below its content's intrinsic width, and a long result card would
@@ -59,7 +62,12 @@ export default function ChatLayout({
           <ChatHeader />
           <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
         </div>
+        {/* Outside the scrolling column on purpose: it is fixed to the
+            viewport, and nesting it inside an `overflow-hidden` ancestor is
+            how a fixed element ends up clipped. Inside the provider, since
+            it opens the modal. */}
+        <CreditsFab />
       </div>
-    </PlansModalProvider>
+    </CreditsModalProvider>
   );
 }

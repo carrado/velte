@@ -10,6 +10,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ExternalLinkIcon,
+  MessageCircleIcon,
   SearchIcon,
   StoreIcon,
   UsersIcon,
@@ -18,7 +19,9 @@ import {
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { fetchMyRequests } from "@/services/buyerRequests";
 import { useBuyerStore } from "@/store/buyerStore";
-import { cn } from "@/lib/utils";
+import { cn, formatNaira } from "@/lib/utils";
+import { compareQuotes, leadTimeLabel } from "@/lib/quoteCompare";
+import { buildChatLink } from "@/lib/chatLink";
 import type {
   BuyerRequestResponder,
   MyBuyerRequest,
@@ -150,20 +153,77 @@ function StatusPill({
   );
 }
 
+/** How much of the request itself to quote back in the WhatsApp prefill.
+ *  /api/chat truncates the whole message at 700 characters, so a long
+ *  description left whole would eat the quote and the question that follow it
+ *  — the two parts the vendor actually needs. Trimmed here instead, where we
+ *  know which part is expendable. */
+const PREFILL_DESCRIPTION_MAX = 240;
+
+/** The prefill. Composed at the call site rather than in the route, like every
+ *  other chat CTA: each surface words it differently, and this one has to
+ *  remind a vendor which request they answered and what they said it would
+ *  cost — they may have accepted a dozen, hours ago. */
+function contactMessage(
+  responder: BuyerRequestResponder,
+  description: string,
+): string {
+  const need =
+    description.length > PREFILL_DESCRIPTION_MAX
+      ? `${description.slice(0, PREFILL_DESCRIPTION_MAX).trimEnd()}…`
+      : description;
+  const lead = leadTimeLabel(responder.leadTimeDays);
+  const quoted =
+    responder.priceKobo != null
+      ? ` You quoted ${formatNaira(responder.priceKobo)}${lead ? ` (${lead})` : ""}.`
+      : "";
+  return `Hi ${responder.name}, I posted a request on Velte for: ${need}.${quoted} Is that still available?`;
+}
+
 // ── One accepted business ──────────────────────────────────────────────────
-// Only ever a vendor who ACCEPTED, which means they already paid for the lead
-// and already hold the buyer's number — so this row is a courtesy, not a
-// handoff: they are expected to make contact first. It links to the public
-// store page rather than offering a chat button, because a buyer has no
-// vendor-chat surface and the store page carries its own contact route.
+// A vendor who ACCEPTED. Since 2026-09-03 accepting is free and releases
+// nothing: they stated a price and are waiting to be picked, and the BUYER is
+// the one who opens the conversation. This row therefore carries the page's
+// primary action rather than being the courtesy it used to be.
+//
+// Message goes through /api/chat — the same route every other buyer-facing
+// WhatsApp CTA already uses — which resolves the vendor's number server-side
+// and bills the lead on the journey. That is precisely what lets the fee be
+// charged on CONTACT instead of on accept: the click passes through a route
+// Velte controls, so the connection is countable. A plain wa.me href would be
+// unbillable, and would put the number in the DOM besides.
+//
+// The row is a flex container rather than one big <Link>: a button nested
+// inside a link is invalid and unreachable by keyboard. The details link to
+// the store; Message sits beside them as its own control.
 function ResponderRow({
   responder,
+  requestId,
+  requestDescription,
   now,
+  badge,
 }: {
   responder: BuyerRequestResponder;
+  /** Both are needed for the handoff: the id keys the lead to THIS request,
+   *  so the backend can bill once per (request, vendor) rather than once per
+   *  click; the description is what the prefill reminds them they answered. */
+  requestId: string;
+  requestDescription: string;
   now: number;
+  /** "Cheapest" / "Fastest" / null — set by the comparison in RequestCard,
+   *  never derived here: one row cannot know what the others cost, and a
+   *  badge computed per-row would be the easiest possible way to end up
+   *  with two "Cheapest" labels on one card. */
+  badge?: string | null;
 }) {
   const where = place(responder.area, responder.state);
+  const lead = leadTimeLabel(responder.leadTimeDays);
+  const chatHref = buildChatLink({
+    vendorId: responder.vendorId,
+    source: "buyer_request",
+    requestId,
+    message: contactMessage(responder, requestDescription),
+  });
   const body = (
     <>
       <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-orange-500 text-xs font-bold text-white">
@@ -180,9 +240,39 @@ function ResponderRow({
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-[#023337]">
-          {responder.name}
+        <span className="flex items-center gap-1.5">
+          <span className="min-w-0 truncate text-sm font-medium text-[#023337]">
+            {responder.name}
+          </span>
+          {badge && (
+            <span className="shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
+              {badge}
+            </span>
+          )}
         </span>
+
+        {/* The quote, or the honest absence of one. A vendor who accepted
+            without naming a price is not shown as worse than one who did —
+            they are shown as unanswered, with the thing to do about it. */}
+        {responder.priceKobo != null ? (
+          <span className="block truncate text-[13px] font-semibold text-[#023337]">
+            {formatNaira(responder.priceKobo)}
+            {lead && (
+              <span className="font-normal text-gray-500"> · {lead}</span>
+            )}
+          </span>
+        ) : (
+          <span className="block truncate text-[12px] text-gray-400">
+            No price given — ask them
+          </span>
+        )}
+
+        {responder.note && (
+          <span className="block truncate text-[11px] text-gray-500">
+            {responder.note}
+          </span>
+        )}
+
         <span className="block truncate text-[11px] text-gray-400">
           {where ? `${where} · ` : ""}
           accepted {timeAgo(responder.respondedAt, now)}
@@ -191,28 +281,42 @@ function ResponderRow({
     </>
   );
 
-  // No store row yet (one is created lazily on the vendor's first dashboard
-  // visit) — shown without a link rather than dropped, so the count above
-  // always matches what is listed under it.
-  if (!responder.storeHandle) {
-    return (
-      <li className="flex items-center gap-3 rounded-xl px-2 py-2">{body}</li>
-    );
-  }
+  const details = responder.storeHandle ? (
+    <Link
+      href={`/store/${responder.storeHandle}`}
+      className="group flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-gray-50"
+    >
+      {body}
+      <span className="flex shrink-0 items-center gap-1 text-gray-400 transition-colors group-hover:text-orange-600">
+        <StoreIcon size={13} />
+        <ExternalLinkIcon size={11} />
+      </span>
+    </Link>
+  ) : (
+    // No store row yet — one is created lazily on the vendor's first dashboard
+    // visit. Shown without a store link rather than dropped, and unlike before
+    // that no longer means unreachable: Message does not depend on a
+    // storefront existing, so this vendor can still be contacted.
+    <span className="flex min-w-0 flex-1 items-center gap-3 px-2 py-2">
+      {body}
+    </span>
+  );
 
   return (
-    <li>
-      <Link
-        href={`/store/${responder.storeHandle}`}
-        className="group flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-gray-50"
-      >
-        {body}
-        <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-gray-400 transition-colors group-hover:text-orange-600">
-          <StoreIcon size={13} />
-          <span className="hidden sm:inline">View store</span>
-          <ExternalLinkIcon size={11} />
-        </span>
-      </Link>
+    <li className="flex items-center gap-1">
+      {details}
+      {chatHref && (
+        <a
+          href={chatHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Message ${responder.name} on WhatsApp`}
+          className="flex shrink-0 items-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-orange-600"
+        >
+          <MessageCircleIcon size={14} />
+          <span className="hidden sm:inline">Message</span>
+        </a>
+      )}
     </li>
   );
 }
@@ -237,8 +341,42 @@ function RequestCard({
       ? Math.min(1, Math.max(0, (now - started) / (ends - started)))
       : 1;
 
-  const visible = showAll ? request.responders : request.responders.slice(0, 3);
-  const hidden = request.responders.length - visible.length;
+  // The comparison (2026-09-03) — deterministic, no model, see
+  // lib/quoteCompare.ts. Computed here rather than per-row because every
+  // verdict below is RELATIVE: which quote is cheapest is not a fact about
+  // any one of them.
+  const comparison = useMemo(
+    () => compareQuotes(request.responders),
+    [request.responders],
+  );
+
+  // Priced offers first, cheapest first, then everyone who accepted without
+  // naming terms. This is the ordering the comparison itself produces, and
+  // using it here is what keeps the badges below pointing at the right rows.
+  const ordered = useMemo(
+    () => [...comparison.quoted, ...comparison.unquoted],
+    [comparison],
+  );
+
+  const badges = useMemo(() => {
+    const map = new Map<string, string>();
+    // Deliberately assigned in this order and never overwritten: a vendor who
+    // is both the recommendation and the cheapest reads better as
+    // "Recommended", and two badges on one row is noise.
+    if (comparison.recommendation) {
+      map.set(comparison.recommendation.responder.vendorId, "Recommended");
+    }
+    if (comparison.cheapest && !map.has(comparison.cheapest.vendorId)) {
+      map.set(comparison.cheapest.vendorId, "Cheapest");
+    }
+    if (comparison.fastest && !map.has(comparison.fastest.vendorId)) {
+      map.set(comparison.fastest.vendorId, "Fastest");
+    }
+    return map;
+  }, [comparison]);
+
+  const visible = showAll ? ordered : ordered.slice(0, 3);
+  const hidden = ordered.length - visible.length;
 
   return (
     <article
@@ -248,6 +386,15 @@ function RequestCard({
       )}
     >
       <div className="flex items-start gap-3 p-4">
+        {request.budgetKobo != null && (
+          <p className="mb-2 text-[12px] text-gray-500">
+            Budget shown to businesses:{" "}
+            <span className="font-semibold text-[#023337]">
+              {formatNaira(request.budgetKobo)}
+            </span>
+          </p>
+        )}
+
         {request.imageUrl && (
           <a
             href={request.imageUrl}
@@ -316,14 +463,33 @@ function RequestCard({
       {request.responders.length > 0 ? (
         <div className="border-t border-gray-100 bg-[#FAFAFA] px-3 py-2">
           <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-            Who accepted
+            {comparison.quoted.length > 1 ? "Compare offers" : "Who accepted"}
           </p>
+
+          {/* The verdict, with the sentence that justifies it. Never a bare
+              "best overall": every recommendation quoteCompare returns
+              carries its own reason, built from the same numbers on the rows
+              below, so a buyer can check it rather than trust it. */}
+          {comparison.recommendation && (
+            <div className="mx-2 mb-2 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2">
+              <p className="text-[12px] font-semibold text-[#023337]">
+                Best pick: {comparison.recommendation.responder.name}
+              </p>
+              <p className="text-[11px] leading-relaxed text-gray-600">
+                {comparison.recommendation.reason}
+              </p>
+            </div>
+          )}
+
           <ul>
             {visible.map((responder) => (
               <ResponderRow
                 key={responder.vendorId}
                 responder={responder}
+                requestId={request.id}
+                requestDescription={request.description}
                 now={now}
+                badge={badges.get(responder.vendorId) ?? null}
               />
             ))}
           </ul>

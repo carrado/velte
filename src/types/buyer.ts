@@ -18,4 +18,14 @@ export interface Buyer {
   email: string | null;
   name: string | null;
   avatar: string | null;
+  /** This buyer's own referral code, for their `?ref=` share link — they earn
+   *  credits when someone joins through it (see lib/credits.ts
+   *  REFERRAL_CREDITS). Already on the wire: the backend returns the whole
+   *  Buyer document, so this only had to be declared to be usable.
+   *
+   *  Nullable because buyers created before referrals existed have none, and
+   *  because a VENDOR acting as a buyer on /chat has no buyer document at
+   *  all. Anything rendering it must handle its absence rather than showing
+   *  an empty link. */
+  referralCode: string | null;
 }

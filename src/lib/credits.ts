@@ -87,6 +87,53 @@ export const SIGNUP_CREDITS = 15;
  *  nothing we weren't already willing to spend acquiring that second buyer. */
 export const REFERRAL_CREDITS = 5;
 
+/**
+ * What a VENDOR starts with, by how much of a catalogue they have uploaded
+ * (2026-08-31).
+ *
+ * A vendor is not a buyer with a different cookie: they arrive having already
+ * done work for Velte. Every offering they list is what the discovery engine
+ * matches against, so a deep catalogue is the most valuable thing a vendor can
+ * give us, and paying for it in the currency they will spend on search is the
+ * cheapest acquisition Velte has. Hence numbers that dwarf a buyer's
+ * SIGNUP_CREDITS — a vendor with twenty listings gets more than thirteen times
+ * what a buyer gets for signing up, and has earned it.
+ *
+ * TARGETS, not increments: a vendor holds whatever their tier says, so
+ * crossing 10 or 20 tops them up by the difference rather than re-paying what
+ * they already have. Someone who joins with three listings and grows to twenty
+ * ends on 200, exactly as if they had arrived with twenty — which is what makes
+ * this an ongoing reason to keep listing rather than a one-shot at whatever
+ * moment we happened to count.
+ *
+ * DISPLAY ONLY on this side. The amounts are actually applied by velte-backend
+ * (config/credits.js VENDOR_CATALOG_GRANTS + syncVendorCatalogCredits), because
+ * a grant that arrived from the client would be a grant the client could
+ * choose. Keep the two in step; this file is what a vendor is PROMISED, that
+ * one is what they GET.
+ *
+ * Ordered highest-first so a linear scan returns on the first tier a count
+ * clears — the same shape as LEAD_TIERS in services/wallet.ts.
+ */
+export const VENDOR_CATALOG_GRANTS: {
+  minOfferings: number;
+  credits: number;
+}[] = [
+  { minOfferings: 20, credits: 200 },
+  { minOfferings: 10, credits: 100 },
+  { minOfferings: 0, credits: 50 },
+];
+
+/** The grant a vendor with this many offerings has earned. Never undefined —
+ *  the last tier's floor is 0, so an empty catalogue still starts with
+ *  something to spend. */
+export function catalogGrantFor(count: number): number {
+  const tier =
+    VENDOR_CATALOG_GRANTS.find((t) => count >= t.minOfferings) ??
+    VENDOR_CATALOG_GRANTS[VENDOR_CATALOG_GRANTS.length - 1];
+  return tier.credits;
+}
+
 /** Can this action be afforded at this balance? Spelled once so the gate and
  *  any "you need N more" copy can never disagree. */
 export function canAfford(balance: number, action: CreditAction): boolean {

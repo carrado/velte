@@ -11,8 +11,7 @@
     "prettier-check": "prettier --check .",
     "prepare": "husky install",
     "eval:search": "tsx scripts/eval-search-intent.ts",
-    "costs": "tsx scripts/analyze-costs.mts",
-    "plans": "tsx scripts/show-plans.mts"
+    "costs": "tsx scripts/analyze-costs.mts"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,md,css}": [

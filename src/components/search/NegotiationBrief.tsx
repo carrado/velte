@@ -6,7 +6,7 @@ import { CREDIT_COST } from "@/lib/credits";
 import { guestCanAfford, spendGuestCredits } from "@/lib/guestCredits";
 import { CHANNEL_PHRASE } from "@/lib/priceChannels";
 import { fmt } from "@/lib/product-price";
-import { usePlansModal } from "@/components/plans/PlansModal";
+import { useCreditsModal } from "@/components/credits/CreditsModal";
 import {
   fetchNegotiationBrief,
   type BriefRefusal,
@@ -47,7 +47,7 @@ export function NegotiationBrief({ band }: { band: PriceBandData }) {
   const buyer = useBuyerStore((s) => s.buyer);
   const vendor = useUserStore((s) => s.user);
   const signedIn = Boolean(buyer || vendor);
-  const { open: openPlans } = usePlansModal();
+  const { open: openCredits } = useCreditsModal();
 
   const [state, setState] = useState<State>({ kind: "idle" });
 
@@ -110,7 +110,7 @@ export function NegotiationBrief({ band }: { band: PriceBandData }) {
         <p className="text-sm text-[#023337]">{state.refusal.message}</p>
         <button
           type="button"
-          onClick={openPlans}
+          onClick={openCredits}
           className="cursor-pointer text-sm font-semibold text-orange-500 hover:text-orange-600"
         >
           {state.refusal.isGuest ? "Create a free account" : "Top up credits"}

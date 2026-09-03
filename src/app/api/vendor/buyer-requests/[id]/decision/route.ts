@@ -21,26 +21,38 @@ export async function POST(req: Request, { params }: Ctx) {
     return jsonError(400, 'decision must be "accepted" or "declined".');
   }
 
+  // The optional quote (2026-09-03) — passed straight through rather than
+  // validated here. The backend validates it properly (see readQuote in
+  // vendorBuyerRequests.controller.js) and it is the side that has to,
+  // because it is the side that stores it; a second set of bounds in this
+  // file would be one more place for them to disagree about what a
+  // realistic price is. Only the SHAPE is normalised, so a stray extra
+  // field on the body can't ride along into the backend request.
+  const rawQuote = body?.quote;
+  const quote =
+    rawQuote && typeof rawQuote === "object"
+      ? {
+          priceKobo: rawQuote.priceKobo ?? null,
+          leadTimeDays: rawQuote.leadTimeDays ?? null,
+          note: rawQuote.note ?? null,
+        }
+      : undefined;
+
   try {
     const data = await backendData<{
       decision: BuyerRequestDecision;
-      whatsappNumber: string | null;
     }>(`/vendor/buyer-requests/${id}/decision`, {
       method: "POST",
-      body: { decision },
+      // Omitted entirely on a decline: a declining vendor has no terms to
+      // state, and the backend ignores a quote there anyway.
+      body:
+        decision === "accepted" && quote ? { decision, quote } : { decision },
       cookie: gate.cookie,
     });
-    // The number is dropped here rather than passed on (2026-08-27) — see
-    // the detail route's own note. Accepting unlocks the ability to chat, and
-    // `canChat` is the whole of what the UI needs to know; the number itself
-    // is resolved server-side by /api/vendor/buyer-requests/:id/chat.
-    return NextResponse.json(
-      {
-        decision: data.decision,
-        canChat: Boolean(data.whatsappNumber),
-      },
-      { status: 201 },
-    );
+    // Accepting no longer unlocks anything to hand back: it records the
+    // vendor's price and puts it in front of the buyer, who decides whether
+    // to message them. The lead is charged at that click, not this one.
+    return NextResponse.json({ decision: data.decision }, { status: 201 });
   } catch (err) {
     return fail(err, "Failed to record your decision.");
   }

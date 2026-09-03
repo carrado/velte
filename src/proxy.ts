@@ -53,7 +53,7 @@ const publicRegardlessOfAuth = [
   // be redirected to /products before the route could decide anything.
   "/launch",
   // No /plans entry since 2026-08-31: buyer plans became a full-screen modal
-  // inside /chat (components/plans/PlansModal.tsx) and the route was deleted,
+  // inside /chat (components/credits/CreditsModal.tsx) and the route was deleted,
   // so there is nothing left here to make public. /chat above already covers
   // every surface that can open it. Not to be confused with /pricing, which
   // is the vendor-facing pay-per-lead page and stays a marketing route.

@@ -16,18 +16,13 @@ export async function GET(_req: Request, { params }: Ctx) {
       `/vendor/buyer-requests/${id}`,
       { cookie: gate.cookie },
     );
-    // The number never goes to the browser (2026-08-27). The backend already
-    // gates it on this vendor having accepted, but "gated" stopped meaning
-    // "not rendered" and started meaning "not sent": in the DOM it was
-    // readable from the status bar on hover, from copy-link-address, and
-    // straight out of this payload. Chatting goes through
-    // /api/vendor/buyer-requests/:id/chat, which resolves it server-side.
-    //
-    // `canChat` replaces it — the one bit the UI actually needs.
-    const { buyerPhone, ...safe } = request;
-    return NextResponse.json({
-      request: { ...safe, canChat: Boolean(buyerPhone) },
-    });
+    // No strip needed since 2026-09-03 — the backend stopped releasing the
+    // buyer's number to vendors entirely (withoutBuyerPhone). It went through
+    // two earlier stages: gated on Accept, then gated AND stripped here
+    // because "gated" meant it still reached the DOM. Now it is simply never
+    // sent, because a vendor has nothing to do with it: the buyer messages
+    // them.
+    return NextResponse.json({ request });
   } catch (err) {
     return fail(err, "Failed to load this request.");
   }

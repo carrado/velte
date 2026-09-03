@@ -3,6 +3,7 @@ import {
   guestCredits,
   spendGuestCredits,
 } from "@/lib/guestCredits";
+import { isBillableTurn } from "@/lib/turnBillable";
 import { CREDIT_COST, GUEST_CREDITS } from "@/lib/credits";
 import type { SearchRequestBody, SearchStreamEvent } from "@/types/search";
 
@@ -189,18 +190,18 @@ export async function runSearchStream(
     if (event.type === "status") onStatus(event.text);
     else if (event.type === "reply") onReply(event.text);
     else if (event.type === "final") {
-      // The guest's charge, mirroring the server's rule exactly (see
-      // /api/search's sendFinal): a turn is billable once it has delivered,
-      // and one answered from the nearby-business path never reached Serper,
-      // so it is free. A turn that errors never gets here at all.
+      // The guest's charge. Charged client-side because a guest has no row
+      // on the server to charge — their balance lives in their own browser.
       //
-      // Charged client-side because a guest has no row on the server to
-      // charge — their balance lives in their own browser.
-      if (isGuest) {
-        const answeredFromPlaces =
-          event.externalStoreSuggestions.length > 0 &&
-          event.externalOffers.length === 0;
-        if (!answeredFromPlaces) spendGuestCredits(guestCost);
+      // The RULE is shared with the server's own charge (lib/turnBillable.ts)
+      // rather than mirrored here, which is what this comment used to promise
+      // and what a hand-written copy could not keep: the clarification
+      // exemption was added on the server first, and this copy went on
+      // charging guests for being asked a question — the one population that
+      // exemption exists for, since five credits does not survive a four-
+      // question intake.
+      if (isGuest && isBillableTurn(event)) {
+        spendGuestCredits(guestCost);
       }
       onFinal(event);
     } else if (event.type === "error") onError(event.message);

@@ -9,6 +9,7 @@ import {
   chargeCredits,
   creditMessage,
 } from "@/lib/server/creditLedger";
+import { isBillableTurn } from "@/lib/turnBillable";
 import type { CreditAction } from "@/lib/credits";
 import { buildPriceBand, isBandableQuery } from "@/lib/server/ai/priceBand";
 import { backendData } from "@/lib/server/backend";
@@ -681,7 +682,14 @@ async function getMatchingServicesForStores(
 // downstream — pulled out so a retry (see POST's "looksLikeLocationClarify"
 // comment) can re-run this exact same extraction on a second model call
 // without duplicating ~90 lines of tool-result parsing.
-function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
+function extractOutcome(
+  result: Awaited<ReturnType<typeof callLLM>>,
+  // A price check answers a question that needs no narrowing. Dropped HERE
+  // rather than at the final event, so every downstream `!outcome.clarification`
+  // guard sees the same nothing — a clarification suppressed in one place and
+  // visible in another is worse than one that is simply never made.
+  suppressClarify = false,
+) {
   // askClarifyingQuestion's own tool description explicitly forbids calling
   // it alongside another tool, but gpt-4o-mini has been observed doing
   // exactly that anyway (found live: it reaches for this tool almost
@@ -714,20 +722,22 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   // separate inline text box (found live — see that component's own
   // comment on why a bare "text" kind was the wrong shape for this one
   // specific question).
-  const clarifyCandidate: Clarification | null = !clarifyInput
+  const clarifyCandidate: Clarification | null = suppressClarify
     ? null
-    : clarifyInput.kind === "location"
-      ? { kind: "location", question: clarifyInput.question }
-      : clarifyInput.kind === "name"
-        ? { kind: "name", question: clarifyInput.question }
-        : clarifyInput.kind === "choice" &&
-            (clarifyInput.options?.length ?? 0) >= 2
-          ? {
-              kind: "choice",
-              question: clarifyInput.question,
-              options: clarifyInput.options!,
-            }
-          : { kind: "text", question: clarifyInput.question };
+    : !clarifyInput
+      ? null
+      : clarifyInput.kind === "location"
+        ? { kind: "location", question: clarifyInput.question }
+        : clarifyInput.kind === "name"
+          ? { kind: "name", question: clarifyInput.question }
+          : clarifyInput.kind === "choice" &&
+              (clarifyInput.options?.length ?? 0) >= 2
+            ? {
+                kind: "choice",
+                question: clarifyInput.question,
+                options: clarifyInput.options!,
+              }
+            : { kind: "text", question: clarifyInput.question };
 
   // .findLast, not .find, for the CALL itself — a fallback model (Groq)
   // occasionally calls a tool more than once for one turn (a real, common
@@ -972,6 +982,10 @@ export async function POST(req: Request) {
 
 async function handleSearch(req: Request) {
   const body = (await req.json().catch(() => null)) as SearchRequestBody | null;
+  // Pressed "Just tell me the price". Suppresses the location gate and every
+  // clarifying question — see SearchRequestBody.priceCheck for why both are
+  // wrong for this question specifically.
+  const isPriceCheck = body?.priceCheck === true;
   const message = body?.message?.trim() ?? "";
   const imageUrl = body?.imageUrl;
   // Resolved once, up front — search itself stays fully anonymous either
@@ -1339,10 +1353,12 @@ async function handleSearch(req: Request) {
         // exit path funnels through here — the same reason the price band is
         // attached here. Guarded so the several early-exit callers can't bill
         // one turn twice.
-        const answeredFromPlaces =
-          event.externalStoreSuggestions.length > 0 &&
-          event.externalOffers.length === 0;
-        if (!turnCharged && !answeredFromPlaces) {
+        // The rule itself lives in lib/turnBillable.ts, shared with the
+        // GUEST charge in searchStream.ts — those were two hand-written
+        // copies of the same condition, and the clarification exemption was
+        // added to this one alone, which left guests still paying for being
+        // asked a question. One implementation, imported by both.
+        if (!turnCharged && isBillableTurn(event)) {
           turnCharged = true;
           // Not awaited into the reply's critical path and never able to
           // throw: a charge that failed costs Velte one credit's revenue,
@@ -1820,6 +1836,13 @@ async function handleSearch(req: Request) {
       // back through this gate; see SearchHome.tsx's own comment on why).
       if (
         message &&
+        // A price check never asks for location — see SearchRequestBody's
+        // own comment. Skipped HERE rather than relying on extractOutcome's
+        // suppression downstream: that leaves the clarify null and falls
+        // through to the ordinary pipeline anyway, so the whole forced LLM
+        // round trip was paid for an answer that could only ever be thrown
+        // away.
+        !isPriceCheck &&
         !imageUrl &&
         !body?.buyerLocation &&
         !namesPlace &&
@@ -1837,7 +1860,7 @@ async function handleSearch(req: Request) {
             ["openai", "groq"],
             "location-only",
           );
-          const locationOutcome = extractOutcome(locationResult);
+          const locationOutcome = extractOutcome(locationResult, isPriceCheck);
           if (locationOutcome.clarifyCandidate?.kind === "location") {
             await sendBareFinal(locationOutcome.clarifyCandidate.question, {
               kind: "location",
@@ -1902,6 +1925,13 @@ async function handleSearch(req: Request) {
         // conversation context — of whether anything distinguishing has
         // been said yet.
         itemTerm &&
+        // The other half of the price-check suppression, and the half that
+        // actually reaches the buyer: this gate answers the turn itself via
+        // sendBareFinal, so extractOutcome never sees it and `isPriceCheck`
+        // could not suppress it downstream. This is the "then a request for
+        // fan size, speed count and wattage, and never a price" leg of the
+        // bug SearchRequestBody.priceCheck describes.
+        !isPriceCheck &&
         !hasSpecificDetails &&
         !imageUrl &&
         // A multi-need message must reach the dual-intent split downstream
@@ -2012,7 +2042,15 @@ async function handleSearch(req: Request) {
       // including from an earlier turn this session, since the client keeps
       // resending it — this reverts to computing normally.
       const sectorClarifiers =
-        message && !imageUrl && !history.length && body?.buyerLocation
+        message &&
+        // Its whole output is an instruction to call askClarifyingQuestion,
+        // which a price check must not do. buildSystemPrompt drops the note
+        // on this flag too; not computing it here also saves the schema
+        // fetch it would have awaited.
+        !isPriceCheck &&
+        !imageUrl &&
+        !history.length &&
+        body?.buyerLocation
           ? getSectorClarifiers(
               // The clean noun phrase when the scope check produced one —
               // same reasoning as the attribute gate above: detection on
@@ -2097,6 +2135,7 @@ async function handleSearch(req: Request) {
                 shownCount: storedGoal.shownProductIds?.length ?? 0,
               }
             : null,
+          isPriceCheck,
         );
         // "openai-strong" (gpt-5-mini, low reasoning effort — see
         // router.ts's own PROVIDERS comment) is the primary for every call
@@ -2310,7 +2349,10 @@ async function handleSearch(req: Request) {
             providerOrder,
             "agreement-only",
           );
-          const agreementOutcome = extractOutcome(agreementResult);
+          const agreementOutcome = extractOutcome(
+            agreementResult,
+            isPriceCheck,
+          );
           const agreementReply = agreementOutcome.clarification
             ? agreementOutcome.clarification.question
             : agreementOutcome.buyerRequestOffer
@@ -2409,7 +2451,7 @@ async function handleSearch(req: Request) {
           providerOrder,
           "main-loop",
         );
-        let outcome = extractOutcome(result);
+        let outcome = extractOutcome(result, isPriceCheck);
 
         // gpt-4o-mini has been observed asking a location clarifying question
         // even when the buyer's device location is already known and folded
@@ -2536,7 +2578,7 @@ async function handleSearch(req: Request) {
               providerOrder,
               "main-loop-retry",
             );
-            outcome = extractOutcome(result);
+            outcome = extractOutcome(result, isPriceCheck);
 
             // Found live (2026-08-19): merely removing askClarifyingQuestion
             // from the tool set isn't always enough — a plain-text reply is
@@ -2571,7 +2613,7 @@ async function handleSearch(req: Request) {
                 providerOrder,
                 "main-loop-retry-dual",
               );
-              outcome = extractOutcome(result);
+              outcome = extractOutcome(result, isPriceCheck);
             }
           }
         }
@@ -2618,10 +2660,18 @@ async function handleSearch(req: Request) {
             providerOrder,
             "location-retry",
           );
-          return { retryResult, retryOutcome: extractOutcome(retryResult) };
+          return {
+            retryResult,
+            retryOutcome: extractOutcome(retryResult, isPriceCheck),
+          };
         }
 
         const needsLocationButDidntAsk =
+          // A price question is answerable without knowing where the buyer
+          // is: the band separates "shops near you" from the online channel
+          // by SOURCE, and an unknown location costs a narrower local range,
+          // not the answer. Blocking on it means never answering at all.
+          !isPriceCheck &&
           !body?.buyerLocation &&
           !alreadyAskedLocationThisConversation &&
           !outcome.productCall &&
@@ -2675,7 +2725,7 @@ async function handleSearch(req: Request) {
               providerOrder,
               "dual-reminder-retry",
             );
-            const retryOutcome = extractOutcome(retryResult);
+            const retryOutcome = extractOutcome(retryResult, isPriceCheck);
             if (retryOutcome.productCall && retryOutcome.storeCall) {
               result = retryResult;
               outcome = retryOutcome;

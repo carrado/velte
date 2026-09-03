@@ -116,6 +116,17 @@ export interface SearchRequestBody {
   message: string;
   imageUrl?: string;
   buyerLocation?: BuyerLocation;
+  // The buyer pressed "Just tell me the price" rather than typing a request
+  // (2026-09-03). A structural signal, not left for the server to infer from
+  // the wording, for the same reason isContinuation is one.
+  //
+  // It suppresses the two things a normal search does BEFORE answering:
+  // asking for a location, and asking clarifying questions. Both are right
+  // when the job is matching a buyer to a vendor and wrong when the job is
+  // answering "what does this cost" — found live: "How much should this cost?
+  // A plastic standing fan" was met with a location gate, then a request for
+  // fan size, speed count and wattage, and never a price.
+  priceCheck?: boolean;
   // Prior turns in this browser session, oldest first. Omitted/empty on the
   // first message of a conversation.
   history?: SearchHistoryTurn[];
@@ -571,8 +582,17 @@ export interface IdentityCapture {
   // "choose" — the account's saved number is on screen with a use-it /
   // use-another pair; the composer stays a plain textarea for it, since
   // there is nothing to type. "phone" and "otp" are the original two.
-  step: "signin" | "choose" | "phone" | "otp";
+  //
+  // "budget" (2026-09-03) runs LAST, once identity is settled, and is the
+  // only step about the REQUEST rather than the buyer. It comes last on
+  // purpose: it is the one step a buyer may legitimately skip, and a skip
+  // should not leave them staring at a half-finished sign-in.
+  step: "signin" | "choose" | "phone" | "otp" | "budget";
   phone: string;
+  // Kobo. Null until the budget step resolves, and STILL null if the buyer
+  // skips it — a request with no stated budget is valid, and every request
+  // made before this existed has none. Never guessed from the description.
+  budgetKobo: number | null;
 }
 
 // A structured clarifying question from askClarifyingQuestionTool — the

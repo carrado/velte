@@ -4,11 +4,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { toast } from "sonner";
-import {
-  walletApi,
-  leadCostForBalance,
-  leadsRemaining,
-} from "@/services/wallet";
+import { walletApi, leadCost, leadsRemaining } from "@/services/wallet";
 import { CloseIcon, LoaderIcon, ShieldCheckIcon } from "@/components/icons";
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000];
@@ -29,22 +25,20 @@ export default function TopUpModal({
   const numericAmount = Number(amount);
   const isValid =
     Number.isFinite(numericAmount) && numericAmount >= MIN_TOPUP_NAIRA;
-  // Simulated tier-by-tier (see leadsRemaining's own comment), not a flat
-  // divide — pricing is tiered now, so a bigger top-up affords MORE than
-  // proportionally more leads once it crosses into a cheaper tier. No cap
-  // here (unlike the low-wallet-SMS check's own use of this same helper,
-  // which only ever needs to distinguish 0/1/2+): a real top-up estimate
-  // needs the true count, however large. Treats the top-up as starting
-  // from ₦0 (same simplification the old flat estimate already made) —
-  // doesn't account for whatever balance the vendor already has.
+  // A straight divide since pricing went flat (2026-09-03). It used to be
+  // simulated tier by tier, because a bigger top-up crossed into a cheaper
+  // rate and so bought MORE than proportionally more leads — that is gone,
+  // and with it the only reason this estimate was ever more than arithmetic.
+  // No cap (unlike the low-wallet-SMS check's own use of this helper, which
+  // only needs 0/1/2+): a top-up estimate wants the true count. Still treats
+  // the top-up as starting from ₦0 — it does not add whatever balance the
+  // vendor already holds.
   const estimatedLeads =
     numericAmount > 0 ? leadsRemaining(numericAmount * 100, Infinity) : 0;
-  // The rate shown in the "Estimated leads at ₦X/lead" caption below is
-  // whichever tier THIS top-up amount alone would land in — a reasonable
-  // single number to display even though the true per-lead cost drifts
-  // tier to tier as the balance drains.
-  const displayRateNaira =
-    numericAmount > 0 ? leadCostForBalance(numericAmount * 100) / 100 : 0;
+  // One rate for everyone now, so this no longer depends on the amount —
+  // read off the same constant the estimate above divides by, rather than
+  // written out a second time here.
+  const displayRateNaira = leadCost() / 100;
 
   const handleSubmit = async () => {
     if (!isValid) return;

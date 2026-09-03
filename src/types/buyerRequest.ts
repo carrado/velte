@@ -14,24 +14,12 @@ export interface BuyerRequest {
   // the request's own snapshot.
   buyerId: string | null;
   buyerName: string;
-  // Present only once THIS vendor has accepted — omitted by the backend
-  // entirely before that (see vendorBuyerRequests.controller.js's
-  // withGatedPhone), so its mere presence is the accept signal, no separate
-  // flag needed to know whether to show it.
-  // NOT sent to the browser (2026-08-27). The backend gates it on this
-  // vendor having accepted, but the BFF strips it even then: a number in the
-  // client payload ends up in the DOM and in a wa.me href, where it is
-  // readable from the hover status bar and from "copy link address".
-  // Chatting goes through /api/vendor/buyer-requests/:id/chat, which
-  // resolves it server-side and redirects.
-  //
-  // Still declared because the SERVER reads it off the backend response —
-  // that chat route is its only consumer.
-  buyerPhone?: string;
-  // What the client gets instead: whether this vendor may chat yet. Derived
-  // in the BFF from the presence of the gated number above.
-  canChat?: boolean;
   description: string;
+  // Kobo, or null when the buyer skipped it. A vendor sees this BEFORE
+  // deciding whether to accept, which is the whole point of it being a field
+  // rather than a phrase inside `description` — accepting costs them a lead
+  // fee, and this is the number that tells them whether it is worth it.
+  budgetKobo: number | null;
   imageUrl: string | null;
   // "N/A" on the vendor-facing detail page when this is absent — the buyer
   // simply didn't grant location for this request; there's no saved
@@ -72,12 +60,31 @@ export interface BuyerRequestResponder {
   area: string | null;
   state: string | null;
   respondedAt: string;
+
+  // ── The quote (2026-09-03) ────────────────────────────────────────────
+  // What the vendor said they'd do it for. All three are null when they
+  // accepted without naming terms, which is a normal and permitted outcome —
+  // see BuyerRequestResponse.model.js on why quoting isn't mandatory.
+  //
+  // VENDOR-STATED. This is their own claim about their own price; Velte
+  // neither sets nor verifies it, and the comparison never blends one of
+  // these with a market figure from priceBand.
+  /** Kobo. */
+  priceKobo: number | null;
+  /** Days until they can supply. 0 is "available now" — distinct from null,
+   *  which is "didn't say". */
+  leadTimeDays: number | null;
+  /** Warranty, delivery, condition — whatever the price alone doesn't say. */
+  note: string | null;
 }
 
 export interface MyBuyerRequest {
   id: string;
   buyerName: string;
   description: string;
+  /** Kobo, or null when skipped — echoed back so the buyer can see what
+   *  businesses were quoting against. */
+  budgetKobo: number | null;
   imageUrl: string | null;
   location?: { type: "Point"; coordinates: [number, number] } | null;
   /** Already aged forward server-side: an "active" row past its expiresAt
@@ -90,6 +97,10 @@ export interface MyBuyerRequest {
   /** Accepted only — the number the page actually acts on. Distinct from
    *  `responseCount`, which counts declines too. */
   acceptedCount: number;
+  /** How many of those actually named a price. Distinct from acceptedCount:
+   *  "3 accepted, 2 quoted" is the honest headline, and a page that showed
+   *  only the first number would promise a comparison it can't draw. */
+  quotedCount: number;
   responders: BuyerRequestResponder[];
   responseCount: number;
   lastResponseAt: string | null;

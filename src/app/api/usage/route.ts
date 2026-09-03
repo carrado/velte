@@ -38,6 +38,14 @@ export async function GET() {
     const data = await backendData<{
       balance: number;
       ownerType: "buyer" | "vendor";
+      /** The VENDOR's lead-wallet balance, so the credits panel can offer to
+       *  spend it without a second request. Null for a buyer, who has no
+       *  wallet — which is what the panel branches on. */
+      walletBalanceKobo: number | null;
+      /** Lifetime spend, which is the other half of the credit meter — the
+       *  ring needs a total, and `balance` alone cannot say what was
+       *  granted. */
+      totalSpent: number;
     }>("/credits", { cookie });
     return NextResponse.json({ ...data, isGuest: false });
   } catch {
@@ -48,6 +56,10 @@ export async function GET() {
     return NextResponse.json({
       balance: 0,
       ownerType: buyerAuth ? "buyer" : "vendor",
+      // Null rather than 0: an unknown wallet must not render as an empty one,
+      // which would tell a vendor with money in it to find a card.
+      walletBalanceKobo: null,
+      totalSpent: 0,
       isGuest: false,
     });
   }

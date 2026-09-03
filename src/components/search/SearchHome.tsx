@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ import { generateUUID } from "@/lib/uuid";
 import { buildProductTerm } from "@/lib/productTerm";
 import { runSearchStream } from "@/lib/searchStream";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { CreditsBar } from "@/components/credits/CreditsBar";
 import { dedupeFinalEventStores } from "@/lib/searchTurnSnapshot";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
 import {
@@ -24,7 +25,7 @@ import { VendorResultCard } from "@/components/search/VendorResultCard";
 import { WatchOffer } from "@/components/search/WatchOffer";
 import { PriceBand } from "@/components/search/PriceBand";
 import { NegotiationBrief } from "@/components/search/NegotiationBrief";
-import { PlansButton } from "@/components/plans/PlansModal";
+import { CreditsButton } from "@/components/credits/CreditsModal";
 import {
   RecommendationPicks,
   pickBadgesFor,
@@ -51,9 +52,9 @@ import {
   pickAvoiding,
   gettingLocationPhrase,
   scanningVendorsPhrase,
+  creatingRequestPhrase,
   sendingOtpPhrase,
   checkingOtpPhrase,
-  creatingRequestPhrase,
   noMatchRequestPhrase,
   initiatingBackgroundItemPhrase,
   backgroundItemPendingPhrase,
@@ -88,8 +89,10 @@ import {
   CompassIcon,
   MapPinIcon,
   PhoneIcon,
+  TagIcon,
   ShieldCheckIcon,
   UserIcon,
+  WalletIcon,
   BellIcon,
 } from "@/components/icons";
 // Composer icons only (upload spinner, remove-photo, camera, send) are
@@ -98,7 +101,16 @@ import {
 // stays on @/components/icons. See [[custom_icon_system]]. Copy/Pencil
 // (the buyer-bubble copy/edit buttons) joined this same lucide exception
 // later, per explicit request, for visual consistency with each other.
-import { ArrowUp, Camera, Loader2, Pencil, Square, X } from "lucide-react";
+import {
+  ArrowUp,
+  Camera,
+  Loader2,
+  Pencil,
+  Plus,
+  Square,
+  X,
+} from "lucide-react";
+import AnchoredPopover from "@/components/AnchoredPopover";
 
 // `products` decides the noun: a pure service turn (e.g. "haircut near me")
 // shouldn't be headed "Products", and a turn can genuinely mix both kinds
@@ -930,64 +942,27 @@ interface ConversationTurn {
   persisted?: boolean;
 }
 
-// Display name only. plans.ts is server-only (it feeds the enforcement
-// path), so it can't be imported into a client component — if the tier is
-// ever renamed there, rename it here too. Nothing but this label duplicates.
-const PLUS_PLAN_NAME = "Velte Plus";
-
 /**
- * What a buyer sees when a turn is refused on quota or plan.
+ * What a buyer sees when a turn is refused for want of credits.
  *
  * Two different endings on purpose, because they are two different people:
- * a GUEST has no account to attach a plan to and almost certainly just needs
- * the free tier, so they get sign-in and never see a price. Only a
- * signed-in buyer who has genuinely run out is worth quoting money at —
- * showing a price to someone who hasn't tried the free tier yet is how you
- * lose them.
+ * a GUEST has no account to put credits on, so they are offered one — free,
+ * and three times what they were holding — and never see a price. Only
+ * someone already signed in is worth quoting money at; showing a price to
+ * someone who hasn't tried the product yet is how you lose them.
  *
- * Owns its own state rather than lifting it to SearchHome: nothing outside
- * this card cares whether a checkout is opening, and a refused turn is
- * terminal so there is no interaction to coordinate with.
+ * The top-up itself opens the credits modal rather than starting a checkout
+ * here (2026-08-31, item 3 of the credits completion plan). It used to POST
+ * straight to /api/buyer-billing/checkout for "Velte Plus" — a product that
+ * no longer exists — which would have taken a real payment for a plan
+ * nothing reads. The modal is where packs and prices live now, and it opens
+ * over the thread so a refused turn stays on screen behind it.
  */
 function QuotaCard({
   quota,
 }: {
   quota: NonNullable<ConversationTurn["quota"]>;
 }) {
-  const [upgrading, setUpgrading] = useState(false);
-  const [upgradeError, setUpgradeError] = useState<string | null>(null);
-
-  const startUpgrade = useCallback(async () => {
-    if (upgrading) return;
-    setUpgrading(true);
-    setUpgradeError(null);
-    try {
-      const res = await fetch("/api/buyer-billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Monthly is the deliberate default: it's the smallest commitment,
-        // and the annual saving is better argued on a real pricing page
-        // than in a card that interrupted what someone was doing.
-        body: JSON.stringify({ planId: "plus", cycle: "monthly" }),
-      });
-      const data = (await res.json().catch(() => null)) as {
-        authorizationUrl?: string;
-        error?: string;
-      } | null;
-      if (!res.ok || !data?.authorizationUrl) {
-        throw new Error(data?.error ?? "Couldn't start the upgrade.");
-      }
-      // Full-page redirect, not a popup — same reasoning as the pay page:
-      // popups are unreliable for buyers arriving from WhatsApp on mobile.
-      window.location.href = data.authorizationUrl;
-    } catch (err) {
-      setUpgradeError(
-        err instanceof Error ? err.message : "Couldn't start the upgrade.",
-      );
-      setUpgrading(false);
-    }
-  }, [upgrading]);
-
   return (
     // AI_MESSAGE_CLASS, not a filled card: this IS one of Velte's messages,
     // and every other one reads as plain text in the thread (see that
@@ -996,29 +971,15 @@ function QuotaCard({
     // something, which is the wrong turn to look like an advert.
     <div className={AI_MESSAGE_CLASS}>
       <p className="text-sm leading-relaxed text-[#023337]">{quota.message}</p>
-      {/* A vendor used to get no call to action here, on the reasoning that
-          Velte Plus was a buyer product they couldn't meaningfully buy. They
-          can now (2026-08-29) — against their vendor identity, no second
-          account — so the refusal names its own fix like every other one.
-          Only a GUEST still gets something different, because signing in is
-          the step in front of buying anything. */}
       <div className="mt-3">
         {quota.isGuest ? (
           <GoogleSignInButton />
         ) : (
-          <button
-            type="button"
-            onClick={startUpgrade}
-            disabled={upgrading}
-            className="inline-flex items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:opacity-60"
-          >
-            {upgrading ? "Opening checkout…" : `Upgrade to ${PLUS_PLAN_NAME}`}
-          </button>
+          <CreditsButton className="inline-flex cursor-pointer items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600">
+            Top up credits
+          </CreditsButton>
         )}
       </div>
-      {upgradeError && (
-        <p className="mt-2 text-xs text-red-600">{upgradeError}</p>
-      )}
     </div>
   );
 }
@@ -1558,6 +1519,28 @@ function ConversationTurnView({
                       <div className={AI_MESSAGE_CLASS}>
                         <FormattedReply text={turn.reply} />
                       </div>
+                      {/* The band belongs on THIS branch at least as much as
+                          on the Velte-results one above (2026-09-03). It used
+                          to render only where `products.length > 0`, so a
+                          turn that found nothing on Velte — the exact shape
+                          every "just tell me the price" question lands in,
+                          since a price question is asked about things Velte
+                          often doesn't stock — computed a band, CHARGED a
+                          credit for it in priceBandFor, and then threw it
+                          away unrendered. The buyer paid for a price answer
+                          and got a list of shopping links.
+
+                          Above the listings, not below: the band is what the
+                          cards are evidence FOR, and a buyer who reads the
+                          range first reads the links as prices rather than as
+                          somewhere to click. */}
+                      {turn.priceBand && <PriceBand band={turn.priceBand} />}
+                      {/* Latest turn only, same rule as the Velte branch —
+                          this one spends an allowance, so it must not sit as
+                          a live CTA all the way down the scrollback. */}
+                      {isLatest && turn.priceBand && (
+                        <NegotiationBrief band={turn.priceBand} />
+                      )}
                       {turn.externalStoreSuggestions.length > 0 && (
                         <CardCarousel
                           items={turn.externalStoreSuggestions}
@@ -1727,9 +1710,9 @@ function ConversationTurnView({
                       upgrade pitch, it's a different problem with a
                       different fix (see watchReply). */}
                   {turn.watchResult?.reason === "plan_required" && (
-                    <PlansButton className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600">
+                    <CreditsButton className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600">
                       See what Velte Plus includes
-                    </PlansButton>
+                    </CreditsButton>
                   )}
                   {turn.buyerRequestOffer &&
                     turn.buyerRequestOffer.status !== "needs_identity" &&
@@ -1833,6 +1816,21 @@ export function SearchHome() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The composer's tools menu (2026-09-03). Two items, because only two tools
+  // cannot be reached by typing: a photo (you cannot type an image) and the
+  // price check (which wants ONE item rather than a conversation). Everything
+  // else stays spoken or offered — see the tool-belt section of the design
+  // doc, and the rule that a tool with no spoken route is a bug.
+  const toolMenuBtnRef = useRef<HTMLButtonElement>(null);
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  // Price-check mode: the composer becomes a single field for one item.
+  //
+  // It does NOT open a separate screen, and that is the constraint every
+  // other mode here already follows (clarifications, the name ask, phone,
+  // code, budget) — the composer changes what it accepts and changes back,
+  // so the answer lands in the same conversation the buyer was already in.
+  const [priceMode, setPriceMode] = useState(false);
+  const [priceValue, setPriceValue] = useState("");
 
   // Every /api/search call is otherwise stateless, so without this the
   // server's own within-turn status-repeat avoidance (see statusPhrases.ts's
@@ -1974,6 +1972,7 @@ export function SearchHome() {
               last?.buyerRequestOffer?.status === "needs_signin"
             ) {
               setIdentityCapture({
+                budgetKobo: null,
                 offer: last.buyerRequestOffer,
                 imageUrl: last.imageUrl,
                 matchQuery: last.buyerRequestMatchQuery,
@@ -2360,6 +2359,7 @@ export function SearchHome() {
           last?.buyerRequestOffer?.status === "needs_signin"
         ) {
           setIdentityCapture({
+            budgetKobo: null,
             offer: last.buyerRequestOffer,
             imageUrl: last.imageUrl,
             matchQuery: last.buyerRequestMatchQuery,
@@ -3104,6 +3104,7 @@ export function SearchHome() {
     message: string,
     currentImageUrl: string | null,
     isContinuation = false,
+    priceCheck = false,
   ): Promise<void> {
     // Text-only history from prior completed turns (see SearchHistoryTurn) —
     // built before the new turn is appended, so it doesn't include itself.
@@ -3170,6 +3171,9 @@ export function SearchHome() {
         history,
         recentStatuses: shownStatusesRef.current,
         isContinuation,
+        // Only ever true for the composer's price mode — see the field's own
+        // comment on SearchRequestBody.
+        ...(priceCheck && { priceCheck: true }),
         // Persisted-conversation identity — undefined (stateless flow)
         // when localStorage is unavailable. The server treats a stale or
         // unknown conversationId as "start a fresh one," never an error.
@@ -3297,6 +3301,7 @@ export function SearchHome() {
                 ? event.buyerRequestOffer.phone
                 : "";
             setIdentityCapture({
+              budgetKobo: null,
               offer: event.buyerRequestOffer,
               imageUrl: currentImageUrl,
               matchQuery: event.buyerRequestMatchQuery,
@@ -3446,6 +3451,8 @@ export function SearchHome() {
     // capture, a clarification answer, "Shared my location"), never guessed
     // here from the text itself.
     isContinuation = false,
+    // Only the composer's price mode passes this. See SearchRequestBody.
+    priceCheck = false,
   ): Promise<void> {
     const turnId = generateUUID();
     setTurns((prev) => [
@@ -3455,12 +3462,20 @@ export function SearchHome() {
         message,
         currentImagePreview,
         currentImageUrl,
-        currentImageUrl
-          ? "Looking at your photo…"
-          : "Understanding your request…",
+        priceCheck
+          ? "Checking what that costs…"
+          : currentImageUrl
+            ? "Looking at your photo…"
+            : "Understanding your request…",
       ),
     ]);
-    await runSearchIntoTurn(turnId, message, currentImageUrl, isContinuation);
+    await runSearchIntoTurn(
+      turnId,
+      message,
+      currentImageUrl,
+      isContinuation,
+      priceCheck,
+    );
   }
 
   // Silent best-effort attempt at the buyer's location — never shows a
@@ -3652,8 +3667,59 @@ export function SearchHome() {
     await submitWithLocationGate(message, currentImageUrl, currentImagePreview);
   }
 
+  // Leaving price mode. Separate from submitting it, because "I changed my
+  // mind" must not cost a turn — and a mode the buyer cannot back out of is
+  // the failure this whole surface is designed against.
+  function exitPriceMode() {
+    setPriceMode(false);
+    setPriceValue("");
+  }
+
+  // Submitting a price check.
+  //
+  // Straight to submitMessage, deliberately skipping submitWithLocationGate:
+  // a price question is answerable without knowing where the buyer is, and
+  // the gate's whole job is to make sure a VENDOR MATCH has somewhere to
+  // match against. Found live — "How much should this cost? A plastic
+  // standing fan" was answered with "can you share your location?", then a
+  // request for fan size, speed count and wattage, and never a price.
+  //
+  // The `priceCheck` flag carries the rest of the difference server-side (no
+  // location gate, no clarifying questions). It is a flag rather than clever
+  // wording because the model decides whether to clarify, and a phrasing that
+  // usually discourages it is not the same as one that cannot.
+  //
+  // The buyer's words go through VERBATIM. The old framing prefix
+  // ("How much should this cost? …") was doing nothing the flag does not do
+  // better, and it put words in their mouth that then appeared as their own
+  // chat bubble. extractQuotedPrice still finds a price they mention, so
+  // "PS5 slim — they're asking ₦185,000" still gets a verdict.
+  async function handlePriceSubmit() {
+    const item = priceValue.trim();
+    if (!item || isSending || uploadingImage) return;
+    const currentImageUrl = imageUrl;
+    const currentImagePreview = imagePreview;
+    exitPriceMode();
+    setImagePreview(null);
+    setImageUrl(null);
+    await submitMessage(
+      item,
+      currentImageUrl,
+      currentImagePreview,
+      false,
+      true,
+    );
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Checked before every other mode: price mode owns the composer outright
+    // while it is on, and cannot overlap the identity chain (that only starts
+    // from an outreach offer, which price mode never produces).
+    if (priceMode) {
+      await handlePriceSubmit();
+      return;
+    }
     // The composer's own name-capture mode (see nameCapture's own comment)
     // hijacks the SAME form/submit button too, checked first — a name ask
     // always comes strictly before the phone/OTP step it leads into, so
@@ -4078,6 +4144,10 @@ export function SearchHome() {
     }>("/api/buyer-requests", {
       description: offer.description,
       name: offer.buyerName,
+      // Omitted entirely when skipped, rather than sent as null: the backend
+      // treats absent and null identically, and not sending it keeps "the
+      // buyer chose not to say" out of the wire shape.
+      ...(capture.budgetKobo != null && { budgetKobo: capture.budgetKobo }),
       imageUrl: capture.imageUrl,
       ...(capture.matchQuery && {
         matchQuery: capture.matchQuery,
@@ -4150,22 +4220,16 @@ export function SearchHome() {
   // retaining the number in the first place.
   async function handleUseSavedNumber() {
     if (!identityCapture || identitySubmitting) return;
-    setIdentitySubmitting(true);
-    const turnId = appendIdentityTurn(
-      `Use ${identityCapture.phone}`,
-      pickAvoiding(creatingRequestPhrase(), []),
-    );
-    try {
-      await finishBuyerRequest(identityCapture, turnId);
-    } catch (err) {
-      updateTurn(turnId, {
-        phase: "done",
-        error: err instanceof Error ? err.message : "Something went wrong.",
-      });
-      // Stays on the choose step so they can try again or switch numbers.
-    } finally {
-      setIdentitySubmitting(false);
-    }
+    // Identity is settled, so the last thing to ask is the budget. No REST
+    // call here any more — confirming a saved number is a pure client-side
+    // advance, and the request only goes out once the budget step resolves.
+    const turnId = appendIdentityTurn(`Use ${identityCapture.phone}`, "");
+    updateTurn(turnId, {
+      phase: "done",
+      reply: "Got it. One last thing — what are you looking to spend?",
+    });
+    setIdentityCapture((cur) => (cur ? { ...cur, step: "budget" } : cur));
+    setIdentityValue("");
   }
 
   // "Use a different number" — a pure client-side switch to the phone step.
@@ -4184,6 +4248,38 @@ export function SearchHome() {
     if (!identityCapture || identitySubmitting) return;
     const value = identityValue.trim();
     if (!value) return;
+
+    if (identityCapture.step === "budget") {
+      // Naira in, kobo out. Digits only — a buyer typing "2m" or "2,000,000"
+      // both mean the same thing to them, and only one of those parses, so
+      // strip everything that is not a digit rather than reject the input.
+      const digits = value.replace(/[^\d]/g, "");
+      const naira = Number(digits);
+      if (!digits || !Number.isFinite(naira) || naira <= 0) {
+        toast.error("Enter an amount, or skip.");
+        return;
+      }
+      setIdentityValue("");
+      setIdentitySubmitting(true);
+      const turnId = appendIdentityTurn(
+        `₦${naira.toLocaleString("en-NG")}`,
+        pickAvoiding(creatingRequestPhrase(), []),
+      );
+      try {
+        await finishBuyerRequest(
+          { ...identityCapture, budgetKobo: naira * 100 },
+          turnId,
+        );
+      } catch (err) {
+        updateTurn(turnId, {
+          phase: "done",
+          error: err instanceof Error ? err.message : "Something went wrong.",
+        });
+      } finally {
+        setIdentitySubmitting(false);
+      }
+      return;
+    }
 
     if (identityCapture.step === "phone") {
       if (value.length < 10) {
@@ -4244,8 +4340,14 @@ export function SearchHome() {
       // line, per explicit request ("the status phrase should also
       // indicate that it is creating the request now before displaying
       // that the request has been created").
-      updateTurn(turnId, { status: pickAvoiding(creatingRequestPhrase(), []) });
-      await finishBuyerRequest(identityCapture, turnId);
+      // Verified — but the request does not go out yet. The budget step is
+      // the last one, and asking for it AFTER identity means a buyer who
+      // skips it has still finished everything that was actually required.
+      updateTurn(turnId, {
+        phase: "done",
+        reply: "Verified. One last thing — what are you looking to spend?",
+      });
+      setIdentityCapture((cur) => (cur ? { ...cur, step: "budget" } : cur));
     } catch (err) {
       updateTurn(turnId, {
         phase: "done",
@@ -4254,6 +4356,33 @@ export function SearchHome() {
       // Stays on the otp step so the buyer can retry the same code (or
       // request a fresh one — see the composer's own "Use a different
       // number"/resend affordance below).
+    } finally {
+      setIdentitySubmitting(false);
+    }
+  }
+
+  // Skipping the budget (2026-09-03). A buyer who genuinely has no figure in
+  // mind must not be stuck on the last step of a flow they already completed
+  // — so this sends the request exactly as the submit does, minus the number.
+  // Vendors then see "no budget given", which is honest, rather than a
+  // fabricated figure they would price against.
+  async function handleSkipBudget() {
+    if (!identityCapture || identitySubmitting) return;
+    setIdentitySubmitting(true);
+    const turnId = appendIdentityTurn(
+      "Skip",
+      pickAvoiding(creatingRequestPhrase(), []),
+    );
+    try {
+      await finishBuyerRequest(
+        { ...identityCapture, budgetKobo: null },
+        turnId,
+      );
+    } catch (err) {
+      updateTurn(turnId, {
+        phase: "done",
+        error: err instanceof Error ? err.message : "Something went wrong.",
+      });
     } finally {
       setIdentitySubmitting(false);
     }
@@ -4378,7 +4507,73 @@ export function SearchHome() {
         </div>
       )}
 
-      {nameCapture ? (
+      {/* Mounted at form level, not inside the default composer's control
+          row: price mode needs the same picker, and a branch that unmounts
+          the input would leave its ref dangling. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleImageSelect}
+      />
+
+      {priceMode ? (
+        // Price-check mode (2026-09-03). One field for one item, in the same
+        // rounded container as every other composer mode — this is a
+        // different QUESTION, not a different screen, and the answer lands
+        // back in the same conversation.
+        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
+          <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
+            <TagIcon size={12} className="text-orange-400 shrink-0" />
+            What are you checking?
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={priceValue}
+              onChange={(e) => setPriceValue(e.target.value)}
+              disabled={isSending || uploadingImage}
+              placeholder="PS5 slim — they're asking ₦185,000"
+              className="flex-1 min-w-0 h-10 bg-transparent outline-none text-base text-gray-900 placeholder:text-gray-400 disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingImage || isSending}
+              title="Add a photo"
+              className="shrink-0 w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+            >
+              <Camera size={16} />
+            </button>
+            <button
+              type="submit"
+              disabled={!priceValue.trim() || isSending || uploadingImage}
+              title="Check the price"
+              className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
+            >
+              {isSending ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <ArrowUp size={18} />
+              )}
+            </button>
+          </div>
+          {/* The way out. Every mode has one that is not "refresh the page" —
+              backing out of a question you changed your mind about must not
+              cost a turn. */}
+          <div className="flex items-center gap-3 mt-2.5">
+            <button
+              type="button"
+              onClick={exitPriceMode}
+              disabled={isSending}
+              className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : nameCapture ? (
         // The composer's own name-capture mode (see nameCapture's own
         // comment) — same single-line-swap treatment as identityCapture
         // just below, just one value with no multi-step progression.
@@ -4518,11 +4713,17 @@ export function SearchHome() {
         // (handleIdentitySubmit, on a real terminal result).
         <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
           <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
-            {identityCapture.step === "phone" ? (
+            {identityCapture.step === "budget" ? (
+              <>
+                <WalletIcon size={12} className="text-orange-400 shrink-0" />
+                What are you looking to spend? Businesses see this before they
+                answer.
+              </>
+            ) : identityCapture.step === "phone" ? (
               <>
                 <PhoneIcon size={12} className="text-orange-400 shrink-0" />
-                What&apos;s your WhatsApp number? That&apos;s how a vendor will
-                reach you.
+                What&apos;s your WhatsApp number? Velte will text you when
+                businesses answer.
               </>
             ) : (
               <>
@@ -4547,7 +4748,11 @@ export function SearchHome() {
               }
               disabled={identitySubmitting}
               placeholder={
-                identityCapture.step === "phone" ? "080X XXX XXXX" : "123456"
+                identityCapture.step === "budget"
+                  ? "e.g. 2,000,000"
+                  : identityCapture.step === "phone"
+                    ? "080X XXX XXXX"
+                    : "123456"
               }
               inputMode={identityCapture.step === "phone" ? "tel" : "numeric"}
               className={cn(
@@ -4558,7 +4763,13 @@ export function SearchHome() {
             <button
               type="submit"
               disabled={identitySubmitting || !identityValue.trim()}
-              title={identityCapture.step === "phone" ? "Continue" : "Verify"}
+              title={
+                identityCapture.step === "budget"
+                  ? "Send request"
+                  : identityCapture.step === "phone"
+                    ? "Continue"
+                    : "Verify"
+              }
               className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
             >
               {identitySubmitting ? (
@@ -4568,6 +4779,18 @@ export function SearchHome() {
               )}
             </button>
           </div>
+          {identityCapture.step === "budget" && (
+            <div className="flex items-center gap-3 mt-2.5">
+              <button
+                type="button"
+                onClick={() => void handleSkipBudget()}
+                disabled={identitySubmitting}
+                className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50 cursor-pointer"
+              >
+                Skip — I don&apos;t have a figure in mind
+              </button>
+            </div>
+          )}
           {identityCapture.step === "otp" && (
             <div className="flex items-center gap-3 mt-2.5">
               <button
@@ -4631,22 +4854,65 @@ export function SearchHome() {
             className="w-full resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 disabled:opacity-50"
           />
           <div className="flex items-center justify-between px-3 pb-3 pt-1">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handleImageSelect}
-            />
             <button
+              ref={toolMenuBtnRef}
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setToolMenuOpen((v) => !v)}
               disabled={uploadingImage || hasPendingClarification || isSending}
-              title="Search with a photo"
+              title="Tools"
+              aria-haspopup="menu"
+              aria-expanded={toolMenuOpen}
               className="shrink-0 w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
             >
-              <Camera size={17} />
+              <Plus size={18} />
             </button>
+            {/* Portalled, not an absolutely-positioned panel: the composer
+                sits inside the chat column's own scroll container, and a bare
+                absolute panel gets clipped by it. AnchoredPopover also flips
+                to open ABOVE the trigger when there is no room below, which
+                is always the case here — the composer is pinned to the
+                bottom of the viewport. */}
+            <AnchoredPopover
+              open={toolMenuOpen}
+              onClose={() => setToolMenuOpen(false)}
+              anchorRef={toolMenuBtnRef}
+              align="left"
+              className="w-[280px] bg-white rounded-2xl shadow-lg border border-gray-200 p-1.5"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setToolMenuOpen(false);
+                  fileInputRef.current?.click();
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer text-left"
+              >
+                <Camera size={17} className="shrink-0 text-gray-500" />
+                <span className="flex-1 text-sm font-medium text-[#023337]">
+                  Search with a photo
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setToolMenuOpen(false);
+                  setPriceMode(true);
+                  setPriceValue("");
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer text-left"
+              >
+                <TagIcon size={17} className="shrink-0 text-gray-500" />
+                <span className="flex-1 text-sm font-medium text-[#023337]">
+                  Just tell me the price
+                </span>
+              </button>
+            </AnchoredPopover>
+            {/* The credit meter, on phones only (2026-09-01). This row is
+                `justify-between` around two buttons, so the middle was empty
+                space already on screen — the balance costs no height here,
+                and it sits beside the button that spends it. From `lg` up the
+                floating ring (credits/CreditsFab) has the job instead. */}
+            <CreditsBar />
             {/* Swaps to a Stop button the instant a search goes "loading" —
                 ChatGPT-style — instead of just disabling Send; clicking it
                 calls handleStop, which aborts searchAbortRef's own

@@ -12,7 +12,6 @@ import { logoutBuyer } from "@/services/buyerAuth";
 import { SEARCH_CONVERSATION_ID_STORAGE_KEY } from "@/lib/searchConversation";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
-import { UpgradeCta } from "@/components/chat/UpgradeCta";
 import {
   BellIcon,
   ClipboardListIcon,
@@ -58,9 +57,7 @@ import type { Buyer } from "@/types/buyer";
 
 const SIDEBAR_WIDTH = 280;
 
-// Shared by every menu row, including UpgradeCta's — passing it in is what
-// keeps the CTA looking like a row here and a pill in the header without
-// either place knowing about the other.
+// Shared by every menu row.
 const MENU_ROW_CLASS =
   "flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-200/50 hover:text-[#023337]";
 
@@ -224,18 +221,12 @@ export function ConversationSidebar() {
                   active={pathname === "/chat/watches"}
                   onNavigate={closeOnMobile}
                 />
-                {/* Renders nothing on the highest tier — the decision is the
-                    server's, not this component's (see UpgradeCta). Which is
-                    also why the divider below stays put regardless: this
-                    section still has a row when the CTA is gone. */}
-                <UpgradeCta
-                  className={cn(
-                    MENU_ROW_CLASS,
-                    "text-orange-600 hover:bg-orange-50 hover:text-orange-700",
-                  )}
-                  iconSize={16}
-                  onClick={closeOnMobile}
-                />
+                {/* The credit meter used to sit here as a third row. It went
+                    back to the header (2026-09-01) where it is visible without
+                    opening or expanding anything — a prepaid balance the
+                    reader has to go looking for is one they stop trusting —
+                    and rendering it in both places would have meant two live
+                    meters and two balance fetches for one number. */}
               </nav>
 
               <div className="mx-3 mb-3 border-t border-gray-200/70 shrink-0" />

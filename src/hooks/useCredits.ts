@@ -1,27 +1,36 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 
-import { guestCredits } from "@/lib/guestCredits";
+import { useCreditsStore, type TopUpSource } from "@/store/creditsStore";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
 
-// The credit balance, for anything that displays or spends it (2026-08-31).
+// Reading the credit balance, for anything that displays or spends it.
 //
 // Replaces useCurrentPlan, which asked "which tier is this?" — a question with
 // no answer any more.
 //
-// A GUEST's balance is read from their own browser, not from the server: they
-// have no row, and their credits live in localStorage (guestCredits.ts). The
-// API answers with the starting allowance for shape consistency, which would
-// be wrong to show, so it is deliberately ignored for guests.
+// This is now a thin read over store/creditsStore (2026-09-01). It used to own
+// the state itself, which meant each meter fetched its own copy: the header
+// bar and the floating ring mount together on desktop, so one page load asked
+// /api/usage twice. The store dedupes concurrent reads, so every consumer here
+// can call this without counting how many of them there are.
+//
+// A GUEST is answered from their own browser, not from the server: they have
+// no row, and the API replies with the STARTING allowance for shape
+// consistency, which would be wrong to show. Deciding which of the two applies
+// is this hook's only real job — the identity lives in the buyer/user stores,
+// which the store itself has no business reaching into.
 
 interface CreditsState {
   balance: number | null;
+  used: number;
   isGuest: boolean;
+  walletBalanceKobo: number | null;
   busyPack: string | null;
-  topUp: (packId: string) => void;
-  refresh: () => void;
+  topUpError: string | null;
+  topUp: (packId: string, source?: TopUpSource) => void;
 }
 
 export function useCredits(active = true): CreditsState {
@@ -29,79 +38,39 @@ export function useCredits(active = true): CreditsState {
   const vendor = useUserStore((s) => s.user);
   const isGuest = !(buyer || vendor);
 
-  const [balance, setBalance] = useState<number | null>(null);
-  const [busyPack, setBusyPack] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
-
-  const refresh = useCallback(() => setTick((n) => n + 1), []);
+  const balance = useCreditsStore((s) => s.balance);
+  const used = useCreditsStore((s) => s.used);
+  const walletBalanceKobo = useCreditsStore((s) => s.walletBalanceKobo);
+  const busyPack = useCreditsStore((s) => s.busyPack);
+  const topUpError = useCreditsStore((s) => s.topUpError);
+  const topUp = useCreditsStore((s) => s.topUp);
+  const load = useCreditsStore((s) => s.load);
+  const loadGuest = useCreditsStore((s) => s.loadGuest);
 
   useEffect(() => {
     // Only when something is actually showing it. The modal passes its own
-    // open state, so a closed panel costs no request — this is polled from a
-    // header that renders on every page in the chat.
+    // open state, so a closed panel costs no request — and opening it later
+    // re-reads, which matters because the balance moves with every search.
     if (!active) return;
-
-    /* eslint-disable react-hooks/set-state-in-effect --
-       Reading localStorage is the side effect, and it belongs after commit
-       for the same two reasons PriceBand.tsx documents: a lazy useState
-       initialiser would read storage during render (impure, and
-       double-invoked by StrictMode in dev), and reading during render
-       without state reintroduces a hydration mismatch — the server has no
-       localStorage, so it cannot render the same balance. */
     if (isGuest) {
-      setBalance(guestCredits());
+      // Reading localStorage is the side effect, and it belongs after commit:
+      // a lazy initialiser would read storage during render (impure, and
+      // double-invoked by StrictMode in dev), and reading during render
+      // without state reintroduces a hydration mismatch, since the server has
+      // no localStorage and cannot render the same balance.
+      loadGuest();
       return;
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
+    void load();
+  }, [active, isGuest, load, loadGuest]);
 
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/usage");
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { balance?: number };
-        if (!cancelled && typeof data.balance === "number") {
-          setBalance(data.balance);
-        }
-      } catch {
-        // Leaves the balance as it was rather than showing zero — telling
-        // someone they are out of credits because a fetch failed is the one
-        // wrong answer here.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [active, isGuest, tick]);
-
-  const topUp = useCallback(
-    (packId: string) => {
-      if (busyPack) return;
-      setBusyPack(packId);
-      void (async () => {
-        try {
-          const res = await fetch("/api/credits/checkout", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ packId }),
-          });
-          const data = (await res.json().catch(() => null)) as {
-            authorizationUrl?: string;
-          } | null;
-          if (data?.authorizationUrl) {
-            // Full-page redirect, not a popup — popups are unreliable for
-            // buyers on mobile, the same reasoning as the pay page.
-            window.location.href = data.authorizationUrl;
-            return;
-          }
-          setBusyPack(null);
-        } catch {
-          setBusyPack(null);
-        }
-      })();
-    },
-    [busyPack],
-  );
-
-  return { balance, isGuest, busyPack, topUp, refresh };
+  return {
+    balance,
+    used,
+    isGuest,
+    walletBalanceKobo,
+    busyPack,
+    topUpError,
+    topUp,
+  };
 }

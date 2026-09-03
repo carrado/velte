@@ -35,6 +35,17 @@ export function buildSystemPrompt(
     cheapestSeenNaira: number | null;
     shownCount: number;
   } | null,
+  // The buyer pressed "Just tell me the price" (route.ts's isPriceCheck).
+  // route.ts already suppresses the clarification WIDGET on these turns, and
+  // skips the two deterministic gates that would have asked before the model
+  // ever ran — but none of that reaches the model, so it kept writing the ask
+  // as ordinary prose, which becomes the reply verbatim. Found live: "A
+  // plastic standing fan" answered with "could you share your location so I
+  // can find nearby sellers of plastic standing fans?" with the listings
+  // sitting right underneath it. Suppressing the widget and leaving the
+  // sentence is the worst of both — a question the buyer is asked and cannot
+  // answer.
+  priceCheck = false,
 ): string {
   const locationNote = hasBuyerLocation
     ? `\n\nThe buyer's device location is already known server-side and is used automatically whenever they haven't named a different place.`
@@ -66,8 +77,24 @@ export function buildSystemPrompt(
   // already known (see its own comment — the location gate above reliably
   // loses to this note otherwise, so the fix is not offering both at once),
   // so this never competes with a location ask in practice.
-  const sectorNote = sectorClarifiers
-    ? `\n\nThis request looks like it falls under "${sectorClarifiers.sectorLabel}". If the buyer's own words already cover roughly what matters for a request like this, just search — don't add friction. But if it's genuinely bare (just the item/service name itself, with no distinguishing detail like size, color, budget, timeframe, or model already given), call askClarifyingQuestion ONCE, asking naturally about whichever of these fit best (never a checklist, never ask about all of them, never more than the one round): ${sectorClarifiers.fields.map((f) => f.name).join(", ")}. Phrase it conversationally around the buyer's actual need, not as a form field. This is only for a request naming a SPECIFIC item or service (searchProducts territory) — never for a request naming a kind of business/shop/tradesperson (that's searchStores territory and already has its own location-focused clarifying question above), and never on a turn that also names one separately (a dual-intent turn is better served by searching everything named than by pausing it).`
+  const sectorNote =
+    sectorClarifiers && !priceCheck
+      ? `\n\nThis request looks like it falls under "${sectorClarifiers.sectorLabel}". If the buyer's own words already cover roughly what matters for a request like this, just search — don't add friction. But if it's genuinely bare (just the item/service name itself, with no distinguishing detail like size, color, budget, timeframe, or model already given), call askClarifyingQuestion ONCE, asking naturally about whichever of these fit best (never a checklist, never ask about all of them, never more than the one round): ${sectorClarifiers.fields.map((f) => f.name).join(", ")}. Phrase it conversationally around the buyer's actual need, not as a form field. This is only for a request naming a SPECIFIC item or service (searchProducts territory) — never for a request naming a kind of business/shop/tradesperson (that's searchStores territory and already has its own location-focused clarifying question above), and never on a turn that also names one separately (a dual-intent turn is better served by searching everything named than by pausing it).`
+      : "";
+
+  // Placed LAST in the prompt (see the return below) so it reads as the
+  // final word over every earlier rule it contradicts — the location rules
+  // and the zero-result cascade are written for a turn whose job is matching
+  // a buyer to a vendor, and this turn's job is a different one.
+  const priceNote = priceCheck
+    ? `
+
+THIS TURN IS A PRICE CHECK, and it overrides every rule above that conflicts with it. The buyer pressed a "Just tell me the price" control — they are asking WHAT THIS COSTS, not asking to be matched with a seller. So:
+- NEVER call askClarifyingQuestion this turn, for any reason. Not for location, not for size/model/capacity/wattage/colour/budget, not for anything else. Search with exactly what they gave you, however thin it is — a rough price for a roughly-described item is the answer they asked for, and a question is not.
+- NEVER ask for their location, in a tool call OR in your own words. A price does not need one. Do not mention their location, do not say you need it, and do not apologise for not having it.
+- Do call searchProducts as normal, with what they described. Ordinary product rules (attributes, budget, the nationwide fallback) all still apply — you just never pause to ask first.
+- Write the reply as an ANSWER ABOUT PRICE: what the thing typically goes for, and what shapes that figure (brand, size, condition, where it's bought). Lead with the number, not with what you searched. If they named a price they were quoted, say plainly whether it looks fair, high, or a good deal.
+- If nothing at all came back, say what you can about the going rate in plain terms and stop there. Do not offer to reach out to businesses, and do not turn it into a hunt for a vendor.`
     : "";
 
   return `You are Velte, a buyer-facing product discovery assistant for a Nigerian marketplace.
@@ -152,7 +179,7 @@ After a searchStores call in an EARLIER turn actually returned a real store, an 
 A follow-up like "where can I buy it/this/one" or "what do they sell/have" after you've already shown results needs its own read of what the buyer means — check the BUYER's own original message earlier in this conversation (not your own reply, which deliberately never restates specifics) to tell which case this is:
 - If the buyer's original message named ONE specific item (a singular product, not a category) — e.g. "white sneakers", "a Tecno charger" — "it" still means that one item: call searchProducts again with that same item description, same as a fresh "where can I get this shoe" would be.
 - If the buyer's original message named a broad category (e.g. "electronics", "kitchen appliances") that could plausibly have turned up several different, unrelated things, the buyer asking where to buy isn't asking for more product options — they're asking for a PLACE. Call searchStores instead, using the general category as the business type (e.g. earlier search was "kitchen appliances" → businessType "kitchen appliance store").
-- If the earlier turn was a searchStores result (a specific store was already found) and the buyer now asks what that store sells/has/carries, that's getVendorProducts with that store's handle from the bracketed note — not searchStores again, and not a fresh searchProducts search.${sectorNote}${goalNote}`;
+- If the earlier turn was a searchStores result (a specific store was already found) and the buyer now asks what that store sells/has/carries, that's getVendorProducts with that store's handle from the bracketed note — not searchStores again, and not a fresh searchProducts search.${sectorNote}${goalNote}${priceNote}`;
 }
 
 // A deterministic short-circuit's own system prompt — see route.ts's own
