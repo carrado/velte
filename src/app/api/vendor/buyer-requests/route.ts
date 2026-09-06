@@ -14,6 +14,10 @@ export async function GET() {
       "/vendor/buyer-requests",
       { cookie: gate.cookie },
     );
+    // Nothing to strip since 2026-09-03: the backend no longer sends a
+    // buyer's number to a vendor at all, accepted or not, because vendors no
+    // longer start the conversation. The buyer does, from their own requests
+    // page. Passed straight through.
     return NextResponse.json({ requests });
   } catch (err) {
     return fail(err, "Failed to load buyer requests.");

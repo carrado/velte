@@ -45,6 +45,18 @@ const publicRegardlessOfAuth = [
   "/chat",
   "/marketplace",
   "/updates",
+  // The installed PWA's entry point (2026-08-29, see app/launch/page.tsx).
+  // MUST be listed here: it is a single-segment path, so without this it
+  // falls all the way through to the "/:id" branch at the bottom — a
+  // logged-out buyer would be bounced to /auth/login (a login wall on app
+  // open, for people who have no vendor account at all) and a vendor would
+  // be redirected to /products before the route could decide anything.
+  "/launch",
+  // No /plans entry since 2026-08-31: buyer plans became a full-screen modal
+  // inside /chat (components/credits/CreditsModal.tsx) and the route was deleted,
+  // so there is nothing left here to make public. /chat above already covers
+  // every surface that can open it. Not to be confused with /pricing, which
+  // is the vendor-facing pay-per-lead page and stays a marketing route.
   // No /buyer/auth entry anymore (2026-08-18) — there's no buyer-facing
   // page tree left at all. A buyer's only touchpoint is the inline
   // phone+OTP capture inside /chat itself (already covered by the /chat
@@ -142,17 +154,48 @@ export async function proxy(request: NextRequest) {
   // UNLESS this is the installed PWA launching (manifest start_url is
   // "/?source=pwa", see site.webmanifest): redirect server-side, before any
   // HTML ships, straight to /welcome instead of the marketing homepage.
-  // StandaloneHomeRedirect used to be the only guard against this and could
-  // only act client-side after hydration — by then the browser had already
-  // painted the SSR'd marketing page, so a logged-out PWA launch visibly
-  // flashed it before bouncing to /welcome. This redirect removes that
-  // flash entirely for the launch path; StandaloneHomeRedirect stays in
-  // place for in-app navigation back to "/" (e.g. the logo Link) while
-  // already running standalone.
+  // A client-side guard alone could only act after hydration — by then the
+  // browser had already painted the SSR'd marketing page, so a logged-out PWA
+  // launch visibly flashed it before bouncing to /welcome. This removes that
+  // flash for the launch path.
+  //
+  // Still here even though start_url now points at /launch (2026-08-29): an
+  // app installed before that change has "/?source=pwa" cached in its own
+  // manifest until the browser re-fetches it, so this is what serves those
+  // installs. In-app navigation to "/" — and to every OTHER marketing page —
+  // is handled by the root layout's pre-paint script + StandalonePublicGuard.
   if (pathname === "/") {
     if (!userId) {
       if (request.nextUrl.searchParams.get("source") === "pwa") {
         return NextResponse.redirect(new URL("/welcome", request.url));
+      }
+      // A signed-in BUYER belongs in the chat, not on the marketing site
+      // (2026-09-05, per explicit request — the same rule the block above
+      // has always applied to vendors, extended to the other kind of
+      // account). Until now it only ever checked `auth_token`, so a buyer
+      // with a perfectly good session still got the landing page, pitched
+      // at them as though they had never signed up.
+      //
+      // Scoped to "/" ALONE, deliberately. The vendor rule covers every
+      // marketing route, but /auth is on that list, and a buyer reaching
+      // for vendor sign-in is a real thing this product actively wants —
+      // a buyer who decides to start selling. Blocking their way to it to
+      // be symmetrical would break the more valuable path.
+      //
+      // Verified here rather than trusted: an expired or forged buyer
+      // cookie reads as signed-out and sees the landing page, which is
+      // the correct treatment for someone with no usable session.
+      const buyerToken = request.cookies.get("buyer_auth_token")?.value;
+      if (buyerToken) {
+        try {
+          const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
+          const { payload } = await jwtVerify(buyerToken, secret);
+          if (payload.type === "buyer" && payload.buyerId) {
+            return NextResponse.redirect(new URL("/chat", request.url));
+          }
+        } catch {
+          // Expired or tampered — fall through to the landing page.
+        }
       }
       return NextResponse.next();
     }

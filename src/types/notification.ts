@@ -5,6 +5,9 @@ export type NotificationType =
   | "wallet"
   | "referral"
   | "lead"
+  // 2026-09-05 — the first notification type a BUYER ever receives, and the
+  // first that belongs to both kinds of account.
+  | "buyer-request"
   | "system";
 
 export interface AppNotification {

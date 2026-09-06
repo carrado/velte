@@ -5,9 +5,8 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { VendorDetailModal } from "@/components/VendorDetailModal";
-import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
-import { buildWhatsappLink } from "@/lib/whatsapp";
+import { buildChatLink } from "@/lib/chatLink";
 import type { StoreMatch } from "@/types/search";
 import { MapPinIcon, StoreIcon, WrenchIcon } from "@/components/icons";
 
@@ -57,12 +56,13 @@ export function StoreResultCard({
   // calls merged into the same turn (e.g. "fix my laptop, and a caterer for
   // my wedding" both landing in `stores` — see StoreMatch's own comment).
   const query = match.matchedQuery ?? searchQuery;
-  const chatHref = buildWhatsappLink(
-    match.whatsapp,
-    query
+  const chatHref = buildChatLink({
+    vendorId: match.vendorId,
+    source: "search",
+    message: query
       ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(query)}, are you able to help?`
       : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.`,
-  );
+  });
   // A logged-in vendor can match their own storefront — no WhatsApp CTA to
   // themselves (which would also bill them a lead), just say so.
   const currentUserId = useUserStore((s) => s.user?.id);
@@ -194,7 +194,6 @@ export function StoreResultCard({
               href={chatHref}
               label="Chat on WhatsApp"
               className="w-full"
-              onClick={() => reportLead(match.vendorId, undefined, "search")}
             />
           )}
           <Link
@@ -224,7 +223,6 @@ export function StoreResultCard({
         onClose={() => setDetailOpen(false)}
         isOwn={isOwn}
         chatHref={chatHref}
-        onChatClick={() => reportLead(match.vendorId, undefined, "search")}
       />
     </div>
   );

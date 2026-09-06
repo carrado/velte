@@ -21,9 +21,8 @@ export async function GET() {
 
 // PATCH /api/buyer-auth/me — { name?, username?, location? }. The
 // progressive-profile counterpart to registration no longer collecting
-// name/username upfront (see verify-otp's own 2026-08-13 comment) — the
-// Profile page's edit-in-place rows and the post-verify "what should we
-// call you?" step both land here.
+// name/username upfront — the Profile page's edit-in-place rows and the
+// "what should we call you?" step both land here.
 export async function PATCH(req: Request) {
   const gate = await requireBuyerAuth();
   if ("response" in gate) return gate.response;

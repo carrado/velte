@@ -56,6 +56,15 @@ const TYPE_CONFIG: Record<
     bg: "bg-green-100",
     color: "text-green-600",
   },
+  // Added 2026-09-05, when notifications stopped being vendor-only. A
+  // VENDOR sees these too: they are on the receiving end of buyer requests —
+  // so the dashboard needs its own rendering for them rather than falling
+  // through to the generic bell.
+  "buyer-request": {
+    icon: MessageCircleIcon,
+    bg: "bg-sky-100",
+    color: "text-sky-600",
+  },
   system: { icon: BellIcon, bg: "bg-gray-100", color: "text-gray-500" },
 };
 

@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { getPublicStore, getSimilarVendors } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
 import { getOptionalUserId } from "@/lib/server/guards";
-import { buildWhatsappLink, normalizeWhatsappNumber } from "@/lib/whatsapp";
+import { normalizeWhatsappNumber } from "@/lib/whatsapp";
+import { buildChatLink } from "@/lib/chatLink";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import type {
   IntroCardProps,
@@ -155,7 +156,6 @@ function IntroCard({
             href={whatsappHref}
             label="Chat on WhatsApp"
             className="w-full"
-            vendorId={store.vendorId}
           />
         )
       )}
@@ -180,10 +180,11 @@ export default async function PublicStorePage({
   const currentUserId = await getOptionalUserId();
   const isOwn = currentUserId != null && currentUserId === store.vendorId;
 
-  const whatsappHref = buildWhatsappLink(
-    store.whatsapp,
-    `Hi ${store.name}! I found your store on Velte.`,
-  );
+  const whatsappHref = buildChatLink({
+    vendorId: store.vendorId,
+    source: "browse",
+    message: `Hi ${store.name}! I found your store on Velte.`,
+  });
 
   const goods = store.products.filter((p) => p.kind === "product");
   const services = store.products.filter((p) => p.kind === "service");
@@ -255,7 +256,6 @@ export default async function PublicStorePage({
             href={whatsappHref}
             label={`Chat with ${store.name}`}
             className="w-full"
-            vendorId={store.vendorId}
           />
         </div>
       )}

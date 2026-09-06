@@ -1466,6 +1466,100 @@ export const GENERAL_PRODUCT_PRESETS: AttributePresetGroup = {
 
 export const PRODUCT_PRESETS_BY_CATEGORY: Record<string, AttributePresetGroup> =
   {
+    // Its own entry rather than an alias onto `electronics` (2026-08-26):
+    // the phones_accessories sector's productCategoryId pointed here and
+    // nothing answered, so both the vendor wizard's attribute suggestions
+    // and the buyer's clarifying questions quietly fell through to the
+    // General pool. Aliasing it to `electronics` was the obvious fix and
+    // the wrong one — that group's important fields are Model / Storage /
+    // Battery, which read as a spec sheet for a PHONE and as nonsense for
+    // the accessories half of the same sector ("what storage is your power
+    // bank?"). These three cover both halves honestly.
+    "phones-accessories": {
+      group: "Phones & Accessories",
+      items: [
+        { name: "Brand", example: "e.g. Samsung, oraimo", important: true },
+        {
+          name: "Model",
+          example: "e.g. Galaxy A15, PowerBox 300",
+          important: true,
+        },
+        {
+          name: "Capacity",
+          example: "e.g. 128GB, 20000mAh",
+          important: true,
+        },
+        { name: "Condition", example: "brand new / UK used" },
+        { name: "Color", example: "e.g. Black" },
+        { name: "Warranty", example: "e.g. 6 months" },
+        { name: "What's in the Box", example: "e.g. charger, cable" },
+      ],
+    },
+    // Laptops get their own entry (2026-08-26). Computers & Laptops used
+    // to point at `electronics`, whose examples were written for phones —
+    // so a buyer asking for a laptop was shown "Model (e.g. Spark 10 Pro)"
+    // and "Battery (e.g. 5000mAh)", which are a Tecno phone and a phone
+    // battery. Nothing generated that: it is a static example string, and
+    // it stayed wrong because one category was being asked to describe two
+    // very different things.
+    "computers-laptops": {
+      group: "Computers & Laptops",
+      items: [
+        {
+          name: "Brand",
+          example: "e.g. HP, Dell, Lenovo, Apple",
+          important: true,
+        },
+        {
+          name: "Processor",
+          example: "e.g. Core i5 11th gen, Ryzen 5",
+          important: true,
+        },
+        {
+          // The single biggest price splitter in this market — a "UK used"
+          // machine and a brand new one are barely the same listing.
+          name: "Condition",
+          example: "brand new / UK used (Tokunbo) / Nigerian used",
+          important: true,
+        },
+        { name: "RAM", example: "e.g. 8GB" },
+        { name: "Storage", example: "e.g. 512GB SSD" },
+        { name: "Screen Size", example: "e.g. 15.6 inches" },
+        { name: "Model", example: "e.g. EliteBook 840 G5" },
+        { name: "Battery Life", example: "e.g. about 5 hours" },
+        { name: "Warranty", example: "e.g. 3 months" },
+      ],
+    },
+    // Same problem, same fix: Home Electronics & Appliances (TVs, fridges,
+    // ACs, microwaves) shared the Kitchenware table, so a buyer asking
+    // about a television was asked its "Capacity (e.g. 5 litres)".
+    "home-electronics": {
+      group: "Home Electronics & Appliances",
+      items: [
+        {
+          name: "Brand",
+          example: "e.g. LG, Hisense, Scanfrost, Haier",
+          important: true,
+        },
+        {
+          // One field on purpose: the size that matters is a different
+          // number for every appliance here, and asking "Capacity" of a
+          // TV is exactly the mismatch this entry exists to end.
+          name: "Size / Capacity",
+          example: "e.g. 43 inches, 200 litres, 1.5HP",
+          important: true,
+        },
+        {
+          name: "Condition",
+          example: "brand new / fairly used",
+          important: true,
+        },
+        { name: "Power", example: "e.g. 1500W, inverter" },
+        { name: "Energy Use", example: "e.g. energy-saving / inverter" },
+        { name: "Model", example: "e.g. 43A7GQ" },
+        { name: "Warranty", example: "e.g. 1 year" },
+      ],
+    },
     electronics: {
       group: "Electronics",
       items: [

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { formatNaira, cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/timeAgo";
-import { walletApi, leadCostForBalance } from "@/services/wallet";
+import { walletApi, leadCost } from "@/services/wallet";
 import type { BuyerRequest, BuyerRequestDecision } from "@/types/buyerRequest";
 import {
   ArrowLeftIcon,
@@ -20,7 +20,6 @@ import {
   MapPinIcon,
   UserRoundIcon,
   WalletIcon,
-  WhatsAppIcon,
   XCircleIcon,
 } from "@/components/icons";
 
@@ -35,12 +34,12 @@ export default function VendorBuyerRequestDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [confirmingAccept, setConfirmingAccept] = useState(false);
-  // Set the instant Accept succeeds so the WhatsApp CTA appears without
-  // waiting on the detail query to refetch — the mutation response already
-  // carries the number, no reason to make the vendor wait a round trip
-  // longer for the one thing they just paid for.
-  const [revealedWhatsapp, setRevealedWhatsapp] = useState<string | null>(null);
-
+  // The optional quote typed on the confirm step (2026-09-03). Strings, not
+  // numbers, because these are controlled inputs and a half-typed "4" must
+  // stay "4" rather than becoming 4 and back. Parsed once, on submit.
+  const [quotePrice, setQuotePrice] = useState("");
+  const [quoteDays, setQuoteDays] = useState("");
+  const [quoteNote, setQuoteNote] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: ["vendor-buyer-requests", params.requestId],
     queryFn: () =>
@@ -55,20 +54,40 @@ export default function VendorBuyerRequestDetailPage() {
   });
 
   const decisionMutation = useMutation({
-    mutationFn: (decision: BuyerRequestDecision) =>
-      api.post<{
+    mutationFn: (decision: BuyerRequestDecision) => {
+      // Naira in the box, kobo on the wire — every money field in both repos
+      // is kobo, and this is the one place a vendor types a human amount.
+      // An unparseable or empty box sends null, which is a permitted answer:
+      // accepting without quoting stays exactly as it was.
+      const priceNaira = Number(quotePrice.replace(/[^0-9.]/g, ""));
+      const days = Number(quoteDays.replace(/[^0-9]/g, ""));
+      const quote =
+        decision === "accepted"
+          ? {
+              priceKobo:
+                Number.isFinite(priceNaira) && priceNaira > 0
+                  ? Math.round(priceNaira * 100)
+                  : null,
+              leadTimeDays:
+                quoteDays.trim() !== "" && Number.isInteger(days) && days >= 0
+                  ? days
+                  : null,
+              note: quoteNote.trim() || null,
+            }
+          : undefined;
+      return api.post<{
         decision: BuyerRequestDecision;
-        whatsappNumber: string | null;
       }>(`/api/vendor/buyer-requests/${params.requestId}/decision`, {
         decision,
-      }),
+        ...(quote ? { quote } : {}),
+      });
+    },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["vendor-buyer-requests"] });
       queryClient.invalidateQueries({ queryKey: ["wallet"] });
       setConfirmingAccept(false);
       if (result.decision === "accepted") {
-        setRevealedWhatsapp(result.whatsappNumber);
-        toast.success("Accepted — here's their WhatsApp number.");
+        toast.success("Accepted — your price is now with the buyer.");
       } else {
         toast.success("Declined.");
         router.push(`/${params.id}/buyer-requests`);
@@ -90,17 +109,18 @@ export default function VendorBuyerRequestDetailPage() {
 
   const decision = request.myDecision;
   const accepted = decision === "accepted";
-  const whatsappNumber =
-    revealedWhatsapp ?? (accepted ? request.buyerPhone : null);
   const balanceKobo = wallet?.balanceKobo ?? null;
-  // Tiered now, not flat — this previews whatever rate the vendor's OWN
-  // current balance actually lands in (see leadCostForBalance's own
-  // comment), same rate decideOnRequest charges server-side at Accept
-  // time. Falls back to the most expensive tier while the wallet is still
-  // loading (balanceKobo null) — a conservative "assume the worst" default
-  // for a price PREVIEW, never used to actually block the button (canAfford
-  // stays optimistic-true during that same loading window, unchanged).
-  const currentLeadCostKobo = leadCostForBalance(balanceKobo ?? 0);
+  // Flat for everyone since 2026-09-03, and no longer charged HERE at all:
+  // accepting is free, and the fee lands only if the buyer actually messages
+  // this vendor (see services/wallet.ts, and /api/chat where it is billed).
+  //
+  // The wallet check survives the move with a different meaning. It is no
+  // longer "you are about to be charged this" but "you must be able to cover
+  // one lead in order to accept" — the gate that keeps the fee collectable
+  // later, when the person clicking is the buyer rather than the vendor.
+  // Still optimistic-true while the wallet loads (balanceKobo null), so a
+  // slow request never reads as an empty wallet.
+  const currentLeadCostKobo = leadCost();
   const canAfford = balanceKobo === null || balanceKobo >= currentLeadCostKobo;
   const mapUrl = request.location
     ? `https://www.google.com/maps?q=${request.location.coordinates[1]},${request.location.coordinates[0]}`
@@ -141,6 +161,22 @@ export default function VendorBuyerRequestDetailPage() {
             {request.description}
           </p>
 
+          {request.budgetKobo != null ? (
+            <div className="flex items-center gap-2 rounded-xl bg-orange-50 border border-orange-100 px-3.5 py-2.5 mb-4">
+              <WalletIcon size={15} className="text-orange-500 shrink-0" />
+              <span className="text-sm text-gray-600">
+                Budget:{" "}
+                <span className="font-semibold text-[#023337]">
+                  {formatNaira(request.budgetKobo)}
+                </span>
+              </span>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 mb-4">
+              No budget given — worth asking before you quote.
+            </p>
+          )}
+
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-gray-500 text-xs border-t border-gray-100 pt-4">
             <span className="inline-flex items-center gap-1.5">
               <UserRoundIcon size={14} className="text-gray-400" />
@@ -179,26 +215,11 @@ export default function VendorBuyerRequestDetailPage() {
           <div className="flex items-center gap-2 text-green-700 font-semibold mb-1">
             <CheckCircleIcon size={18} /> You accepted this request
           </div>
-          <p className="text-green-700/80 text-sm mb-4">
-            Message {request.buyerName} directly on WhatsApp — they&apos;re
-            expecting to hear from vendors.
+          <p className="text-green-700/80 text-sm">
+            {request.buyerName} can see your price alongside the other
+            businesses that answered. They&apos;ll message you on WhatsApp if
+            they choose yours — that&apos;s the only point you&apos;re charged.
           </p>
-          {whatsappNumber ? (
-            <a
-              href={`https://wa.me/${whatsappNumber.replace(/[^\d]/g, "")}?text=${encodeURIComponent(
-                `Hi ${request.buyerName}, I saw your request on Velte for: ${request.description}`,
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-[#25D366] hover:bg-[#1ebe57] text-white font-semibold text-sm rounded-lg px-4 py-2.5 transition-colors"
-            >
-              <WhatsAppIcon size={18} /> Chat on WhatsApp
-            </a>
-          ) : (
-            <p className="text-green-700/60 text-sm">
-              WhatsApp number unavailable — refresh this page.
-            </p>
-          )}
         </div>
       ) : decision === "declined" ? (
         <div className="bg-white rounded-2xl border border-gray-200 p-5 flex items-center gap-2 text-gray-500">
@@ -212,10 +233,70 @@ export default function VendorBuyerRequestDetailPage() {
         <div className="bg-white rounded-2xl border border-orange-200 p-5">
           <p className="text-gray-900 font-medium mb-1">Accept this request?</p>
           <p className="text-gray-500 text-sm mb-4">
-            {formatNaira(currentLeadCostKobo)} will be deducted from your
-            wallet, and you&apos;ll get {request.buyerName}&apos;s WhatsApp
-            number right away.
+            Accepting is free. {request.buyerName} sees your price and messages
+            you if they choose — only then is {formatNaira(currentLeadCostKobo)}{" "}
+            deducted from your wallet.
           </p>
+
+          {/* The quote (2026-09-03). OPTIONAL, and labelled as such, because
+              making it mandatory would change what Accept means for every
+              vendor already using it — and a vendor forced to name a number
+              will invent a placeholder, which is worse for the buyer than no
+              quote at all. What it buys the vendor is stated plainly: this
+              request went to several businesses, and a quote is what puts
+              them on a comparison rather than in a list of names. */}
+          <div className="border-t border-gray-100 pt-4 mb-4">
+            <p className="text-sm font-medium text-gray-900">
+              Add your price{" "}
+              <span className="font-normal text-gray-400">(optional)</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5 mb-3">
+              {request.buyerName} sent this to several businesses. Quoting puts
+              you on their comparison instead of just their contact list.
+            </p>
+            <div className="flex gap-2.5">
+              <label className="flex-1">
+                <span className="block text-xs text-gray-500 mb-1">
+                  Your price (₦)
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={quotePrice}
+                  onChange={(e) => setQuotePrice(e.target.value)}
+                  placeholder="450,000"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none"
+                />
+              </label>
+              <label className="w-28">
+                <span className="block text-xs text-gray-500 mb-1">
+                  Ready in (days)
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={quoteDays}
+                  onChange={(e) => setQuoteDays(e.target.value)}
+                  placeholder="2"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none"
+                />
+              </label>
+            </div>
+            <label className="block mt-2.5">
+              <span className="block text-xs text-gray-500 mb-1">
+                Anything else? (warranty, delivery…)
+              </span>
+              <input
+                type="text"
+                maxLength={200}
+                value={quoteNote}
+                onChange={(e) => setQuoteNote(e.target.value)}
+                placeholder="1 year warranty, free delivery in Enugu"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none"
+              />
+            </label>
+          </div>
+
           <div className="flex gap-2.5">
             <Button
               onClick={() => setConfirmingAccept(false)}
@@ -242,16 +323,16 @@ export default function VendorBuyerRequestDetailPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
           <p className="text-gray-900 font-medium mb-1">Interested?</p>
           <p className="text-gray-500 text-sm mb-4">
-            Accept to get {request.buyerName}&apos;s WhatsApp number and reach
-            out directly — {formatNaira(currentLeadCostKobo)} is deducted from
-            your wallet. Declining costs nothing.
+            Accept to put your price in front of {request.buyerName}. It costs
+            nothing to accept or decline — {formatNaira(currentLeadCostKobo)} is
+            deducted only if they message you.
           </p>
 
           {!canAfford && (
             <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">
               <WalletIcon size={14} className="shrink-0" />
               Your balance ({formatNaira(balanceKobo ?? 0)}) is below the{" "}
-              {formatNaira(currentLeadCostKobo)} needed to accept —{" "}
+              {formatNaira(currentLeadCostKobo)} you need available to accept —{" "}
               <a
                 href={`/${params.id}/wallet`}
                 className="underline font-medium"
@@ -286,7 +367,7 @@ export default function VendorBuyerRequestDetailPage() {
                   : "bg-gray-100 text-gray-400 cursor-not-allowed hover:bg-gray-100",
               )}
             >
-              Accept — {formatNaira(currentLeadCostKobo)}
+              Accept
             </Button>
           </div>
         </div>

@@ -72,7 +72,10 @@ export function CardCarousel<T>({
   // results" share one visual language — just no arrows / nothing to swipe.
   if (items.length === 1) {
     return (
-      <div className={cn("max-w-full", slideClassName)}>
+      <div
+        data-slide-id={getKey(items[0])}
+        className={cn("max-w-full", slideClassName)}
+      >
         {renderItem(items[0])}
       </div>
     );
@@ -96,6 +99,12 @@ export function CardCarousel<T>({
           <div
             key={getKey(item)}
             data-carousel-slide
+            // Addressable by id so the recommendation block above can scroll
+            // straight to the card it is talking about (see
+            // RecommendationPicks' own scrollToCard). Set on the SLIDE, not
+            // the card, because the slide is what the scroll container
+            // actually positions.
+            data-slide-id={getKey(item)}
             className={cn("shrink-0 snap-start", slideClassName)}
           >
             {renderItem(item)}

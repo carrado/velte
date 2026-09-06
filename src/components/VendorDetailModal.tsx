@@ -53,7 +53,12 @@ export function VendorDetailModal({
   onClose: () => void;
   isOwn: boolean;
   chatHref: string | null;
-  onChatClick: () => void;
+  // Optional since 2026-08-27: the WhatsApp CTA is now a plain link to
+  // /api/chat, which bills the lead server-side — there is no click beacon
+  // left to fire. Kept on the type for any caller that still wants to react
+  // to the click for its own reasons (analytics, closing the modal), but
+  // nothing is required to.
+  onChatClick?: () => void;
 }) {
   return (
     <DetailSheet

@@ -1,6 +1,14 @@
+import {
+  guestCanAfford,
+  guestCredits,
+  spendGuestCredits,
+} from "@/lib/guestCredits";
+import { isBillableTurn } from "@/lib/turnBillable";
+import { GUEST_CREDIT_COST, guestExhaustedMessage } from "@/lib/credits";
 import type { SearchRequestBody, SearchStreamEvent } from "@/types/search";
 
 type FinalEvent = Extract<SearchStreamEvent, { type: "final" }>;
+type QuotaEvent = Extract<SearchStreamEvent, { type: "quota" }>;
 
 interface SearchStreamHandlers {
   onStatus: (text: string) => void;
@@ -9,6 +17,13 @@ interface SearchStreamHandlers {
   onReply: (text: string) => void;
   onFinal: (event: FinalEvent) => void;
   onError: (message: string) => void;
+  // The turn was refused on quota / plan (2026-08-29) — terminal, arrives
+  // alone, and is NOT a failure: see SearchStreamEvent's own "quota"
+  // comment. Optional, but a caller that omits it still shows the buyer
+  // something: dispatch falls back to onError rather than dropping the
+  // event, because a silently ignored refusal looks to the buyer like the
+  // Send button is broken.
+  onQuota?: (event: QuotaEvent) => void;
   // Called instead of onError when `signal` fired (the buyer hit Stop) —
   // a deliberate cancel, not a real failure, so SearchHome.tsx can give it
   // its own quiet "Stopped generating." wrap-up rather than the scarier
@@ -17,6 +32,45 @@ interface SearchStreamHandlers {
   // not SearchHome-specific) isn't forced to handle a case it never
   // triggers by never passing a signal.
   onAbort?: () => void;
+  /** Whether NOBODY is signed in — neither a buyer nor a vendor.
+   *
+   *  Required, not optional with a safe default, and that is the whole point:
+   *  a default of `false` would silently leave a future call site ungated,
+   *  which is the exact bug this field exists to fix. A default of `true`
+   *  would meter signed-in buyers against a browser counter. Neither default
+   *  is safe, so every caller has to say. */
+  isGuest: boolean;
+}
+
+/**
+ * What a signed-out browser sees once its free searches are gone (2026-08-31).
+ *
+ * Builds the same `quota` event shape the SERVER sends, so SearchHome's
+ * existing QuotaCard renders a client-side refusal and a server-side one
+ * identically — no new UI, and no second way for a refusal to look.
+ */
+function guestRefusal(cost: number): QuotaEvent {
+  return {
+    type: "quota",
+    // Literally the same sentence creditLedger.ts's creditMessage produces
+    // for a guest — one function in credits.ts, called by both, rather than
+    // the hand-copied string this used to be. That copy interpolated the
+    // guest allowance but hardcoded the signup grant, so it went on
+    // promising 15 credits after the grant dropped to 10.
+    message: guestExhaustedMessage(),
+    kind: "text",
+    // Balance and cost, the two numbers a credit meter needs.
+    used: guestCredits(),
+    limit: cost,
+    planId: "guest",
+    planName: "Velte credits",
+    isGuest: true,
+    actorType: "guest",
+    // "exhausted", never "unavailable": search IS on this tier, they have
+    // used it up. The distinction drives the CTA — see the quota event's own
+    // comment in types/search.ts.
+    reason: "exhausted",
+  };
 }
 
 /**
@@ -35,9 +89,48 @@ interface SearchStreamHandlers {
  */
 export async function runSearchStream(
   body: SearchRequestBody,
-  { onStatus, onReply, onFinal, onError, onAbort }: SearchStreamHandlers,
+  {
+    onStatus,
+    onReply,
+    onFinal,
+    onError,
+    onQuota,
+    onAbort,
+    isGuest,
+  }: SearchStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
+  // Before anything is spent, and gated HERE rather than at the call site
+  // because this is the single door every search goes through — a gate a
+  // caller has to remember is one a future caller forgets, and the bug being
+  // fixed is precisely an allowance nobody enforced. Signed-in callers pass
+  // `isGuest: false` and skip it entirely; they are metered properly on their
+  // own row by /api/search.
+  //
+  // CHECKED here, CHARGED when the turn delivers — the same rule the server
+  // follows for an account. A guest must not pay for a turn that failed, nor
+  // for one answered from the nearby-business path, which costs nothing to
+  // have run. The check still comes first, or an empty balance could set a
+  // real model call going and never pay for it.
+  //
+  // GUEST_CREDIT_COST — the same table a signed-in account is charged
+  // (unified 2026-09-06; see credits.ts's own "ONE cost table" note), read
+  // under this name only so this stays legible as a guest-path lookup. A
+  // guest starts with ten (GUEST_CREDITS) and a photo turn costs eight, so
+  // anyone who has searched even once (text costs three) can no longer
+  // afford a photo search: photo stays the sign-in hook it has always been,
+  // enforced by the pricing rather than by a rule saying so.
+  const guestCost = GUEST_CREDIT_COST[body.imageUrl ? "photo" : "text"];
+  if (isGuest && !guestCanAfford(guestCost)) {
+    const refusal = guestRefusal(guestCost);
+    // Falls back to onError like every other dispatch of this event, so a
+    // caller that forgot the handler still shows the buyer something rather
+    // than a Send button that appears broken.
+    if (onQuota) onQuota(refusal);
+    else onError(refusal.message);
+    return;
+  }
+
   let res: Response;
   try {
     res = await fetch("/api/search", {
@@ -98,8 +191,26 @@ export async function runSearchStream(
     }
     if (event.type === "status") onStatus(event.text);
     else if (event.type === "reply") onReply(event.text);
-    else if (event.type === "final") onFinal(event);
-    else if (event.type === "error") onError(event.message);
+    else if (event.type === "final") {
+      // The guest's charge. Charged client-side because a guest has no row
+      // on the server to charge — their balance lives in their own browser.
+      //
+      // The RULE is shared with the server's own charge (lib/turnBillable.ts)
+      // rather than mirrored here, which is what this comment used to promise
+      // and what a hand-written copy could not keep: the clarification
+      // exemption was added on the server first, and this copy went on
+      // charging guests for being asked a question — the one population that
+      // exemption exists for, since five credits does not survive a four-
+      // question intake.
+      if (isGuest && isBillableTurn(event)) {
+        spendGuestCredits(guestCost);
+      }
+      onFinal(event);
+    } else if (event.type === "error") onError(event.message);
+    else if (event.type === "quota") {
+      if (onQuota) onQuota(event);
+      else onError(event.message);
+    }
   }
 }
 

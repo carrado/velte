@@ -5,7 +5,8 @@ import { assessDescriptionQuality } from "./assessDescriptionQuality";
 // or providers later stays a localized change. Groq's chat completions API
 // is OpenAI-compatible, so a plain fetch avoids pulling in an SDK.
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+// See router.ts — the llama-3.3 id was decommissioned by Groq.
+const GROQ_MODEL = "openai/gpt-oss-20b";
 
 // Generation is self-correcting against the SAME bar assessDescriptionQuality.ts
 // checks later, rather than just hoping a well-worded prompt is enough on

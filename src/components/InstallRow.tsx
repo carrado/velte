@@ -34,7 +34,7 @@ const GUIDE_ICONS = {
 
 /* A permanent settings-page card — NOT the dismissible install banner
  * (PushNotificationManager, vendor) or the dismissible /chat popup
- * (BuyerInstallPrompt, buyer), both of which can be skipped/cooled-down
+ * (InstallSuggestion, buyer), both of which can be skipped/cooled-down
  * away. Shared between the buyer Profile page and the vendor Settings
  * page verbatim, on purpose: this component has no actor-specific logic
  * at all (no buyer/vendor session, nothing account-scoped) — it's pure

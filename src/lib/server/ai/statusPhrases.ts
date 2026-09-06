@@ -1,3 +1,5 @@
+import { formatNaira } from "@/lib/utils";
+
 // Curated status-line variants for the search stream's "staged reveal" (spec
 // §7 — never raw model chain-of-thought, only pre-written progress text).
 //
@@ -423,6 +425,24 @@ export function similarMatchPhrase(count: number): string[] {
   ];
 }
 
+// Shown while the kind-of-item gate (verifyMatches.ts) is in flight — for
+// Velte's own results and, on a dead-end turn, for the external offers
+// too. Either way it lands after the listings are back but before any are
+// shown, so it narrates the one thing genuinely still happening: looking at
+// the photos to confirm these are actually the right kind of item. Never
+// says "removing" or "rejecting" — nothing has been judged yet at this
+// point, and most turns end with every candidate kept.
+export function checkingPhotosPhrase(what: string): string[] {
+  return [
+    `Checking the photos to be sure these are really ${snippet(what)}…`,
+    "Looking at each listing's photo to confirm the match…",
+    `Making sure these are actually ${snippet(what)}…`,
+    "Double-checking the photos against what you asked for…",
+    "Having a proper look at these before showing you…",
+    `Confirming each one is really ${snippet(what)}…`,
+  ];
+}
+
 // No `hasExternal` branch here on purpose: a zero-result searchProducts
 // ALWAYS falls through to a searchStores call next (see systemPrompt.ts's
 // zero-result rule) — a real, still-on-Velte vendor can easily turn up there
@@ -500,6 +520,33 @@ export function noVendorMatchPhrase(hasExternal: boolean): string[] {
 // Sole status line for createBuyerRequestTool's "created" path — the
 // "needs_identity" path shows no status line at all (the frontend takes
 // over with the inline phone+OTP capture instead of a spinner).
+// Shown while route.ts's extra comparison call (pickRecommendation, Phase 3
+// of docs/velte-ai-search-flow-plan.md) is in flight — the search itself is
+// already done at that point, so this narrates the one thing genuinely
+// still happening before the results land.
+export function comparingOptionsPhrase(count: number): string[] {
+  return [
+    `Comparing the ${count} options I found…`,
+    "Weighing up the best options for you…",
+    `Sizing up these ${count} finds against what you asked for…`,
+    "Picking out the strongest matches…",
+    "Comparing prices and distance for you…",
+    "Working out which of these fits you best…",
+  ];
+}
+
+// Shown while Phase 4's external connectors run — only ever on a genuine
+// dead end, so this narrates the honest thing: Velte itself came up empty
+// and we're looking further afield before giving up.
+export function checkingElsewherePhrase(what: string): string[] {
+  return [
+    `Nothing on Velte yet — checking what's available online for "${what}"…`,
+    `Looking beyond Velte for "${what}"…`,
+    `Seeing where else you could get "${what}"…`,
+    `Checking other stores online for "${what}"…`,
+  ];
+}
+
 export function sendingRequestPhrase(): string[] {
   return [
     "Sending your request to businesses that may be able to help…",
@@ -648,26 +695,117 @@ export function noVendorEvenBySectorPhrase(
   isService: boolean,
 ): string[] {
   const w = snippet(what, 60);
+  // hasNearby=true means real nearby-business cards render right under
+  // this text (2026-09-05, per explicit request) — a "Nothing on Velte
+  // matches X" line used to be one of the four variants in BOTH pools
+  // below, sitting directly above those cards and reading as a flat
+  // contradiction: told there's nothing, shown something. Same defect
+  // noVendorButOnlineOffersPhrase's own header comment already describes
+  // for external offers — this is that same fix applied to the OTHER card
+  // type that can appear on this branch. Only the `hasNearby=false` pool
+  // below keeps that framing: there really is nothing on screen there.
   return hasNearby
     ? isService
       ? [
           `No vendor on Velte offers "${w}" yet — but one of these nearby might be able to help.`,
-          `Nothing on Velte matches "${w}", even broadly — here's where you might actually get this done close by.`,
           `Couldn't find a Velte vendor for "${w}" at all — the businesses below might be able to help though.`,
           `No match on Velte for "${w}", even a loose one — here's where you could possibly get this done nearby.`,
         ]
       : [
           `No vendor on Velte carries "${w}" yet — but you may be able to get it from one of these nearby.`,
-          `Nothing on Velte matches "${w}", even broadly — here's where you might actually find it close by.`,
           `Couldn't find a Velte vendor for "${w}" at all — the businesses below might have it though.`,
           `No match on Velte for "${w}", even a loose one — here's where you could possibly get it nearby.`,
         ]
-    : [
-        `Nothing on Velte fits "${w}", even by sector, and nothing nearby either.`,
-        `No vendor on Velte for "${w}", and no nearby alternative came up either.`,
-        `Couldn't find a match on Velte or anything nearby for "${w}".`,
-        `No results here for "${w}" — nothing on Velte, and nothing close by either.`,
-      ];
+    : // Reaching here means BOTH the product search and the sector-level
+      // store search came back empty — so no vendor on Velte covers this
+      // KIND of thing at all, not merely this wording of it.
+      //
+      // Say that (2026-09-05, found live). The old lines — 'Nothing on Velte
+      // fits "Lexus Jeep 2026 model", even by sector' — read as though the
+      // buyer's phrasing was the problem, and invited them to try again with
+      // different words on a category Velte will never carry. Velte is a
+      // marketplace of small vendors; it has no 2026 cars, and no rewording
+      // changes that. Naming the category as the gap is both the honest
+      // answer and the one that stops a pointless second attempt.
+      isService
+      ? [
+          `No one on Velte offers ${w} — it's not a service the vendors here cover, and nothing nearby came up either.`,
+          `Velte doesn't have anyone for ${w} yet. I checked the whole category, not just that wording, and there's nothing close by either.`,
+          `That's outside what Velte's vendors do — no one here offers ${w}, and I couldn't find anyone nearby either.`,
+        ]
+      : [
+          `No one on Velte sells ${w} — it isn't a category the vendors here carry, and nothing nearby came up either.`,
+          `Velte doesn't have ${w}. I checked the whole category, not just that wording, so it's not about how you phrased it — and there's nothing close by either.`,
+          `That's outside what Velte's vendors stock — nobody here has ${w}, and I couldn't find it nearby either.`,
+        ];
+}
+
+// The dead-end line when Velte has nothing AND there are no nearby
+// businesses to point at, but the external connectors DID find the item on
+// sale online (Phase 4). Split out from noVendorEvenBySectorPhrase because
+// that function is chosen before the connectors have run: its "nothing
+// nearby either" branch would otherwise sit directly above six real
+// online offers, telling the buyer there was nowhere to go while showing
+// them somewhere to go. Deliberately names the offers as OFF-Velte and as
+// online — they carry no vendor relationship, no distance and no trust
+// signal, and the reply must never imply otherwise.
+//
+// No "Nothing on Velte matches X" framing in ANY variant (2026-09-05, per
+// explicit request) — an earlier version still had one, which sat directly
+// above the very external-offer cards it was supposedly describing as
+// absent. Real external offers ARE rendering right under this text, so
+// every variant here has to read as "not on Velte, but here's what IS
+// available" — never "nothing matches."
+//
+// `unconfirmedBudgetNaira` (2026-09-05, found live) — a buyer gave a
+// ₦400k budget, and the cards shown underneath this text were two listings
+// with NO PRICE AT ALL, presented with the same confidence a verified
+// ₦380k match would have had. connectors/index.ts's own budget filter only
+// ever DROPS a listing it can confirm is over budget — an unpriced one is
+// kept, deliberately, rather than punished for being unreadable — but
+// "kept" is not the same claim as "fits," and the reply was making the
+// second claim by omission. Set this to the buyer's own ceiling when a
+// budget was named AND route.ts's own check (parseOfferPrice against every
+// shown offer) found not one of them confirms fitting it — undefined
+// whenever no budget was given, or at least one shown offer genuinely does
+// confirm fitting it, in which case the plain variants below still apply.
+export function noVendorButOnlineOffersPhrase(
+  what: string,
+  unconfirmedBudgetNaira?: number,
+  // A COMPARISON turn (2026-09-05). The buyer asked which of several things
+  // to buy, and a full comparison — criteria, picks, a table — is rendering
+  // directly below this line. The ordinary variants read as a consolation
+  // ("the closest I can get you is these online listings"), which undersells
+  // a turn that just ANSWERED the question: Velte not stocking the item
+  // doesn't make "which should I buy" unanswerable, and the comparison is
+  // built from real fetched listings either way.
+  //
+  // Same defect this function's own header describes for the "nothing
+  // nearby" framing: a line written before the results existed, still on
+  // screen above them, describing a turn that didn't happen.
+  isComparison = false,
+): string[] {
+  const w = snippet(what, 60);
+  if (isComparison && unconfirmedBudgetNaira == null) {
+    return [
+      `Neither is on Velte, so I've compared what's listed online instead — here's how they stack up.`,
+      `No Velte vendor has these yet, so I've weighed up the online listings for each — here's what I found.`,
+      `Not on Velte, but I found both selling online and compared them for you.`,
+    ];
+  }
+  if (unconfirmedBudgetNaira != null) {
+    const budget = formatNaira(unconfirmedBudgetNaira * 100);
+    return [
+      `No vendor on Velte has "${w}" yet, and I couldn't confirm a price within your ${budget} budget on these either — here's what's out there online, but check the price yourself before buying.`,
+      `Nothing on Velte for "${w}", and none of these online listings show a confirmed price under ${budget} — worth checking each one before you buy.`,
+      `Couldn't find "${w}" on Velte, and these online listings don't show a price I can confirm fits your ${budget} budget — take a look, but verify the price first.`,
+    ];
+  }
+  return [
+    `No vendor on Velte has "${w}" yet — but here's where it's selling online right now.`,
+    `Couldn't find "${w}" on Velte at all — the closest I can get you is these online listings.`,
+    `No Velte vendor for "${w}" yet. Off Velte, these stores are listing it.`,
+  ];
 }
 
 // BuyerRequestOfferWidget's own "no vendor to notify" message (see that
@@ -821,5 +959,32 @@ export function fetchingCatalogPhrase(): string[] {
     "Retrieving their catalog…",
     "Checking their inventory…",
     "Checking what this vendor offers…",
+  ];
+}
+
+// The gap between "the buyer has paid" and "the credits are on the account"
+// (2026-09-05). Card top-ups are granted by a Paystack WEBHOOK, so someone who
+// pays mid-search is routinely back on /chat a second or two before their
+// balance moves. Something has to hold that moment, and it should sound like
+// the payment being processed — which it is — rather than like the search
+// having stalled.
+export function waitingForCreditsPhrase(): string[] {
+  return [
+    "Confirming your payment…",
+    "Just adding your credits…",
+    "Payment's in — topping up your balance…",
+    "One moment, putting the credits on your account…",
+  ];
+}
+
+// The refused search starting again, once the credits are there. Deliberately
+// acknowledges what just happened: the buyer paid (or signed up) precisely to
+// get this answer, and silently resuming would make the top-up feel unnoticed.
+export function resumingAfterTopUpPhrase(): string[] {
+  return [
+    "You're topped up — picking your search back up…",
+    "Credits are in. Back to what you asked for…",
+    "All set — carrying on with your search…",
+    "Sorted. Looking that up for you now…",
   ];
 }

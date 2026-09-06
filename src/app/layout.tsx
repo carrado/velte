@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import Providers from "./providers";
 import { Toaster } from "sonner";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import { StandalonePublicGuard } from "@/components/StandalonePublicGuard";
 import ReferralCapture from "@/components/ReferralCapture";
 import MetaPixel from "@/components/MetaPixel";
 import BlockedAccountModal from "@/components/BlockedAccountModal";
@@ -219,6 +220,26 @@ export const viewport: Viewport = {
   themeColor: "#000000",
 };
 
+// Blocks the installed PWA from ever painting a marketing page. Runs before
+// React, before hydration, before anything is drawn. Deliberately tiny and
+// dependency-free — it is inlined into every HTML response.
+//
+// Wrapped in try/catch because matchMedia can throw in exotic embedded
+// webviews, and a crash here would take the whole document down with it. A
+// failure just means the React guard handles it a beat later, with a flash.
+const PRE_PAINT_STANDALONE_GUARD = `try{
+var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+if (standalone) {
+  var p = location.pathname;
+  var blocked = ["/about","/blog","/careers","/contact","/faq","/how-it-works","/join","/pricing"];
+  var hit = p === "/";
+  for (var i = 0; i < blocked.length && !hit; i++) {
+    if (p === blocked[i] || p.indexOf(blocked[i] + "/") === 0) hit = true;
+  }
+  if (hit) location.replace("/welcome");
+}
+}catch(e){}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -234,12 +255,27 @@ export default function RootLayout({
       )}
     >
       <body>
+        {/* Runs synchronously during HTML parsing, BEFORE anything paints —
+            same pre-paint pattern chat/layout.tsx uses for its resume check.
+            Without it the marketing page is server-rendered and painted, then
+            yanked away once React hydrates and StandalonePublicGuard runs,
+            which is exactly the visible flash the "/" redirect in proxy.ts was
+            added to kill. The server cannot do this one: display-mode is a
+            client fact, and the PWA shares its cookie jar with the ordinary
+            browser, so any server-side marker would hide these pages from the
+            normal browser too. Kept in sync with
+            lib/standalonePublicRoutes.ts by hand — it is a handful of literal
+            paths, and the guard below is the backstop if they ever drift. */}
+        <script
+          dangerouslySetInnerHTML={{ __html: PRE_PAINT_STANDALONE_GUARD }}
+        />
         <MetaPixel />
         {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
           <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
         )}
         <Providers>
           <ServiceWorkerRegistrar />
+          <StandalonePublicGuard />
           <ReferralCapture />
           <BlockedAccountModal />
           <ScrollToTopButton />
