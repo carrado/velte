@@ -41,7 +41,6 @@ export function CreditsDonut({
   balance,
   used,
   isGuest,
-  signupCredits,
 }: {
   /** Credits remaining. Null while it is still being read. */
   balance: number | null;
@@ -49,8 +48,6 @@ export function CreditsDonut({
    *  allowance, since the browser only stores what is left. */
   used: number;
   isGuest: boolean;
-  /** What signing in would add, for the guest's one-line pitch. */
-  signupCredits: number;
 }) {
   const known = balance !== null;
   const remaining = known ? Math.max(balance, 0) : 0;
@@ -119,22 +116,26 @@ export function CreditsDonut({
       </div>
 
       {/* The split in words. The ring is a glance; this is the fact — so
-          nothing here is carried by colour alone. */}
+          nothing here is carried by colour alone.
+          //
+          // A GUEST at zero is told to sign in, never to "top up" — the pack
+          // grid is signed-in only (see CreditsPanel), so a guest has no top-up
+          // to reach for yet. No separate bonus line underneath any more
+          // (2026-09-06): signing in no longer grants anything on its own —
+          // see credits.ts's own note on dropping SIGNUP_CREDITS — so there is
+          // no number left to pitch here that CreditsPanel's own sign-in
+          // section below doesn't already say better. */}
       <p className="mt-4 text-sm text-gray-600">
         {!known
           ? "Checking…"
           : total === 0
             ? "No credits yet"
             : remaining === 0
-              ? `All ${total} used — top up to keep going`
+              ? isGuest
+                ? `All ${total} used — sign in to keep going`
+                : `All ${total} used — top up to keep going`
               : `${spent} used · ${remaining} left`}
       </p>
-
-      {isGuest && (
-        <p className="mt-2 text-sm font-semibold text-orange-600">
-          Create a free account and get {signupCredits} credits.
-        </p>
-      )}
     </div>
   );
 }

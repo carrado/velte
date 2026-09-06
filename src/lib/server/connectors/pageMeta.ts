@@ -47,6 +47,24 @@
 //   - JSON-LD (Jumia/Konga only, absent on Jiji) sits at byte 110k-147k,
 //             past this file's cap, and carries only marketing copy. Not
 //             worth a 300kb read, so it is deliberately NOT parsed.
+//
+// Widened again 2026-09-04 — ATTRIBUTES, not just photos and a blurb.
+// Checked live: a Jiji listing's og:description is often as thin as
+// "Samsung A15, 6 gb 128 gb available for sale", which tells a comparison
+// call almost nothing. But the SAME page server-renders a real spec table
+// as plain HTML — `<div class="b-advert-attribute__value">…</div><div
+// class="b-advert-attribute__key">…</div>` pairs, value before key — sitting
+// at byte ~23k, well inside the existing 100kb cap. Ten real pairs came back
+// off one ordinary listing: Condition, Physical Condition (the seller's own
+// damage claim — "No cracks", same one this file already knows to distrust
+// against the photos), Internal Storage, Ram, Card Slot, Rear/Front Camera,
+// Display Type, Operating System, Color. This is the actual difference
+// between "6GB RAM, 128GB, Used" and a comparison call guessing from a
+// title. Jiji-only for now (2026-09-04) — Konga's equivalent page renders
+// its results client-side, so getting its own attribute table needs a
+// separately verified extractor, same discipline every other per-merchant
+// rule here follows; it does not fall back to a wrong guess in the
+// meantime, it simply has none.
 
 // Deliberately tight. This runs after the buyer has already been told Velte
 // had nothing, on top of a search that has already spent its time — a
@@ -104,6 +122,10 @@ export interface PageMeta {
   galleryUrls: string[];
   description: string | null;
   priceText: string | null;
+  /** See ExternalOffer.attributes — real spec pairs the page itself
+   *  published, not marketing copy. Empty for a merchant with no
+   *  extractor written for it. */
+  attributes: { name: string; value: string }[];
 }
 
 function metaContent(html: string, keys: string[]): string | null {
@@ -262,6 +284,46 @@ function pickJijiVariant(variants: { url: string; token: string }[]): string {
     .sort((a, b) => a.width - b.width)[0];
   if (big) return big.url;
   return sized.sort((a, b) => b.width - a.width)[0].url;
+}
+
+// Jiji's server-rendered spec table. VALUE comes before KEY in the DOM —
+// verified against a live page, never assumed from the class names alone.
+// The `<!--[-->…<!--]-->`/`<!---->` around the value are Vue's own hydration
+// comment markers (this is a Nuxt page whose client-side store happens to
+// be empty, but the server-rendered markup itself is real); stripped here
+// rather than left in, since they carry no content of their own.
+const JIJI_ATTRIBUTE =
+  /<div class="b-advert-attribute__value"[^>]*>(?:<!--\[-->)?([^<]*)(?:<!--\]-->)?<!---->\s*<\/div><div class="b-advert-attribute__key">([^<]*)<\/div>/g;
+
+// A hard ceiling on how many spec pairs leave here for one listing — plenty
+// for a comparison call (ten came back off an ordinary phone listing) and
+// small enough that a listing with an unusually long table can't crowd out
+// everything else in the prompt.
+const MAX_ATTRIBUTES = 12;
+
+function extractAttributes(
+  html: string,
+  pageUrl: string,
+): { name: string; value: string }[] {
+  let host = "";
+  try {
+    host = new URL(pageUrl).hostname;
+  } catch {
+    return [];
+  }
+  // Jiji-only for now — see this file's own top comment on why a merchant
+  // with no extractor here simply publishes none, rather than a guess.
+  if (!host.includes("jiji.ng")) return [];
+
+  const out: { name: string; value: string }[] = [];
+  for (const m of html.matchAll(JIJI_ATTRIBUTE)) {
+    const value = plainText(m[1]);
+    const name = plainText(m[2]);
+    if (!name || !value) continue;
+    out.push({ name, value });
+    if (out.length >= MAX_ATTRIBUTES) break;
+  }
+  return out;
 }
 
 /** Every distinct photo on the page, in document order — one canonical URL
@@ -441,7 +503,14 @@ export async function fetchPageMeta(
             : null;
 
           const priceText = priceFromMeta(html);
-          if (!primary && !galleryUrls.length && !description && !priceText) {
+          const attributes = extractAttributes(html, url);
+          if (
+            !primary &&
+            !galleryUrls.length &&
+            !description &&
+            !priceText &&
+            !attributes.length
+          ) {
             continue;
           }
           out.set(url, {
@@ -449,6 +518,7 @@ export async function fetchPageMeta(
             galleryUrls,
             description,
             priceText,
+            attributes,
           });
         } catch {
           // Timeout, DNS, bot wall, malformed HTML — all the same thing

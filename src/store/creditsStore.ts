@@ -42,6 +42,25 @@ interface CreditsStore {
   loadGuest: () => void;
   /** Reads the signed-in balance. Concurrent callers share one request. */
   load: () => Promise<void>;
+  /** Applies a charge the caller already KNOWS just happened, before `load`
+   *  gets a chance to reconcile against the server. Exists because the
+   *  server's own chargeCredits calls are all deliberately fire-and-forget
+   *  (never awaited into a response, so a slow ledger write can't delay or
+   *  break the thing that earned the charge) — which means a `load()`
+   *  fired the instant a request resolves can land at the server BEFORE
+   *  that write completes, and read the pre-charge balance right back. A
+   *  caller that already knows the exact cost (every spend site does — it
+   *  comes straight out of credits.ts) applies it here first, so the meter
+   *  moves the instant the action succeeds instead of sitting stale until
+   *  some unrelated later action happens to trigger another `load()`.
+   *  No-ops until the first real balance is known (`balance` still null) —
+   *  there's nothing honest to subtract from an unread number, and the
+   *  first `load()` will set the real one shortly anyway. */
+  spend: (cost: number) => void;
+  /** When `spend` last ran (`Date.now()`, or null before the first one) —
+   *  see `load`'s own comment on why this exists. Internal bookkeeping,
+   *  not meant to be read by a component. */
+  lastSpendAt: number | null;
   topUp: (packId: string, source?: TopUpSource) => void;
 }
 
@@ -50,12 +69,33 @@ interface CreditsStore {
  *  turns "every meter fetches" into "the first meter fetches". */
 let inFlight: Promise<void> | null = null;
 
+// How long a `load()` result is treated as SUSPECT if it would raise the
+// balance right after a `spend()` (2026-09-05, found live: the donut ring
+// and the mobile bar were visibly not updating — not because nothing ever
+// called `spend()`, but because the `load()` fired right after it kept
+// winning the race and silently overwriting the correct number).
+//
+// `chargeCredits` on the server is fire-and-forget by design (see this
+// file's own top comment), so the write it starts can still be in flight
+// when a `load()` a moment later asks the ledger for the truth — and
+// `load()`'s own `inFlight` dedup makes this WORSE, not just possible: a
+// `load()` triggered by an unrelated mount that started BEFORE the spend
+// can be handed back as-is, guaranteeing a stale read.
+//
+// Four seconds — the same order of magnitude as this feature's other
+// cross-service timeouts (see lib/server/guestNetworkGate.ts) — is
+// generous for what is normally a single indexed database write landing
+// in well under a second; it exists to cover the slow tail, not the
+// common case.
+const RECONCILE_GRACE_MS = 4000;
+
 export const useCreditsStore = create<CreditsStore>()((set, get) => ({
   balance: null,
   used: 0,
   walletBalanceKobo: null,
   busyPack: null,
   topUpError: null,
+  lastSpendAt: null,
 
   loadGuest: () => {
     const left = guestCredits();
@@ -82,11 +122,32 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
           walletBalanceKobo?: number | null;
         };
         const next: Partial<CreditsStore> = {};
-        if (typeof data.balance === "number") next.balance = data.balance;
-        if (typeof data.totalSpent === "number") next.used = data.totalSpent;
+        const { balance: currentBalance, lastSpendAt } = get();
+        // SUSPECT: this response would raise the balance back up, and a
+        // spend applied it downward too recently for that to be a genuine
+        // top-up landing — almost certainly the fire-and-forget charge this
+        // read raced against and lost. Keep the optimistic value instead of
+        // overwriting it with what is, for the next few seconds, very
+        // likely stale information; a LOWER balance is never suspect (that
+        // can only mean we under-charged, which is exactly what this
+        // reconciliation exists to self-correct).
+        const suspect =
+          typeof data.balance === "number" &&
+          currentBalance != null &&
+          data.balance > currentBalance &&
+          lastSpendAt != null &&
+          Date.now() - lastSpendAt < RECONCILE_GRACE_MS;
+        if (!suspect) {
+          if (typeof data.balance === "number") next.balance = data.balance;
+          if (typeof data.totalSpent === "number") {
+            next.used = data.totalSpent;
+          }
+        }
         // Only a vendor's response carries a wallet. Assigning it
         // unconditionally would be wrong on a buyer's, where its absence is
-        // the answer.
+        // the answer. Applied regardless of `suspect` — a vendor's wallet is
+        // a separate balance `spend()` never touches, so it is never what a
+        // spend-vs-load race is actually about.
         next.walletBalanceKobo =
           typeof data.walletBalanceKobo === "number"
             ? data.walletBalanceKobo
@@ -101,6 +162,19 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
       }
     })();
     return inFlight;
+  },
+
+  spend: (cost) => {
+    const { balance, used } = get();
+    if (balance == null) return;
+    set({
+      balance: Math.max(balance - cost, 0),
+      used: used + cost,
+      // Stamped so the next `load()` knows to distrust a response that
+      // would raise this back up within the grace window — see that
+      // action's own comment.
+      lastSpendAt: Date.now(),
+    });
   },
 
   topUp: (packId, source = "card") => {

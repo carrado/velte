@@ -1,6 +1,8 @@
 import { serperConnector } from "@/lib/server/connectors/serper";
 import type { ExternalConnector } from "@/lib/server/connectors/types";
 import type { ExternalOffer } from "@/types/search";
+import { isVagueReference } from "@/lib/productTerm";
+import { parseOfferPrice } from "@/lib/priceText";
 
 export type { ExternalConnector } from "@/lib/server/connectors/types";
 
@@ -55,16 +57,49 @@ export async function fetchExternalOffers(params: {
   query: string;
   country?: string;
   limit?: number;
+  // The buyer's stated ceiling, in plain naira (2026-09-05) — when set, a
+  // budget applies to OFF-PLATFORM results exactly as hard as it already
+  // applies to Velte's own catalogue (see searchProductsTool.ts's own
+  // maxBudgetNaira comment: "a real, code-enforced price filter... never
+  // just prose riding along in the query text"). Without this, a dead end
+  // could hand a buyer who said "under ₦400k" a Google Shopping result
+  // priced at ₦900k with nothing marking it as out of range — the exact
+  // "the model translates, the data decides" rule this whole product runs
+  // on, just for a price ceiling instead of a vendor claim. Only ever
+  // drops a PARSEABLE price that's actually over budget — see
+  // parseOfferPrice's own strictness note on why a range or an unreadable
+  // price is kept rather than guessed at: an offer this can't judge is not
+  // the same as one it knows is over.
+  maxBudgetNaira?: number;
 }): Promise<ExternalOffer[]> {
   const enabled = CONNECTORS.filter((c) => c.isEnabled());
-  if (!enabled.length || !params.query.trim()) return [];
+  // See isVagueReference's own comment — "all of them"/"the best" carry no
+  // real product signal, and asking Google Shopping/Search for one anyway
+  // returns whatever ranks well generically for that vague text, not
+  // anything related to what the buyer actually meant.
+  if (
+    !enabled.length ||
+    !params.query.trim() ||
+    isVagueReference(params.query)
+  ) {
+    return [];
+  }
+
+  const limit = params.limit ?? MAX_OFFERS;
+  // Over-fetch when there's a budget to filter by. Each connector's own
+  // `limit` has no notion of price, so asking for exactly `limit` results
+  // and THEN dropping the over-budget ones among them can leave fewer than
+  // `limit` shown even when the underlying market genuinely has enough
+  // that fit — this gives the filter below real headroom to still fill the
+  // list instead of quietly returning a thinner one.
+  const fetchLimit = params.maxBudgetNaira != null ? limit * 2 : limit;
 
   const settled = await Promise.allSettled(
     enabled.map((c) =>
       c.search({
         query: params.query,
         country: params.country,
-        limit: params.limit ?? MAX_OFFERS,
+        limit: fetchLimit,
       }),
     ),
   );
@@ -81,10 +116,46 @@ export async function fetchExternalOffers(params: {
     for (const offer of result.value) {
       const key = titleKey(offer.title);
       if (!key || seen.has(key)) continue;
+      // The one hard filter this orchestrator applies itself, same spirit
+      // as verifyOfferMatches' kind-of-item gate downstream in route.ts: a
+      // buyer who named a ceiling is not shown something priced above it,
+      // whatever else about the listing fits. Checked BEFORE `seen.add` so
+      // an over-budget duplicate never blocks a later, cheaper listing of
+      // the same title from a different source.
+      if (params.maxBudgetNaira != null) {
+        const price = parseOfferPrice(offer.priceText);
+        if (price != null && price > params.maxBudgetNaira) continue;
+      }
       seen.add(key);
       merged.push(offer);
-      if (merged.length >= (params.limit ?? MAX_OFFERS)) return merged;
+      // Only short-circuit early when there's no budget to weigh. With one,
+      // the confirmed-price-first sort below needs to see every candidate
+      // that passed the filter above, not just the first `limit` of them in
+      // encounter order — otherwise a run of price-less listings could fill
+      // every slot before a verified-affordable one further down the
+      // connector's results was ever compared against them.
+      if (params.maxBudgetNaira == null && merged.length >= limit) {
+        return merged;
+      }
     }
   }
-  return merged;
+
+  if (params.maxBudgetNaira == null) return merged.slice(0, limit);
+
+  // A CONFIRMED in-budget price outranks a listing this can't verify at
+  // all (no price shown, or a range parseOfferPrice won't guess at) — found
+  // live: a buyer who gave a ₦400k budget got back two listings with no
+  // price on either one, shown with exactly the same confidence a verified
+  // match would have had. Everything in `merged` already cleared the budget
+  // filter above (nothing over budget survives it), so this is purely a
+  // presentation order, never a second filter — an unpriced listing is
+  // still shown, just after anything that could actually be confirmed.
+  const withPrice: ExternalOffer[] = [];
+  const withoutPrice: ExternalOffer[] = [];
+  for (const offer of merged) {
+    (parseOfferPrice(offer.priceText) != null ? withPrice : withoutPrice).push(
+      offer,
+    );
+  }
+  return [...withPrice, ...withoutPrice].slice(0, limit);
 }

@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
+import { isVagueReference } from "@/lib/productTerm";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
 import { allowsNearbyBusinesses } from "@/lib/server/ai/sectorClarifiers";
 import {
@@ -114,6 +115,21 @@ export async function searchStoresCore(
     };
   }
   const coords = resolved.kind === "coords" ? resolved.coords : undefined;
+
+  // See productTerm.ts's isVagueReference — "all of them", "the best" name
+  // no real kind of business to search for. Same treatment searchProducts-
+  // Core gives it: a clean, honest zero-result search rather than a real
+  // lookup (and the external Places/Serper fallback it could otherwise
+  // trigger) on a term with nothing in it to match against.
+  if (isVagueReference(businessType)) {
+    return {
+      results: [],
+      furtherResults: [],
+      matchTier: null,
+      matchQuality: undefined,
+      externalSuggestions: [],
+    };
+  }
 
   const includeNearbyBusinesses = allowsNearbyBusinesses(
     businessType,

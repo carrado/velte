@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 
 import { CheckIcon, CopyIcon } from "@/components/icons";
-import { REFERRAL_CREDITS, SIGNUP_CREDITS } from "@/lib/credits";
+import { REFERRAL_CREDITS } from "@/lib/credits";
 
 // The buyer's own referral link (2026-08-31).
 //
@@ -67,10 +67,6 @@ export function ReferralCard({ code }: { code: string | null }) {
       <h2 className="text-sm font-semibold text-[#023337]">
         Get {REFERRAL_CREDITS} credits for every friend
       </h2>
-      <p className="mt-1.5 text-sm leading-relaxed text-gray-600">
-        They get {SIGNUP_CREDITS} free credits when they join, and you get{" "}
-        {REFERRAL_CREDITS}.
-      </p>
       <div className="mt-3 flex items-stretch gap-2">
         {/* Readable and selectable rather than a bare button: someone typing
             the code into a message by hand has to be able to see it. */}

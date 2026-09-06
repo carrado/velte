@@ -22,8 +22,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 //   2. NEVER BLOCK. No I/O, no awaits. Records accumulate in memory for
 //      the life of one request and are emitted as one console line.
 //
-// Attribution without threading: callLLM is called from 14 places across
-// route.ts, verifyMatches, recommendResults and generateItemClarifiers.
+// Attribution without threading: callLLM is called from many places across
+// route.ts, verifyMatches, recommendResults, and other dedicated helpers.
 // Passing a context object through all of them would be invasive and easy
 // to forget at a new call site, so this uses AsyncLocalStorage — the route
 // opens a turn once, and every LLM call underneath it lands in that turn

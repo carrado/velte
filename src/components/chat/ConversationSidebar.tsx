@@ -2,24 +2,27 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname, useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 
 import { buyerApi } from "@/lib/buyer-api-client";
 import { useBuyerStore } from "@/store/buyerStore";
-import { useIsStandalone } from "@/hooks/useIsStandalone";
-import { logoutBuyer } from "@/services/buyerAuth";
-import { SEARCH_CONVERSATION_ID_STORAGE_KEY } from "@/lib/searchConversation";
+import { useAccountSignOut } from "@/hooks/useAccountSignOut";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
+import { fetchNotifications } from "@/services/notifications";
+import { Avatar } from "@/components/Avatar";
 import {
   BellIcon,
   ClipboardListIcon,
   CloseIcon,
+  LogOutIcon,
   MenuIcon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
   MessageSquareIllustration,
+  ShoppingCartIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { SearchConversationList } from "@/types/search";
@@ -39,16 +42,11 @@ import type { Buyer } from "@/types/buyer";
 // collapsed flags are separate.
 //
 // TWO sections once signed in (2026-08-30): the app's own surfaces (Your
-// requests, Watching, Upgrade) above a divider, the conversation list below
-// it.
+// requests, Upgrade) above a divider, the conversation list below it.
 // Signed OUT there is deliberately no division — the menu section would be
 // empty of anything an anonymous visitor can act on, and the column's whole
 // body is already the sign-in prompt, so a divider there would separate a
 // heading from nothing.
-//
-// Those menu rows are a MOVE, not a copy: ChatHeader drops its own Watching
-// link and Upgrade pill for exactly the visitors who see them here (see its
-// `menuInSidebar`), so the same action never sits in two places at once.
 //
 // Rows are titles and timestamps only — the list endpoint deliberately
 // never returns turns (see the backend's listConversations). Opening a row
@@ -58,6 +56,11 @@ import type { Buyer } from "@/types/buyer";
 const SIDEBAR_WIDTH = 280;
 
 // Shared by every menu row.
+//
+// py-2, unchanged since the icons here went from 16px to 19px (2026-09-05) —
+// a menu row this size already had headroom, and enlarging the icons made
+// them the thing a thumb actually aims for instead of an afterthought beside
+// the label.
 const MENU_ROW_CLASS =
   "flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-200/50 hover:text-[#023337]";
 
@@ -67,12 +70,17 @@ function MenuLink({
   label,
   active,
   onNavigate,
+  // Unread count, for the rows that have one (2026-09-05). Rendered only
+  // when > 0: a "0" badge is a permanent piece of furniture that trains the
+  // eye to stop seeing the badge at all, which costs the one that matters.
+  badge,
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
   active: boolean;
   onNavigate: () => void;
+  badge?: number;
 }) {
   return (
     <Link
@@ -86,6 +94,16 @@ function MenuLink({
     >
       {icon}
       <span>{label}</span>
+      {badge != null && badge > 0 && (
+        <span
+          // The count is also announced, not just shown — a bare number
+          // beside a label says nothing on its own to a screen reader.
+          aria-label={`${badge} unread`}
+          className="ml-auto min-w-[20px] rounded-full bg-orange-500 px-1.5 py-0.5 text-center text-[11px] font-bold leading-4 text-white"
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -113,6 +131,34 @@ export function ConversationSidebar() {
   const setCollapsed = useChatHistoryStore((s) => s.setCollapsed);
   const requestConversation = useChatHistoryStore((s) => s.requestConversation);
   const requestNewChat = useChatHistoryStore((s) => s.requestNewChat);
+  const router = useRouter();
+
+  // Opening a chat has to GET YOU TO THE CHAT (2026-09-05).
+  //
+  // Both actions below only set store state, and the thing that acts on it —
+  // SearchHome — lives on the /chat PAGE, while this sidebar lives in the
+  // chat LAYOUT (see chatHistoryStore's own note on why they are on opposite
+  // sides of the tree). On /chat that works. On /chat/notifications or
+  // /chat/requests, SearchHome is not mounted at all, so the request was set
+  // and nothing ever consumed it: the row highlighted, the drawer closed,
+  // and the buyer stayed exactly where they were.
+  //
+  // The store request is still set FIRST and the navigation second — the
+  // request must already be in place by the time SearchHome mounts and its
+  // effects read it, and the store survives a client-side navigation.
+  const goToChat = () => {
+    if (pathname !== "/chat") router.push("/chat");
+  };
+
+  const openConversation = (conversationId: string) => {
+    requestConversation(conversationId);
+    goToChat();
+  };
+
+  const startNewChat = () => {
+    requestNewChat();
+    goToChat();
+  };
   const buyer = useBuyerStore((s) => s.buyer);
   const pathname = usePathname();
 
@@ -132,6 +178,29 @@ export function ConversationSidebar() {
     enabled: Boolean(buyer),
     staleTime: 30_000,
   });
+
+  // The unread badge on the Notifications row (2026-09-05).
+  //
+  // Its own query rather than a field on the conversations one above: the two
+  // answer different questions, change on different schedules, and a
+  // notification arriving should not invalidate a conversation list.
+  //
+  // `refetchInterval` because a notification (a vendor accepting a buyer
+  // request, say) fires from a SWEEP, not from anything this browser did —
+  // nothing in the page would otherwise know one had appeared until the
+  // next full reload. A minute is slow enough to be free and quick enough
+  // that the badge isn't stale by the time someone looks at the menu.
+  //
+  // Shares the ["notifications"] key with the page itself, so opening it and
+  // marking things read updates this badge with no extra request.
+  const { data: notificationData } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: fetchNotifications,
+    enabled: Boolean(buyer),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const unreadCount = notificationData?.unreadCount ?? 0;
 
   // Escape closes the MOBILE slide-over only. On desktop the sidebar is
   // part of the page, not an overlay — Escape collapsing it would be a
@@ -208,17 +277,28 @@ export function ConversationSidebar() {
             <>
               <nav className="px-3 pb-3 shrink-0 space-y-0.5">
                 <MenuLink
+                  href="/chat/notifications"
+                  icon={<BellIcon size={19} className="shrink-0" />}
+                  label="Notifications"
+                  active={pathname === "/chat/notifications"}
+                  onNavigate={closeOnMobile}
+                  badge={unreadCount}
+                />
+                <MenuLink
                   href="/chat/requests"
-                  icon={<ClipboardListIcon size={16} className="shrink-0" />}
+                  icon={<ClipboardListIcon size={19} className="shrink-0" />}
                   label="Your requests"
                   active={pathname === "/chat/requests"}
                   onNavigate={closeOnMobile}
                 />
                 <MenuLink
-                  href="/chat/watches"
-                  icon={<BellIcon size={16} className="shrink-0" />}
-                  label="Watching"
-                  active={pathname === "/chat/watches"}
+                  href="/chat/plans"
+                  icon={<ShoppingCartIcon size={19} className="shrink-0" />}
+                  label="Your plans"
+                  active={
+                    pathname === "/chat/plans" ||
+                    pathname.startsWith("/chat/plans/")
+                  }
                   onNavigate={closeOnMobile}
                 />
                 {/* The credit meter used to sit here as a third row. It went
@@ -243,10 +323,10 @@ export function ConversationSidebar() {
           <div className="px-3 pb-2 shrink-0">
             <button
               type="button"
-              onClick={requestNewChat}
+              onClick={startNewChat}
               className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white border border-gray-200 hover:border-orange-200 hover:bg-orange-50/40 transition-colors cursor-pointer"
             >
-              <MessageSquarePlusIcon size={16} className="text-orange-500" />
+              <MessageSquarePlusIcon size={19} className="text-orange-500" />
               <span className="text-sm font-medium text-[#023337]">
                 New chat
               </span>
@@ -308,7 +388,7 @@ export function ConversationSidebar() {
                   <li key={c.conversationId}>
                     <button
                       type="button"
-                      onClick={() => requestConversation(c.conversationId)}
+                      onClick={() => openConversation(c.conversationId)}
                       className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-gray-200/50 transition-colors cursor-pointer group"
                     >
                       <span className="flex items-start gap-2.5">
@@ -360,78 +440,54 @@ export function ConversationSidebar() {
 }
 
 function BuyerAccountFooter({ buyer }: { buyer: Buyer }) {
-  const clearBuyer = useBuyerStore((s) => s.clearBuyer);
-  const queryClient = useQueryClient();
-  const isStandalone = useIsStandalone();
-  const [busy, setBusy] = useState(false);
-
-  const signOut = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await logoutBuyer();
-    } catch {
-      // The cookie may or may not have been cleared upstream, but there is
-      // nothing useful to say and nothing to retry — everything below runs
-      // regardless so the buyer is signed out LOCALLY either way. Leaving
-      // them looking signed-in after they asked not to be is the one
-      // outcome worth avoiding.
-    }
-
-    clearBuyer();
-    // Their conversations and watches are account data — they must not sit
-    // in the cache for whoever uses this browser next.
-    queryClient.clear();
-
-    // THE IMPORTANT ONE, on a shared phone especially: /chat resumes from a
-    // conversation id in localStorage (see chat/layout.tsx's pre-paint
-    // check). Left behind, the next person to open Velte on this device
-    // silently reopens the previous buyer's thread — vendors, photos,
-    // prices and all.
-    try {
-      localStorage.removeItem(SEARCH_CONVERSATION_ID_STORAGE_KEY);
-    } catch {
-      /* blocked storage — nothing was stored to leak either */
-    }
-
-    // A full navigation, not a router push: SearchHome holds the whole
-    // thread in component state, and only a real document load is
-    // guaranteed to drop it. replace(), so the signed-in page isn't one
-    // back-press away (and can't be served from bfcache without hitting
-    // middleware) — same reasoning as the vendor logout in Header.tsx.
-    //
-    // /welcome inside the installed app, /chat in a browser: a buyer who
-    // signs out is still a buyer, and can keep searching as a guest.
-    window.location.replace(isStandalone ? "/welcome" : "/chat");
-  };
+  // Moved into a shared hook (2026-09-05) so the account menu in ChatHeader
+  // runs the SAME sign-out rather than a second copy of it. The cleanup this
+  // does — clearing the query cache and the stored conversation id — is a
+  // privacy fix on shared devices, and two copies of it is one to forget.
+  const { signOut, busy } = useAccountSignOut();
+  // A confirm step, not an immediate sign-out (2026-09-05, per explicit
+  // request) — the button sits at the bottom of a menu of otherwise
+  // harmless navigation rows, exactly where a mis-tap lands after scrolling.
+  // Signing out mid-search costs the visible thread (SearchHome holds it in
+  // component state; useAccountSignOut does a full navigation to drop it),
+  // so a stray tap here is more expensive than most confirm dialogs guard
+  // against.
+  const [confirming, setConfirming] = useState(false);
 
   return (
     <div className="shrink-0 border-t border-gray-200/70 px-3 py-3">
       <div className="flex items-center gap-2.5 px-1">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-orange-500 text-xs font-bold text-white">
-          {buyer.avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={buyer.avatar}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            (buyer.name ?? buyer.email ?? "?").trim().charAt(0).toUpperCase()
-          )}
-        </span>
+        <Avatar
+          src={buyer.avatar}
+          label={(buyer.name ?? buyer.email ?? "?")
+            .trim()
+            .charAt(0)
+            .toUpperCase()}
+          className="h-7 w-7"
+        />
         <span className="min-w-0 flex-1 truncate text-sm text-[#023337]">
           {buyer.name ?? buyer.email}
         </span>
       </div>
       <button
         type="button"
-        onClick={signOut}
-        disabled={busy}
-        className="mt-2 w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-500 transition-colors hover:bg-gray-200/50 hover:text-gray-700 disabled:opacity-60 cursor-pointer"
+        onClick={() => setConfirming(true)}
+        className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-500 transition-colors hover:bg-gray-200/50 hover:text-gray-700 cursor-pointer"
       >
-        {busy ? "Signing out…" : "Sign out"}
+        <LogOutIcon size={19} className="shrink-0 text-gray-400" />
+        {/* "Log out", not "Sign out" (2026-09-05, per explicit request) —
+            matches the label ChatHeader's own account menu already uses, so
+            the two places this action lives don't say two different things
+            for the same click. */}
+        <span>Log out</span>
       </button>
+      {confirming && (
+        <LogoutConfirmModal
+          busy={busy}
+          onClose={() => setConfirming(false)}
+          onConfirm={signOut}
+        />
+      )}
     </div>
   );
 }

@@ -594,13 +594,19 @@ export const serperConnector: ExternalConnector = {
           // Kept as the source's own string on purpose — see ExternalOffer.
           priceText: item.price?.trim() || null,
           imageUrl: item.imageUrl?.trim() || null,
-          // Both filled from the product page below — Google Shopping
-          // carries one thumbnail and no description at all.
+          // All three filled from the product page below — Google Shopping
+          // carries one thumbnail and no description or spec table at all.
           galleryUrls: [],
           description: null,
+          attributes: [],
           merchant: merchant.label,
           source: "serper",
           url,
+          // See ExternalOffer.isDirectLink — true only when `match` found a
+          // real organic product page for this exact listing; the `search`
+          // fallback lands on the shop's own results for the item's name,
+          // not the item itself, and the card has to say which one this is.
+          isDirectLink: Boolean(match),
         });
       }
 
@@ -619,9 +625,13 @@ export const serperConnector: ExternalConnector = {
           imageUrl: null,
           galleryUrls: [],
           description: null,
+          attributes: [],
           merchant: link.merchant.label,
           source: "serper",
           url: link.url,
+          // Always a real product page — this whole pass exists to surface
+          // organic direct links Google Shopping didn't already cover.
+          isDirectLink: true,
         });
       }
 
@@ -656,10 +666,12 @@ export const serperConnector: ExternalConnector = {
           if (!found) continue;
           offer.imageUrl = offer.imageUrl ?? found.imageUrl;
           offer.priceText = offer.priceText ?? found.priceText;
-          // Not `??` — these two never arrive from the connector, and an
-          // empty gallery is a real "found nothing", not a gap to preserve.
+          // Not `??` — none of these three ever arrive from the connector
+          // itself, and an empty one is a real "found nothing", not a gap
+          // to preserve.
           offer.galleryUrls = found.galleryUrls;
           offer.description = found.description;
+          offer.attributes = found.attributes;
         }
       }
       return clean;

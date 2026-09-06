@@ -7,15 +7,15 @@ import type { MyBuyerRequest } from "@/types/buyerRequest";
 
 // GET /api/buyer-requests/mine — the requests THIS buyer has sent out.
 //
-// Buyer session only, unlike /api/price-watch's dual-session helper: a
-// request is owned by the Buyer document that created it (`buyerId`), and a
-// vendor cookie identifies a different collection entirely. A vendor's own
-// view of the requests they were matched to is a different page with a
-// different shape — /api/vendor/buyer-requests.
+// Buyer session only: a request is owned by the Buyer document that
+// created it (`buyerId`), and a vendor cookie identifies a different
+// collection entirely. A vendor's own view of the requests they were
+// matched to is a different page with a different shape —
+// /api/vendor/buyer-requests.
 //
 // An anonymous caller gets an empty list rather than a 401. The page it
-// feeds renders its own sign-in prompt (same as WatchesPage), so a 401 here
-// would only turn a designed empty state into a red error toast.
+// feeds renders its own sign-in prompt, so a 401 here would only turn a
+// designed empty state into a red error toast.
 export async function GET() {
   const auth = await getOptionalBuyerAuth();
   if (!auth) return NextResponse.json({ requests: [] });

@@ -2,9 +2,9 @@ import type { BuyerRequestResponder } from "@/types/buyerRequest";
 
 // Comparing the quotes on a Buyer Request (2026-09-03).
 //
-// DETERMINISTIC. No model call, anywhere in this file — the same split
-// priceBand.ts and negotiationBrief.ts already run on, and for the same
-// reason: **the model translates, code decides everything checkable.** Which
+// DETERMINISTIC. No model call, anywhere in this file — same rule as the
+// rest of this codebase's arithmetic-over-real-data features:
+// **the model translates, code decides everything checkable.** Which
 // of three prices is lowest is not a judgement, and a recommendation a model
 // produced could not be explained to the buyer in terms they could check.
 //

@@ -3,7 +3,7 @@
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { CreditsDonut } from "@/components/credits/CreditsDonut";
 import { ReferralCard } from "@/components/credits/ReferralCard";
-import { SIGNUP_CREDITS, VENDOR_CATALOG_GRANTS } from "@/lib/credits";
+import { VENDOR_CATALOG_GRANTS } from "@/lib/credits";
 import { CREDIT_PACKS } from "@/lib/creditPacks";
 import { cn } from "@/lib/utils";
 
@@ -78,12 +78,7 @@ export function CreditsPanel({
       {/* The meter. One ring, one number — a buyer should never have to work
           out which of six allowances applies to what they are about to do,
           and now they can see how much of their own they have spent. */}
-      <CreditsDonut
-        balance={balance}
-        used={used}
-        isGuest={isGuest}
-        signupCredits={SIGNUP_CREDITS}
-      />
+      <CreditsDonut balance={balance} used={used} isGuest={isGuest} />
 
       {/* Directly under the balance, because that is the number someone is
           looking at when a way to top it up for free is worth offering. */}
@@ -133,16 +128,23 @@ export function CreditsPanel({
           // button: /api/credits/checkout 401s without a session, so a tap
           // opened nothing and said nothing. The step in front of paying is
           // having an account to put the credits on, so a guest is offered
-          // that instead — and it is the better ask anyway, because it is
-          // free and hands them three times what they are holding. */}
+          // that instead.
+          //
+          // No longer pitched as a credit BONUS (2026-09-06) — signing in
+          // used to hand a guest more credits on top of what they already
+          // had; now a guest already starts with the full, real-price
+          // allowance (see credits.ts's GUEST_CREDITS/SIGNUP_CREDITS note),
+          // so there is nothing extra to promise here. The honest pitch is
+          // what an account actually adds: it keeps what a guest can't —
+          // their history — and it's the only way to buy more once the free
+          // ten are gone. */}
       {isGuest ? (
         <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 text-center">
           <h2 className="text-sm font-semibold text-[#023337]">
-            Get {SIGNUP_CREDITS} free credits
+            Sign in to keep going
           </h2>
           <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-gray-600">
-            Sign in to claim them, keep your searches, and top up whenever you
-            need more.
+            Keep your search history, and top up whenever you need more.
           </p>
           <div className="mx-auto mt-4 flex max-w-xs justify-center">
             <GoogleSignInButton />
@@ -245,9 +247,8 @@ export function CreditsPanel({
             })}
           </div>
           <p className="mt-3 text-xs text-gray-500">
-            {isVendor
-              ? "Wallet payments come out of the balance you keep for leads, and never change your cost per lead. Card payments go through Paystack."
-              : "Paid with any Nigerian card through Paystack."}{" "}
+            {isVendor &&
+              "Wallet payments come out of the balance you keep for leads, and never change your cost per lead. Card payments go through Paystack. "}
             Credits never expire, and there is no recurring charge — nothing
             renews unless you buy again.
           </p>

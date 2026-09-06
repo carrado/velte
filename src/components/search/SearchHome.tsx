@@ -12,6 +12,11 @@ import { runSearchStream } from "@/lib/searchStream";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { CreditsBar } from "@/components/credits/CreditsBar";
 import { dedupeFinalEventStores } from "@/lib/searchTurnSnapshot";
+import {
+  clearRefusedSearch,
+  holdRefusedSearch,
+  takeRefusedSearch,
+} from "@/lib/pendingRefusedSearch";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
 import {
   getSearchDeviceId,
@@ -22,14 +27,18 @@ import {
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { lookupCopiedImage, hashBlob } from "@/lib/copiedImageRegistry";
 import { VendorResultCard } from "@/components/search/VendorResultCard";
-import { WatchOffer } from "@/components/search/WatchOffer";
-import { PriceBand } from "@/components/search/PriceBand";
-import { NegotiationBrief } from "@/components/search/NegotiationBrief";
 import { CreditsButton } from "@/components/credits/CreditsModal";
+import { CreditGateModal } from "@/components/credits/CreditGateModal";
+import AnchoredPopover from "@/components/AnchoredPopover";
 import {
   RecommendationPicks,
   pickBadgesFor,
 } from "@/components/search/RecommendationPicks";
+import { ComparisonTemplate } from "@/components/search/ComparisonTemplate";
+import {
+  ShoppingPlanDraftCard,
+  ShoppingPlanView,
+} from "@/components/search/ShoppingPlanTemplate";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { ExternalOfferCard } from "@/components/search/ExternalOfferCard";
@@ -45,9 +54,12 @@ import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import { buyerApi } from "@/lib/buyer-api-client";
-import { useQueryClient } from "@tanstack/react-query";
 import { useBuyerStore } from "@/store/buyerStore";
+import { useCreditsStore } from "@/store/creditsStore";
+import { isBillableTurn } from "@/lib/turnBillable";
+import { CREDIT_COST } from "@/lib/credits";
 import type { Buyer } from "@/types/buyer";
+import type { IconComponent } from "@/types/common";
 import {
   pickAvoiding,
   gettingLocationPhrase,
@@ -59,41 +71,42 @@ import {
   initiatingBackgroundItemPhrase,
   backgroundItemPendingPhrase,
   backgroundItemResolvedPhrase,
-  startingWatchPhrase,
-  checkingPlanPhrase,
-  savingWatchPhrase,
-  resumingAfterUpgradePhrase,
+  resumingAfterTopUpPhrase,
+  waitingForCreditsPhrase,
 } from "@/lib/server/ai/statusPhrases";
 import type {
+  AnyRecommendation,
   BackgroundSearchItem,
   BuyerLocation,
   BuyerRequestOffer,
   Clarification,
+  ComposerTool,
   IdentityCapture,
   MatchQuality,
   MatchTier,
   NearbyBusiness,
-  PriceBand as PriceBandData,
   SearchHistoryTurn,
   ExternalOffer,
   SearchItemOutcome,
-  SearchRecommendation,
+  ShoppingPlan,
+  ShoppingPlanDraft,
+  ShoppingPlanItem,
   StoreMatch,
   StoredConversation,
   StoredSearchTurn,
   StoreProductItem,
   VendorMatch,
-  WatchCandidate,
 } from "@/types/search";
+import { isComparisonTemplate } from "@/types/search";
 import {
   CompassIcon,
   MapPinIcon,
   PhoneIcon,
-  TagIcon,
   ShieldCheckIcon,
   UserIcon,
   WalletIcon,
-  BellIcon,
+  ScaleIcon,
+  ShoppingCartIcon,
 } from "@/components/icons";
 // Composer icons only (upload spinner, remove-photo, camera, send) are
 // lucide-react, not the custom set — reverted 2026-08-17 per explicit
@@ -101,6 +114,10 @@ import {
 // stays on @/components/icons. See [[custom_icon_system]]. Copy/Pencil
 // (the buyer-bubble copy/edit buttons) joined this same lucide exception
 // later, per explicit request, for visual consistency with each other.
+// Camera rejoined the exception 2026-09-06 for the rebuilt tool-menu's own
+// "Search by Photo" entry — ScaleIcon above is the other menu item, and
+// stays on the custom set since it's not part of the original
+// upload/spinner/send cluster this exception was scoped to.
 import {
   ArrowUp,
   Camera,
@@ -110,7 +127,6 @@ import {
   Square,
   X,
 } from "lucide-react";
-import AnchoredPopover from "@/components/AnchoredPopover";
 
 // `products` decides the noun: a pure service turn (e.g. "haircut near me")
 // shouldn't be headed "Products", and a turn can genuinely mix both kinds
@@ -134,6 +150,19 @@ const RECENT_STATUS_MEMORY = 8;
 // `max-w-md` stays, but purely as a reading-width cap for the longer
 // dead-end and offer messages — it's a measure, not a box.
 const AI_MESSAGE_CLASS = "max-w-md";
+
+// Stable reference for a per-turn Set lookup with no entry yet — avoids a
+// fresh empty Set (and the re-render it would cause downstream) on every
+// turn that never touched its draft checklist.
+const EMPTY_SET: Set<string> = new Set();
+
+/** Which item, on which turn, a "Replace" tap is currently re-searching —
+ *  Shopping Plan's own single in-flight edit, same lifted-to-SearchHome
+ *  shape expandedServicesVendorId already uses for a cross-turn UI state. */
+interface PlanReplaceTarget {
+  turnId: string;
+  itemId: string;
+}
 
 // Found live: the gate used to fire even when the buyer's OWN message
 // already named a place ("...in Lekki") — it only ever checked device
@@ -337,58 +366,6 @@ function extractBulletLines(text: string): string[] {
 // silent geolocation BEFORE appending anything at all, which left the
 // whole screen blank (not even the buyer's own typed message showing) for
 // up to several seconds on a slow/no GPS fix.
-// What Velte says once the watch flow lands. Pure, and module-level, so the
-// exact wording of a refusal is readable in one place rather than assembled
-// across a component.
-//
-// The two refusals are genuinely different situations and must not share a
-// sentence:
-//
-//   plan_required — their tier allows ZERO watches. The honest answer names
-//                   the feature and what unlocks it, and the CTA is an
-//                   upgrade. This is the one moment a plan pitch is welcome,
-//                   because they just asked for the thing it buys.
-//   limit_reached — they PAY for watches and have used them all. Pitching
-//                   them the feature they already bought would read as not
-//                   knowing who they are; the useful answer is that they can
-//                   free one up, or move up for more room.
-function watchReply(
-  saved: string[],
-  blocked: string[],
-  reason: "plan_required" | "limit_reached" | null,
-): string {
-  const list = (items: string[]) =>
-    items.length === 1
-      ? items[0]
-      : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-
-  if (saved.length && !blocked.length) {
-    return saved.length === 1
-      ? `Done — I'm watching ${list(saved)}. If the price drops, you'll get an email and a text.`
-      : `Done — I'm watching ${list(saved)}. If any of them drops, you'll get an email and a text.`;
-  }
-
-  if (saved.length && blocked.length) {
-    const tail =
-      reason === "limit_reached"
-        ? `That's your plan full, so I couldn't add ${list(blocked)} — free one up in Watching, or move up a plan for more room.`
-        : reason === "plan_required"
-          ? `I couldn't add ${list(blocked)} on your current plan.`
-          : `I couldn't add ${list(blocked)} — something went wrong on my side.`;
-    return `I've set up ${list(saved)} — you'll get an email and a text if the price drops. ${tail}`;
-  }
-
-  if (reason === "plan_required") {
-    return blocked.length === 1
-      ? `Price watching is part of Velte Plus — I'd need you on that before I can track ${list(blocked)} for you.`
-      : `Price watching is part of Velte Plus — I'd need you on that before I can track those for you.`;
-  }
-  if (reason === "limit_reached") {
-    return `You're already using all the watches your plan allows. Free one up in Watching and I'll add ${list(blocked)}, or move up a plan for more room.`;
-  }
-  return "I couldn't set that up just now — worth trying again in a moment.";
-}
-
 function createLoadingTurn(
   id: string,
   query: string,
@@ -428,10 +405,8 @@ function createLoadingTurn(
     buyerRequestMatchQuery: null,
     contextNote: null,
     recommendation: null,
-    priceBand: null,
-    watchOffer: [],
-    watchRequest: null,
-    watchResult: null,
+    shoppingPlanDraft: null,
+    shoppingPlan: null,
     externalOffers: [],
     error: null,
     quota: null,
@@ -454,10 +429,11 @@ function storedTurnToConversationTurn(
     status: "",
     error: null,
     quota: null,
-    // Client-only and deliberately not persisted (see the field's own note):
-    // a reopened conversation still reads what Velte said, it just doesn't
-    // re-render the upgrade button, which the header carries anyway.
-    watchResult: null,
+    // Client-only, never persisted server-side (see the field's own note) —
+    // a reopened conversation's plan-draft turn shows nothing to act on;
+    // the plan itself, once built, lives on /chat/plans instead.
+    shoppingPlanDraft: null,
+    shoppingPlan: null,
     persisted: true,
   };
 }
@@ -495,9 +471,6 @@ function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
     buyerRequestMatchQuery: turn.buyerRequestMatchQuery,
     contextNote: turn.contextNote,
     recommendation: turn.recommendation,
-    priceBand: turn.priceBand,
-    watchOffer: turn.watchOffer,
-    watchRequest: turn.watchRequest,
     externalOffers: turn.externalOffers,
   };
 }
@@ -877,31 +850,18 @@ interface ConversationTurn {
   // badge chips on the matching cards + the RecommendationPicks summary
   // above the carousel. Null on turns that didn't qualify (0–1 products)
   // or where the comparison call failed; rendering degrades to plain cards.
-  recommendation: SearchRecommendation | null;
-  // What this thing SHOULD cost, per market (2026-08-30) — the fair-price
-  // check. Null when the category isn't one a band is honest for, when there
-  // was nothing priced to compare, or when the account's allowance is spent.
-  // Never an error state: a missing band just means no block.
-  priceBand: PriceBandData | null;
-  // The products Velte offered to keep an eye on this turn (2026-08-29).
-  // Empty on most turns; see watchCandidates.ts for what qualifies.
-  watchOffer: WatchCandidate[];
-  // Non-null only on a turn where the buyer took up that offer — the
-  // selection the watch flow below acts on. See the flow in this file.
-  watchRequest: WatchCandidate[] | null;
-  // How the watch flow ENDED, for the parts of the answer that are more than
-  // prose: the upgrade CTA, and which products were actually saved.
-  //
-  // Client-only, deliberately not persisted. Every fact a returning buyer
-  // needs is already in the turn's reply text; what is lost on reopen is a
-  // button to /plans, which the header carries anyway. Persisting it would
-  // mean threading a field through five server-side finals that can never
-  // set it.
-  watchResult: {
-    saved: string[];
-    blocked: string[];
-    reason: "plan_required" | "limit_reached" | null;
-  } | null;
+  // A genuine Compare turn carries the richer ComparisonTemplate shape
+  // instead (see isComparisonTemplate) — rendered by the ComparisonTemplate
+  // component in place of RecommendationPicks.
+  recommendation: AnyRecommendation | null;
+  // Shopping Plan's own two states (2026-09-06). `shoppingPlanDraft` is the
+  // unconfirmed checklist from a "plan" tool turn — present only until the
+  // buyer confirms it, at which point `shoppingPlan` holds the real, built
+  // plan this turn produced. Both null on every ordinary turn. Client-only,
+  // like `error`/`quota` below — a reopened conversation finds the plan
+  // itself on /chat/plans, not replayed inline here.
+  shoppingPlanDraft: ShoppingPlanDraft | null;
+  shoppingPlan: ShoppingPlan | null;
   // Off-Velte offers, only ever present on a genuine dead end (Phase 4).
   // Rendered in their own clearly-labelled section with an outbound link
   // and NO chat CTA — there's no vendor relationship behind these.
@@ -917,8 +877,11 @@ interface ConversationTurn {
     message: string;
     isGuest: boolean;
     actorType: "guest" | "buyer" | "vendor";
-    // "unavailable" = never on this plan; "exhausted" = used up this month.
-    reason: "unavailable" | "exhausted";
+    // "unavailable" = never on this plan; "exhausted" = used up this month;
+    // "network_limited" (2026-09-05) = a shared address tripped the guest
+    // network backstop, not this browser's own balance — see
+    // lib/server/guestNetworkGate.ts.
+    reason: "unavailable" | "exhausted" | "network_limited";
   } | null;
   // True only when the buyer hit Stop mid-search (handleStop/onAbort) —
   // per explicit request, a stopped turn shows no wrap-up bubble of its
@@ -999,6 +962,12 @@ function ConversationTurnView({
   onSaveEdit,
   onCancelEdit,
   canEdit,
+  draftRemovedKeys,
+  buildingPlanTurnId,
+  replacingPlanItem,
+  onToggleDraftItem,
+  onConfirmPlan,
+  onReplacePlanItem,
 }: {
   turn: ConversationTurn;
   isLatest: boolean;
@@ -1029,6 +998,15 @@ function ConversationTurnView({
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   canEdit: boolean;
+  // Shopping Plan's own turn-scoped state, lifted to SearchHome for the
+  // same reason expandedServicesVendorId above is — see PlanReplaceTarget's
+  // own comment.
+  draftRemovedKeys: Map<string, Set<string>>;
+  buildingPlanTurnId: string | null;
+  replacingPlanItem: PlanReplaceTarget | null;
+  onToggleDraftItem: (turnId: string, category: string, label: string) => void;
+  onConfirmPlan: (turn: ConversationTurn) => void;
+  onReplacePlanItem: (turn: ConversationTurn, item: ShoppingPlanItem) => void;
 }) {
   // Scrolls the panel into view the moment it opens — a buyer who clicked
   // "View matching services" on a card scrolled into the middle of a
@@ -1255,9 +1233,43 @@ function ConversationTurnView({
               !turn.stopped &&
               !turn.quota && (
                 <div className="space-y-6">
-                  {turn.products.length > 0 ||
-                  turn.stores.length > 0 ||
-                  turn.vendorProducts.length > 0 ? (
+                  {turn.shoppingPlanDraft || turn.shoppingPlan ? (
+                    // Shopping Plan's own turn shape (2026-09-06) — never a
+                    // product/store carousel, so this takes priority over
+                    // the ordinary results/dead-end split below entirely.
+                    <>
+                      <FormattedReply text={turn.reply} />
+                      {turn.shoppingPlan ? (
+                        <ShoppingPlanView
+                          plan={turn.shoppingPlan}
+                          replacingItemId={
+                            replacingPlanItem?.turnId === turn.id
+                              ? replacingPlanItem.itemId
+                              : null
+                          }
+                          onReplaceItem={(item) =>
+                            onReplacePlanItem(turn, item)
+                          }
+                        />
+                      ) : (
+                        turn.shoppingPlanDraft && (
+                          <ShoppingPlanDraftCard
+                            draft={turn.shoppingPlanDraft}
+                            busy={buildingPlanTurnId === turn.id}
+                            removedKeys={
+                              draftRemovedKeys.get(turn.id) ?? EMPTY_SET
+                            }
+                            onToggleItem={(category, label) =>
+                              onToggleDraftItem(turn.id, category, label)
+                            }
+                            onConfirm={() => onConfirmPlan(turn)}
+                          />
+                        )
+                      )}
+                    </>
+                  ) : turn.products.length > 0 ||
+                    turn.stores.length > 0 ||
+                    turn.vendorProducts.length > 0 ? (
                     <>
                       <FormattedReply text={turn.reply} />
                       {turn.vendorProducts.length > 0 &&
@@ -1309,49 +1321,27 @@ function ConversationTurnView({
                               )}
                             </h2>
                           )}
-                          {/* The anchor, above everything else it frames:
-                              what this SHOULD cost before we argue about
-                              which one to buy. Unlike the watch offer it
-                              renders on every turn that has one, not just
-                              the latest — a band is a fact about that
-                              moment's market, and scrolling back to it is
-                              the point. */}
-                          {turn.priceBand && (
-                            <PriceBand band={turn.priceBand} />
-                          )}
-                          {/* The DO half of the band — what to open at, aim
-                              for and walk away from. Only on the LATEST
-                              turn, unlike the band itself: the band is a
-                              fact worth scrolling back to, but this is a
-                              call to action that SPENDS an allowance, and a
-                              CTA repeated down the whole thread is exactly
-                              the advert-in-the-conversation this surface
-                              avoids everywhere else. The last turn is still
-                              there when a reopened conversation is the
-                              buyer coming back to it before going out. */}
-                          {isLatest && turn.priceBand && (
-                            <NegotiationBrief band={turn.priceBand} />
-                          )}
                           {/* The WHY half of the recommendation layer — the
                             chips on the cards below say which, this says
                             why (see RecommendationPicks). Absent whenever
                             the turn has no recommendation, and the cards
-                            render exactly as they always did. */}
-                          {turn.recommendation && (
-                            <RecommendationPicks
-                              recommendation={turn.recommendation}
-                              products={turn.products}
-                            />
-                          )}
-                          {/* Sits with the picks, not the cards — it offers
-                              to watch exactly the products just argued for,
-                              and reads as the same thought continuing. Only
-                              on the LATEST turn: an offer further up the
-                              thread is one the buyer has already moved past,
-                              and the composer can only act on one. */}
-                          {isLatest && turn.watchOffer.length > 0 && (
-                            <WatchOffer candidates={turn.watchOffer} />
-                          )}
+                            render exactly as they always did. A genuine
+                            Compare turn (explicit or auto-detected — see
+                            classifyScopeTool) carries the richer
+                            ComparisonTemplate shape instead, rendered by its
+                            own component. */}
+                          {turn.recommendation &&
+                            (isComparisonTemplate(turn.recommendation) ? (
+                              <ComparisonTemplate
+                                comparison={turn.recommendation}
+                                products={turn.products}
+                              />
+                            ) : (
+                              <RecommendationPicks
+                                recommendation={turn.recommendation}
+                                products={turn.products}
+                              />
+                            ))}
                           <CardCarousel
                             items={turn.products}
                             getKey={(match) => match.productId}
@@ -1382,7 +1372,10 @@ function ConversationTurnView({
                         </div>
                       )}
                       {turn.stores.length > 0 && (
-                        <div className="space-y-3">
+                        // data-results-group so the comparison block's own
+                        // scroll-to-card lookup resolves against THIS turn's
+                        // store carousel (see scrollToCard).
+                        <div className="space-y-3" data-results-group>
                           {(turn.products.length > 0 ||
                             (turn.storesMatchTier &&
                               turn.storesMatchTier !== "local") ||
@@ -1394,6 +1387,21 @@ function ConversationTurnView({
                               )}
                             </h2>
                           )}
+                          {/* Service providers get the SAME comparison
+                            engine products do, on a compare turn (2026-09-05)
+                            — "compare wedding photographers in PH" is a
+                            searchStores turn, and used to get no comparison
+                            at all. Only ever the rich template here: the
+                            lighter picks layer has never run over stores,
+                            so a plain recommendation can't arrive on this
+                            branch. */}
+                          {turn.recommendation &&
+                            turn.products.length === 0 &&
+                            isComparisonTemplate(turn.recommendation) && (
+                              <ComparisonTemplate
+                                comparison={turn.recommendation}
+                              />
+                            )}
                           <CardCarousel
                             items={turn.stores}
                             getKey={(store) => store.storeId}
@@ -1519,28 +1527,6 @@ function ConversationTurnView({
                       <div className={AI_MESSAGE_CLASS}>
                         <FormattedReply text={turn.reply} />
                       </div>
-                      {/* The band belongs on THIS branch at least as much as
-                          on the Velte-results one above (2026-09-03). It used
-                          to render only where `products.length > 0`, so a
-                          turn that found nothing on Velte — the exact shape
-                          every "just tell me the price" question lands in,
-                          since a price question is asked about things Velte
-                          often doesn't stock — computed a band, CHARGED a
-                          credit for it in priceBandFor, and then threw it
-                          away unrendered. The buyer paid for a price answer
-                          and got a list of shopping links.
-
-                          Above the listings, not below: the band is what the
-                          cards are evidence FOR, and a buyer who reads the
-                          range first reads the links as prices rather than as
-                          somewhere to click. */}
-                      {turn.priceBand && <PriceBand band={turn.priceBand} />}
-                      {/* Latest turn only, same rule as the Velte branch —
-                          this one spends an allowance, so it must not sit as
-                          a live CTA all the way down the scrollback. */}
-                      {isLatest && turn.priceBand && (
-                        <NegotiationBrief band={turn.priceBand} />
-                      )}
                       {turn.externalStoreSuggestions.length > 0 && (
                         <CardCarousel
                           items={turn.externalStoreSuggestions}
@@ -1567,14 +1553,20 @@ function ConversationTurnView({
                             `recommendation` belongs to whichever is on
                             screen, and RecommendationPicks resolves its
                             ids against both lists. */}
-                          {turn.recommendation && (
-                            <RecommendationPicks
-                              recommendation={turn.recommendation}
-                              products={[]}
-                              offers={turn.externalOffers}
-                              valueLabel="Best price"
-                            />
-                          )}
+                          {turn.recommendation &&
+                            (isComparisonTemplate(turn.recommendation) ? (
+                              <ComparisonTemplate
+                                comparison={turn.recommendation}
+                                offers={turn.externalOffers}
+                              />
+                            ) : (
+                              <RecommendationPicks
+                                recommendation={turn.recommendation}
+                                products={[]}
+                                offers={turn.externalOffers}
+                                valueLabel="Best price"
+                              />
+                            ))}
                           <CardCarousel
                             items={turn.externalOffers}
                             getKey={(offer) => offer.id}
@@ -1705,15 +1697,6 @@ function ConversationTurnView({
                   renders the "created" confirmation card now — see that
                   component's own comment for why "no_match"/"error" have
                   nothing left to render here either. */}
-                  {/* The one control a watch refusal needs. Only on a
-                      PLAN refusal — "your allowance is full" is not an
-                      upgrade pitch, it's a different problem with a
-                      different fix (see watchReply). */}
-                  {turn.watchResult?.reason === "plan_required" && (
-                    <CreditsButton className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600">
-                      See what Velte Plus includes
-                    </CreditsButton>
-                  )}
                   {turn.buyerRequestOffer &&
                     turn.buyerRequestOffer.status !== "needs_identity" &&
                     turn.buyerRequestOffer.status !== "needs_signin" &&
@@ -1735,6 +1718,38 @@ function ConversationTurnView({
 const VELUX_GREETING = "Hi, I'm Velte — what are you looking for?";
 const VELUX_SUBTEXT =
   "Describe it in your own words or a photo — I'll match it against real vendor inventory nearby, ranked by meaning, distance and trust. Never guessed, never invented.";
+
+// The composer's "+" tool menu (2026-09-06, "plan" added same day) — a
+// small, fixed set (see ComposerTool's own comment in types/search.ts for
+// why it's these two and not the full 9-capability list) rendered both as
+// the dropdown's own options and as the badge attached to the textarea once
+// picked. Icon component, not a rendered element, so the same config drives
+// both places at whatever size each needs.
+const COMPOSER_TOOL_META: Record<
+  ComposerTool,
+  { label: string; icon: IconComponent; placeholder: string }
+> = {
+  compare: {
+    label: "Compare",
+    icon: ScaleIcon,
+    placeholder: "e.g. 'iPhone 15 vs Samsung S24'",
+  },
+  plan: {
+    label: "Shopping Plan",
+    icon: ShoppingCartIcon,
+    placeholder: "e.g. 'Moving into a new apartment, ₦2m, need the essentials'",
+  },
+};
+
+/** What picking a tool is about to cost, for the credit-gate check at
+ *  selection time. Shopping Plan has its own real price (CREDIT_COST.plan);
+ *  Compare has no price of its own — it rides on whatever the underlying
+ *  turn already is — so this checks against the cheapest possible one
+ *  (text) rather than a guess at whether a photo will follow. A buyer who
+ *  can't even afford that can't afford Compare either way. */
+function composerToolCost(tool: ComposerTool): number {
+  return tool === "plan" ? CREDIT_COST.plan : CREDIT_COST.text;
+}
 
 // Velte's buyer-facing search (build-order step d/e), at /chat —
 // `/` is now the marketing homepage. Structured as a conversation: each
@@ -1762,6 +1777,111 @@ export function SearchHome() {
   >(null);
   function toggleServices(vendorId: string) {
     setExpandedServicesVendorId((cur) => (cur === vendorId ? null : vendorId));
+  }
+
+  // Shopping Plan's own client state (2026-09-06) — three small pieces,
+  // same "lift the cross-turn bit to SearchHome" shape as
+  // expandedServicesVendorId above.
+  //
+  // `draftRemovedKeys` is per-TURN (a buyer can have more than one draft
+  // open across a long conversation, in principle), keyed by turn id ->
+  // the "category|label" keys they've unchecked before confirming.
+  const [draftRemovedKeys, setDraftRemovedKeys] = useState<
+    Map<string, Set<string>>
+  >(new Map());
+  function onToggleDraftItem(turnId: string, category: string, label: string) {
+    const key = `${category}|${label}`;
+    setDraftRemovedKeys((prev) => {
+      const next = new Map(prev);
+      const current = new Set(next.get(turnId) ?? EMPTY_SET);
+      if (current.has(key)) current.delete(key);
+      else current.add(key);
+      next.set(turnId, current);
+      return next;
+    });
+  }
+
+  const [buildingPlanTurnId, setBuildingPlanTurnId] = useState<string | null>(
+    null,
+  );
+  const [replacingPlanItem, setReplacingPlanItem] =
+    useState<PlanReplaceTarget | null>(null);
+
+  /** Confirms a draft (minus whatever the buyer unchecked) and builds the
+   *  real thing — POST /api/shopping-plan runs the full search/verify/pick
+   *  pipeline server-side (see pickPlanItem.ts) and persists the result.
+   *  Not streamed (see that route's own comment on why) — the composer
+   *  shows a plain busy state on the confirm button meanwhile. */
+  async function onConfirmPlan(turn: ConversationTurn) {
+    const draft = turn.shoppingPlanDraft;
+    if (!draft || buildingPlanTurnId) return;
+    const removed = draftRemovedKeys.get(turn.id) ?? EMPTY_SET;
+    const items = draft.items.filter(
+      (it) => !removed.has(`${it.category}|${it.label}`),
+    );
+    if (!items.length) return;
+
+    setBuildingPlanTurnId(turn.id);
+    try {
+      const res = await fetch("/api/shopping-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draft: { ...draft, items } }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(
+          body?.error ?? "Couldn't build your shopping plan just now.",
+        );
+        return;
+      }
+      updateTurn(turn.id, {
+        shoppingPlan: body.plan,
+        shoppingPlanDraft: null,
+      });
+      void useCreditsStore.getState().load();
+    } catch {
+      toast.error("Couldn't build your shopping plan just now.");
+    } finally {
+      setBuildingPlanTurnId(null);
+    }
+  }
+
+  /** "Replace this item" — re-runs the search/pick pipeline for ONE item,
+   *  excluding whatever is currently selected, and persists whatever comes
+   *  back (including a genuine no_match). */
+  async function onReplacePlanItem(
+    turn: ConversationTurn,
+    item: ShoppingPlanItem,
+  ) {
+    if (!turn.shoppingPlan || replacingPlanItem) return;
+    setReplacingPlanItem({ turnId: turn.id, itemId: item.id });
+    try {
+      const res = await fetch(
+        `/api/shopping-plan/${turn.shoppingPlan.id}/items/${item.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            label: item.label,
+            targetBudgetKobo: item.targetBudgetKobo,
+            excludeProductId: item.productId,
+            excludeExternalOfferId: item.externalOfferId,
+            location: turn.shoppingPlan.location,
+          }),
+        },
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(body?.error ?? "Couldn't replace that item.");
+        return;
+      }
+      updateTurn(turn.id, { shoppingPlan: body.plan });
+    } catch {
+      toast.error("Couldn't replace that item.");
+    } finally {
+      setReplacingPlanItem(null);
+    }
   }
 
   // Editing a past buyer message — ChatGPT-style: swaps that one bubble
@@ -1816,21 +1936,65 @@ export function SearchHome() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // The composer's tools menu (2026-09-03). Two items, because only two tools
-  // cannot be reached by typing: a photo (you cannot type an image) and the
-  // price check (which wants ONE item rather than a conversation). Everything
-  // else stays spoken or offered — see the tool-belt section of the design
-  // doc, and the rule that a tool with no spoken route is a bug.
+
+  // The composer's "+" tool menu (2026-09-06) — Compare is a real MODE the
+  // buyer explicitly steps into (see activeTool's own comment below);
+  // Search by Photo isn't one, it's a direct action that opens the same
+  // file picker fileInputRef already drives — clicking it never touches
+  // activeTool at all.
   const toolMenuBtnRef = useRef<HTMLButtonElement>(null);
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
-  // Price-check mode: the composer becomes a single field for one item.
+  // The badge attached to the textarea (see the composer's own render
+  // below) — set only by picking Compare from the tool menu, cleared on
+  // send (trySubmit) or by pressing Backspace with the textarea empty
+  // (handleComposerKeyDown). Threaded through SearchRequestBody.activeTool
+  // unchanged; route.ts's toolAlignment.ts enforces it server-side — this
+  // is a promise, not just decoration.
+  const [activeTool, setActiveTool] = useState<ComposerTool | null>(null);
+  // Set instead of activeTool (2026-09-06) when a tool pick's own cost is
+  // more than the current balance can cover — see CreditGateModal's own
+  // comment on why this is checked at SELECTION time rather than waiting
+  // for send to refuse it. A snapshot taken at the moment of the tap, not a
+  // live subscription — the modal is short-lived (signs in, tops up, or is
+  // dismissed), so re-rendering it against a balance that ticks while open
+  // isn't worth a new subscription in an already-large component.
   //
-  // It does NOT open a separate screen, and that is the constraint every
-  // other mode here already follows (clarifications, the name ask, phone,
-  // code, budget) — the composer changes what it accepts and changes back,
-  // so the answer lands in the same conversation the buyer was already in.
-  const [priceMode, setPriceMode] = useState(false);
-  const [priceValue, setPriceValue] = useState("");
+  // Keyed on a plain LABEL, not a ComposerTool — Search by Photo needs the
+  // exact same gate (found live: it has its own real cost and its own
+  // button, entirely separate from the two ComposerTool buttons below it,
+  // so checking only those left the camera icon free to open with an
+  // unaffordable balance) but isn't a ComposerTool itself, so there is no
+  // COMPOSER_TOOL_META entry to key off for it.
+  // `cost` deliberately isn't part of this state — CreditGateModal shows
+  // the balance for context but never the tool's own price (per-action
+  // pricing isn't shown to buyers anywhere else; see that component's own
+  // note). `cost` still exists as creditGateBlocks' own parameter below,
+  // since the CHECK itself obviously still needs the real number even
+  // though the modal never renders it.
+  const [creditGateTool, setCreditGateTool] = useState<{
+    label: string;
+    balance: number;
+    isGuest: boolean;
+  } | null>(null);
+
+  /** The one check every gated composer action shares: is the CURRENT
+   *  balance enough for `cost`? Opens the gate modal and returns true
+   *  (caller should stop) when it isn't; returns false (caller proceeds)
+   *  otherwise. `balance == null` (still loading) fails OPEN, same as every
+   *  other credit gate in this codebase — better to let a borderline
+   *  action through than block on a number that hasn't arrived yet. */
+  function creditGateBlocks(label: string, cost: number): boolean {
+    const balance = useCreditsStore.getState().balance;
+    if (balance == null || balance >= cost) return false;
+    setCreditGateTool({
+      label,
+      balance,
+      isGuest: !(
+        useBuyerStore.getState().buyer || useUserStore.getState().user
+      ),
+    });
+    return true;
+  }
 
   // Every /api/search call is otherwise stateless, so without this the
   // server's own within-turn status-repeat avoidance (see statusPhrases.ts's
@@ -1867,6 +2031,15 @@ export function SearchHome() {
   // not.
   const [rehydrating, setRehydrating] = useState(false);
 
+  // True once the rehydrate effect below has SETTLED, whichever way it went
+  // (nothing stored, a hero handoff, a fetch that succeeded, a fetch that
+  // failed). Distinct from `!rehydrating`, which is also true for the whole
+  // first commit — before that effect has even run. Anything that appends a
+  // turn on mount has to wait for this, because rehydrate only rebuilds the
+  // thread into an EMPTY turns list: append first and the buyer's restored
+  // conversation is silently dropped.
+  const [rehydrateSettled, setRehydrateSettled] = useState(false);
+
   // The refresh rehydrate — runs once on mount (ref-guarded against React
   // StrictMode's double-invoke): loads the stored conversation's turn
   // snapshots and rebuilds the thread from them, but only into an EMPTY
@@ -1888,8 +2061,14 @@ export function SearchHome() {
     // returns drop it immediately (nothing to resume after all), the
     // fetch's finally drops it once `rehydrating` state has taken over
     // rendering.
-    const dropResumeGate = () =>
+    // Both halves of "rehydrate is over": the pre-paint gate attribute comes
+    // off (revealing the hero/thread) and `rehydrateSettled` lets anything
+    // waiting to append a turn — a resumed search after a top-up — go ahead
+    // now that the restored thread, if there was one, is already in place.
+    const dropResumeGate = () => {
       document.documentElement.removeAttribute("data-velte-resume");
+      setRehydrateSettled(true);
+    };
     if (!deviceId || !storedId) {
       dropResumeGate();
       return;
@@ -1903,6 +2082,26 @@ export function SearchHome() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("q") && params.get("auto") === "1") {
       clearStoredConversationId();
+      dropResumeGate();
+      return;
+    }
+    // A request already waiting when this mounts (2026-09-05) — the buyer
+    // tapped "New chat" or a history row from a sub-page (/chat/notifications,
+    // /chat/requests…), which sets the store and THEN navigates here.
+    // Same reasoning as the hero handoff above: whatever they just asked for
+    // is what they want on screen, and rehydrating the stored thread
+    // underneath it would race the effect that honours it.
+    //
+    // That race is not theoretical. This effect reads the stored id and
+    // starts its fetch synchronously on mount, BEFORE the two effects below
+    // run — so "New chat" would clear storage and empty the turns, and then
+    // this fetch would resolve into the empty list it found and put the old
+    // conversation straight back.
+    //
+    // Read straight off the store rather than subscribed: this runs once, on
+    // mount, and only the value AT that moment matters.
+    const pending = useChatHistoryStore.getState();
+    if (pending.newChatNonce || pending.requestedConversationId) {
       dropResumeGate();
       return;
     }
@@ -2058,6 +2257,29 @@ export function SearchHome() {
   // own floating-pill UI — stopping one mid-flight isn't this button's job).
   const searchAbortRef = useRef<AbortController | null>(null);
 
+  // The turn that was just refused for want of credits, and everything needed
+  // to run it again untouched (2026-09-05). One slot, because a refusal is
+  // terminal and the composer is locked while a search is in flight, so there
+  // is never more than one refused turn waiting at a time — a second refusal
+  // simply replaces the first, which is the newer thing the buyer wants.
+  //
+  // Null on every ordinary turn, and cleared the moment a retry starts: this
+  // is "there is a search waiting on credits", and anything that reads it
+  // treats a non-null value as permission to start one.
+  const refusedSearchRef = useRef<{
+    turnId: string;
+    message: string;
+    imageUrl: string | null;
+    isContinuation: boolean;
+    activeTool: ComposerTool | null;
+    /** What the refusal itself reported — their balance, and what this turn
+     *  costs. The pair is what says whether a top-up has actually landed yet,
+     *  which a card payment's webhook makes a real question (see
+     *  lib/pendingRefusedSearch.ts). */
+    balance: number;
+    cost: number;
+  } | null>(null);
+
   // Scrolls the new message into view only when a turn is actually ADDED
   // (submit), not on every subsequent status/final update within that same
   // turn — found live that re-scrolling on every streamed update yanked the
@@ -2176,18 +2398,6 @@ export function SearchHome() {
   // leftover text in either box.
   const [identityValue, setIdentityValue] = useState("");
   const [identitySubmitting, setIdentitySubmitting] = useState(false);
-  // A watch request waiting on the buyer to sign in (2026-08-29). Held
-  // rather than re-asked, per explicit product direction: they already said
-  // which products they wanted, and making them say it again after signing
-  // in is the kind of small indignity that loses the sale.
-  const [watchCapture, setWatchCapture] = useState<{
-    candidates: WatchCandidate[];
-    turnId: string;
-  } | null>(null);
-  // The plan is granted by a Paystack webhook, so a buyer returning from
-  // checkout has a cached plan read that is now wrong. Invalidated on the
-  // upgrade-return path below.
-  const queryClient = useQueryClient();
   // Seconds left before "Resend code" is tappable again — 0 means it's
   // live. SMS delivery has a real, sometimes-lagging round trip to the
   // buyer's phone that has nothing to do with how fast our own
@@ -3002,6 +3212,15 @@ export function SearchHome() {
   // flow" a picked one already did, not a parallel reimplementation that
   // could quietly drift from it.
   async function handleImageFile(file: File) {
+    // The credit gate, at the one point every entry path actually
+    // converges (2026-09-06) — the file-picker's own menu tap already
+    // blocks earlier, before the dialog even opens (better UX there,
+    // nothing to undo), but a PASTED image has no earlier moment to catch
+    // it at: the clipboard event IS the attach. Checked before validation
+    // or the preview even renders, so a buyer who can't afford a photo
+    // search never sees one half-attached only to be told no.
+    if (creditGateBlocks("Search with a photo", CREDIT_COST.photo)) return;
+
     const validationError = validateImageFile(file);
     if (validationError) {
       toast.error(validationError);
@@ -3104,7 +3323,18 @@ export function SearchHome() {
     message: string,
     currentImageUrl: string | null,
     isContinuation = false,
-    priceCheck = false,
+    // Captured by the caller BEFORE activeTool state is cleared (same
+    // "snapshot at click time" pattern currentImageUrl/currentImagePreview
+    // already follow below) — never read from the activeTool closure
+    // directly, so a badge cleared for the NEXT message can't leak onto a
+    // call already in flight.
+    activeToolForTurn: ComposerTool | null = null,
+    // Overrides the loading line this turn opens on. Only resumeRefusedSearch
+    // passes one, so the buyer who has just paid is told THAT — "you're topped
+    // up, picking your search back up" — rather than being dropped straight
+    // back into a generic "Understanding your request…" that says nothing
+    // about the money they just spent.
+    initialStatus: string | null = null,
   ): Promise<void> {
     // Text-only history from prior completed turns (see SearchHistoryTurn) —
     // built before the new turn is appended, so it doesn't include itself.
@@ -3126,14 +3356,17 @@ export function SearchHome() {
           // exchange).
           awaitingBuyerRequestReply: t.awaitingBuyerRequestReply,
           buyerRequestMatchQuery: t.buyerRequestMatchQuery,
-          // Same kind of structural signal, for the same reason: the route
-          // must know with certainty whether a bare "yes please" has a live
-          // watch offer to attach itself to, and inferring that from prose
-          // is exactly what failed twice for the reach-out flow above.
-          // Only the most recent assistant turn's is ever read server-side.
-          watchOffer: t.watchOffer.length ? t.watchOffer : undefined,
         },
       ]);
+
+    // Any search starting supersedes a refusal still waiting on credits —
+    // including this one, if it is the retry (resumeRefusedSearch clears
+    // both before it calls in here, so this is just belt and braces for it).
+    // Without this, a buyer who was refused, gave up, asked something else,
+    // and topped up a week later would have the ABANDONED question resumed
+    // instead of the one they were actually looking at.
+    refusedSearchRef.current = null;
+    clearRefusedSearch();
 
     // Refreshes the loading status to match what THIS call is actually
     // about — the turn may already be showing something else (e.g.
@@ -3141,9 +3374,16 @@ export function SearchHome() {
     // was resolving silent geolocation) by the time this runs.
     updateTurn(turnId, {
       phase: "loading",
-      status: currentImageUrl
-        ? "Looking at your photo…"
-        : "Understanding your request…",
+      // Whatever refusal this turn may have been showing goes now — the
+      // status shimmer takes its place in the same bubble, which is what a
+      // resumed search should look like: the question was always theirs, and
+      // re-appending it would read as Velte asking it back.
+      quota: null,
+      status:
+        initialStatus ??
+        (currentImageUrl
+          ? "Looking at your photo…"
+          : "Understanding your request…"),
     });
 
     // A fresh controller per call — this function only ever runs while no
@@ -3171,9 +3411,7 @@ export function SearchHome() {
         history,
         recentStatuses: shownStatusesRef.current,
         isContinuation,
-        // Only ever true for the composer's price mode — see the field's own
-        // comment on SearchRequestBody.
-        ...(priceCheck && { priceCheck: true }),
+        activeTool: activeToolForTurn ?? undefined,
         // Persisted-conversation identity — undefined (stateless flow)
         // when localStorage is unavailable. The server treats a stale or
         // unknown conversationId as "start a fresh one," never an error.
@@ -3231,6 +3469,45 @@ export function SearchHome() {
             conversationIdRef.current = event.conversationId;
             storeConversationId(event.conversationId);
           }
+          // The credit meter, everywhere it's shown (CreditsBar on mobile,
+          // CreditsFab's ring + CreditsDonut on desktop — all three read
+          // the same store), reflecting a turn the instant it lands rather
+          // than waiting for whatever next happened to re-open the panel.
+          //
+          // A signed-in balance is SPENT here optimistically before the
+          // reconciling `load()` runs, not just re-fetched (2026-09-05,
+          // found live: the donut/bar sat stale until some unrelated click
+          // triggered another load). Root cause: route.ts's own
+          // chargeCredits call is deliberately fire-and-forget — never
+          // awaited into the reply's critical path, so a slow ledger write
+          // can never delay or break a turn — which means the "final" event
+          // (and this handler) can fire, and this `load()` can land at the
+          // server, BEFORE that write actually completes. `load()` alone
+          // would then read the pre-charge balance and just sit there until
+          // some LATER action happened to trigger a fresh fetch — exactly
+          // the "click on something before it updates" symptom. `spend`
+          // applies the same known cost immediately; `load()` right after
+          // still reconciles against whatever the server actually recorded,
+          // so a rare drift (a failed charge, fail-open ledger outage)
+          // self-corrects on this same turn rather than lingering.
+          //
+          // isBillableTurn is the SAME shared rule (lib/turnBillable.ts)
+          // the server used to decide whether to charge at all and this
+          // file's own guest path (searchStream.ts) already runs on this
+          // identical event shape — reused here, not re-derived, so this
+          // can never disagree with what the server actually charged for.
+          const signedIn =
+            useBuyerStore.getState().buyer || useUserStore.getState().user;
+          if (signedIn) {
+            if (isBillableTurn(event)) {
+              useCreditsStore
+                .getState()
+                .spend(CREDIT_COST[currentImageUrl ? "photo" : "text"]);
+            }
+            void useCreditsStore.getState().load();
+          } else {
+            useCreditsStore.getState().loadGuest();
+          }
           updateTurn(turnId, {
             persisted: Boolean(event.conversationId),
             phase: "done",
@@ -3257,8 +3534,8 @@ export function SearchHome() {
             buyerRequestMatchQuery: event.buyerRequestMatchQuery,
             contextNote,
             recommendation: event.recommendation,
+            shoppingPlanDraft: event.shoppingPlanDraft,
             externalOffers: event.externalOffers,
-            priceBand: event.priceBand,
           });
           // A buyer who already has a verified session (a prior visit's
           // identity cookie still valid) skips the composer's own
@@ -3273,13 +3550,6 @@ export function SearchHome() {
           // concludeCurrentItemFlow handles both cases: advances the queue
           // if anything's left in it, otherwise clears a "pending" pill
           // that this exact answer just resolved.
-          // A watch request short-circuits everything else on this turn —
-          // the route ran no search and sent an empty reply precisely so the
-          // flow below can narrate what actually happens.
-          if (event.watchRequest?.length) {
-            void runWatchFlow(event.watchRequest, turnId);
-            return;
-          }
           const offerAlreadyTerminal =
             event.buyerRequestOffer?.status === "created" ||
             event.buyerRequestOffer?.status === "no_match" ||
@@ -3392,6 +3662,36 @@ export function SearchHome() {
               reason: event.reason,
             },
           });
+          // Hold the search itself, so buying credits (or signing up) can
+          // simply carry on with it instead of leaving the buyer to retype
+          // what they just asked for — see resumeRefusedSearch below. The
+          // event's `used`/`limit` ARE the balance and the cost (see
+          // route.ts's own note where it builds this), which is what tells a
+          // resume whether the credits have landed yet.
+          //
+          // Both copies, always: in memory for the paths that never leave the
+          // page (a wallet top-up, a guest signing in), and in localStorage
+          // for the card path, which redirects to Paystack and comes back to
+          // a fresh page with this component remounted. At refusal time there
+          // is no telling which way they will pay.
+          refusedSearchRef.current = {
+            turnId,
+            message,
+            imageUrl: currentImageUrl,
+            isContinuation,
+            activeTool: activeToolForTurn,
+            balance: event.used,
+            cost: event.limit,
+          };
+          holdRefusedSearch({
+            message,
+            imageUrl: currentImageUrl,
+            isContinuation,
+            activeTool: activeToolForTurn,
+            balance: event.used,
+            cost: event.limit,
+            at: Date.now(),
+          });
         },
         // The buyer hit Stop (handleStop) — a deliberate cancel, not a
         // failure. Per explicit request, this shows NO wrap-up bubble of
@@ -3422,6 +3722,86 @@ export function SearchHome() {
     searchAbortRef.current = null;
   }
 
+  // ── Resuming a search that ran out of credits (2026-09-05) ─────────────
+  //
+  // Running out mid-conversation is the single most likely moment a buyer
+  // ever pays us, and until now paying dropped them back onto a dead refusal
+  // bubble with their question still sitting in it, unanswered, waiting to be
+  // typed again. Somebody who has just handed over money should not have to
+  // ask twice.
+  //
+  // So the refusal holds the search (refusedSearchRef / holdRefusedSearch),
+  // and the arrival of credits — by whichever of the three routes — starts it
+  // again in the SAME turn: the refusal card is replaced by the status
+  // shimmer, and the answer lands under the question that was already there.
+
+  /** Runs the held search again, in the turn that was refused. */
+  async function resumeRefusedSearch(): Promise<void> {
+    const pending = refusedSearchRef.current;
+    if (!pending) return;
+    // Claimed before anything awaits, so two signals landing together (a
+    // sign-in that also refreshes the balance, say) can't start the same
+    // search twice.
+    refusedSearchRef.current = null;
+    clearRefusedSearch();
+    await runSearchIntoTurn(
+      pending.turnId,
+      pending.message,
+      pending.imageUrl,
+      pending.isContinuation,
+      pending.activeTool,
+      pickAvoiding(resumingAfterTopUpPhrase(), shownStatusesRef.current),
+    );
+  }
+
+  // The store subscriptions below are set up ONCE, so they must not call the
+  // first render's copy of the resume — `runSearchIntoTurn` reads `turns` from
+  // its closure to build the model's history, and a render-0 closure would
+  // hand it an empty conversation. This ref always holds the current one.
+  const resumeRefusedSearchRef = useRef(resumeRefusedSearch);
+  useEffect(() => {
+    resumeRefusedSearchRef.current = resumeRefusedSearch;
+  });
+
+  // Credits landing while the page is still open — two of the three ways a
+  // refused search becomes affordable again:
+  //
+  //  - a VENDOR pays from their Velte wallet, which settles inside the request
+  //    and sets the new balance straight into the store (creditsStore.topUp);
+  //  - a GUEST signs in, which stops them being metered against this
+  //    browser's allowance at all — though since dropping the separate
+  //    signup bonus (2026-09-06) that alone no longer grants anything, so a
+  //    guest who was refused for lack of credits will usually still need to
+  //    top up before a resumed search actually goes through.
+  //
+  // The card path is the third and cannot be caught here — it leaves the site
+  // for Paystack; see the ?topup=done effect further down.
+  //
+  // Subscribed to the STORES rather than wired to the refusal card's own two
+  // buttons, deliberately: the same top-up can be started from the header, the
+  // floating ring or the sidebar, and a resume that only worked when the buyer
+  // happened to use the button inside the refusal is exactly the kind of gap
+  // nobody notices until someone pays and nothing happens.
+  useEffect(() => {
+    const unsubscribeCredits = useCreditsStore.subscribe((state) => {
+      const pending = refusedSearchRef.current;
+      if (!pending || state.balance == null) return;
+      // Against the COST, not merely "more than before": a balance that moved
+      // for some other reason, or a top-up too small to cover this turn, must
+      // not start a search that would only be refused a second time.
+      if (state.balance >= pending.cost) void resumeRefusedSearchRef.current();
+    });
+    const unsubscribeBuyer = useBuyerStore.subscribe((state, prev) => {
+      // Signing IN specifically — not the store settling, and not a sign-out.
+      if (prev.buyer || !state.buyer) return;
+      if (refusedSearchRef.current) void resumeRefusedSearchRef.current();
+    });
+    return () => {
+      unsubscribeCredits();
+      unsubscribeBuyer();
+    };
+  }, []);
+
   // ChatGPT-style Stop — the composer's send button swaps to this while
   // isSending (see its own render below). A no-op if there's nothing to
   // abort (the ref is only ever set for the DURATION of runSearchIntoTurn's
@@ -3451,8 +3831,11 @@ export function SearchHome() {
     // capture, a clarification answer, "Shared my location"), never guessed
     // here from the text itself.
     isContinuation = false,
-    // Only the composer's price mode passes this. See SearchRequestBody.
-    priceCheck = false,
+    // See runSearchIntoTurn's own comment — a snapshot, never the
+    // activeTool closure. Every call site OTHER than the ordinary composer
+    // submit (clarification answers, name/OTP capture, the URL handoff)
+    // omits this, since none of those started from a tool badge.
+    activeToolForTurn: ComposerTool | null = null,
   ): Promise<void> {
     const turnId = generateUUID();
     setTurns((prev) => [
@@ -3462,11 +3845,9 @@ export function SearchHome() {
         message,
         currentImagePreview,
         currentImageUrl,
-        priceCheck
-          ? "Checking what that costs…"
-          : currentImageUrl
-            ? "Looking at your photo…"
-            : "Understanding your request…",
+        currentImageUrl
+          ? "Looking at your photo…"
+          : "Understanding your request…",
       ),
     ]);
     await runSearchIntoTurn(
@@ -3474,7 +3855,7 @@ export function SearchHome() {
       message,
       currentImageUrl,
       isContinuation,
-      priceCheck,
+      activeToolForTurn,
     );
   }
 
@@ -3575,13 +3956,22 @@ export function SearchHome() {
     message: string,
     currentImageUrl: string | null,
     currentImagePreview: string | null,
+    // See runSearchIntoTurn's own comment — a snapshot, never the
+    // activeTool closure.
+    activeToolForTurn: ComposerTool | null = null,
   ): Promise<void> {
     if (
       buyerLocationRef.current ||
       locationDeclinedRef.current ||
       messageNamesAPlace(message)
     ) {
-      await submitMessage(message, currentImageUrl, currentImagePreview);
+      await submitMessage(
+        message,
+        currentImageUrl,
+        currentImagePreview,
+        false,
+        activeToolForTurn,
+      );
       return;
     }
 
@@ -3603,7 +3993,13 @@ export function SearchHome() {
 
     const silentLocation = await trySilentGeolocation();
     if (silentLocation) rememberBuyerLocation(silentLocation);
-    await runSearchIntoTurn(turnId, message, currentImageUrl);
+    await runSearchIntoTurn(
+      turnId,
+      message,
+      currentImageUrl,
+      false,
+      activeToolForTurn,
+    );
   }
 
   // One-shot handoff from the homepage's own Velte input (Hero.tsx) and any
@@ -3654,6 +4050,11 @@ export function SearchHome() {
     // composer into its own mode before this ever renders).
     if (hasPendingClarification && lastTurn?.clarification?.kind === "text") {
       setQuery("");
+      // A clarification answer is never itself the tool-gated message —
+      // whatever badge was showing belongs to the request that's still
+      // being resolved, not to this one-word/one-figure reply, so it's
+      // cleared rather than carried forward or re-checked against.
+      setActiveTool(null);
       handleClarificationAnswer(message);
       return;
     }
@@ -3661,65 +4062,26 @@ export function SearchHome() {
 
     const currentImageUrl = imageUrl;
     const currentImagePreview = imagePreview;
+    // Snapshotted before clearing, same reason currentImageUrl/
+    // currentImagePreview are — the badge disappears from the composer the
+    // instant this turn is sent (matching how the photo preview clears),
+    // not left sitting there as if it still applied to whatever's typed
+    // next.
+    const activeToolForTurn = activeTool;
     setQuery("");
     setImagePreview(null);
     setImageUrl(null);
-    await submitWithLocationGate(message, currentImageUrl, currentImagePreview);
-  }
-
-  // Leaving price mode. Separate from submitting it, because "I changed my
-  // mind" must not cost a turn — and a mode the buyer cannot back out of is
-  // the failure this whole surface is designed against.
-  function exitPriceMode() {
-    setPriceMode(false);
-    setPriceValue("");
-  }
-
-  // Submitting a price check.
-  //
-  // Straight to submitMessage, deliberately skipping submitWithLocationGate:
-  // a price question is answerable without knowing where the buyer is, and
-  // the gate's whole job is to make sure a VENDOR MATCH has somewhere to
-  // match against. Found live — "How much should this cost? A plastic
-  // standing fan" was answered with "can you share your location?", then a
-  // request for fan size, speed count and wattage, and never a price.
-  //
-  // The `priceCheck` flag carries the rest of the difference server-side (no
-  // location gate, no clarifying questions). It is a flag rather than clever
-  // wording because the model decides whether to clarify, and a phrasing that
-  // usually discourages it is not the same as one that cannot.
-  //
-  // The buyer's words go through VERBATIM. The old framing prefix
-  // ("How much should this cost? …") was doing nothing the flag does not do
-  // better, and it put words in their mouth that then appeared as their own
-  // chat bubble. extractQuotedPrice still finds a price they mention, so
-  // "PS5 slim — they're asking ₦185,000" still gets a verdict.
-  async function handlePriceSubmit() {
-    const item = priceValue.trim();
-    if (!item || isSending || uploadingImage) return;
-    const currentImageUrl = imageUrl;
-    const currentImagePreview = imagePreview;
-    exitPriceMode();
-    setImagePreview(null);
-    setImageUrl(null);
-    await submitMessage(
-      item,
+    setActiveTool(null);
+    await submitWithLocationGate(
+      message,
       currentImageUrl,
       currentImagePreview,
-      false,
-      true,
+      activeToolForTurn,
     );
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Checked before every other mode: price mode owns the composer outright
-    // while it is on, and cannot overlap the identity chain (that only starts
-    // from an outreach offer, which price mode never produces).
-    if (priceMode) {
-      await handlePriceSubmit();
-      return;
-    }
     // The composer's own name-capture mode (see nameCapture's own comment)
     // hijacks the SAME form/submit button too, checked first — a name ask
     // always comes strictly before the phone/OTP step it leads into, so
@@ -3749,6 +4111,18 @@ export function SearchHome() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void trySubmit();
+      return;
+    }
+    // The active-tool badge (see activeTool's own comment) sits OUTSIDE
+    // the textarea's own value — it was never typed, so ordinary
+    // backspacing through `query` can never reach it. This is its one
+    // removal path: Backspace with nothing left to delete removes the
+    // whole badge in a single press, same as Gmail/Notion remove their own
+    // inline chips — and it works identically on mobile and desktop
+    // because a virtual keyboard's delete key fires the same "Backspace"
+    // key event a physical one does.
+    if (e.key === "Backspace" && query === "" && activeTool) {
+      setActiveTool(null);
     }
   }
 
@@ -3916,220 +4290,98 @@ export function SearchHome() {
   // BuyerPhoneVerifyForm used to make on its own (request-otp/verify-otp/
   // POST buyer-requests), just narrated as conversation instead of a
   // silent form.
-  // Picks a held watch selection back up after the buyer upgraded mid-flow
-  // (2026-08-29, per explicit product direction).
+  // Resumes a refused search after a credit top-up — buying with a card
+  // leaves the site entirely and comes back to a fresh `/chat?topup=done`
+  // (velte-backend's own credits.controller.js CALLBACK_PATH) with this
+  // component remounted and refusedSearchRef empty. The arrival IS the
+  // signal; localStorage carried the search across.
   //
-  // NOT a poll and not a subscription: upgrading leaves the site entirely for
-  // Paystack, which returns the buyer to `/chat?upgrade=done` — velte-backend
-  // has always sent them there (buyerBilling.controller.js CALLBACK_PATH), so
-  // the arrival IS the signal, and a mount effect is the whole detector.
-  //
-  // Deliberately runs once, on mount. `takePendingWatch` clears the held
-  // selection as it reads it, so a refresh can't replay it, and the marker is
-  // stripped from the URL so a bookmarked link never re-fires it either.
+  // Waits for `rehydrateSettled` rather than running on mount: rehydrate
+  // only rebuilds the stored thread into an EMPTY turns list, so appending
+  // the resumed turn first would silently cost the buyer the conversation
+  // they just paid to continue.
+  const topUpResumeStartedRef = useRef(false);
   useEffect(() => {
-    let cancelled = false;
+    if (!rehydrateSettled || topUpResumeStartedRef.current) return;
+    topUpResumeStartedRef.current = true;
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("upgrade") !== "done") return;
-      params.delete("upgrade");
+      if (params.get("topup") !== "done") return;
+      params.delete("topup");
       const qs = params.toString();
       window.history.replaceState(
         null,
         "",
         `${window.location.pathname}${qs ? `?${qs}` : ""}`,
       );
-
-      const pending = takePendingWatch();
+      const pending = takeRefusedSearch();
+      // No held search is an ordinary outcome, not a fault: plenty of people
+      // top up from the header with nothing waiting on it.
       if (!pending) return;
-
-      // A fresh turn rather than reviving the old one: the buyer has been to
-      // Paystack and back, the thread was rebuilt from storage, and appending
-      // reads as Velte picking the thread up — which is what happened.
-      const turnId = generateUUID();
-      setTurns((prev) => [
-        ...prev,
-        createLoadingTurn(
-          turnId,
-          "",
-          null,
-          null,
-          pickAvoiding(resumingAfterUpgradePhrase(), []),
-        ),
-      ]);
-      // The plan was granted by a webhook, so the read that decides what this
-      // buyer may now do must not come from cache.
-      queryClient.invalidateQueries({ queryKey: ["current-plan"] });
-      if (!cancelled) void createWatches(pending, turnId, true);
+      void resumeAfterCardTopUp(pending);
     } catch {
       /* no URL access (or malformed) — nothing held, nothing to resume */
     }
-    return () => {
-      cancelled = true;
-    };
-    // Mount only: this reacts to how the page was ARRIVED at, which cannot
-    // change without another page load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [rehydrateSettled]);
 
-  // ── Price watches (2026-08-29) ─────────────────────────────────────────
-  //
-  // Runs in the BROWSER, not the route, for the same reason the reach-out
-  // flow does: two of its steps can only happen here. Signing in needs a
-  // popup, and coming back from Paystack having upgraded mid-conversation is
-  // a page load. The route's job ended when it decided this message was a
-  // watch request (see classifyWatchIntentTool); everything below is the
-  // doing of it, narrated as ordinary conversation.
-  //
-  // The whole flow is written to survive being interrupted, because it
-  // routinely is — a buyer signs in halfway, or leaves to pay and comes back.
-
-  /** Where a held selection lives across the Paystack round trip. localStorage
-   *  rather than state, because upgrading LEAVES the page entirely: the buyer
-   *  is redirected to Paystack and returns to a fresh /chat?upgrade=done. */
-  const PENDING_WATCH_KEY = "velte-pending-watch";
-
-  function holdPendingWatch(candidates: WatchCandidate[]) {
-    try {
-      localStorage.setItem(PENDING_WATCH_KEY, JSON.stringify(candidates));
-    } catch {
-      /* private mode — the buyer simply asks again, which is recoverable */
-    }
-  }
-
-  function takePendingWatch(): WatchCandidate[] | null {
-    try {
-      const raw = localStorage.getItem(PENDING_WATCH_KEY);
-      // Cleared on READ, not on success: a held selection that somehow fails
-      // to resume must not sit there re-firing on every future page load.
-      localStorage.removeItem(PENDING_WATCH_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) && parsed.length ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-
-  /** Creates the watches, one at a time, and narrates what happened.
+  /** How long to wait for a card top-up's credits before searching anyway.
    *
-   *  Sequential rather than parallel ON PURPOSE. The plan gate is enforced
-   *  per-request by the backend, so firing three at once against a plan with
-   *  room for one produces two racing refusals and no way to say which
-   *  succeeded. One at a time means the first refusal is authoritative and
-   *  everything before it is genuinely saved. */
-  async function createWatches(
-    candidates: WatchCandidate[],
-    turnId: string,
-    afterUpgrade = false,
-  ) {
-    updateTurn(turnId, {
-      status: pickAvoiding(
-        afterUpgrade ? resumingAfterUpgradePhrase() : checkingPlanPhrase(),
-        [],
-      ),
-    });
+   *  They are granted by a Paystack WEBHOOK, not by the redirect that brings
+   *  the buyer back, so the two race and the buyer usually wins — hence a wait
+   *  rather than an immediate retry that would refuse them a second time for
+   *  a payment they had already made. Bounded, and the search runs regardless
+   *  once it expires: the server is the authority on the balance either way,
+   *  and a spinner that never ends is worse than a refusal that at least says
+   *  something. */
+  const CREDIT_GRANT_WAIT_MS = 20_000;
+  const CREDIT_GRANT_POLL_MS = 1_500;
 
-    const saved: string[] = [];
-    const blocked: string[] = [];
-    let reason: "plan_required" | "limit_reached" | null = null;
-
-    for (const candidate of candidates) {
-      if (reason) {
-        // Once the plan has refused, everything after it is blocked for the
-        // same reason — asking again per product would be three identical
-        // refusals and three pointless round trips.
-        blocked.push(candidate.label);
-        continue;
-      }
-      updateTurn(turnId, {
-        status: pickAvoiding(savingWatchPhrase(candidate.label), []),
-      });
-      try {
-        const res = await fetch("/api/price-watch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            kind: candidate.kind,
-            productId: candidate.productId ?? undefined,
-            url: candidate.url ?? undefined,
-            label: candidate.label,
-            imageUrl: candidate.imageUrl,
-            merchant: candidate.merchant,
-            startPriceKobo: candidate.priceKobo,
-          }),
-        });
-        if (res.ok) {
-          saved.push(candidate.label);
-          continue;
-        }
-        const body = (await res.json().catch(() => null)) as {
-          code?: string;
-          error?: string;
-        } | null;
-        if (res.status === 402) {
-          // Two different gates share this status and mean opposite things —
-          // see the price-watch route, which lifts the discriminator out of
-          // the upstream body precisely so this branch can exist.
-          reason =
-            body?.code === "limit_reached" ? "limit_reached" : "plan_required";
-          blocked.push(candidate.label);
-          continue;
-        }
-        if (res.status === 401) {
-          // Session expired mid-flow. Hand back to the sign-in step with the
-          // rest of the selection still held.
-          holdPendingWatch(candidates.slice(candidates.indexOf(candidate)));
-          setWatchCapture({ candidates, turnId });
-          updateTurn(turnId, {
-            phase: "done",
-            status: "",
-            reply:
-              "Looks like you got signed out — sign back in and I'll finish setting those up.",
-          });
-          return;
-        }
-        blocked.push(candidate.label);
-      } catch {
-        blocked.push(candidate.label);
-      }
+  async function waitForCreditGrant(cost: number): Promise<void> {
+    const { load } = useCreditsStore.getState();
+    const deadline = Date.now() + CREDIT_GRANT_WAIT_MS;
+    for (;;) {
+      await load();
+      const balance = useCreditsStore.getState().balance;
+      if (balance != null && balance >= cost) return;
+      if (Date.now() >= deadline) return;
+      await new Promise((resolve) => setTimeout(resolve, CREDIT_GRANT_POLL_MS));
     }
-
-    updateTurn(turnId, {
-      phase: "done",
-      status: "",
-      reply: watchReply(saved, blocked, reason),
-      watchResult: { saved, blocked, reason },
-    });
   }
 
-  /** Entry point from a turn the route flagged as a watch request. */
-  async function runWatchFlow(candidates: WatchCandidate[], turnId: string) {
-    updateTurn(turnId, {
-      status: pickAvoiding(startingWatchPhrase(candidates.length), []),
-    });
-
-    // Signed in? Read the store rather than a prop — a buyer may have signed
-    // in earlier in this same conversation.
-    const buyer = useBuyerStore.getState().buyer;
-    if (!buyer) {
-      // Held, not re-asked (per explicit product direction). The sign-in
-      // button renders in the composer, and the selection is picked straight
-      // back up the moment a session exists.
-      holdPendingWatch(candidates);
-      setWatchCapture({ candidates, turnId });
-      updateTurn(turnId, {
-        phase: "done",
-        status: "",
-        reply:
-          candidates.length === 1
-            ? "I can keep an eye on that for you — I'll just need you signed in first, so I know where to send the alert."
-            : "I can keep an eye on those for you — I'll just need you signed in first, so I know where to send the alerts.",
-      });
-      return;
-    }
-
-    await createWatches(candidates, turnId);
+  /** Rebuilds the refused turn after the Paystack round trip and runs it.
+   *
+   *  A fresh turn rather than the refused one, because that turn no longer
+   *  exists: /api/search refuses BEFORE it does any work, so nothing about it
+   *  was ever persisted and the rehydrated thread has no trace of it. Showing
+   *  the buyer's question back is therefore correct here — it is the only copy
+   *  of it left, and without it the answer would arrive attached to nothing.
+   *
+   *  The stored imageUrl doubles as the preview, the same way a rehydrated
+   *  turn's does: the original blob URL died with the old tab. */
+  async function resumeAfterCardTopUp(
+    pending: NonNullable<ReturnType<typeof takeRefusedSearch>>,
+  ): Promise<void> {
+    const turnId = generateUUID();
+    setTurns((prev) => [
+      ...prev,
+      createLoadingTurn(
+        turnId,
+        pending.message,
+        pending.imageUrl,
+        pending.imageUrl,
+        pickAvoiding(waitingForCreditsPhrase(), shownStatusesRef.current),
+      ),
+    ]);
+    await waitForCreditGrant(pending.cost);
+    await runSearchIntoTurn(
+      turnId,
+      pending.message,
+      pending.imageUrl,
+      pending.isContinuation,
+      pending.activeTool,
+      pickAvoiding(resumingAfterTopUpPhrase(), shownStatusesRef.current),
+    );
   }
 
   // The half of the reach-out flow that runs once the buyer's NUMBER is
@@ -4449,16 +4701,6 @@ export function SearchHome() {
     hasPendingClarification && lastTurn.clarification?.kind === "text";
 
   const collapsed = turns.length > 0;
-  // A live watch offer on the latest turn (2026-08-29). Drives the composer
-  // placeholder below: the WatchOffer strip deliberately has no buttons, so
-  // the placeholder is the affordance that tells a buyer they can just SAY
-  // which one — without it, a list of thumbnails is a dead end.
-  //
-  // Scoped to the latest turn only. A hint pointing at products three turns
-  // up would be worse than none: the buyer would name one and the classifier
-  // would have nothing live to attach it to.
-  const liveWatchOffer =
-    lastTurn && lastTurn.watchOffer.length > 0 ? lastTurn.watchOffer : null;
 
   // Shared by the state-driven resume loader AND its pre-hydration static
   // twin below (see the render's own comments) — one definition so the
@@ -4507,9 +4749,6 @@ export function SearchHome() {
         </div>
       )}
 
-      {/* Mounted at form level, not inside the default composer's control
-          row: price mode needs the same picker, and a branch that unmounts
-          the input would leave its ref dangling. */}
       <input
         ref={fileInputRef}
         type="file"
@@ -4518,62 +4757,7 @@ export function SearchHome() {
         onChange={handleImageSelect}
       />
 
-      {priceMode ? (
-        // Price-check mode (2026-09-03). One field for one item, in the same
-        // rounded container as every other composer mode — this is a
-        // different QUESTION, not a different screen, and the answer lands
-        // back in the same conversation.
-        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
-          <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
-            <TagIcon size={12} className="text-orange-400 shrink-0" />
-            What are you checking?
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              autoFocus
-              value={priceValue}
-              onChange={(e) => setPriceValue(e.target.value)}
-              disabled={isSending || uploadingImage}
-              placeholder="PS5 slim — they're asking ₦185,000"
-              className="flex-1 min-w-0 h-10 bg-transparent outline-none text-base text-gray-900 placeholder:text-gray-400 disabled:opacity-50"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingImage || isSending}
-              title="Add a photo"
-              className="shrink-0 w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
-            >
-              <Camera size={16} />
-            </button>
-            <button
-              type="submit"
-              disabled={!priceValue.trim() || isSending || uploadingImage}
-              title="Check the price"
-              className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
-            >
-              {isSending ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <ArrowUp size={18} />
-              )}
-            </button>
-          </div>
-          {/* The way out. Every mode has one that is not "refresh the page" —
-              backing out of a question you changed your mind about must not
-              cost a turn. */}
-          <div className="flex items-center gap-3 mt-2.5">
-            <button
-              type="button"
-              onClick={exitPriceMode}
-              disabled={isSending}
-              className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50 cursor-pointer"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : nameCapture ? (
+      {nameCapture ? (
         // The composer's own name-capture mode (see nameCapture's own
         // comment) — same single-line-swap treatment as identityCapture
         // just below, just one value with no multi-step progression.
@@ -4606,34 +4790,6 @@ export function SearchHome() {
               )}
             </button>
           </div>
-        </div>
-      ) : watchCapture ? (
-        // A watch request waiting on sign-in (2026-08-29). Same shape as the
-        // reach-out flow's own sign-in step, and the same reasoning: there is
-        // nothing to type, so the composer is replaced rather than disabled.
-        //
-        // Resumes IN PLACE — the products they already chose are picked
-        // straight back up, never re-asked.
-        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
-          <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-            <BellIcon size={12} className="text-orange-400 shrink-0" />
-            Sign in and I&apos;ll start watching
-            {watchCapture.candidates.length === 1 ? " it" : " them"} for you.
-          </label>
-          <GoogleSignInButton
-            onSignedIn={() => {
-              const pending = watchCapture;
-              setWatchCapture(null);
-              // Clear the localStorage copy too: this session is finishing the
-              // job, so the Paystack-return path must not fire it a second
-              // time on the next page load.
-              takePendingWatch();
-              if (pending) {
-                updateTurn(pending.turnId, { phase: "loading" });
-                void createWatches(pending.candidates, pending.turnId);
-              }
-            }}
-          />
         </div>
       ) : identityCapture?.step === "signin" ? (
         // Sign-in, before anything else (2026-08-29). Shown instead of the
@@ -4816,73 +4972,103 @@ export function SearchHome() {
         </div>
       ) : (
         <div className="flex flex-col bg-white rounded-[28px] border border-gray-200 shadow-sm focus-within:border-gray-300 focus-within:shadow-md transition-shadow">
-          <textarea
-            {...autoResize}
-            rows={1}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleComposerKeyDown}
-            onPaste={handleComposerPaste}
-            // `isSending` — per explicit request, the composer locks while
-            // Velte is still generating a response, same as the Send
-            // button already effectively required (trySubmit's own
-            // isSending guard) but now visibly so, instead of letting the
-            // buyer type and hit Enter into what silently no-ops.
-            disabled={
-              (hasPendingClarification && !pendingTextClarification) ||
-              isSending
-            }
-            placeholder={
-              isSending
-                ? "Velte is still working on that…"
-                : pendingTextClarification
-                  ? "Type your answer…"
-                  : hasPendingClarification
-                    ? "Answer the question above to continue…"
-                    : liveWatchOffer
-                      ? // Names a REAL product from the offer above rather
-                        // than a generic "watch a price" — the specific
-                        // example is what makes it obvious the reply can be
-                        // conversational ("watch the Tecno one") instead of
-                        // a command. First word of the label keeps it short
-                        // enough for a phone-width placeholder.
-                        `e.g. 'watch the ${liveWatchOffer[0].label.split(/\s+/)[0]} one', or ask a follow-up…`
-                      : collapsed
-                        ? "Ask a follow-up, or search for something else…"
-                        : "e.g. 'Tecno fast charger near me'"
-            }
-            className="w-full resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 px-5 pt-4 pb-1 disabled:opacity-50"
-          />
+          {/* Badge + textarea share one row so the badge reads as
+              "attached to" the input, not a separate line above it — the
+              badge is `shrink-0`, the textarea takes the rest. It is
+              never part of `query` itself: nothing typed here can ever
+              touch it, which is what makes a single Backspace enough to
+              remove it (see handleComposerKeyDown) and what guarantees the
+              message actually SENT never carries its label. */}
+          <div className="flex items-center gap-2 px-5 pt-4">
+            {activeTool && (
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-600">
+                {(() => {
+                  const ToolIcon = COMPOSER_TOOL_META[activeTool].icon;
+                  return <ToolIcon size={13} className="shrink-0" />;
+                })()}
+                {COMPOSER_TOOL_META[activeTool].label}
+              </span>
+            )}
+            <textarea
+              {...autoResize}
+              rows={1}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleComposerKeyDown}
+              onPaste={handleComposerPaste}
+              // `isSending` — per explicit request, the composer locks while
+              // Velte is still generating a response, same as the Send
+              // button already effectively required (trySubmit's own
+              // isSending guard) but now visibly so, instead of letting the
+              // buyer type and hit Enter into what silently no-ops.
+              disabled={
+                (hasPendingClarification && !pendingTextClarification) ||
+                isSending
+              }
+              placeholder={
+                isSending
+                  ? "Velte is still working on that…"
+                  : pendingTextClarification
+                    ? "Type your answer…"
+                    : hasPendingClarification
+                      ? "Answer the question above to continue…"
+                      : activeTool
+                        ? // The badge already says WHICH tool; the
+                          // placeholder's only job now is a concrete
+                          // example of how to phrase something it will
+                          // accept — see toolAlignment.ts for what
+                          // actually decides that server-side.
+                          COMPOSER_TOOL_META[activeTool].placeholder
+                        : collapsed
+                          ? "Ask a follow-up, or search for something else…"
+                          : "e.g. 'Tecno fast charger near me'"
+              }
+              className="w-full min-w-0 resize-none bg-transparent outline-none text-base leading-6 text-gray-900 placeholder:text-gray-400 pb-1 disabled:opacity-50"
+            />
+          </div>
           <div className="flex items-center justify-between px-3 pb-3 pt-1">
             <button
               ref={toolMenuBtnRef}
               type="button"
               onClick={() => setToolMenuOpen((v) => !v)}
               disabled={uploadingImage || hasPendingClarification || isSending}
-              title="Tools"
+              title="Shopping tools"
               aria-haspopup="menu"
               aria-expanded={toolMenuOpen}
               className="shrink-0 w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
             >
               <Plus size={18} />
             </button>
-            {/* Portalled, not an absolutely-positioned panel: the composer
-                sits inside the chat column's own scroll container, and a bare
-                absolute panel gets clipped by it. AnchoredPopover also flips
-                to open ABOVE the trigger when there is no room below, which
-                is always the case here — the composer is pinned to the
-                bottom of the viewport. */}
+            {/* Portalled, not an absolutely-positioned panel — the composer
+                sits inside the chat column's own scroll container, and a
+                bare absolute panel gets clipped by it. AnchoredPopover also
+                flips to open ABOVE the trigger when there's no room below,
+                which is always the case here since the composer is pinned
+                to the bottom of the viewport. */}
             <AnchoredPopover
               open={toolMenuOpen}
               onClose={() => setToolMenuOpen(false)}
               anchorRef={toolMenuBtnRef}
               align="left"
-              className="w-[280px] bg-white rounded-2xl shadow-lg border border-gray-200 p-1.5"
+              className="w-[240px] bg-white rounded-2xl shadow-lg border border-gray-200 p-1.5"
             >
+              {/* Search by Photo is NOT a ComposerTool — it never sets
+                  activeTool, it just opens the same file picker the
+                  composer's paste/drop handlers already feed. Listed here
+                  because "+" is where a buyer looks for it, not because it
+                  shares the badge/gating mechanics the two below it do. It
+                  DOES share their credit gate, though (found live) — its own
+                  real cost, checked the same way, before the file picker
+                  ever opens. */}
               <button
                 type="button"
                 onClick={() => {
                   setToolMenuOpen(false);
+                  if (
+                    creditGateBlocks("Search with a photo", CREDIT_COST.photo)
+                  ) {
+                    return;
+                  }
                   fileInputRef.current?.click();
                 }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer text-left"
@@ -4892,20 +5078,35 @@ export function SearchHome() {
                   Search with a photo
                 </span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setToolMenuOpen(false);
-                  setPriceMode(true);
-                  setPriceValue("");
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer text-left"
-              >
-                <TagIcon size={17} className="shrink-0 text-gray-500" />
-                <span className="flex-1 text-sm font-medium text-[#023337]">
-                  Just tell me the price
-                </span>
-              </button>
+              {(Object.keys(COMPOSER_TOOL_META) as ComposerTool[]).map(
+                (toolId) => {
+                  const meta = COMPOSER_TOOL_META[toolId];
+                  const ToolIcon = meta.icon;
+                  return (
+                    <button
+                      key={toolId}
+                      type="button"
+                      onClick={() => {
+                        setToolMenuOpen(false);
+                        // Checked at SELECTION time, not send time — see
+                        // CreditGateModal's own comment.
+                        if (
+                          creditGateBlocks(meta.label, composerToolCost(toolId))
+                        ) {
+                          return;
+                        }
+                        setActiveTool(toolId);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer text-left"
+                    >
+                      <ToolIcon size={17} className="shrink-0 text-gray-500" />
+                      <span className="flex-1 text-sm font-medium text-[#023337]">
+                        {meta.label}
+                      </span>
+                    </button>
+                  );
+                },
+              )}
             </AnchoredPopover>
             {/* The credit meter, on phones only (2026-09-01). This row is
                 `justify-between` around two buttons, so the middle was empty
@@ -4956,6 +5157,14 @@ export function SearchHome() {
     // the actual viewport-height boundary now; ChatHeader replaced the
     // <header> that used to live here). See chat/layout.tsx's own comment.
     <div className="h-full bg-white flex flex-col overflow-hidden relative">
+      {creditGateTool && (
+        <CreditGateModal
+          toolLabel={creditGateTool.label}
+          balance={creditGateTool.balance}
+          isGuest={creditGateTool.isGuest}
+          onClose={() => setCreditGateTool(null)}
+        />
+      )}
       {rehydrating ? (
         // A stored conversation exists and its turns are still loading (see
         // rehydrating's own comment) — a returning buyer sees Velte
@@ -5039,6 +5248,12 @@ export function SearchHome() {
                     onSaveEdit={() => void handleSaveEdit(turn)}
                     onCancelEdit={handleCancelEdit}
                     canEdit={!isSending}
+                    draftRemovedKeys={draftRemovedKeys}
+                    buildingPlanTurnId={buildingPlanTurnId}
+                    replacingPlanItem={replacingPlanItem}
+                    onToggleDraftItem={onToggleDraftItem}
+                    onConfirmPlan={onConfirmPlan}
+                    onReplacePlanItem={onReplacePlanItem}
                   />
                 </div>
               ))}

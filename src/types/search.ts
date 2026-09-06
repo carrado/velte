@@ -70,16 +70,6 @@ export interface SearchHistoryTurn {
   // use this, not only the long vendor-facing description, or Yes can
   // no_match after an offer that already found sector vendors.
   buyerRequestMatchQuery?: string | null;
-  // The products this assistant turn offered to watch the price of, if any
-  // (2026-08-29). Set by SearchHome from the turn it actually RENDERED —
-  // structured client state, never inferred from the text — for exactly the
-  // reason awaitingBuyerRequestReply above is: the route has to know, with
-  // certainty, whether a "yes please" has a live offer to attach itself to.
-  //
-  // Its presence is what gates the watch-intent classifier (see
-  // classifyWatchIntentTool.ts). No offer live → that call never runs → the
-  // message flows through the ordinary pipeline. Omitted on every other turn.
-  watchOffer?: WatchCandidate[];
 }
 
 // The scope check's read of WHAT the buyer is trying to do (classifyScope's
@@ -116,17 +106,6 @@ export interface SearchRequestBody {
   message: string;
   imageUrl?: string;
   buyerLocation?: BuyerLocation;
-  // The buyer pressed "Just tell me the price" rather than typing a request
-  // (2026-09-03). A structural signal, not left for the server to infer from
-  // the wording, for the same reason isContinuation is one.
-  //
-  // It suppresses the two things a normal search does BEFORE answering:
-  // asking for a location, and asking clarifying questions. Both are right
-  // when the job is matching a buyer to a vendor and wrong when the job is
-  // answering "what does this cost" — found live: "How much should this cost?
-  // A plastic standing fan" was met with a location gate, then a request for
-  // fan size, speed count and wattage, and never a price.
-  priceCheck?: boolean;
   // Prior turns in this browser session, oldest first. Omitted/empty on the
   // first message of a conversation.
   history?: SearchHistoryTurn[];
@@ -172,161 +151,32 @@ export interface SearchRequestBody {
   // changed — the server merges rather than overwrites.
   locationDeclined?: boolean;
   locationPlaceName?: string;
+  // The composer's "+" tool badge (2026-09-06) — the buyer explicitly
+  // picked one of a small set of shopping tools before typing (see
+  // ComposerTool), rather than this being guessed from the words alone.
+  // Unlike every other field here, this is a PROMISE the server has to
+  // enforce, not just a hint: route.ts runs a dedicated alignment check
+  // before the ordinary pipeline, and politely declines a message that
+  // doesn't actually match the selected tool rather than quietly
+  // reinterpreting it. Omitted for an ordinary composer submission.
+  activeTool?: ComposerTool;
 }
 
-// One product Velte is offering to watch the price of (2026-08-29).
+// The small, fixed set of shopping-journey tools the composer's "+" menu
+// offers (2026-09-06) — deliberately narrower than the 9-capability model
+// in the standing "shopping consultant" design doc: Search/Fair Price/
+// Negotiate/Check Seller/Find Nearby are reachable by just typing or by
+// the model's own judgement mid-conversation, so giving them a SEPARATE
+// selectable slot would be a second way to do the same thing. Photo search
+// is its own composer affordance (triggers the file picker directly, no
+// badge, no "mode") and isn't a ComposerTool for that reason — see
+// SearchHome.tsx's own tool-menu comment.
 //
-// A flattened, already-eligible candidate: whichever kind of listing it came
-// from, everything a watch needs is on it, so the UI and the create call stop
-// caring which. Built ONLY by watchCandidates.ts, which is where the
-// eligibility rules live — nothing else should construct one, or the rules
-// stop being one thing.
-//
-// `priceKobo` is non-null by construction. A listing with no usable starting
-// price is not a candidate at all (PriceWatch requires startPriceKobo), so
-// the absence is handled by exclusion rather than by a nullable field every
-// consumer would have to re-check.
-/** Which market a price came from. Online and offline are not one market —
- *  see priceBand.ts's header for why blending them is actively harmful. */
-export type PriceBandChannelId = "local" | "informal" | "formal";
-
-/** One market's price range for the thing being searched. */
-export interface PriceBandChannel {
-  id: PriceBandChannelId;
-  /** How many listings this range was drawn from. Always surfaced — it is
-   *  what makes the band a measurement rather than an oracle. */
-  count: number;
-  /** Kobo. 25th percentile, middle, 75th percentile. */
-  lowKobo: number;
-  midKobo: number;
-  highKobo: number;
-  /** False when there were too few listings to claim a range; the UI shows a
-   *  single figure instead of a span it can't support. */
-  ranged: boolean;
-}
-
-/** A single named price, shown when there is too little to draw a band. */
-export interface PriceBandListing {
-  label: string;
-  priceKobo: number;
-  channel: PriceBandChannelId;
-  condition: "new" | "used";
-  merchant: string | null;
-  url: string | null;
-}
-
-/** Where a price the buyer NAMED sits against the market (2026-08-31).
- *
- *  "Should I buy this?" — the question that lets Velte be useful to somebody
- *  who already knows what they want and is standing in front of it. Produced
- *  only when the buyer actually quoted a figure; see extractQuotedPrice for
- *  the (deliberately strict) rules on what counts as one. */
-export interface PriceVerdict {
-  /** The figure the buyer said they were quoted, in kobo. */
-  quotedKobo: number;
-  /** `good` — at or under the cheap end. `fair` — inside the normal range.
-   *  `high` — above it but not wildly. `overpriced` — outside any range we
-   *  can explain. Four rungs rather than a good/bad flip because the middle
-   *  two are where most real quotes land, and collapsing them would make the
-   *  verdict either alarmist or useless. */
-  status: "good" | "fair" | "high" | "overpriced";
-  /** Which market it was measured against. ALWAYS surfaced: "high for a
-   *  Computer Village price" and "high for Jumia" are different claims, and
-   *  a verdict that hides which one it made is not checkable. */
-  against: PriceBandChannelId;
-  /** Kobo above that channel's middle. Negative when the quote is below it. */
-  deltaKobo: number;
-}
-
-/** What to open at, settle for, and walk away from (2026-08-31).
- *
- *  The Nigerian half of the fair-price feature. A band tells a buyer what
- *  something costs; it does not tell them what to SAY, and in a market where
- *  the posted price is an opening bid and what you pay depends on whether the
- *  trader reads you as knowing the market, that gap is most of the value.
- *
- *  Every number here is arithmetic over the band — no model call, same rule
- *  as priceBand.ts. The model does not phrase it either: the copy is fixed
- *  templates, because advice about someone's money should not be re-improvised
- *  on each render. */
-export interface NegotiationBrief {
-  /** What is being negotiated, for the block's heading. */
-  query: string;
-  /** The market these numbers describe, named for the same reason
-   *  PriceVerdict.against is. */
-  channel: PriceBandChannelId;
-  /** Kobo. The opening offer — under the target, so there is room to be
-   *  talked up to it. */
-  openKobo: number;
-  /** Kobo. A good, genuinely achievable outcome. */
-  targetKobo: number;
-  /** Kobo. Above this, walk — it is outside what this market charges. */
-  walkKobo: number;
-  /** Why these numbers, in the buyer's terms. Ordered most useful first;
-   *  every line is derived from a fact in the band, never invented. */
-  points: string[];
-  /** One line the buyer can say word for word.
-   *
-   *  Its own field rather than another `points` entry because it is a
-   *  different kind of thing — the points are facts to know, this is a script
-   *  to use — and the UI needs to be able to set it apart. It is also the
-   *  part people screenshot. */
-  openingLine: string;
-}
-
-/** The fair-price answer for one turn (2026-08-30). Built by
- *  server/ai/priceBand.ts, which is deterministic — no model call, so this
- *  can never be hallucinated and costs nothing extra to produce. */
-export interface PriceBand {
-  /** What was priced, for the block's own heading. */
-  query: string;
-  /** How much we are willing to claim. `band` is the full answer, `rough`
-   *  means the spread was wide enough to warrant hedging in the copy, and
-   *  `listings` means we found one or two prices and are showing them
-   *  rather than pretending to know a market. */
-  confidence: "band" | "rough" | "listings";
-  /** Per-market ranges, cheapest-first ordering left to the UI. Empty on
-   *  `listings`. */
-  channels: PriceBandChannel[];
-  /** Populated only on `listings`. */
-  listings: PriceBandListing[];
-  /** Comparable listings behind the whole thing. */
-  totalCount: number;
-  /** Used/refurb listings seen and deliberately NOT folded in — surfaced as
-   *  a caution, since a suspiciously cheap quote is usually one of these. */
-  usedCount: number;
-  /** Kobo saved by buying from `cheapestChannel` instead of the dearest.
-   *  Null when there aren't two comparable markets, or the gap is noise. */
-  gapKobo: number | null;
-  cheapestChannel: PriceBandChannelId | null;
-  /** Where the buyer's own quoted price sits, when they named one.
-   *
-   *  OPTIONAL, unlike every field above it, and that is about stored turns
-   *  rather than taste: conversations persisted before 2026-08-31 have a
-   *  `priceBand` with no such key, and they rehydrate into this same type.
-   *  Declaring it required would be a lie the UI could crash on. */
-  verdict?: PriceVerdict | null;
-  /** Whether a negotiation brief can be built from this band at all — it
-   *  needs one market with a real range behind it. Decided here rather than
-   *  in the component so the rule sits next to the data it judges, and so the
-   *  offer can never appear over a band that could not answer it.
-   *
-   *  Optional for the same rehydration reason as `verdict`. */
-  negotiable?: boolean;
-}
-
-export interface WatchCandidate {
-  kind: "velte" | "external";
-  /** productId for a Velte listing, the offer's own id for an external one —
-   *  unique within the turn, and what a buyer's selection refers to. */
-  id: string;
-  productId: string | null;
-  url: string | null;
-  label: string;
-  imageUrl: string | null;
-  merchant: string | null;
-  priceKobo: number;
-}
+// "plan" joined 2026-09-06 — Shopping Plan is a genuine third mode (a goal
+// + budget, not a single item), so it earns a badge the same way Compare
+// does rather than being inferred from plain text the way ordinary search
+// is.
+export type ComposerTool = "compare" | "plan";
 
 // Mirrors the shape searchProducts() returns in velte-backend's
 // retrieval.service.js.
@@ -465,11 +315,31 @@ export interface ExternalOffer {
    *  as the gallery: it's where a seller's own "UK used", "Grade A" or
    *  "for parts" actually shows up. */
   description: string | null;
+  /** Real spec attributes the listing's own page published — Condition,
+   *  Storage, RAM, Camera, and so on. Same shape as VendorMatch.attributes,
+   *  for the same reason: it's genuinely structured data the seller filled
+   *  in, not marketing copy. Empty is normal, not an error — only Jiji's
+   *  server-rendered listing page is parsed for these today (2026-09-04);
+   *  a merchant with no extractor written for it simply publishes none.
+   *  See connectors/pageMeta.ts's own comment on why this exists at all —
+   *  a 400-character og:description blurb was never going to say "6GB
+   *  RAM, 128GB storage, Used, no cracks", and this is where that
+   *  actually lives on the page. */
+  attributes: { name: string; value: string }[];
   /** The shop selling it ("Jumia", "Konga", …) as the source reported it. */
   merchant: string | null;
   /** Which connector produced this (see ExternalConnector.name). */
   source: string;
   url: string;
+  /** True when `url` is this exact listing's own product page — a Google
+   *  Shopping result the connector matched against a real organic link, or
+   *  an organic direct link on its own (see connectors/serper.ts's two
+   *  passes). False when no confident match was found and `url` falls back
+   *  to the merchant's own SEARCH page for the item's name instead — still
+   *  a real, useful destination (the right shop, a pre-filled query), but
+   *  not the specific product, and the card must say so rather than let a
+   *  "View on Jiji" label imply the exact page underneath every link. */
+  isDirectLink: boolean;
 }
 
 // One item from getVendorProductsTool — a SPECIFIC, already-identified
@@ -677,6 +547,195 @@ export interface SearchRecommendation {
   tradeoff: { productId: string; note: string } | null;
 }
 
+// The full "Universal Comparison Template" (2026-09-05) — built ONLY on a
+// genuine COMPARE turn: the buyer explicitly selected the Compare tool (and
+// toolAlignment.ts confirmed it fits), or classifyScopeTool detected the
+// same thing unprompted from plain text. Every other multi-result turn
+// keeps the lighter SearchRecommendation above unchanged.
+//
+// A strict SUPERSET of SearchRecommendation on purpose — every existing
+// consumer (pickBadgesFor, the client's own fallback lead-in) keeps working
+// unmodified on a comparison turn, because a
+// ComparisonTemplate IS a SearchRecommendation structurally, just with the
+// extra fields the richer template needs. See AnyRecommendation below and
+// isComparisonTemplate for how a turn's `recommendation` field is told apart.
+//
+// Same division of labor as SearchRecommendation: the MODEL judges fit,
+// names criteria, and writes the one-line/one-paragraph verdicts; CODE
+// decides everything checkable (each row's name/price/source, `nearestId`,
+// id verification, sanitizing). See comparisonTemplate.ts's own comment.
+export interface ComparisonTemplate extends SearchRecommendation {
+  // Said OUT LOUD when what's being compared isn't quite what the buyer
+  // literally named (2026-09-05, found live: "Toyota 2026 vs Lexus Jeep
+  // 2026" — Lexus makes no vehicle called "Jeep" — quietly turned into a
+  // table of Highlander/Camry/RAV4/TX 350, with nothing telling the buyer
+  // their exact wording wasn't what got compared). One honest sentence,
+  // e.g. "I couldn't find an exact 'Lexus Jeep 2026' listing, so I've
+  // compared the closest Lexus SUVs against comparable 2026 Toyotas
+  // instead." — placed ABOVE the table, before any number is shown, so the
+  // substitution is disclosed before it's relied on, not buried in a
+  // caption under it.
+  //
+  // null when the candidates genuinely are what was asked for — this is a
+  // disclosure of a GAP, never filler on an exact match, and forcing one
+  // out of the model on every turn is how a "nothing to disclose" turn
+  // ends up with an invented one anyway.
+  substitutionNote: string | null;
+  // What THIS request's own words made worth weighing — the model's dynamic
+  // criteria list ("price", "battery life", "camera"), never a fixed set:
+  // a "cheapest X" ask weighs price: a "best for video" ask weighs
+  // performance. 2-5 short phrases, buyer-facing as written.
+  criteria: string[];
+  // One row per candidate actually shown (capped — see comparisonTemplate.ts),
+  // for the "Compare your options" table. `name`/`priceLabel`/`source` are
+  // pulled from the real candidate data, never the model's own words for
+  // those three; `bestFor`/`keyStrength`/`mainDrawback` are its one-line
+  // judgments, sanitized like every other reason field here.
+  rows: ComparisonRow[];
+  // A third, DYNAMICALLY labeled pick beyond bestOverall/bestValue — e.g.
+  // "Best for video", "Best portfolio", "Fastest available" — whatever axis
+  // this request's own criteria actually turned up as worth a separate call-
+  // out. null when nothing stood out beyond the first two picks.
+  thirdPickLabel: string | null;
+  thirdPickId: string | null;
+  thirdPickReason: string | null;
+  // The fuller "My recommendation" paragraph — a couple of sentences
+  // personalized to what the buyer actually asked for, distinct from
+  // bestOverallReason (which stays a short one-liner for the pick itself).
+  recommendationNote: string | null;
+  // "Choose X if…" lines — one per candidate worth guiding on (the picks
+  // only, never every row), so the buyer can place themselves rather than
+  // just being told a single winner.
+  guidance: { id: string; condition: string }[];
+}
+
+// One candidate's row in a ComparisonTemplate's table.
+export interface ComparisonRow {
+  id: string;
+  name: string;
+  priceLabel: string;
+  // Where this option actually is ("Lekki, Lagos · 3.2km away"), built in
+  // CODE from the candidate's own area/state/distanceKm — null when there's
+  // nothing real to say (an online listing, a nationwide match with no
+  // buyer coordinate to measure from).
+  //
+  // The design doc's option structure also lists Availability and
+  // Reviews/reputation. Both are deliberately ABSENT: Velte holds no stock
+  // level, no calendar, and no review data for any vendor, so those columns
+  // could only ever render blank or be invented — and an invented
+  // "Available now" on a comparison someone is about to spend money on is
+  // exactly the failure this codebase's every other guard exists to stop.
+  // They belong here the moment there is real data behind them, not before.
+  location: string | null;
+  // Constant across every row in today's boundary (a turn is only ever
+  // Velte results OR external offers, never both — see comparisonTemplate.ts's
+  // own comment on why the source merge stays out of scope), but kept
+  // per-row rather than turn-level so a future merge of both into one
+  // comparison needs no shape change here, only a real mix of values.
+  source: "velte" | "external";
+  bestFor: string | null;
+  keyStrength: string | null;
+  mainDrawback: string | null;
+}
+
+// What a turn's `recommendation` field actually holds — either shape reads
+// safely through SearchRecommendation's own fields; only a genuine compare
+// turn ever carries the richer one.
+export type AnyRecommendation = SearchRecommendation | ComparisonTemplate;
+
+/** Distinguishes the two recommendation shapes above — `criteria` only ever
+ *  exists on a ComparisonTemplate. */
+export function isComparisonTemplate(
+  r: AnyRecommendation,
+): r is ComparisonTemplate {
+  return "criteria" in r;
+}
+
+// ── Shopping Plan (2026-09-06) ──────────────────────────────────────────────
+//
+// A goal + budget ("moving into a new apartment, ₦2m, need the essentials")
+// resolved into a complete, priced, editable shopping list — deliberately a
+// SEPARATE, persisted, buyer-owned record rather than a turn field, because
+// unlike everything else in this file it outlives one conversation (see
+// velte-backend's ShoppingPlan.model.js for the full reasoning). These
+// client-facing types mirror that model's toClientShape() exactly.
+
+export interface ShoppingPlanCategory {
+  label: string;
+  targetBudgetKobo: number;
+}
+
+export type ShoppingPlanItemStatus =
+  | "pending"
+  | "found"
+  | "no_match"
+  | "deferred";
+
+export interface ShoppingPlanItem {
+  id: string;
+  category: string;
+  label: string;
+  targetBudgetKobo: number | null;
+  status: ShoppingPlanItemStatus;
+  source: "velte" | "external" | null;
+  productId: string | null;
+  /** Set alongside productId — the vendor to contact. The WhatsApp handoff
+   *  link is built from the VENDOR, not the listing (see chatLink.ts). */
+  vendorId: string | null;
+  externalOfferId: string | null;
+  name: string | null;
+  imageUrl: string | null;
+  priceKobo: number | null;
+  merchant: string | null;
+  url: string | null;
+}
+
+export interface ShoppingPlanLocation {
+  area: string | null;
+  state: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+export interface ShoppingPlan {
+  id: string;
+  goalText: string;
+  totalBudgetKobo: number;
+  location: ShoppingPlanLocation | null;
+  status: "draft" | "active" | "archived";
+  categories: ShoppingPlanCategory[];
+  items: ShoppingPlanItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One row of GET /api/shopping-plan/mine — thin, like
+ *  SearchConversationSummary, for the same reason: a list of plans is a
+ *  sidebar/page of titles and totals, not the full priced detail. */
+export interface ShoppingPlanSummary {
+  id: string;
+  goalText: string;
+  totalBudgetKobo: number;
+  status: ShoppingPlan["status"];
+  itemCount: number;
+  spentKobo: number;
+  createdAt: string;
+}
+
+/** The UN-confirmed checklist — categories + bare item labels with a
+ *  planning target each, nothing searched yet. This is what a "plan" turn's
+ *  `shoppingPlanDraft` carries and what the confirmation card renders (see
+ *  the product spec's own point: don't search before the buyer has seen and
+ *  agreed to the breakdown). Sent back verbatim (edits and all) as the body
+ *  of POST /api/shopping-plan once confirmed. */
+export interface ShoppingPlanDraft {
+  goalText: string;
+  totalBudgetKobo: number;
+  location: ShoppingPlanLocation | null;
+  categories: ShoppingPlanCategory[];
+  items: { category: string; label: string; targetBudgetKobo: number }[];
+}
+
 // Build-order step d — /api/search streams a sequence of these as
 // newline-delimited JSON: zero or more "status" events while the model +
 // tool call are in flight, then exactly one "final" (or "error"). `products`
@@ -703,7 +762,14 @@ export type SearchStreamEvent =
   // `reason` decides the wording, and the distinction is worth keeping:
   // "unavailable" means this tier never had it (a guest reaching for photo
   // search — the single best-placed signup prompt in the product),
-  // "exhausted" means they used it up and it returns on the 1st.
+  // "exhausted" means they used it up and it returns on the 1st, and
+  // "network_limited" (2026-09-05) means a shared ADDRESS, not this one
+  // browser's own balance, tripped the guest network backstop — see
+  // lib/server/guestNetworkGate.ts. Not read by anything's rendering today
+  // (the server-composed `message` is what's actually shown), but kept
+  // accurate rather than folded into "exhausted" because the two are
+  // genuinely different facts and this is exactly the field that exists to
+  // record which one happened.
   | {
       type: "quota";
       message: string;
@@ -718,7 +784,7 @@ export type SearchStreamEvent =
        *  upgrade — vendors included since 2026-08-29, when a plan stopped
        *  requiring a separate buyer account. */
       actorType: "guest" | "buyer" | "vendor";
-      reason: "unavailable" | "exhausted";
+      reason: "unavailable" | "exhausted" | "network_limited";
     }
   | {
       type: "final";
@@ -875,33 +941,18 @@ export type SearchStreamEvent =
       // comparison call succeeded — see SearchRecommendation's own
       // comment. Renders as badge chips on the matching cards plus a
       // compact "Velte's picks" summary; plain cards when null.
-      recommendation: SearchRecommendation | null;
-      // The products Velte is offering to watch the price of, if any
-      // (2026-08-29). Drawn from this turn's own recommendation and filtered
-      // to what is actually watchable — see watchCandidates.ts. Empty on
-      // every turn with no recommendation, and empty is the normal case:
-      // an offer with no eligible target is worse than no offer.
-      watchOffer: WatchCandidate[];
-      // Set ONLY on a turn where the buyer took up a watch offer — the
-      // candidates they actually selected (2026-08-29). Non-null is the
-      // signal that this turn IS the watch request: the frontend runs the
-      // auth/plan/create flow off it, because none of those steps can happen
-      // server-side (signing in needs the browser, and so does coming back
-      // from Paystack having upgraded mid-conversation).
-      watchRequest: WatchCandidate[] | null;
+      recommendation: AnyRecommendation | null;
+      // Non-null only on a "plan" tool turn (2026-09-06) — the generated,
+      // not-yet-searched checklist a buyer confirms/edits before Velte
+      // spends any credits or does any searching. See ShoppingPlanDraft's
+      // own comment. Null on every other turn.
+      shoppingPlanDraft: ShoppingPlanDraft | null;
       // Off-Velte product offers (Phase 4) — populated ONLY on a genuine
       // dead end, and only when a connector is configured. Always rendered
       // as clearly not-Velte, with no chat handoff: there's no vendor
       // relationship behind these. Empty on every turn that found anything
       // on Velte at all.
       externalOffers: ExternalOffer[];
-      // The fair-price check for this turn (2026-08-30) — what the thing
-      // SHOULD cost, per market, drawn from the same listings the cards
-      // above came from. Null when there was nothing honest to say, when
-      // the category isn't one a band works for (land, services), or when
-      // the account's band allowance is spent — a refusal here never fails
-      // the turn, it just leaves the block off. See server/ai/priceBand.ts.
-      priceBand: PriceBand | null;
       // The persisted conversation this turn was written into (Phase 1 of
       // docs/velte-ai-search-flow-plan.md) — the client stores this and
       // sends it back as SearchRequestBody.conversationId on every later
@@ -950,7 +1001,7 @@ export type SearchItemOutcome =
       // resolveSearchItem itself, which stays deliberately LLM-free (see
       // its own doc comment). Null on thin results or when the comparison
       // call failed; rendering degrades to plain cards either way.
-      recommendation: SearchRecommendation | null;
+      recommendation: AnyRecommendation | null;
       // The term this item actually searched for (searchItemTerm's own
       // output) — mirrors "stores"' own storesQuery below. Lets
       // SearchHome.tsx's resolveBackgroundItem say what was found ("Found a
@@ -1049,16 +1100,8 @@ export interface StoredSearchTurn {
   awaitingBuyerRequestReply: boolean;
   buyerRequestMatchQuery: string | null;
   contextNote: string | null;
-  recommendation: SearchRecommendation | null;
-  // See the stream event's own note — the same list, carried on the stored
-  // turn so a reopened conversation can still act on an offer it made.
-  watchOffer: WatchCandidate[];
-  watchRequest: WatchCandidate[] | null;
+  recommendation: AnyRecommendation | null;
   externalOffers: ExternalOffer[];
-  // Persisted like every other block so a reopened conversation renders
-  // exactly what the live turn rendered — the invariant searchTurnSnapshot.ts
-  // exists to hold.
-  priceBand: PriceBand | null;
 }
 
 // The active shopping task's lifecycle — derived server-side (staffly-ai-

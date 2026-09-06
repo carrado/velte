@@ -67,8 +67,8 @@ export interface BuyerRequestResponder {
   // see BuyerRequestResponse.model.js on why quoting isn't mandatory.
   //
   // VENDOR-STATED. This is their own claim about their own price; Velte
-  // neither sets nor verifies it, and the comparison never blends one of
-  // these with a market figure from priceBand.
+  // neither sets nor verifies it, and the comparison never blends it with
+  // any outside market figure.
   /** Kobo. */
   priceKobo: number | null;
   /** Days until they can supply. 0 is "available now" — distinct from null,

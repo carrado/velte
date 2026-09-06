@@ -14,7 +14,7 @@ import { useBuyerStore } from "@/store/buyerStore";
 // tiers are gone; this now shows a credit METER — how much of what they have
 // is left — and the top-up packs. A buyer reaching for "Plans" or an
 // upgrade prompt is always mid-conversation — they have just been refused a
-// price watch, or run out of briefs, or glanced at the header — and sending
+// search, or run out of briefs, or glanced at the header — and sending
 // them to another URL for that costs the thread its place: the page unmounts,
 // the composer empties, and coming back is a navigation rather than a
 // dismissal. A modal keeps the conversation exactly where it was underneath.

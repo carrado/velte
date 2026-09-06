@@ -298,12 +298,22 @@ html[data-velte-resume] .velte-resume-hero {
    `box-shadow`, not `outline` or a border: it draws outside the box without
    affecting layout, so nothing shifts as it fades — a card that nudged
    sideways as the eye arrived would defeat the point of pointing at it. */
+/* The ring that marks the card a pick or a table row just scrolled to.
+   Reworked 2026-09-05: it used to reach full strength at 25% and spend the
+   remaining 1.2s fading out, so by the time the smooth scroll had actually
+   landed the ring was already half gone — the buyer arrived at the carousel
+   with nothing left telling them WHICH card they'd asked for. It now snaps
+   on quickly, HOLDS at full strength for a good couple of seconds, and only
+   then fades. */
 @keyframes velte-pick-flash {
   0% {
     box-shadow: 0 0 0 0 rgb(249 115 22 / 0);
   }
-  25% {
-    box-shadow: 0 0 0 3px rgb(249 115 22 / 0.55);
+  6% {
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0.6);
   }
   100% {
     box-shadow: 0 0 0 3px rgb(249 115 22 / 0);
@@ -312,7 +322,10 @@ html[data-velte-resume] .velte-resume-hero {
 
 .velte-pick-flash {
   border-radius: 1rem;
-  animation: velte-pick-flash 1.6s ease-out forwards;
+  /* Keep in step with FLASH_DURATION_MS in RecommendationPicks.tsx, which
+     removes the class — a shorter timeout there would cut the ring off
+     mid-hold. */
+  animation: velte-pick-flash 4s ease-out forwards;
 }
 
 /* Someone who has asked the OS for less motion still gets the scroll (that

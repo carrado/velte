@@ -3,8 +3,11 @@ import {
   ACTION_LABEL,
   CREDIT_COST,
   GUEST_CREDITS,
+  guestExhaustedMessage,
   type CreditAction,
 } from "@/lib/credits";
+import { MIN_TOPUP_NGN } from "@/lib/creditPacks";
+import { formatNaira } from "@/lib/utils";
 
 // ---------------------------------------------------------------------
 // Credit spending, frontend half (2026-08-31).
@@ -187,9 +190,9 @@ export async function refundCredits(params: {
  *
  * Three different endings because they are three different people, and the
  * difference is the whole conversion moment: a GUEST should be offered an
- * account (free, and three times what they had), someone signed in with an
- * empty balance should be offered a top-up, and someone who simply can't
- * afford THIS action but has credits should be told the shortfall rather than
+ * account (free, and twice what they had), someone signed in with an empty
+ * balance should be offered a top-up, and someone who simply can't afford
+ * THIS action but has credits should be told the shortfall rather than
  * "you're out" — because they aren't.
  */
 export function creditMessage(decision: CreditDecision): string {
@@ -197,10 +200,12 @@ export function creditMessage(decision: CreditDecision): string {
   const label = ACTION_LABEL[action];
 
   if (isGuest) {
-    return `You've used your ${GUEST_CREDITS} free credits. Create a free account and you'll get 15 more — enough for a proper shopping session.`;
+    // Shared with the client-side guest gate — see guestExhaustedMessage.
+    return guestExhaustedMessage();
   }
+  const minTopUp = formatNaira(MIN_TOPUP_NGN * 100);
   if (balance <= 0) {
-    return `You're out of credits. Top up from ₦500 to keep going — a ${label} costs ${cost}.`;
+    return `You're out of credits. Top up from ${minTopUp} to keep going — a ${label} costs ${cost}.`;
   }
-  return `A ${label} costs ${cost} credits and you have ${balance}. Top up from ₦500 to continue.`;
+  return `A ${label} costs ${cost} credits and you have ${balance}. Top up from ${minTopUp} to continue.`;
 }

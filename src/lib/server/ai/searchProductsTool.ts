@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { buildProductTerm } from "@/lib/productTerm";
+import { buildProductTerm, isVagueReference } from "@/lib/productTerm";
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
 import {
@@ -96,7 +96,7 @@ const inputSchema = z.object({
 const NON_ATTRIBUTE =
   /\b(did ?n[o']?t specify|not specified|unspecified|no preference|any (brand|colour|color|size|type)|n\/a|none specified|buyer did)\b/i;
 
-function usableAttributes(attributes?: string[]): string[] | undefined {
+export function usableAttributes(attributes?: string[]): string[] | undefined {
   if (!attributes?.length) return attributes;
   const kept = attributes
     .map((a) => a.trim())
@@ -141,13 +141,35 @@ export interface SearchProductsCoreResult {
  * prompt mandating it — even though a real Velte vendor's own product
  * listing ("Web & Mobile App development") matched the same query directly.
  */
+/**
+ * A budget the model actually meant. The schema above says "omit entirely
+ * when no budget is mentioned" — and found live (2026-09-05) the model sends
+ * `0` instead, on a query with no budget in it anywhere ("I want to buy a
+ * new phone, which one do I pick, Infinix and Samsung").
+ *
+ * A zero ceiling is not a harmless bit of noise. It is `!= null`, so every
+ * budget-aware path downstream treats it as a REAL cap: the buyer is told
+ * nothing shows "a confirmed price under ₦0", and — far worse —
+ * fetchExternalOffers hard-drops every listing whose price exceeds it, which
+ * is every priced listing in existence. What survives is exactly the junk
+ * with no price on it. A prompt instruction cannot be the only guard against
+ * that, so this normalizes it at every boundary the value is read at.
+ */
+export function usableBudget(
+  value: number | null | undefined,
+): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
 export async function searchProductsCore(
   {
     product,
     attributes,
     location,
     radiusKm,
-    maxBudgetNaira,
+    maxBudgetNaira: rawMaxBudgetNaira,
   }: SearchProductsCoreInput,
   {
     buyerLocation,
@@ -181,6 +203,11 @@ export async function searchProductsCore(
 ): Promise<
   SearchProductsCoreResult | { error: "location-not-found"; message: string }
 > {
+  // Normalized at the boundary, so nothing below — the retrieval backend's
+  // own price filter included — can ever be handed a zero ceiling. See
+  // usableBudget's own comment for what a stray 0 actually did on screen.
+  const maxBudgetNaira = usableBudget(rawMaxBudgetNaira);
+
   // Best-effort status text before we know the resolved coordinates —
   // an explicit place is shown as-is; otherwise "your area" if a
   // device location is known, or nothing (nationwide phrasing) if not.
@@ -202,6 +229,20 @@ export async function searchProductsCore(
 
   const cleanAttributes = usableAttributes(attributes);
   const queryText = buildProductTerm(product, cleanAttributes);
+  // See isVagueReference's own comment — "all of them", "the best" carry no
+  // real product to search for. Returned as a clean, honest zero-result
+  // search (matchTier null, same shape genuine "nothing found" already
+  // takes) rather than spending a real vector-search call — and the
+  // network round trip that would follow it — on a term with nothing in it
+  // to match against.
+  if (isVagueReference(queryText)) {
+    return {
+      results: [],
+      matchTier: null,
+      matchQuality: undefined,
+      externalSuggestions: [],
+    };
+  }
   const includeNearbyBusinesses = allowsNearbyBusinesses(
     queryText,
     allowNearbyBusinesses,

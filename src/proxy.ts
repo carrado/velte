@@ -169,6 +169,34 @@ export async function proxy(request: NextRequest) {
       if (request.nextUrl.searchParams.get("source") === "pwa") {
         return NextResponse.redirect(new URL("/welcome", request.url));
       }
+      // A signed-in BUYER belongs in the chat, not on the marketing site
+      // (2026-09-05, per explicit request — the same rule the block above
+      // has always applied to vendors, extended to the other kind of
+      // account). Until now it only ever checked `auth_token`, so a buyer
+      // with a perfectly good session still got the landing page, pitched
+      // at them as though they had never signed up.
+      //
+      // Scoped to "/" ALONE, deliberately. The vendor rule covers every
+      // marketing route, but /auth is on that list, and a buyer reaching
+      // for vendor sign-in is a real thing this product actively wants —
+      // a buyer who decides to start selling. Blocking their way to it to
+      // be symmetrical would break the more valuable path.
+      //
+      // Verified here rather than trusted: an expired or forged buyer
+      // cookie reads as signed-out and sees the landing page, which is
+      // the correct treatment for someone with no usable session.
+      const buyerToken = request.cookies.get("buyer_auth_token")?.value;
+      if (buyerToken) {
+        try {
+          const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
+          const { payload } = await jwtVerify(buyerToken, secret);
+          if (payload.type === "buyer" && payload.buyerId) {
+            return NextResponse.redirect(new URL("/chat", request.url));
+          }
+        } catch {
+          // Expired or tampered — fall through to the landing page.
+        }
+      }
       return NextResponse.next();
     }
     // Logged-in user visits "/" -> "/:id/products", UNLESS this is the

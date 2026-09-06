@@ -20,7 +20,7 @@ import { useUserStore } from "@/store/userStore";
 //   - `searchStream`'s client gate metered them against the 5-credit guest
 //     allowance, so a vendor holding 200 credits was refused after five
 //     searches by a counter in localStorage.
-//   - `ChatHeader` and `WatchesPage` read the same empty store.
+//   - `ChatHeader` and the notifications page read the same empty store.
 //
 // One silent fetch fixes all of them, because they all read one store.
 //

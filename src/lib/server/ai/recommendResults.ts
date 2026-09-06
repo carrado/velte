@@ -59,7 +59,19 @@ const PHONE_LIKE = /\+?(?:\d[\s-]?){9,16}\d/;
 const MARKDOWN_IMAGE = /!\[[^\]]*\]\([^)]*\)/g;
 const MARKDOWN_LINK = /\[([^\]]*)\]\([^)]*\)/g;
 
-function sanitizeReason(raw: unknown): string | null {
+// Exported (2026-09-05) so comparisonTemplate.ts's richer compare-turn call
+// can reuse the exact same sanitizing/summarizing/photo-rationing logic
+// rather than a second copy that could quietly drift from this one.
+export function sanitizeReason(
+  raw: unknown,
+  // Overridable cap (2026-09-05). The 220 default is right for a chip line,
+  // but the comparison template's "My recommendation" is a PARAGRAPH the
+  // model is explicitly asked to write in 2-3 sentences — reported live as
+  // being cut off mid-sentence, because it was going through this same
+  // one-line cap. A cap is still applied at every call site; it just has to
+  // fit what that particular field is for.
+  maxLength: number = MAX_REASON_LENGTH,
+): string | null {
   if (typeof raw !== "string") return null;
   const cleaned = raw
     .replace(MARKDOWN_IMAGE, "")
@@ -67,8 +79,8 @@ function sanitizeReason(raw: unknown): string | null {
     .replace(/\s+/g, " ")
     .trim();
   if (!cleaned || PHONE_LIKE.test(cleaned)) return null;
-  return cleaned.length > MAX_REASON_LENGTH
-    ? `${cleaned.slice(0, MAX_REASON_LENGTH - 1).trimEnd()}…`
+  return cleaned.length > maxLength
+    ? `${cleaned.slice(0, maxLength - 1).trimEnd()}…`
     : cleaned;
 }
 
@@ -134,7 +146,7 @@ function recommendResultsTool() {
 // Note `hasContact` is a boolean about WHETHER a number exists — the number
 // itself is never sent to the model (see this file's own sanitizeReason,
 // and route.ts's own leaked-phone guard).
-function sellerInfo(match: VendorMatch) {
+export function sellerInfo(match: VendorMatch) {
   const photoCount =
     (match.mainImageUrl ? 1 : 0) + (match.thumbnailUrls?.length ?? 0);
   const descriptionLength = match.description?.trim().length ?? 0;
@@ -184,7 +196,7 @@ export function differsMeaningfully(a: VendorMatch, b: VendorMatch): boolean {
 
 /** The compact, model-facing view of one candidate — no images, no contact
  * fields (nothing to leak), descriptions clipped hard. */
-function candidateSummary(match: VendorMatch) {
+export function candidateSummary(match: VendorMatch) {
   return {
     id: match.productId,
     kind: match.kind,
@@ -355,12 +367,6 @@ export async function pickRecommendation(params: {
 // source's own string, untouched — see ExternalOffer's own comment.
 // ---------------------------------------------------------------------
 
-// Moved to lib/priceText.ts (2026-08-29) so the price-watch checker and
-// the "Watch price" button — one of them a client component — can read a
-// price the exact same way this comparison does. Re-exported rather than
-// relocated outright so existing importers of this module keep working.
-export { parseOfferPrice };
-
 // A cheapness superlative. The model is told not to rank on price (that is
 // computed separately) and still reaches for it: found live on "20000mah
 // power bank", where the Top pick's reason ended "...at the lowest price"
@@ -382,7 +388,7 @@ const MAX_PHOTOS_PER_OFFER = 4;
 // no listing is judged blind while another gets four.
 const MAX_PHOTOS_TOTAL = 12;
 
-function offerSummary(offer: ExternalOffer, photoCount: number) {
+export function offerSummary(offer: ExternalOffer, photoCount: number) {
   return {
     id: offer.id,
     title: offer.title,
@@ -392,6 +398,13 @@ function offerSummary(offer: ExternalOffer, photoCount: number) {
     // seller's "UK used", "Grade A" or "for parts" lands here — but it is
     // the seller talking, which the prompt says out loud.
     description: offer.description ?? null,
+    // Real spec pairs the listing's own page published — Condition, RAM,
+    // Storage, Camera and the like (see ExternalOffer.attributes). Empty on
+    // most listings today (only Jiji's page is parsed for these), which the
+    // model is told is normal, not a gap to guess at.
+    attributes: offer.attributes.length
+      ? Object.fromEntries(offer.attributes.map((a) => [a.name, a.value]))
+      : null,
     // Announced so the model knows whether silence about condition means
     // "nothing visible" or "nothing was shown to me".
     photoCount,
@@ -406,7 +419,9 @@ function offerSummary(offer: ExternalOffer, photoCount: number) {
  *  whole change exists to remove. So offers take one photo each in turn
  *  until the budget runs out, rather than the first offers taking all of
  *  it. */
-function collectOfferPhotos(offers: ExternalOffer[]): Map<string, string[]> {
+export function collectOfferPhotos(
+  offers: ExternalOffer[],
+): Map<string, string[]> {
   const available = new Map<string, string[]>();
   for (const offer of offers) {
     const photos = [
@@ -432,7 +447,7 @@ function collectOfferPhotos(offers: ExternalOffer[]): Map<string, string[]> {
 
 /** Do two offers differ in anything a buyer could act on? The external
  *  analogue of differsMeaningfully — the axes are just far fewer. */
-function offersDiffer(a: ExternalOffer, b: ExternalOffer): boolean {
+export function offersDiffer(a: ExternalOffer, b: ExternalOffer): boolean {
   return (
     a.priceText !== b.priceText ||
     a.merchant !== b.merchant ||
@@ -481,16 +496,18 @@ function cheapestOnly(cheapestId: string | null): SearchRecommendation | null {
 const EXTERNAL_SYSTEM_PROMPT = [
   "You compare online shopping listings for a buyer on Velte, a Nigerian vendor-discovery service.",
   "Velte itself had no vendor for this request, so these are OFF-PLATFORM listings from ordinary online shops — the buyer would be buying from those shops directly, not through Velte.",
-  "You get the buyer's request and a JSON list of listings, each with a title, the price as the shop displayed it, the shop's name, the listing's own description where it published one, and how many of its photos you were given.",
+  "You get the buyer's request and a JSON list of listings, each with a title, the price as the shop displayed it, the shop's name, the listing's own description where it published one, an `attributes` object of real spec pairs the page itself published (Condition, RAM, Storage, Camera, and the like — null when none were found, which is normal, not a gap to fill in), and how many of its photos you were given.",
   "The photos follow the list, each labelled with the listing number it belongs to. A listing often has several — they are the SAME item shown from different angles, not different items.",
   "",
   "Judge which listing best fits what the buyer actually asked for, and whether one of them carries a real catch worth flagging.",
   "",
+  "USE `attributes` WHEN YOU HAVE IT. This is the one place a real spec comparison is possible instead of a guess from the title — if the buyer asked for something needing real memory or storage and one listing's attributes show it and another's don't (or show less), say so specifically, by name and figure ('6GB RAM' beats a listing with no RAM stated, not just a vaguer 'seems better specced'). Never invent a value for a listing whose attributes are null — say only what its title, description or photos actually show instead.",
+  "",
   "LOOK AT EVERY PHOTO BEFORE YOU PICK. Sellers lead with their most flattering shot, so damage shows up in the later ones: a cracked or shattered screen, a deep scratch or dent, a missing part, heavy wear, an item clearly opened or used when sold as new. A listing whose later photos show damage must NOT be your top pick when a comparable undamaged one is available, however good its title and price look.",
   "Say what you actually saw. If you flag damage, name it and say which photo it was in — 'the third photo shows a cracked screen', never a vague 'may have issues'. If the photos show nothing wrong, do not invent a concern, and do not describe condition you could not see.",
-  "Treat the description as the SELLER's own claim, not fact — 'no cracks', 'perfect condition' and 'grade A' are written by whoever is selling it. Where a photo and the description disagree, believe the photo and say so.",
+  "Treat the description AND the attributes' own Condition/Physical Condition fields as the SELLER's own claim, not fact — 'no cracks', 'perfect condition' and 'grade A' are written by whoever is selling it, whether they show up in prose or in a spec field. Where a photo and either one disagree, believe the photo and say so.",
   "",
-  "Judge only from what you were given — the titles, prices, descriptions and photos. You know nothing about delivery, stock, warranty, authenticity, or how good any of these shops are — never imply otherwise, and never call a shop trusted, verified, official, reputable or reliable.",
+  "Judge only from what you were given — the titles, prices, descriptions, attributes and photos. You know nothing about delivery, stock, warranty, authenticity, or how good any of these shops are — never imply otherwise, and never call a shop trusted, verified, official, reputable or reliable.",
   "Do NOT pick a best-value listing: that is computed from the prices separately, so pass null for bestValueId and bestValueReason.",
   "Keep the lead-in honest about what these are — they are not Velte vendors.",
   "",

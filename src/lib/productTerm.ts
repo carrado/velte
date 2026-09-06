@@ -112,3 +112,68 @@ export function buildProductTerm(
   }
   return parts.join(" ");
 }
+
+// Words that point AT something without naming it — on top of STOPWORDS,
+// which already strips connectors that carry no content either way.
+const REFERENTIAL_WORDS = new Set([
+  "all",
+  "both",
+  "any",
+  "either",
+  "whichever",
+  "whatever",
+  "it",
+  "this",
+  "that",
+  "them",
+  "these",
+  "those",
+  "one",
+  "ones",
+  "option",
+  "options",
+  "best",
+  "cheapest",
+  "top",
+  "good",
+  "better",
+  "check",
+  "give",
+  "please",
+  "can",
+  "you",
+]);
+
+/**
+ * True when a term carries no real product/business noun to search for —
+ * "all of them", "the best", "check all of them and give me the best" — as
+ * opposed to a genuinely short but real one ("phone", "TV").
+ *
+ * Found live: "Can you check all of them and give me the best?" (naming
+ * nothing concrete, following a turn that had just SUGGESTED several real
+ * laptops) reached searchProducts and the external Serper fallback anyway.
+ * A term this vague has no real signal for a vector search or a shopping
+ * query to match against, so Serper's `site:jiji.ng OR ...` returned
+ * whatever ranks best there GENERICALLY — used-car listings, utterly
+ * unrelated to the laptops the buyer had just been shown. Checked here,
+ * once, so every caller that builds a search term from the model's own
+ * `product`/`businessType` field can refuse to run a real lookup on one
+ * rather than trusting the model never to call a search tool with nothing
+ * concrete to search for.
+ *
+ * Deliberately permissive in the OTHER direction: a single real noun
+ * anywhere in the term ("the best LAPTOP") is enough to pass — this only
+ * catches a term that is ENTIRELY filler once stopwords and referential
+ * words are stripped, never a real product name that merely happens to be
+ * short.
+ */
+export function isVagueReference(term: string): boolean {
+  const words = term
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(
+      (w) => w.length > 0 && !STOPWORDS.has(w) && !REFERENTIAL_WORDS.has(w),
+    );
+  return words.length === 0;
+}

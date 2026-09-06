@@ -28,4 +28,22 @@ export interface Buyer {
    *  all. Anything rendering it must handle its absence rather than showing
    *  an empty link. */
   referralCode: string | null;
+  /** The VENDOR account proven to belong to the same person (2026-08-29's
+   *  linked identities, first read 2026-09-05).
+   *
+   *  Set at Google sign-in when this buyer's address matches a vendor whose
+   *  own email is verified — both halves have proven they own it, which is
+   *  the whole reason the link is on email and may only ever be on email
+   *  (vendor PHONES are never OTP-verified; see CLAUDE.md).
+   *
+   *  Null for the overwhelming majority of buyers, who have no vendor
+   *  account at all. Already on the wire for the same reason `referralCode`
+   *  is — the backend returns the whole Buyer document — so this only had to
+   *  be declared to become usable.
+   *
+   *  This is the first thing to actually read across the link, which was
+   *  built for a retired plan feature and kept precisely because "anything
+   *  later that has to follow a person rather than a cookie needs exactly
+   *  this". */
+  linkedVendorId: string | null;
 }

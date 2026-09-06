@@ -4,6 +4,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
+  SearchIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { ExternalOffer } from "@/types/search";
@@ -178,9 +179,39 @@ export function ExternalOfferCard({
             {offer.priceText}
           </p>
         )}
+        {/* Real spec pairs the page published (see ExternalOffer.attributes)
+            — capped at 3 and comma-joined rather than a full table, since
+            this is a compact card, not the listing's own page. Absent on
+            most listings today (only Jiji's page is parsed for these),
+            which is a normal, silent gap, not an error state. */}
+        {offer.attributes.length > 0 && (
+          <p className="text-xs text-gray-500">
+            {offer.attributes
+              .slice(0, 3)
+              .map((a) => a.value)
+              .join(" · ")}
+          </p>
+        )}
+        {/* Found live: a "View on Jiji" label reads as this exact listing's
+            own page no matter what's actually underneath it — and when the
+            organic lookup couldn't confidently match this listing to a real
+            product page, what's underneath is the shop's own search results
+            for its name instead (see ExternalOffer.isDirectLink). Still a
+            real, useful destination — the right shop, a pre-filled query —
+            just not what "View" promises, so the label and icon change to
+            say which one this tap actually is. */}
         <span className="mt-auto inline-flex items-center gap-1 pt-1 text-xs font-semibold text-orange-600">
-          View on {offer.merchant ?? "site"}
-          <ExternalLinkIcon size={12} className="shrink-0" />
+          {offer.isDirectLink ? (
+            <>
+              View on {offer.merchant ?? "site"}
+              <ExternalLinkIcon size={12} className="shrink-0" />
+            </>
+          ) : (
+            <>
+              Search {offer.merchant ?? "site"} for this
+              <SearchIcon size={12} className="shrink-0" />
+            </>
+          )}
         </span>
       </div>
     </a>

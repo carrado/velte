@@ -17,6 +17,7 @@ import {
   ClipboardListIllustration,
 } from "@/components/icons";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { Avatar } from "@/components/Avatar";
 import { fetchMyRequests } from "@/services/buyerRequests";
 import { useBuyerStore } from "@/store/buyerStore";
 import { cn, formatNaira } from "@/lib/utils";
@@ -28,9 +29,8 @@ import type {
 } from "@/types/buyerRequest";
 
 // "Your requests" — the buyer's own view of every Buyer Request they have
-// sent out (2026-08-30). The counterpart to Watching, and the answer to the
-// one question the chat cannot answer once the conversation scrolls away:
-// did anything come of it?
+// sent out (2026-08-30). The answer to the one question the chat cannot
+// answer once the conversation scrolls away: did anything come of it?
 //
 // A request is never created from this page — that only ever happens inside a
 // conversation, after a search genuinely found nothing and the buyer agreed
@@ -38,10 +38,9 @@ import type {
 // createBuyerRequest in any other situation). So this page is deliberately
 // read-only: it reports, and every action on it leads back to a search.
 //
-// Buyer session ONLY, unlike WatchesPage which accepts a vendor one too: a
-// request belongs to the Buyer document that created it, and a vendor's own
-// view of the requests they were matched to is a different page entirely
-// (/{id}/buyer-requests).
+// Buyer session ONLY: a request belongs to the Buyer document that created
+// it, and a vendor's own view of the requests they were matched to is a
+// different page entirely (/{id}/buyer-requests).
 
 const HOUR = 3_600_000;
 
@@ -226,19 +225,12 @@ function ResponderRow({
   });
   const body = (
     <>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-orange-500 text-xs font-bold text-white">
-        {responder.avatar ? (
-          <img
-            src={responder.avatar}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          responder.name.trim().charAt(0).toUpperCase()
-        )}
-      </span>
+      <Avatar
+        src={responder.avatar}
+        label={responder.name.trim().charAt(0).toUpperCase()}
+        className="h-9 w-9"
+        loading="lazy"
+      />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="min-w-0 truncate text-sm font-medium text-[#023337]">

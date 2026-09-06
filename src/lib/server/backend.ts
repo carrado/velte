@@ -36,10 +36,17 @@ interface BackendOptions {
   body?: unknown;
   /** Raw `Cookie` header value to forward (carries the session). */
   cookie?: string;
-  /** Extra headers. Added for the price-watch checker, which authenticates
-   *  to the backend with a shared secret rather than a buyer session — a
-   *  cron tick has no cookie to forward. */
+  /** Extra headers — for a caller that authenticates to the backend some
+   *  other way than a buyer session (a shared secret, say), which has no
+   *  cookie to forward. */
   headers?: Record<string, string>;
+  /** Aborts the upstream call (2026-09-05, for the guest network gate) — a
+   *  slow or hung backend must not delay a search turn, and this is the one
+   *  BFF call in the codebase that sits directly in front of the model call
+   *  rather than answering a page load, so it is the one that actually
+   *  needs its own timeout rather than just eating whatever the network
+   *  gives it. */
+  signal?: AbortSignal;
 }
 
 // Pulls a human-readable string out of an upstream error field — the field
@@ -86,7 +93,7 @@ function fieldsFrom(data: unknown): Record<string, string> | undefined {
 
 async function doFetch(
   path: string,
-  { method = "GET", body, cookie, headers }: BackendOptions,
+  { method = "GET", body, cookie, headers, signal }: BackendOptions,
 ): Promise<{ res: Response; data: unknown }> {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
@@ -99,6 +106,7 @@ async function doFetch(
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
+    signal,
   });
 
   let data: unknown = null;

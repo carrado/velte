@@ -12,7 +12,10 @@ import type {
 // model names the catch in one sentence (already server-verified as real),
 // and the buyer can then expand a plain side-by-side that has no room to
 // fabricate anything. Nothing here can say more than the data does.
-function buildDifferenceRows(
+// Exported (2026-09-05) so ComparisonTemplate.tsx's own "Worth knowing"
+// section can reuse the exact same factual-diff computation rather than a
+// second copy that could quietly drift from this one.
+export function buildDifferenceRows(
   tradeoff: VendorMatch,
   topPick: VendorMatch,
 ): { label: string; tradeoff: string; topPick: string }[] {
@@ -87,7 +90,7 @@ function buildDifferenceRows(
 // does on the Velte side: the tradeoff note can now say "the third photo
 // shows a cracked screen", and a buyer who reads that should be able to see
 // at a glance that there WERE three photos to look at.
-function buildOfferDifferenceRows(
+export function buildOfferDifferenceRows(
   tradeoff: ExternalOffer,
   topPick: ExternalOffer,
 ): { label: string; tradeoff: string; topPick: string }[] {
@@ -218,7 +221,13 @@ function fallbackLeadIn(recommendation: SearchRecommendation): string {
 // `block: "nearest"` keeps the page from jumping vertically when the card is
 // already in view — the horizontal move is the point; a vertical one would
 // feel like the thread lost its place.
-function scrollToCard(from: HTMLElement, id: string) {
+/** How long the "this is the card you asked for" ring stays up. Must match
+ *  the .velte-pick-flash animation duration in globals.css — this timeout is
+ *  what removes the class, so a shorter value cuts the ring off mid-hold.
+ *  Was 1600ms, which expired almost as soon as the smooth scroll landed. */
+const FLASH_DURATION_MS = 4000;
+
+export function scrollToCard(from: HTMLElement, id: string) {
   const group = from.closest("[data-results-group]");
   if (!group) return;
   // CSS.escape because a product id is arbitrary data in a selector.
@@ -238,11 +247,20 @@ function scrollToCard(from: HTMLElement, id: string) {
     block: "nearest",
   });
 
-  // A brief ring rather than a persistent selected state: this is a "look
-  // here" gesture, not a selection the buyer has to undo. Applied to the
-  // slide so it frames the whole card without touching the card component.
+  // A ring rather than a persistent selected state: this is a "look here"
+  // gesture, not a selection the buyer has to undo. Applied to the slide so
+  // it frames the whole card without touching the card component.
+  //
+  // Re-applied from scratch each time (remove, force a reflow, re-add) so
+  // that tapping a second row while the first ring is still running
+  // restarts the animation on the new card instead of doing nothing.
+  slide.classList.remove("velte-pick-flash");
+  void slide.offsetWidth;
   slide.classList.add("velte-pick-flash");
-  window.setTimeout(() => slide.classList.remove("velte-pick-flash"), 1600);
+  window.setTimeout(
+    () => slide.classList.remove("velte-pick-flash"),
+    FLASH_DURATION_MS,
+  );
 }
 
 export function RecommendationPicks({
@@ -414,7 +432,7 @@ export function RecommendationPicks({
 // expanded comparison underneath is computed from the two listings' own
 // fields, so the buyer can always check the claim against the data rather
 // than take it on trust. No extra model call is involved in expanding it.
-function TradeoffNote({
+export function TradeoffNote({
   note,
   name,
   rows,

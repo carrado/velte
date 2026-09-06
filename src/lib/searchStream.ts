@@ -4,7 +4,7 @@ import {
   spendGuestCredits,
 } from "@/lib/guestCredits";
 import { isBillableTurn } from "@/lib/turnBillable";
-import { CREDIT_COST, GUEST_CREDITS } from "@/lib/credits";
+import { GUEST_CREDIT_COST, guestExhaustedMessage } from "@/lib/credits";
 import type { SearchRequestBody, SearchStreamEvent } from "@/types/search";
 
 type FinalEvent = Extract<SearchStreamEvent, { type: "final" }>;
@@ -52,12 +52,12 @@ interface SearchStreamHandlers {
 function guestRefusal(cost: number): QuotaEvent {
   return {
     type: "quota",
-    // Deliberately the same sentence creditLedger.ts's creditMessage
-    // produces for a guest. Duplicated because that module is server-only,
-    // and the whole point of this gate is not to call the server. Only the
-    // wording is duplicated — the numbers come from credits.ts, which both
-    // halves import, so they cannot disagree about the allowance itself.
-    message: `You've used your ${GUEST_CREDITS} free credits. Create a free account and you'll get 15 more — enough for a proper shopping session.`,
+    // Literally the same sentence creditLedger.ts's creditMessage produces
+    // for a guest — one function in credits.ts, called by both, rather than
+    // the hand-copied string this used to be. That copy interpolated the
+    // guest allowance but hardcoded the signup grant, so it went on
+    // promising 15 credits after the grant dropped to 10.
+    message: guestExhaustedMessage(),
     kind: "text",
     // Balance and cost, the two numbers a credit meter needs.
     used: guestCredits(),
@@ -113,12 +113,14 @@ export async function runSearchStream(
   // have run. The check still comes first, or an empty balance could set a
   // real model call going and never pay for it.
   //
-  // A photo turn costs five credits where a text turn costs one — the same
-  // ratio the server charges, from the same table. A guest starts with five,
-  // so anyone who has searched even once can no longer afford a photo search:
-  // photo stays the sign-in hook it has always been, enforced by the pricing
-  // rather than by a rule saying so.
-  const guestCost = CREDIT_COST[body.imageUrl ? "photo" : "text"];
+  // GUEST_CREDIT_COST — the same table a signed-in account is charged
+  // (unified 2026-09-06; see credits.ts's own "ONE cost table" note), read
+  // under this name only so this stays legible as a guest-path lookup. A
+  // guest starts with ten (GUEST_CREDITS) and a photo turn costs eight, so
+  // anyone who has searched even once (text costs three) can no longer
+  // afford a photo search: photo stays the sign-in hook it has always been,
+  // enforced by the pricing rather than by a rule saying so.
+  const guestCost = GUEST_CREDIT_COST[body.imageUrl ? "photo" : "text"];
   if (isGuest && !guestCanAfford(guestCost)) {
     const refusal = guestRefusal(guestCost);
     // Falls back to onError like every other dispatch of this event, so a
