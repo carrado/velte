@@ -12,6 +12,8 @@ import ReferralCapture from "@/components/ReferralCapture";
 import MetaPixel from "@/components/MetaPixel";
 import BlockedAccountModal from "@/components/BlockedAccountModal";
 import { ScrollToTopButton } from "@/components/ScrollToTopButton";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { THEME_PRE_PAINT_SCRIPT } from "@/lib/theme";
 
 // Swapped from Inter 2026-08-17 — matching buvvo.ng's own choice. The
 // `geist` package (Vercel's own, self-hosted — no Google Fonts network
@@ -253,7 +255,23 @@ export default function RootLayout({
         GeistSans.variable,
         GeistMono.variable,
       )}
+      // The theme script below adds/removes `class="dark"` and sets
+      // `data-theme`/`color-scheme` on this element before React hydrates, so
+      // the server's markup and the live DOM legitimately differ here. This
+      // suppresses the warning for THIS element's attributes only — it does
+      // not extend to the tree inside it.
+      suppressHydrationWarning
     >
+      <head>
+        {/* Theme, before the first paint (2026-09-10) — in <head> rather than
+            <body> so it runs before any of the page renders, not after the
+            first chunk of markup has already been laid out. The server cannot
+            know this browser's theme (preference in localStorage, device
+            setting readable only on the client), so without this every load
+            would paint the LIGHT app and snap to dark on hydration. See
+            lib/theme.ts for why it's written as a tiny inline try/catch. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_PRE_PAINT_SCRIPT }} />
+      </head>
       <body>
         {/* Runs synchronously during HTML parsing, BEFORE anything paints —
             same pre-paint pattern chat/layout.tsx uses for its resume check.
@@ -274,34 +292,40 @@ export default function RootLayout({
           <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
         )}
         <Providers>
-          <ServiceWorkerRegistrar />
-          <StandalonePublicGuard />
-          <ReferralCapture />
-          <BlockedAccountModal />
-          <ScrollToTopButton />
-          {children}
-          <Toaster
-            position="top-right"
-            richColors
-            // Sonner's default mobile offset is a flat 16px from every edge —
-            // it doesn't know about the iOS notch/status bar or Android's
-            // cutouts. With viewportFit:"cover" this app draws under those
-            // areas, so the toast needs the same env(safe-area-inset-*)
-            // padding already used for the header/bottom bars elsewhere,
-            // or it renders clipped/overlapping the status bar on mobile.
-            mobileOffset={{
-              top: "calc(env(safe-area-inset-top) + 16px)",
-              right: "calc(env(safe-area-inset-right) + 16px)",
-            }}
-            toastOptions={{
-              classNames: {
-                error: "bg-red-600 text-white border-red-600",
-                success: "bg-green-600 text-white border-green-600",
-                warning: "bg-yellow-500 text-black border-yellow-500",
-                info: "bg-blue-600 text-white border-blue-600",
-              },
-            }}
-          />
+          {/* Outermost of the in-app providers: the theme applies to the
+              dashboard, /chat, the marketing pages and the public store/pay
+              pages alike — there is no per-surface theme, and anything that
+              renders can ask for the current one. */}
+          <ThemeProvider>
+            <ServiceWorkerRegistrar />
+            <StandalonePublicGuard />
+            <ReferralCapture />
+            <BlockedAccountModal />
+            <ScrollToTopButton />
+            {children}
+            <Toaster
+              position="top-right"
+              richColors
+              // Sonner's default mobile offset is a flat 16px from every edge —
+              // it doesn't know about the iOS notch/status bar or Android's
+              // cutouts. With viewportFit:"cover" this app draws under those
+              // areas, so the toast needs the same env(safe-area-inset-*)
+              // padding already used for the header/bottom bars elsewhere,
+              // or it renders clipped/overlapping the status bar on mobile.
+              mobileOffset={{
+                top: "calc(env(safe-area-inset-top) + 16px)",
+                right: "calc(env(safe-area-inset-right) + 16px)",
+              }}
+              toastOptions={{
+                classNames: {
+                  error: "bg-red-600 text-white border-red-600",
+                  success: "bg-green-600 text-white border-green-600",
+                  warning: "bg-yellow-500 text-black border-yellow-500",
+                  info: "bg-blue-600 text-white border-blue-600",
+                },
+              }}
+            />
+          </ThemeProvider>
         </Providers>
       </body>
     </html>

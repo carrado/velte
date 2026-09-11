@@ -58,7 +58,7 @@ function PaymentCallbackContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 p-8 text-center">
+      <div className="w-full max-w-md rounded-2xl bg-surface shadow-sm ring-1 ring-gray-100 p-8 text-center">
         {state === "verifying" && (
           <>
             <LoaderIcon

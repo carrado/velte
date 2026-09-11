@@ -58,7 +58,7 @@ export function CreditsFab() {
       // the send button. 7rem clears the composer row (~92px including its own
       // safe-area padding) with room to spare, at every width, and it still
       // reads as the bottom-right of the page.
-      className="fixed right-6 bottom-[calc(env(safe-area-inset-bottom)+7rem)] z-30 hidden cursor-pointer flex-col items-center gap-1 rounded-2xl border border-gray-200 bg-white px-2.5 py-2 shadow-lg transition-shadow hover:shadow-xl lg:flex"
+      className="fixed right-6 bottom-[calc(env(safe-area-inset-bottom)+7rem)] z-30 hidden cursor-pointer flex-col items-center gap-1 rounded-2xl border border-gray-200 bg-surface px-2.5 py-2 shadow-lg transition-shadow hover:shadow-xl lg:flex"
     >
       <span
         role="progressbar"
@@ -104,7 +104,7 @@ export function CreditsFab() {
       {/* The two numbers the ring cannot say. Tabular here, unlike the panel's
           hero figure — these are small, and a digit changing width as the
           count ticks over would make the whole control twitch. */}
-      <span className="text-[11px] leading-none font-semibold tabular-nums text-[#023337]">
+      <span className="text-[11px] leading-none font-semibold tabular-nums text-ink">
         {spent}/{total}
       </span>
     </button>

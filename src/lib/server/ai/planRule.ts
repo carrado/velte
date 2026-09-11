@@ -1,10 +1,26 @@
-// THE definition of what counts as a genuine Shopping Plan request — read
-// only by toolAlignment.ts today, since (unlike Compare) a plan is not also
-// inferred from plain text with no tool selected; it's explicit-tool-only,
-// so there is no classifyScopeTool sibling call to keep in step with. Kept
-// as its own file anyway, matching comparisonRule.ts's own shape, so the
-// rule stays a decision procedure and not a list of examples the model
-// pattern-matches against instead of actually judging.
+// THE definition of what counts as a genuine Shopping Plan request, in one
+// place.
+//
+// TWO callers now read it, and they must never drift into disagreeing about
+// it (exactly the shape comparisonRule.ts's own header describes):
+//   - toolAlignment.ts, when the buyer explicitly picked the Shopping Plan
+//     tool and we're deciding whether their message honours that promise,
+//     and
+//   - classifyScopeTool / buildScopeCheckSystemPrompt, which judges every
+//     message-bearing turn so a plan request typed with NO tool selected is
+//     still treated as one.
+//
+// That second caller is new (2026-09-10, per explicit product direction) and
+// reverses what this file used to say: a plan was deliberately
+// explicit-tool-only, on the reasoning that inferring one wrongly would hand
+// a buyer a whole checklist they never asked for. What changed is that the
+// cost of the OTHER error turned out to be higher — "I want to set up an
+// office space, what and what do I need" is unmistakably a plan, and
+// answering it with a single generic search (or worse, a location question)
+// misses the entire feature. The false-positive risk is handled where it
+// belongs instead: in the rule below, which is written as a decision
+// procedure with the not-a-plan cases spelled out, and by the plan flow
+// itself asking for a budget before it commits to anything.
 export const PLAN_TOOL_RULE = [
   "A SHOPPING PLAN request states a GOAL and a BUDGET the buyer wants to spend across MULTIPLE things, not a single item to find right now.",
   "",

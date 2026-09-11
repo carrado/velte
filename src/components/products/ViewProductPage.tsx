@@ -72,12 +72,12 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-surface sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="flex items-center gap-2.5 px-5 py-4 border-b border-gray-100">
         <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
           <Icon size={14} className="text-orange-500" />
         </div>
-        <h3 className="text-dash-heading font-bold text-[#023337]">{title}</h3>
+        <h3 className="text-dash-heading font-bold text-ink">{title}</h3>
       </div>
       <div className="px-5 py-4">{children}</div>
     </div>
@@ -183,17 +183,17 @@ function ProductCarousel({
         <>
           <button
             onClick={prev}
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm shadow flex items-center justify-center hover:bg-white transition-colors z-10"
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm shadow flex items-center justify-center hover:bg-surface transition-colors z-10"
             aria-label="Previous image"
           >
-            <ChevronLeftIcon size={16} className="text-[#023337]" />
+            <ChevronLeftIcon size={16} className="text-ink" />
           </button>
           <button
             onClick={next}
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm shadow flex items-center justify-center hover:bg-white transition-colors z-10"
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm shadow flex items-center justify-center hover:bg-surface transition-colors z-10"
             aria-label="Next image"
           >
-            <ChevronRightIcon size={16} className="text-[#023337]" />
+            <ChevronRightIcon size={16} className="text-ink" />
           </button>
         </>
       )}
@@ -208,7 +208,7 @@ function ProductCarousel({
               className={cn(
                 "rounded-full transition-all duration-300",
                 i === current
-                  ? "w-5 h-2 bg-white shadow"
+                  ? "w-5 h-2 bg-surface shadow"
                   : "w-2 h-2 bg-white/50 hover:bg-white/80",
               )}
               aria-label={`Go to slide ${i + 1}`}
@@ -227,9 +227,9 @@ function ViewProductSkeleton() {
     <div className="space-y-5 animate-pulse">
       <div className="h-5 w-32 bg-gray-200 rounded" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-1 bg-white sm:rounded-2xl shadow-sm h-72 border border-gray-100" />
+        <div className="lg:col-span-1 bg-surface sm:rounded-2xl shadow-sm h-72 border border-gray-100" />
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 h-40 p-5 space-y-3">
+          <div className="bg-surface sm:rounded-2xl shadow-sm border border-gray-100 h-40 p-5 space-y-3">
             <div className="h-6 bg-gray-200 rounded w-2/3" />
             <div className="h-4 bg-gray-100 rounded w-full" />
             <div className="h-4 bg-gray-100 rounded w-5/6" />
@@ -238,7 +238,7 @@ function ViewProductSkeleton() {
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="h-20 bg-white sm:rounded-2xl shadow-sm border border-gray-100"
+                className="h-20 bg-surface sm:rounded-2xl shadow-sm border border-gray-100"
               />
             ))}
           </div>
@@ -344,7 +344,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         {/* ── Left: Carousel + name ── */}
         <div className="lg:col-span-1">
-          <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-surface sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="relative">
               <ProductCarousel
                 productName={product.name}
@@ -356,7 +356,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
 
             {/* Name + category + description */}
             <div className="px-5 py-4 border-t border-gray-100">
-              <h2 className="text-dash-title font-bold text-[#023337] leading-tight mb-1">
+              <h2 className="text-dash-title font-bold text-ink leading-tight mb-1">
                 {product.name}
               </h2>
               {categoryDisplay && (
@@ -418,7 +418,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                         ? "Price range"
                         : "Price"}
                   </p>
-                  <p className="text-[2rem] font-black text-[#023337] leading-none">
+                  <p className="text-[2rem] font-black text-ink leading-none">
                     {pricing.quoteOnRequest
                       ? "Contact for quote"
                       : pricing.isRange
@@ -484,7 +484,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     <span className="text-dash-body text-gray-500 font-medium">
                       {attr.name}
                     </span>
-                    <span className="text-dash-body font-bold text-[#023337]">
+                    <span className="text-dash-body font-bold text-ink">
                       {attr.value}
                     </span>
                   </div>
@@ -530,7 +530,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                 {product.dailyLimit != null && (
                   <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-2.5">
                     <LayersIcon size={14} className="text-gray-500" />
-                    <span className="text-dash-body font-semibold text-[#023337]">
+                    <span className="text-dash-body font-semibold text-ink">
                       Daily limit: {product.dailyLimit}
                     </span>
                   </div>
@@ -591,7 +591,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     className="border border-gray-100 rounded-xl overflow-hidden"
                   >
                     <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
-                      <span className="text-dash-body font-semibold text-[#023337]">
+                      <span className="text-dash-body font-semibold text-ink">
                         {group.name}
                       </span>
                       {group.required && (
@@ -642,7 +642,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     <span className="text-dash-body text-gray-500 font-medium">
                       {attr.name}
                     </span>
-                    <span className="text-dash-body font-bold text-[#023337]">
+                    <span className="text-dash-body font-bold text-ink">
                       {attr.value}
                     </span>
                   </div>
@@ -665,7 +665,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     <span className="text-dash-body text-gray-500 font-medium">
                       {attr.name}
                     </span>
-                    <span className="text-dash-body font-bold text-[#023337]">
+                    <span className="text-dash-body font-bold text-ink">
                       {attr.value}
                     </span>
                   </div>
@@ -698,7 +698,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                   <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
                     Created Date
                   </p>
-                  <p className="text-dash-body font-semibold text-[#023337]">
+                  <p className="text-dash-body font-semibold text-ink">
                     {fmtDate(product.createdDate)}
                   </p>
                 </div>
@@ -713,7 +713,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
                       Category
                     </p>
-                    <p className="text-dash-body font-semibold text-[#023337]">
+                    <p className="text-dash-body font-semibold text-ink">
                       {categoryDisplay.emoji} {categoryDisplay.name}
                     </p>
                   </div>
@@ -748,7 +748,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
                       Manufacturing Date
                     </p>
-                    <p className="text-dash-body font-semibold text-[#023337]">
+                    <p className="text-dash-body font-semibold text-ink">
                       {fmtDate(product.manufacturingDate)}
                     </p>
                   </div>
@@ -764,7 +764,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
                     <p className="text-dash-caption text-gray-400 uppercase tracking-wide font-semibold mb-0.5">
                       Duration / Guarantee
                     </p>
-                    <p className="text-dash-body font-semibold text-[#023337]">
+                    <p className="text-dash-body font-semibold text-ink">
                       {fmtDate(product.expirationDate)}
                     </p>
                     <p className="text-dash-caption text-gray-400 mt-0.5">

@@ -18,7 +18,7 @@ export default function FaqAccordionItem({
   return (
     <div
       className={cn(
-        "border rounded-2xl bg-white overflow-hidden transition-shadow duration-200",
+        "border rounded-2xl bg-surface overflow-hidden transition-shadow duration-200",
         open
           ? "border-orange-200 shadow-md shadow-orange-500/[0.06]"
           : "border-gray-200 hover:border-gray-300",
@@ -30,7 +30,7 @@ export default function FaqAccordionItem({
         aria-expanded={open}
         className="w-full flex items-center justify-between gap-4 text-left px-5 py-4 cursor-pointer"
       >
-        <span className="text-[#023337] font-semibold text-[15px]">
+        <span className="text-ink font-semibold text-[15px]">
           {faq.question}
         </span>
         <PlusIcon

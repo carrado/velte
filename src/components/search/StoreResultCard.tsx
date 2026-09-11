@@ -83,7 +83,7 @@ export function StoreResultCard({
   const hasMore = descOverflows || match.sectors.length > 3;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-2.5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
+    <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm p-4 space-y-2.5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="flex items-center gap-2">
         <div className="w-9 h-9 rounded-full bg-orange-50 overflow-hidden flex items-center justify-center shrink-0">
           {match.avatar ? (

@@ -97,7 +97,7 @@ export function VendorResultCard({
     descOverflows || match.attributes.length > 0 || images.length > 1;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
+    <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div
         className={`relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden ${images.length > 0 ? "cursor-zoom-in" : ""}`}
         onClick={() => images.length > 0 && setLightboxOpen(true)}
@@ -156,7 +156,7 @@ export function VendorResultCard({
                   key={url}
                   className={cn(
                     "h-1.5 w-1.5 rounded-full transition-colors",
-                    i === imgIndex ? "bg-white" : "bg-white/50",
+                    i === imgIndex ? "bg-surface" : "bg-white/50",
                   )}
                 />
               ))}
@@ -169,11 +169,9 @@ export function VendorResultCard({
           {match.name}
         </p>
         {match.quoteOnRequest ? (
-          <p className="text-[15px] font-extrabold text-[#023337]">
-            Ask for price
-          </p>
+          <p className="text-[15px] font-extrabold text-ink">Ask for price</p>
         ) : (
-          <p className="text-[15px] font-extrabold text-[#023337]">
+          <p className="text-[15px] font-extrabold text-ink">
             {fmt(match.price, symbol)}
             {isRange && (
               <>

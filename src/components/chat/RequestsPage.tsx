@@ -17,10 +17,11 @@ import {
   ClipboardListIllustration,
 } from "@/components/icons";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import { Avatar } from "@/components/Avatar";
 import { fetchMyRequests } from "@/services/buyerRequests";
 import { useBuyerStore } from "@/store/buyerStore";
-import { cn, formatNaira } from "@/lib/utils";
+import { cn, formatNaira, timeAgo } from "@/lib/utils";
 import { compareQuotes, leadTimeLabel } from "@/lib/quoteCompare";
 import { buildChatLink } from "@/lib/chatLink";
 import type {
@@ -53,22 +54,6 @@ function useNow(intervalMs: number): number {
     return () => clearInterval(id);
   }, [intervalMs]);
   return now;
-}
-
-function timeAgo(iso: string, now: number): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const minutes = Math.max(0, Math.round((now - then) / 60_000));
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(then).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-  });
 }
 
 /** Rounded DOWN, deliberately: "3h left" that turns out to be 3h20m is a
@@ -233,7 +218,7 @@ function ResponderRow({
       />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="min-w-0 truncate text-sm font-medium text-[#023337]">
+          <span className="min-w-0 truncate text-sm font-medium text-ink">
             {responder.name}
           </span>
           {badge && (
@@ -247,7 +232,7 @@ function ResponderRow({
             without naming a price is not shown as worse than one who did —
             they are shown as unanswered, with the thing to do about it. */}
         {responder.priceKobo != null ? (
-          <span className="block truncate text-[13px] font-semibold text-[#023337]">
+          <span className="block truncate text-[13px] font-semibold text-ink">
             {formatNaira(responder.priceKobo)}
             {lead && (
               <span className="font-normal text-gray-500"> · {lead}</span>
@@ -322,6 +307,7 @@ function RequestCard({
 }) {
   const tone = toneOf(request);
   const [showAll, setShowAll] = useState(false);
+  const { navigate } = useNavigation();
 
   // How much of this request's own window has run — computed from its two
   // stored timestamps rather than a hardcoded 48h, so changing
@@ -373,7 +359,7 @@ function RequestCard({
   return (
     <article
       className={cn(
-        "overflow-hidden rounded-2xl border bg-white transition-shadow hover:shadow-sm",
+        "overflow-hidden rounded-2xl border bg-surface transition-shadow hover:shadow-sm",
         tone === "answered" ? "border-green-100" : "border-gray-100",
       )}
     >
@@ -381,7 +367,7 @@ function RequestCard({
         {request.budgetKobo != null && (
           <p className="mb-2 text-[12px] text-gray-500">
             Budget shown to businesses:{" "}
-            <span className="font-semibold text-[#023337]">
+            <span className="font-semibold text-ink">
               {formatNaira(request.budgetKobo)}
             </span>
           </p>
@@ -406,7 +392,7 @@ function RequestCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
-            <p className="min-w-0 text-sm leading-relaxed text-[#023337]">
+            <p className="min-w-0 text-sm leading-relaxed text-ink">
               {request.description}
             </p>
             <StatusPill request={request} now={now} />
@@ -464,7 +450,7 @@ function RequestCard({
               below, so a buyer can check it rather than trust it. */}
           {comparison.recommendation && (
             <div className="mx-2 mb-2 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2">
-              <p className="text-[12px] font-semibold text-[#023337]">
+              <p className="text-[12px] font-semibold text-ink">
                 Best pick: {comparison.recommendation.responder.name}
               </p>
               <p className="text-[11px] leading-relaxed text-gray-600">
@@ -511,13 +497,14 @@ function RequestCard({
           <p className="text-xs text-gray-500">
             No business picked this one up before it closed.
           </p>
-          <Link
-            href="/chat"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-600 transition-colors hover:text-orange-700"
+          <button
+            type="button"
+            onClick={() => navigate("/chat")}
+            className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-orange-600 transition-colors hover:text-orange-700"
           >
             <SearchIcon size={12} />
             Try another search
-          </Link>
+          </button>
         </div>
       )}
     </article>
@@ -534,11 +521,11 @@ function StatTile({
   accent?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
+    <div className="rounded-2xl border border-gray-100 bg-surface px-4 py-3">
       <p
         className={cn(
           "text-xl font-bold",
-          accent ? "text-green-600" : "text-[#023337]",
+          accent ? "text-green-600" : "text-ink",
         )}
       >
         {value}
@@ -577,6 +564,7 @@ export function RequestsPage() {
   const buyer = useBuyerStore((s) => s.buyer);
   const [filter, setFilter] = useState<FilterId>("all");
   const now = useNow(60_000);
+  const { navigate } = useNavigation();
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["buyer", "requests"],
@@ -608,7 +596,7 @@ export function RequestsPage() {
       <div className="h-full overflow-y-auto">
         <div className="mx-auto max-w-lg px-4 py-16 text-center">
           <ClipboardListIllustration size={64} className="mx-auto" />
-          <h1 className="mt-4 text-lg font-bold text-[#023337]">
+          <h1 className="mt-4 text-lg font-bold text-ink">
             Sign in to see your requests
           </h1>
           <p className="mt-2 text-sm text-gray-500">
@@ -629,7 +617,7 @@ export function RequestsPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-2xl px-4 py-8">
         <header className="mb-6">
-          <h1 className="text-xl font-bold text-[#023337]">Your requests</h1>
+          <h1 className="text-xl font-bold text-ink">Your requests</h1>
           <p className="mt-1 text-sm text-gray-500">
             What Velte asked businesses on your behalf, and who came back.
           </p>
@@ -647,7 +635,7 @@ export function RequestsPage() {
         )}
 
         {isError && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 text-center">
+          <div className="rounded-2xl border border-gray-100 bg-surface p-5 text-center">
             <p className="text-sm text-gray-500">
               Couldn&apos;t load your requests just now.
             </p>
@@ -664,7 +652,7 @@ export function RequestsPage() {
         {!isLoading && !isError && requests.length === 0 && (
           <div className="rounded-2xl border border-dashed border-gray-200 p-8 text-center">
             <ClipboardListIllustration size={56} className="mx-auto" />
-            <p className="mt-4 text-sm font-semibold text-[#023337]">
+            <p className="mt-4 text-sm font-semibold text-ink">
               You haven&apos;t sent any requests yet
             </p>
             <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-gray-500">
@@ -672,13 +660,14 @@ export function RequestsPage() {
               no business on Velte has it, Velte offers to reach out to the ones
               who might, and whatever comes back lands on this page.
             </p>
-            <Link
-              href="/chat"
-              className="mt-5 inline-flex items-center justify-center gap-1.5 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+            <button
+              type="button"
+              onClick={() => navigate("/chat")}
+              className="mt-5 inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
             >
               <SearchIcon size={14} />
               Start a search
-            </Link>
+            </button>
           </div>
         )}
 
@@ -707,7 +696,7 @@ export function RequestsPage() {
                         "cursor-pointer rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
                         filter === tab.id
                           ? "border-orange-200 bg-orange-50 text-orange-700"
-                          : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50",
+                          : "border-gray-200 bg-surface text-gray-500 hover:bg-gray-50",
                       )}
                     >
                       {tab.label}

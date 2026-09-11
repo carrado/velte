@@ -3,6 +3,7 @@
 
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { VelteLogo } from "@/components/VelteLogo";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
 import { getInitial } from "@/lib/initials";
@@ -138,7 +139,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="hidden lg:flex w-[260px] h-full bg-white flex-col border-r border-gray-200 overflow-y-auto flex-shrink-0">
+    <aside className="hidden lg:flex w-[260px] h-full bg-surface flex-col border-r border-gray-200 overflow-y-auto flex-shrink-0">
       <div className="flex items-center px-4 py-2 h-[70px] border-b border-gray-200">
         <div className="flex gap-1.5">
           {/* Swapped off the stale Cloudinary-hosted copy (2026-08-14) —
@@ -152,12 +153,7 @@ export default function Sidebar() {
               against the sidebar's left edge (2026-08-17, reported too
               close to the edge). Dropped now that there's nothing left to
               compensate for. */}
-          <img
-            src="/velte_logo_esn5dj.png"
-            alt="Velte logo"
-            width={56}
-            height={27}
-          />
+          <VelteLogo alt="Velte logo" width={56} height={27} />
         </div>
       </div>
 
@@ -202,7 +198,7 @@ export default function Sidebar() {
               }
             />
           </div>
-          <p className="text-lg font-bold text-[#023337]">
+          <p className="text-lg font-bold text-ink">
             {wallet ? formatNaira(wallet.balanceKobo) : "—"}
           </p>
           {wallet && wallet.balanceKobo < LOW_BALANCE_KOBO && (
@@ -212,7 +208,7 @@ export default function Sidebar() {
           )}
           <button
             onClick={() => navigate(getFullPath("wallet"))}
-            className="mt-2.5 w-full py-1.5 text-dash-caption font-semibold text-orange-600 bg-white border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors cursor-pointer"
+            className="mt-2.5 w-full py-1.5 text-dash-caption font-semibold text-orange-600 bg-surface border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors cursor-pointer"
           >
             {wallet && wallet.balanceKobo < LOW_BALANCE_KOBO
               ? "Top Up"

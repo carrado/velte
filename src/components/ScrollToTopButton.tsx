@@ -44,7 +44,7 @@ export function ScrollToTopButton() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 12, scale: 0.9 }}
           transition={{ type: "spring", stiffness: 380, damping: 30 }}
-          className="fixed z-40 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#023337] shadow-lg ring-1 ring-black/5 hover:bg-gray-50 transition-colors"
+          className="fixed z-40 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-ink shadow-lg ring-1 ring-black/5 hover:bg-gray-50 transition-colors"
           style={{
             right: "max(1.25rem, env(safe-area-inset-right))",
             bottom: "calc(env(safe-area-inset-bottom) + 1.25rem)",

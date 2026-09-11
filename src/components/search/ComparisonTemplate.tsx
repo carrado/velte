@@ -172,14 +172,14 @@ export function ComparisonTemplate({
           <span className="shrink-0 rounded-full border border-sky-300 bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700 mt-0.5">
             About these results
           </span>
-          <p className="min-w-0 text-sm leading-relaxed text-[#023337]">
+          <p className="min-w-0 text-sm leading-relaxed text-ink">
             {comparison.substitutionNote}
           </p>
         </div>
       )}
 
       <div className="space-y-1">
-        <h2 className="text-[15px] sm:text-base font-semibold text-[#023337]">
+        <h2 className="text-[15px] sm:text-base font-semibold text-ink">
           I found {comparison.rows.length} option
           {comparison.rows.length === 1 ? "" : "s"}
           {sourceIsMixed
@@ -215,7 +215,7 @@ export function ComparisonTemplate({
                 <span aria-hidden>{PICK_EMOJI[pick.kind]}</span>
                 {pick.label}
               </span>
-              <span className="mt-1 block text-[15px] font-semibold text-[#023337] leading-snug">
+              <span className="mt-1 block text-[15px] font-semibold text-ink leading-snug">
                 {pick.name}
               </span>
               <span className="block text-sm text-gray-600">
@@ -238,7 +238,7 @@ export function ComparisonTemplate({
 
       {comparison.rows.length > 1 && (
         <div className="space-y-1.5">
-          <h3 className="text-sm font-semibold text-[#023337]">
+          <h3 className="text-sm font-semibold text-ink">
             Compare your options
           </h3>
           {/* Always open, never behind a toggle: the buyer asked to compare,
@@ -281,7 +281,7 @@ export function ComparisonTemplate({
                     className="border-t border-gray-100 cursor-pointer hover:bg-orange-50/40"
                     onClick={(e) => scrollToCard(e.currentTarget, row.id)}
                   >
-                    <td className="py-2 pl-3 pr-3 font-medium text-[#023337]">
+                    <td className="py-2 pl-3 pr-3 font-medium text-ink">
                       {row.name}
                     </td>
                     <td className="py-2 pr-3 whitespace-nowrap text-gray-800">
@@ -348,9 +348,7 @@ export function ComparisonTemplate({
 
       {comparison.recommendationNote && (
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold text-[#023337]">
-            My recommendation
-          </h3>
+          <h3 className="text-sm font-semibold text-ink">My recommendation</h3>
           <p className="text-sm leading-relaxed text-gray-700">
             {comparison.recommendationNote}
           </p>
@@ -359,7 +357,7 @@ export function ComparisonTemplate({
 
       {guidanceRows.length > 0 && (
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold text-[#023337]">Trade-offs</h3>
+          <h3 className="text-sm font-semibold text-ink">Trade-offs</h3>
           <ul className="space-y-1">
             {guidanceRows.map((g) => (
               <li key={g.id}>

@@ -82,13 +82,13 @@ export function AskVeluxButton({
     <Link
       href="/chat"
       className={cn(
-        "inline-flex items-center gap-3 pl-2 pr-5 sm:pr-6 py-2 rounded-full bg-white border border-orange-200 shadow-sm hover:shadow-md hover:border-orange-300 transition-all",
+        "inline-flex items-center gap-3 pl-2 pr-5 sm:pr-6 py-2 rounded-full bg-surface border border-orange-200 shadow-sm hover:shadow-md hover:border-orange-300 transition-all",
         className,
       )}
     >
       {avatar}
       <span className="flex flex-col items-start leading-tight text-left">
-        <span className="text-[14px] sm:text-[15px] font-semibold text-[#023337]">
+        <span className="text-[14px] sm:text-[15px] font-semibold text-ink">
           {label}
         </span>
         {subtext && (

@@ -43,7 +43,7 @@ export function OpportunitiesBanner() {
         <SparklesIcon size={16} className="text-white" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-dash-body font-semibold text-[#023337]">
+        <p className="text-dash-body font-semibold text-ink">
           {unresponded.length}{" "}
           {unresponded.length === 1
             ? "buyer opportunity"

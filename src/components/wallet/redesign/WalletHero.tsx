@@ -26,7 +26,7 @@ export default function WalletHero({
   const canAutoRecharge = wallet?.autoRecharge.enabled && hasCard;
 
   return (
-    <div className="relative overflow-hidden rounded-none sm:rounded-3xl bg-white border border-gray-100 shadow-sm p-6 sm:p-8">
+    <div className="relative overflow-hidden rounded-none sm:rounded-3xl bg-surface border border-gray-100 shadow-sm p-6 sm:p-8">
       {/* Layered ambient glow + dot texture — decoration only, no data. */}
       <div className="pointer-events-none absolute -top-28 -right-24 w-80 h-80 bg-orange-100/70 rounded-full blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -left-16 w-64 h-64 bg-amber-50 rounded-full blur-3xl" />
@@ -65,7 +65,7 @@ export default function WalletHero({
           </div>
         </div>
 
-        <p className="text-4xl sm:text-5xl leading-tight font-black text-[#023337] mb-6 tabular-nums">
+        <p className="text-4xl sm:text-5xl leading-tight font-black text-ink mb-6 tabular-nums">
           {isLoading ? "—" : formatNaira(Math.round(animatedBalance))}
         </p>
 

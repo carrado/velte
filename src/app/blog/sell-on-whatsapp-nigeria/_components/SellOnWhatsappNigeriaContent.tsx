@@ -84,7 +84,7 @@ export default function SellOnWhatsappNigeriaContent() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#F1F5F9] min-h-screen pt-24 pb-20">
+      <main className="bg-canvas min-h-screen pt-24 pb-20">
         <article className="max-w-3xl mx-auto px-5 sm:px-8 flex flex-col gap-8">
           {/* Header */}
           <header className="flex flex-col gap-4">
@@ -92,7 +92,7 @@ export default function SellOnWhatsappNigeriaContent() {
             <span className="inline-flex self-start items-center rounded-full bg-orange-50 border border-orange-200 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-orange-700">
               Guides
             </span>
-            <h1 className="text-3xl sm:text-4xl font-bold text-[#023337] text-balance tracking-tight">
+            <h1 className="text-3xl sm:text-4xl font-bold text-ink text-balance tracking-tight">
               How to Start Selling on WhatsApp in Nigeria: A Complete Guide
             </h1>
             <p className="text-gray-500 text-base max-w-2xl">
@@ -102,17 +102,17 @@ export default function SellOnWhatsappNigeriaContent() {
               to close it.
             </p>
             <div className="flex flex-wrap gap-2 text-xs text-gray-400">
-              <span className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
+              <span className="rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5">
                 11 August 2026
               </span>
-              <span className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
+              <span className="rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5">
                 8 min read
               </span>
             </div>
           </header>
 
           {/* Intro */}
-          <section className="rounded-2xl border border-gray-100 bg-white shadow-sm p-6 sm:p-7">
+          <section className="rounded-2xl border border-gray-100 bg-surface shadow-sm p-6 sm:p-7">
             <p className="text-gray-600 text-[15px] leading-relaxed">
               Nigeria has one of the most active WhatsApp Business markets in
               the world — millions of small vendors, from fashion resellers to
@@ -145,9 +145,9 @@ export default function SellOnWhatsappNigeriaContent() {
             {STEPS.map((step, i) => (
               <section
                 key={step.title}
-                className="rounded-2xl border border-gray-100 bg-white shadow-sm p-6 sm:p-7"
+                className="rounded-2xl border border-gray-100 bg-surface shadow-sm p-6 sm:p-7"
               >
-                <h2 className="text-xl font-bold text-[#023337] mb-2.5">
+                <h2 className="text-xl font-bold text-ink mb-2.5">
                   {step.title}
                 </h2>
                 <p className="text-gray-500 text-[15px] leading-relaxed">
@@ -176,7 +176,7 @@ export default function SellOnWhatsappNigeriaContent() {
           <section className="rounded-2xl border border-red-100 bg-red-50/40 p-6 sm:p-7">
             <div className="flex items-center gap-2 mb-3.5">
               <XCircleIcon className="w-5 h-5 text-red-500 shrink-0" />
-              <h2 className="text-lg font-bold text-[#023337]">
+              <h2 className="text-lg font-bold text-ink">
                 Common mistakes that cost vendors sales
               </h2>
             </div>
@@ -197,7 +197,7 @@ export default function SellOnWhatsappNigeriaContent() {
           <section className="rounded-2xl border border-orange-200 bg-orange-50 p-6 sm:p-7">
             <div className="flex items-center gap-2 mb-3.5">
               <CheckCircleIcon className="w-5 h-5 text-orange-600 shrink-0" />
-              <h2 className="text-lg font-bold text-[#023337]">
+              <h2 className="text-lg font-bold text-ink">
                 What a working setup looks like
               </h2>
             </div>
@@ -224,13 +224,13 @@ export default function SellOnWhatsappNigeriaContent() {
 
           {/* FAQ */}
           <section>
-            <h2 className="text-lg font-bold text-[#023337] mb-2">
+            <h2 className="text-lg font-bold text-ink mb-2">
               Common questions
             </h2>
             <div className="divide-y divide-gray-200">
               {FAQS.map((item) => (
                 <div key={item.q} className="py-3.5">
-                  <p className="text-sm font-semibold text-[#023337] mb-1">
+                  <p className="text-sm font-semibold text-ink mb-1">
                     {item.q}
                   </p>
                   <p className="text-sm text-gray-500">{item.a}</p>
@@ -240,9 +240,9 @@ export default function SellOnWhatsappNigeriaContent() {
           </section>
 
           {/* CTA */}
-          <section className="rounded-2xl border border-gray-100 bg-white shadow-sm p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <section className="rounded-2xl border border-gray-100 bg-surface shadow-sm p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="font-bold text-[#023337] mb-1">
+              <p className="font-bold text-ink mb-1">
                 Ready to turn your WhatsApp chats into a real store?
               </p>
               <p className="text-sm text-gray-500">

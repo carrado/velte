@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
+import { VelteLogo } from "@/components/VelteLogo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -123,18 +123,12 @@ function LoginForm() {
         href="/"
         className="flex items-center gap-2.5 justify-center mb-6 lg:hidden"
       >
-        <Image
-          src="/velte_logo_esn5dj.png"
-          alt="Velte logo"
-          width={72}
-          height={35}
-          priority
-        />
+        <VelteLogo alt="Velte logo" width={72} height={35} priority />
       </Link>
 
-      <div className="bg-white border border-gray-100 sm:rounded-2xl p-8 shadow-xl shadow-gray-200/60">
+      <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-xl shadow-gray-200/60">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-[#023337] mb-2 tracking-tight">
+          <h1 className="text-2xl font-bold text-ink mb-2 tracking-tight">
             Welcome back
           </h1>
           <p className="text-gray-500 text-sm">

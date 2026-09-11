@@ -43,7 +43,7 @@ function SpendTooltip({ active, payload }: TooltipProps<number, string>) {
     label: string;
   };
   return (
-    <div className="bg-white rounded-lg border border-gray-100 shadow-lg px-3 py-2">
+    <div className="bg-surface rounded-lg border border-gray-100 shadow-lg px-3 py-2">
       <p className="text-dash-caption font-semibold text-gray-900">
         {point.label}{" "}
         <span className="font-normal text-gray-400">{point.year}</span>
@@ -72,7 +72,7 @@ export default function LeadGenerationCard() {
   const hasActivity = (stats?.totalLeads ?? 0) > 0;
 
   return (
-    <div className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+    <div className="bg-surface rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
           <h2 className="text-dash-heading font-semibold text-gray-900">

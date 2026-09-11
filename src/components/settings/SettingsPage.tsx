@@ -12,6 +12,7 @@ import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
 import LogoutModal from "@/components/LogOutModal";
 import { InstallRow } from "@/components/InstallRow";
 import { PushNotificationToggle } from "@/components/PushNotificationManager";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 import { NIGERIA_STATES } from "@/lib/states";
 import {
@@ -25,6 +26,7 @@ import {
 import type { UserLocation } from "@/types/user";
 import {
   BellIcon,
+  MonitorIcon,
   BuildingIcon,
   CameraIcon,
   CheckCircleIcon,
@@ -138,7 +140,7 @@ function SectionCard({
   return (
     <div
       id={id}
-      className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6"
+      className="bg-surface sm:rounded-2xl border border-gray-200 p-5 sm:p-6"
     >
       <div className="flex items-center gap-3 mb-5">
         <div className="w-9 h-9 bg-orange-50 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -581,7 +583,7 @@ function AccountSettingsPanel() {
             onValueChange={(v) => setProfile((p) => ({ ...p, state: v ?? "" }))}
             disabled={addressLocked}
           >
-            <SelectTrigger className="w-full h-11 bg-white border border-gray-200 rounded-xl text-dash-body text-gray-700 focus-visible:ring-2 focus-visible:ring-orange-300 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed">
+            <SelectTrigger className="w-full h-11 bg-surface border border-gray-200 rounded-xl text-dash-body text-gray-700 focus-visible:ring-2 focus-visible:ring-orange-300 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed">
               <SelectValue placeholder="Select your state" />
             </SelectTrigger>
             <SelectContent className="max-h-60">
@@ -941,7 +943,7 @@ function LogoutSection() {
 
   return (
     <>
-      <div className="bg-white sm:rounded-2xl border border-gray-200 p-5 sm:p-6 flex items-center justify-between gap-4">
+      <div className="bg-surface sm:rounded-2xl border border-gray-200 p-5 sm:p-6 flex items-center justify-between gap-4">
         <div>
           <p className="text-dash-body font-semibold text-gray-900">Log out</p>
           <p className="text-dash-secondary text-gray-400 mt-0.5">
@@ -986,6 +988,14 @@ export default function SettingsPage() {
       <div className="px-5 sm:px-0">
         <InstallRow />
       </div>
+
+      <SectionCard
+        icon={MonitorIcon}
+        title="Appearance"
+        description="System follows your device — pick Light or Dark to override it."
+      >
+        <ThemeToggle />
+      </SectionCard>
 
       <SectionCard
         icon={BellIcon}

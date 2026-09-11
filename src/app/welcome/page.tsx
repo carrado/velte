@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
+import { VelteLogo } from "@/components/VelteLogo";
 import { Button } from "@/components/ui/button";
 import { ArrowRightIcon, StoreIcon } from "@/components/icons";
 // Landing screen for the installed PWA — shown after logout instead of the
@@ -14,15 +14,8 @@ export const metadata: Metadata = {
 
 export default function WelcomePage() {
   return (
-    <div className="min-h-screen bg-[#F1F5F9] flex flex-col items-center justify-center px-6 text-center">
-      <Image
-        src="/velte_logo_esn5dj.png"
-        alt="Velte"
-        width={72}
-        height={35}
-        priority
-        className="mb-6"
-      />
+    <div className="min-h-screen bg-canvas flex flex-col items-center justify-center px-6 text-center">
+      <VelteLogo width={72} height={35} priority className="mb-6" />
 
       <p className="text-gray-500 text-[15px] leading-relaxed max-w-[280px] mb-9">
         Describe what you need — we connect you to real vendors nearby.
@@ -43,7 +36,7 @@ export default function WelcomePage() {
           <Button
             size="lg"
             variant="outline"
-            className="w-full text-gray-700 cursor-pointer hover:bg-white border-gray-300 gap-2 h-12"
+            className="w-full text-gray-700 cursor-pointer hover:bg-surface border-gray-300 gap-2 h-12"
           >
             <StoreIcon className="w-4 h-4" />
             I&apos;m a vendor

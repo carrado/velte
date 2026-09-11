@@ -178,7 +178,7 @@ export function InstallRow() {
           happens next," not "read this first." */}
       {showGuide && (
         <div
-          className="mt-3.5 flex items-center gap-3 rounded-xl bg-white border border-gray-200 px-3.5 py-3 animate-in fade-in duration-200"
+          className="mt-3.5 flex items-center gap-3 rounded-xl bg-surface border border-gray-200 px-3.5 py-3 animate-in fade-in duration-200"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="relative w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">

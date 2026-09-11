@@ -165,7 +165,7 @@ function NotificationItem({
         onClose={() => setMenuOpen(false)}
         anchorRef={menuTriggerRef}
         align="auto"
-        className="w-40 bg-white rounded-lg shadow-lg border border-gray-100 py-1"
+        className="w-40 bg-surface rounded-lg shadow-lg border border-gray-100 py-1"
       >
         {!notification.read && (
           <button
@@ -229,7 +229,7 @@ export function NotificationList({
 
   return (
     <div className={cn("flex flex-col px-3 sm:px-0", className)}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 sticky top-0 bg-surface z-10">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-gray-900">
             Notifications

@@ -136,7 +136,7 @@ export default function VendorBuyerRequestDetailPage() {
       </button>
 
       {/* ── Request card ─────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-4">
+      <div className="bg-surface rounded-2xl border border-gray-200 overflow-hidden mb-4">
         {request.imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -166,7 +166,7 @@ export default function VendorBuyerRequestDetailPage() {
               <WalletIcon size={15} className="text-orange-500 shrink-0" />
               <span className="text-sm text-gray-600">
                 Budget:{" "}
-                <span className="font-semibold text-[#023337]">
+                <span className="font-semibold text-ink">
                   {formatNaira(request.budgetKobo)}
                 </span>
               </span>
@@ -222,15 +222,15 @@ export default function VendorBuyerRequestDetailPage() {
           </p>
         </div>
       ) : decision === "declined" ? (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 flex items-center gap-2 text-gray-500">
+        <div className="bg-surface rounded-2xl border border-gray-200 p-5 flex items-center gap-2 text-gray-500">
           <XCircleIcon size={18} /> You declined this request.
         </div>
       ) : request.status !== "active" ? (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 text-center text-gray-500 text-sm">
+        <div className="bg-surface rounded-2xl border border-gray-200 p-5 text-center text-gray-500 text-sm">
           This request is no longer active.
         </div>
       ) : confirmingAccept ? (
-        <div className="bg-white rounded-2xl border border-orange-200 p-5">
+        <div className="bg-surface rounded-2xl border border-orange-200 p-5">
           <p className="text-gray-900 font-medium mb-1">Accept this request?</p>
           <p className="text-gray-500 text-sm mb-4">
             Accepting is free. {request.buyerName} sees your price and messages
@@ -320,7 +320,7 @@ export default function VendorBuyerRequestDetailPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <div className="bg-surface rounded-2xl border border-gray-200 p-5">
           <p className="text-gray-900 font-medium mb-1">Interested?</p>
           <p className="text-gray-500 text-sm mb-4">
             Accept to put your price in front of {request.buyerName}. It costs

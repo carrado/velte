@@ -75,7 +75,7 @@ export function SlidingCover({
             <span
               key={i}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === index ? "w-3.5 bg-white" : "w-1.5 bg-white/50"
+                i === index ? "w-3.5 bg-surface" : "w-1.5 bg-white/50"
               }`}
             />
           ))}
@@ -121,7 +121,7 @@ export function VendorCard({ item }: { item: VendorPreviewItem }) {
     // fix and why: animating many cards' opacity/y transforms WHILE the
     // buyer's own manual scroll moves the page read live as "distorted"
     // cards). Hover lift is plain CSS below, untouched.
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex flex-col h-full">
+    <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex flex-col h-full">
       {/* Twitter-style profile layout: a wide, short cover strip with the
           avatar overlapping its bottom edge, rather than a top-down stacked
           image+name card like the product grid above. */}
@@ -150,9 +150,7 @@ export function VendorCard({ item }: { item: VendorPreviewItem }) {
         </div>
 
         <div className="flex items-center gap-1 min-w-0">
-          <p className="font-bold text-[#023337] text-[15px] truncate">
-            {item.name}
-          </p>
+          <p className="font-bold text-ink text-[15px] truncate">{item.name}</p>
           <BadgeCheckIcon
             size={15}
             className="text-orange-500 shrink-0 fill-orange-500/15"
@@ -175,7 +173,7 @@ export function VendorCard({ item }: { item: VendorPreviewItem }) {
               <button
                 type="button"
                 onClick={() => setDescExpanded((v) => !v)}
-                className="mt-0.5 text-[11px] font-semibold text-[#023337] hover:text-orange-600"
+                className="mt-0.5 text-[11px] font-semibold text-ink hover:text-orange-600"
               >
                 {descExpanded ? "See less" : "See more"}
               </button>
@@ -239,7 +237,7 @@ export function VendorsPreview({ items }: { items: VendorPreviewItem[] }) {
   const shown = items.slice(0, 3);
 
   return (
-    <section className="relative bg-white border-t border-gray-100 py-14 sm:py-16">
+    <section className="relative bg-surface border-t border-gray-100 py-14 sm:py-16">
       <div className="max-w-5xl mx-auto px-5 sm:px-8">
         <motion.div
           initial="hidden"
@@ -250,7 +248,7 @@ export function VendorsPreview({ items }: { items: VendorPreviewItem[] }) {
         >
           <motion.h2
             variants={fadeUp}
-            className="text-2xl sm:text-3xl font-bold text-[#023337] tracking-tight text-balance"
+            className="text-2xl sm:text-3xl font-bold text-ink tracking-tight text-balance"
           >
             Find businesses you can actually talk to
           </motion.h2>

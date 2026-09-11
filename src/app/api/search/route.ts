@@ -69,7 +69,9 @@ import {
   buildAgreementOnlySystemPrompt,
   buildDescriptionOnlySystemPrompt,
   buildScopeCheckSystemPrompt,
+  buildComparisonAnswerSystemPrompt,
 } from "@/lib/server/ai/systemPrompt";
+import { comparisonPickTool } from "@/lib/server/ai/comparisonPickTool";
 import { classifyScopeTool } from "@/lib/server/ai/classifyScopeTool";
 import { verifyOfferMatches } from "@/lib/server/ai/verifyMatches";
 import { verifyStoreMatches } from "@/lib/server/ai/verifyStoreMatches";
@@ -1221,6 +1223,17 @@ async function handleSearch(req: Request) {
       );
     }
   }
+  // Hoisted here (used to be declared much further down, right next to
+  // `sheetApplies`) — 2026-09-10, so `sendFinal` (defined below) can safely
+  // read `storedGoal?.maxBudgetNaira` for `knownBudgetNaira` on EVERY final
+  // event, including the several early-exit sendFinal calls that run before
+  // the line this used to live on. Referencing a `const` declared later
+  // than an early-exit call site is exactly the temporal-dead-zone bug
+  // `startsFreshRequest` already got bitten by once this same session (see
+  // that declaration's own comment) — trivially safe to hoist since this is
+  // pure derivation from `conversation`, already available here with no
+  // dependency on anything computed later.
+  const storedGoal = conversation?.task ?? null;
   // The server-side history wins whenever it's at least as complete as what
   // the client resent — the client's copy still covers the gap where an
   // earlier turn's persist write failed (or hasn't landed yet, for a
@@ -1252,6 +1265,24 @@ async function handleSearch(req: Request) {
     ...historyMessages,
     { role: "user", content },
   ];
+
+  // Declared here (`let`, reassigned below once the classifier's read is
+  // available) rather than as a `const` at its original spot further down —
+  // 2026-09-09, found live: sendFinal's own `goal` object reads this
+  // binding, and sendFinal is called by every early-exit short-circuit
+  // (tool-mismatch decline, the Shopping Plan draft, and the fresh-
+  // comparison branch — see isFreshComparisonRequest below), every one of
+  // which runs BEFORE the boundary-decision block that used to declare this
+  // as a `const`. A `const` is in the temporal dead zone until its own
+  // declaration line executes, so any of those early sendFinal calls threw
+  // ReferenceError: Cannot access 'startsFreshRequest' before initialization
+  // — caught and only console.error'd by sendFinal's own try/catch, so the
+  // turn displayed fine live and simply never made it to the database. This
+  // is what a buyer saw as "the reply vanished after refresh." `false` is
+  // the safe default for every turn that exits before the real classifier
+  // decision runs: none of them are the boundary-decision turn, so leaving
+  // the goal sheet exactly as it was (never wiping it) is correct.
+  let startsFreshRequest = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -1339,11 +1370,32 @@ async function handleSearch(req: Request) {
         maxBudgetNaira?: number | null;
         attributes?: string[];
       } = {};
+      // Declared HERE, beside goalUpdate, for exactly the same reason — and
+      // because it was caught red-handed not being (2026-09-10). sendFinal's
+      // own `goal` object reads `itemTerm`, and this used to be a `let`
+      // declared down with the rest of the scope-check results, several
+      // hundred lines BELOW both sendFinal's definition and the early-exit
+      // branches that call it (the Shopping Plan short-circuit, the
+      // tool-mismatch decline, the fresh-comparison answer). Every one of
+      // those threw `ReferenceError: Cannot access 'itemTerm' before
+      // initialization` from inside sendFinal's try/catch, which logged and
+      // swallowed it — so the turn streamed to the buyer perfectly and was
+      // then never persisted at all. This is the SECOND variable in this one
+      // object literal to do that (see startsFreshRequest's own comment);
+      // anything sendFinal closes over has to be initialised above it, full
+      // stop.
+      let itemTerm: string | null = null;
+      // The session's active tool as it should stand AFTER this turn — read
+      // by sendFinal, so (like everything else it closes over) it is declared
+      // here, above sendFinal, and merely ASSIGNED later once the tool is
+      // known. Starts null so an early exit that never reaches the
+      // assignment simply persists "no tool", which is the safe direction.
+      let sessionToolAtTurnEnd: string | null = null;
 
       async function sendFinal(
         event: Omit<
           Extract<SearchStreamEvent, { type: "final" }>,
-          "conversationId"
+          "conversationId" | "knownBudgetNaira"
         >,
       ): Promise<void> {
         // ── Charging, once the turn has actually delivered ─────────────
@@ -1383,6 +1435,15 @@ async function handleSearch(req: Request) {
         const full = {
           ...event,
           conversationId: conversation?.conversationId ?? null,
+          // Injected here rather than by every call site (like
+          // conversationId above) — 2026-09-10, found live: the buyer-
+          // request identity flow's own "budget" step asked again for a
+          // figure already given earlier in the SAME conversation, because
+          // nothing carried the goal sheet's own known budget from the
+          // offer turn through to that client-side flow. This is what lets
+          // it skip the redundant ask — see IdentityCapture's own comment
+          // in SearchHome.tsx.
+          knownBudgetNaira: storedGoal?.maxBudgetNaira ?? null,
         };
         controller.enqueue(encodeEvent(full));
         if (conversation && deviceId) {
@@ -1406,9 +1467,32 @@ async function handleSearch(req: Request) {
                 itemTerm,
                 ...goalUpdate,
               },
+              // The session's tool, carried to the next turn — see its own
+              // comment where it's adopted. Always an explicit value (string
+              // or null), never undefined, so this route is unambiguously
+              // the thing that owns it.
+              activeTool: sessionToolAtTurnEnd,
             });
           } catch (err) {
-            console.error("[search] conversation persist failed:", err);
+            // Swallowed on purpose — the buyer already has their answer, and
+            // the next turn's client-resent history covers the gap. But a
+            // ReferenceError here is NEVER a persistence outage: it means
+            // this function closed over a binding declared below one of its
+            // own call sites, which has now happened twice in this one
+            // object (`startsFreshRequest`, then `itemTerm`) and is invisible
+            // precisely because this catch hides it. Called out loudly so the
+            // third one is found by reading a log instead of by a buyer
+            // noticing a whole exchange vanished.
+            if (err instanceof ReferenceError) {
+              console.error(
+                "[search] BUG: sendFinal read an uninitialised binding — a " +
+                  "variable it closes over is declared below one of its call " +
+                  "sites. Nothing was persisted for this turn.",
+                err,
+              );
+            } else {
+              console.error("[search] conversation persist failed:", err);
+            }
           }
         }
       }
@@ -1453,6 +1537,9 @@ async function handleSearch(req: Request) {
           recommendation: null,
           shoppingPlanDraft: null,
           externalOffers: [],
+          awaitingComparisonPurchaseReply: false,
+          comparisonPickItem: null,
+          awaitingShoppingPlanReply: false,
         });
         controller.close();
       }
@@ -1482,67 +1569,53 @@ async function handleSearch(req: Request) {
       // deliberately absent: unlike the bare-query gate's own skip pill,
       // there is nothing useful to search for "as-is" here — the message
       // itself is the thing that doesn't fit.
-      const activeTool = body?.activeTool;
-      if (activeTool && message.trim()) {
+      // ── THE SESSION'S ACTIVE TOOL (2026-09-10) ────────────────────────
+      //
+      // The composer clears its badge the instant a message is sent, so only
+      // the FIRST message of a flow ever arrives carrying `activeTool` —
+      // every follow-up looks toolless. That produced the same bug three
+      // separate times (the reach-out offer, the comparison pick, the
+      // Shopping Plan budget answer), each patched with its own bespoke
+      // `awaiting…Reply` flag on the previous turn.
+      //
+      // This is the general rule, per explicit product direction: the tool
+      // belongs to the CONVERSATION, and stays in play until one of exactly
+      // two things happens —
+      //   1. the buyer asks for something unrelated, or
+      //   2. they open a new chat (a new conversation document, which starts
+      //      with no tool by construction).
+      //
+      // (1) is `startsFreshRequest`, the route's own already-vetoed boundary
+      // decision — but that is computed AFTER the scope check, well below
+      // this point, and the plan/compare branches need a tool before then.
+      // So the stored tool is adopted here and RELEASED further down, once
+      // the boundary decision exists. The ordering is deliberate: an
+      // unrelated message gets one turn of a stale tool at most, and the
+      // tool-alignment check immediately below is what keeps even that from
+      // mattering — a message that doesn't fit the tool is declined rather
+      // than forced through it.
+      const sessionTool = conversation?.activeTool ?? null;
+      const activeTool = body?.activeTool ?? sessionTool ?? undefined;
+      // Carried forward by default. Dropped in exactly two places: the
+      // boundary decision below (an unrelated request), and the plan
+      // branch once it has actually produced a checklist — see each.
+      sessionToolAtTurnEnd = activeTool ?? null;
+      // Alignment is only ever checked against a tool the buyer EXPLICITLY
+      // picked for THIS message. A tool inherited from earlier in the
+      // session must never decline a message: "what about a microwave too"
+      // is a perfectly good thing to say mid-plan, and refusing it because
+      // it doesn't read like a fresh plan request would be the stickiness
+      // turning into a cage.
+      if (body?.activeTool && message.trim()) {
         const aligned = await checkToolAlignment({
-          tool: activeTool,
+          tool: body.activeTool,
           message,
         });
         if (!aligned) {
-          const reply = toolMismatchReply(activeTool);
+          const reply = toolMismatchReply(body.activeTool);
           await sendBareFinal(reply, { kind: "text", question: reply });
           return;
         }
-      }
-
-      // Shopping Plan's own short-circuit (2026-09-06) — a genuine plan
-      // request never enters the ordinary search pipeline at all: nothing
-      // is searched yet, on purpose (the product requirement is explicit —
-      // see planRule.ts — don't spend a single search or credit until the
-      // buyer has seen and confirmed the checklist this generates). This
-      // is also why it's UNBILLED: same "asked a question, showed nothing"
-      // exemption isBillableTurn already gives askClarifyingQuestion — the
-      // real credit check happens once, at POST /api/shopping-plan, when
-      // the buyer confirms and the actual multi-source search runs.
-      if (activeTool === "plan" && message.trim()) {
-        const draft = await buildShoppingPlanDraft({
-          goalText: message,
-          history: historyMessages,
-        });
-        const reply = draft
-          ? "Here's a starting checklist — take a look and let me know if you'd like to add, remove, or change anything before I start searching."
-          : "What's your total budget for this? I'll build the checklist around it once I know.";
-        await sendFinal({
-          type: "final",
-          reply,
-          toolCalled: false,
-          clarification: draft ? null : { kind: "text", question: reply },
-          products: [],
-          weakProducts: [],
-          stores: [],
-          furtherStores: [],
-          storesQuery: null,
-          productStores: [],
-          storeServices: [],
-          productsMatchTier: null,
-          storesMatchTier: null,
-          productsMatchQuality: undefined,
-          storesMatchQuality: undefined,
-          externalStoreSuggestions: [],
-          vendorProducts: [],
-          vendorProductsStore: null,
-          buyerRequestOffer: null,
-          buyerRequestOffered: false,
-          backgroundItems: [],
-          dualIntentItemALabel: null,
-          awaitingBuyerRequestReply: false,
-          buyerRequestMatchQuery: null,
-          recommendation: null,
-          shoppingPlanDraft: draft,
-          externalOffers: [],
-        });
-        controller.close();
-        return;
       }
 
       // Reused by needsLocationButDidntAsk/searchedNationwideWithoutAsking
@@ -1556,7 +1629,11 @@ async function handleSearch(req: Request) {
         history.some(
           (turn) =>
             turn.role === "assistant" &&
-            LOCATION_CLARIFY_PATTERN.test(turn.content),
+            // The structural flag is the reliable signal (see its own
+            // comment in types/search.ts — the freeform-phrasing bug this
+            // fixes); the regex stays only as a fallback for history rows
+            // persisted before this field existed.
+            (turn.askedLocation || LOCATION_CLARIFY_PATTERN.test(turn.content)),
         ) ||
         // Phase 5: the conversation's own settled location state — a
         // structural record of the answer, not a guess at it from prose.
@@ -1610,7 +1687,8 @@ async function handleSearch(req: Request) {
       // stays out of the way, which is the safe direction — a skipped
       // question costs a slightly thinner search, a wrong or repeated one
       // costs the buyer's patience.
-      let itemTerm: string | null = null;
+      // (`itemTerm` itself is declared up beside `goalUpdate`, above
+      // sendFinal — see its own comment on why.)
       let seekingKind: SearchIntentKind = "unclear";
       let hasSpecificDetails = true;
       // Defaults to "refinement" — the pre-signal behavior (full context
@@ -1630,6 +1708,14 @@ async function handleSearch(req: Request) {
       // this is what lets code VERIFY each option was searched instead of
       // inferring it from whichever tool calls the model happened to make.
       let comparisonOptions: string[] = [];
+      // Whether this is a GOAL that resolves into a whole checklist rather
+      // than a request for one thing (see planRule.ts) — the exact sibling of
+      // scopeSaysComparison above, judged on the same call, and the reason
+      // the plan short-circuit now lives BELOW the scope check instead of
+      // above it. Defaults false: failing toward "ordinary search" means a
+      // missed checklist, where failing the other way would hand someone a
+      // list they never asked for.
+      let scopeSaysPlan = false;
       if (message) {
         try {
           const scopeCheckMessages: ModelMessage[] = imageUrl
@@ -1658,6 +1744,7 @@ async function handleSearch(req: Request) {
                 hasSpecificDetails: boolean;
                 isComparison: boolean;
                 comparisonOptions: string[];
+                isShoppingPlan: boolean;
               }
             | undefined;
           if (scopeOutput?.inScope === false && !imageUrl) {
@@ -1674,6 +1761,7 @@ async function handleSearch(req: Request) {
           requestRelation = scopeOutput?.requestRelation ?? "refinement";
           hasSpecificDetails = scopeOutput?.hasSpecificDetails ?? true;
           scopeSaysComparison = scopeOutput?.isComparison ?? false;
+          scopeSaysPlan = scopeOutput?.isShoppingPlan ?? false;
           // Deduped and trimmed here rather than trusted as returned — the
           // model has been seen repeating an option and padding with empties.
           comparisonOptions = Array.from(
@@ -1688,14 +1776,49 @@ async function handleSearch(req: Request) {
         }
       }
 
-      // The turn's comparison verdict, from either route: the buyer picked
-      // the Compare tool (already confirmed genuine by toolAlignment.ts
-      // above), or the scope check just recognised one in their own words.
-      // Both are the same request as far as everything downstream is
-      // concerned — see buildSystemPrompt's toolNote and the
-      // comparison-template branch near the end of this file.
-      const isCompareTurn =
+      // A genuinely FRESH comparison — the buyer just named two or more
+      // DIFFERENT things to weigh against each other, from either route:
+      // they picked the Compare tool (already confirmed genuine by
+      // toolAlignment.ts above), or the scope check just recognised one in
+      // their own words. This is the two-phase design's Phase 1 trigger
+      // (2026-09-09, see comparisonRule.ts's own header) — answered
+      // conversationally, below, with NO Velte search at all; the rich
+      // comparison template is reserved for comparing different LISTINGS of
+      // the SAME item, which only ever happens once the buyer commits to
+      // one (see pendingComparisonPick right below).
+      const isFreshComparisonRequest =
         activeTool === "compare" || (!activeTool && scopeSaysComparison);
+
+      // Phase 2's own trigger: was the LAST assistant turn a fresh
+      // comparison's own "want me to find it on Velte?" ask, and does this
+      // message look like the buyer's reply to it rather than a clean break
+      // to something else? Same guard shape as isAnsweringOffer further
+      // below (a bare decline, or the classifier reading this as a brand
+      // NEW request, both mean the buyer walked away rather than confirmed)
+      // — deliberately generous otherwise, since a free-text reply naming a
+      // DIFFERENT option from the same comparison ("actually get me the
+      // Samsung") is still a confirmation of this same exchange, just not
+      // of the original pick; the main call's own toolNote below is what
+      // lets the model read that nuance from full conversation context.
+      const lastComparisonTurn = history.at(-1);
+      const pendingComparisonPick: string | null =
+        lastComparisonTurn?.role === "assistant" &&
+        lastComparisonTurn.awaitingComparisonPurchaseReply === true &&
+        !isOfferDeclineReply(message) &&
+        requestRelation !== "new" &&
+        typeof lastComparisonTurn.comparisonPickItem === "string" &&
+        lastComparisonTurn.comparisonPickItem.trim()
+          ? lastComparisonTurn.comparisonPickItem.trim()
+          : null;
+
+      // The turn's comparison verdict for everything downstream (the
+      // template-vs-plain-picks branch near the end of this file): true for
+      // BOTH phases — a fresh comparison (handled entirely by the
+      // short-circuit right below, never reaching that branch) and a
+      // confirmed pick's own single-item search (which DOES reach it, and
+      // is exactly what should render through the rich template).
+      const isCompareTurn =
+        isFreshComparisonRequest || pendingComparisonPick !== null;
 
       // A COMPARISON IS NEVER A DUAL INTENT (2026-09-05, found live: "I want
       // to buy a new car, Toyota 2026 model and Lexus Jeep 2026 model, which
@@ -1718,6 +1841,219 @@ async function handleSearch(req: Request) {
       // whole reason this bug existed is that a per-site exemption has to be
       // remembered by every site added later — and one of them wasn't.
       if (isCompareTurn) hasMultipleIntents = false;
+
+      // A SHOPPING PLAN IS NEVER A DUAL INTENT, for precisely the reason the
+      // comparison line above isn't: a plan is a goal that resolves into
+      // MANY things, so `hasMultipleIntents` is very often true for one too
+      // ("a bed, mattress, TV and fridge" is four things by any reading).
+      // Left alone, the dual-intent split downstream would grab the turn and
+      // search one or two of the items as standalone requests — the plan
+      // never built, and most of the list silently dropped. Same fix, same
+      // place: forced at the single point the verdict is known, not per
+      // branch, because a per-site exemption has to be remembered by every
+      // site added later and that is exactly how this bit the comparison
+      // flow.
+      //
+      // THREE ways into the plan flow, and all three matter:
+      //   1. the buyer picked the Shopping Plan tool (already confirmed
+      //      genuine by toolAlignment.ts before we got here), OR inherited it
+      //      from the conversation — see the session-tool block above;
+      //   2. the last turn asked for the budget and this is the answer (the
+      //      narrow per-turn flag — kept as belt-and-braces, since it still
+      //      works even if the session tool is ever dropped a turn early);
+      //   3. the scope check read a plan out of plain text with no tool
+      //      selected at all (2026-09-10) — the same shape
+      //      isFreshComparisonRequest uses for comparisons, and the reason
+      //      this whole block now sits BELOW the scope check rather than
+      //      above it.
+      const pendingShoppingPlanReply =
+        history.at(-1)?.role === "assistant" &&
+        history.at(-1)?.awaitingShoppingPlanReply === true &&
+        !isOfferDeclineReply(message);
+      const isPlanTurn =
+        (activeTool === "plan" ||
+          pendingShoppingPlanReply ||
+          (!activeTool && scopeSaysPlan)) &&
+        Boolean(message.trim()) &&
+        // A comparison is never a plan. The scope check is told they're
+        // mutually exclusive, but when a model contradicts itself the more
+        // specific claim wins — same precedence the dual-intent line above
+        // settles, for the same reason.
+        !isCompareTurn;
+      if (isPlanTurn) hasMultipleIntents = false;
+
+      // Shopping Plan's own short-circuit (2026-09-06) — a genuine plan
+      // request never enters the ordinary search pipeline at all: nothing
+      // is searched yet, on purpose (the product requirement is explicit —
+      // see planRule.ts — don't spend a single search or credit until the
+      // buyer has seen and confirmed the checklist this generates). This
+      // is also why it's UNBILLED: same "asked a question, showed nothing"
+      // exemption isBillableTurn already gives askClarifyingQuestion — the
+      // real credit check happens once, at POST /api/shopping-plan, when
+      // the buyer confirms and the actual multi-source search runs.
+      //
+      // MOVED BELOW THE SCOPE CHECK (2026-09-10). It used to run above it,
+      // which was fine while a plan could only ever be reached by explicitly
+      // picking the tool — the scope check had nothing to contribute. Now
+      // that a plan is also inferred from plain text (`scopeSaysPlan`, see
+      // planRule.ts's own reversal note) the verdict simply doesn't exist up
+      // there. Position matters in the other direction too, and this is the
+      // bug the move fixes: it has to stay ABOVE the proactive location gate
+      // and the bare-query budget gate, or a plan request gets asked where
+      // it is shopping, or for a budget a second time, before ever reaching
+      // the checklist.
+      //
+      // The three ways in are folded into `isPlanTurn` above, where the
+      // verdict has to be known anyway to keep the dual-intent split off it.
+      if (isPlanTurn) {
+        const draft = await buildShoppingPlanDraft({
+          goalText: message,
+          history: historyMessages,
+        });
+        const reply = draft
+          ? "Here's a starting checklist — take a look and let me know if you'd like to add, remove, or change anything before I start searching."
+          : "What's your total budget for this? I'll build the checklist around it once I know.";
+        // Sticky until the checklist EXISTS, then released — which is what
+        // keeps "the tool persists" from becoming "the tool is stuck". While
+        // the budget is still outstanding the exchange is unfinished and the
+        // next message belongs to it (the bug this all exists to fix); once
+        // a draft is on screen the chat's part is done — the buyer continues
+        // through the checklist's own confirm UI, so a later "I also need a
+        // microwave" is an ordinary search, not a silent second plan.
+        sessionToolAtTurnEnd = draft ? null : "plan";
+        await sendFinal({
+          type: "final",
+          reply,
+          toolCalled: false,
+          clarification: draft ? null : { kind: "text", question: reply },
+          products: [],
+          weakProducts: [],
+          stores: [],
+          furtherStores: [],
+          storesQuery: null,
+          productStores: [],
+          storeServices: [],
+          productsMatchTier: null,
+          storesMatchTier: null,
+          productsMatchQuality: undefined,
+          storesMatchQuality: undefined,
+          externalStoreSuggestions: [],
+          vendorProducts: [],
+          vendorProductsStore: null,
+          buyerRequestOffer: null,
+          buyerRequestOffered: false,
+          backgroundItems: [],
+          dualIntentItemALabel: null,
+          awaitingBuyerRequestReply: false,
+          buyerRequestMatchQuery: null,
+          recommendation: null,
+          shoppingPlanDraft: draft,
+          externalOffers: [],
+          awaitingComparisonPurchaseReply: false,
+          comparisonPickItem: null,
+          // True only while still asking for budget — once a real draft
+          // exists the buyer continues through its own UI/`/api/shopping-
+          // plan`, never back through here.
+          awaitingShoppingPlanReply: !draft,
+        });
+        controller.close();
+        return;
+      }
+
+      // Phase 1's own short-circuit (2026-09-09) — a FRESH comparison
+      // between different items never enters the ordinary search pipeline
+      // at all: nothing is searched, on purpose (see comparisonRule.ts's
+      // header and buildComparisonAnswerSystemPrompt's own comment). Same
+      // pattern as the Shopping Plan short-circuit just above — a dedicated,
+      // narrow call outside the big multi-tool loop, ending the turn here.
+      //
+      // Keyed on isFreshComparisonRequest ALONE, deliberately, not also on
+      // `pendingComparisonPick === null` — this message's OWN words already
+      // won that judgment call (the scope check, or an explicit Compare tool
+      // selection), and that must outrank a stale flag left on the PREVIOUS
+      // turn. A buyer who moves straight from confirming one comparison to
+      // asking a brand new one ("actually, compare Xiaomi vs Samsung
+      // instead") must get Phase 1 again, not have their new request
+      // silently read as confirming the old pick just because
+      // requestRelation misjudged it as "answer" rather than "new" — the
+      // classifier is good, not perfect (measured 91% elsewhere in this
+      // file), and this message's own explicit signal is the one sure
+      // thing. The confirmation turn itself never has this problem: a bare
+      // "yes" carries no comparison words of its own, so
+      // isFreshComparisonRequest is false for it and this block simply
+      // doesn't run — pendingComparisonPick is what routes THAT turn,
+      // further down.
+      if (isFreshComparisonRequest) {
+        push(["Weighing up your options…", "Thinking this through…"]);
+        const compareProviderOrder: ("openai-strong" | "openai" | "groq")[] =
+          imageUrl
+            ? ["openai-strong", "openai"]
+            : ["openai-strong", "openai", "groq"];
+        let pickItem: string | null = null;
+        let reply = "";
+        try {
+          const compareResult = await callLLM(
+            {
+              system: buildComparisonAnswerSystemPrompt(comparisonOptions),
+              messages,
+              tools: { comparisonPick: comparisonPickTool() },
+              stopWhen: stepCountIs(2),
+            },
+            compareProviderOrder,
+            "comparison-answer",
+          );
+          reply = sanitizeReply(compareResult.text);
+          const pickOutput = compareResult.toolResults.find(
+            (r) => r.toolName === "comparisonPick",
+          )?.output as { pickItem?: string } | undefined;
+          pickItem =
+            pickOutput?.pickItem?.trim() || comparisonOptions[0] || null;
+        } catch (err) {
+          console.error("[search] comparison answer failed:", err);
+        }
+        if (!reply) {
+          reply =
+            "Sorry, something went wrong comparing those — mind trying again?";
+          pickItem = null;
+        }
+        await sendFinal({
+          type: "final",
+          reply,
+          toolCalled: false,
+          clarification: null,
+          products: [],
+          weakProducts: [],
+          stores: [],
+          furtherStores: [],
+          storesQuery: null,
+          productStores: [],
+          storeServices: [],
+          productsMatchTier: null,
+          storesMatchTier: null,
+          productsMatchQuality: undefined,
+          storesMatchQuality: undefined,
+          externalStoreSuggestions: [],
+          vendorProducts: [],
+          vendorProductsStore: null,
+          buyerRequestOffer: null,
+          buyerRequestOffered: false,
+          backgroundItems: [],
+          dualIntentItemALabel: null,
+          awaitingBuyerRequestReply: false,
+          buyerRequestMatchQuery: null,
+          recommendation: null,
+          shoppingPlanDraft: null,
+          externalOffers: [],
+          // Only an open exchange when there's actually a pick to confirm —
+          // the error-fallback reply above has none, and asking the buyer
+          // to confirm "null" would be nonsense.
+          awaitingComparisonPurchaseReply: Boolean(pickItem),
+          comparisonPickItem: pickItem,
+          awaitingShoppingPlanReply: false,
+        });
+        controller.close();
+        return;
+      }
 
       // Google Places is a SERVICE-only fallback (2026-08-26) — see
       // allowsNearbyBusinesses in sectorClarifiers.ts for the reasoning.
@@ -1766,13 +2102,26 @@ async function handleSearch(req: Request) {
       // beats a model's reading of it, so these override the classifier.
       const isStructuralContinuation =
         Boolean(body?.isContinuation) ||
-        history.at(-1)?.awaitingBuyerRequestReply === true;
-      const startsFreshRequest =
+        history.at(-1)?.awaitingBuyerRequestReply === true ||
+        history.at(-1)?.awaitingComparisonPurchaseReply === true;
+      // Reassigns the `let` declared up near `messages`/`history` above —
+      // see that declaration's own comment for why this is no longer a
+      // `const` here.
+      startsFreshRequest =
         requestRelation === "new" &&
         historyMessages.length > 0 &&
         !isStructuralContinuation;
       if (startsFreshRequest) {
         messages = [{ role: "user", content }];
+        // RESET #1 of the two the product rule names (2026-09-10): the buyer
+        // has moved to something unrelated, so whatever tool the last request
+        // was using no longer applies. Reset #2 — a new chat — needs no code:
+        // it's a new conversation document, which starts with no tool.
+        //
+        // This is the same signal that already wipes the goal sheet, and for
+        // the same reason: both are "facts about the request in play", and a
+        // request that has been replaced shouldn't leave its settings behind.
+        sessionToolAtTurnEnd = null;
       }
 
       // ── The goal sheet's two locks ────────────────────────────────────
@@ -1788,7 +2137,7 @@ async function handleSearch(req: Request) {
       // "PS5" still covers "PS5 Slim" while "fridge" matches nothing about
       // a PS5. A budget named in the CURRENT message outranks both locks,
       // and is handled by the model's own tool call rather than here.
-      const storedGoal = conversation?.task ?? null;
+      // (storedGoal itself is declared earlier now — see its own comment.)
       const sameItemAsSheet = (() => {
         const a = storedGoal?.itemTerm?.trim().toLowerCase();
         const b = itemTerm?.trim().toLowerCase();
@@ -1954,7 +2303,10 @@ async function handleSearch(req: Request) {
         history.some(
           (turn) =>
             turn.role === "assistant" &&
-            BUDGET_CLARIFY_PATTERN.test(turn.content),
+            // Same fix as alreadyAskedLocationThisConversation above — the
+            // structural flag first, the fixed-phrase regex only as a
+            // fallback for pre-migration history rows.
+            (turn.askedBudget || BUDGET_CLARIFY_PATTERN.test(turn.content)),
         );
       if (
         // Every input below comes from the scope check's own reading of the
@@ -1987,19 +2339,18 @@ async function handleSearch(req: Request) {
         // compare turn must never be second-guessed by this gate.
         !isCompareTurn
       ) {
-        // Widened 2026-09-05 — see bareQueryGate.ts's own top comment for
-        // the full reasoning. `gate` is null on any failure and its arrays
-        // are empty when the model genuinely had nothing to add; either way
-        // composeBareQueryReply collapses back to the exact plain
-        // budget-only question this gate always asked, so a bad call here
-        // degrades to the known-good 2026-09-04 behavior rather than
-        // breaking the turn.
-        const gate = await buildBareQueryGate({
+        // Widened 2026-09-05, rewritten 2026-09-09 — see bareQueryGate.ts's
+        // own top comment for the full reasoning. `dynamicQuestion` is null
+        // on any failure/unusable output; either way composeBareQueryReply
+        // collapses back to the exact plain budget-only question this gate
+        // always asked, so a bad call here degrades to the known-good
+        // 2026-09-04 behavior rather than breaking the turn.
+        const dynamicQuestion = await buildBareQueryGate({
           itemTerm,
           seekingKind,
           message,
         });
-        const question = composeBareQueryReply(itemTerm, gate);
+        const question = composeBareQueryReply(itemTerm, dynamicQuestion);
         await sendBareFinal(question, {
           kind: "text",
           question,
@@ -2148,10 +2499,17 @@ async function handleSearch(req: Request) {
                 shownCount: storedGoal.shownProductIds?.length ?? 0,
               }
             : null,
-          // "compare" whenever isCompareTurn is true — whether from an
-          // explicit, aligned selection or auto-detected intent — so
-          // buildSystemPrompt's own toolNote treats both identically.
-          isCompareTurn ? "compare" : activeTool,
+          // Non-null only on the turn confirming a fresh comparison's pick
+          // (Phase 2) — a fresh comparison itself never reaches this call at
+          // all (see the short-circuit above), so isCompareTurn being true
+          // here always means pendingComparisonPick is set.
+          pendingComparisonPick,
+          // Structural "don't ask about location again" fact — see
+          // buildSystemPrompt's own comment on the bug this fixes. Reuses
+          // the exact same computation the proactive gate above already
+          // trusts, so the model is never left to re-derive from raw prose
+          // a decision route.ts has already made deterministically.
+          alreadyAskedLocationThisConversation,
         );
         // "openai-strong" (gpt-5-mini, low reasoning effort — see
         // router.ts's own PROVIDERS comment) is the primary for every call
@@ -2339,6 +2697,9 @@ async function handleSearch(req: Request) {
               recommendation: null,
               shoppingPlanDraft: null,
               externalOffers: preCheckOffers,
+              awaitingComparisonPurchaseReply: false,
+              comparisonPickItem: null,
+              awaitingShoppingPlanReply: false,
             });
             return;
           }
@@ -2427,6 +2788,9 @@ async function handleSearch(req: Request) {
             recommendation: null,
             shoppingPlanDraft: null,
             externalOffers: agreementOffers,
+            awaitingComparisonPurchaseReply: false,
+            comparisonPickItem: null,
+            awaitingShoppingPlanReply: false,
           });
           return;
         }
@@ -2884,6 +3248,9 @@ async function handleSearch(req: Request) {
             recommendation: null,
             shoppingPlanDraft: null,
             externalOffers: [],
+            awaitingComparisonPurchaseReply: false,
+            comparisonPickItem: null,
+            awaitingShoppingPlanReply: false,
           });
         }
 
@@ -4327,6 +4694,14 @@ async function handleSearch(req: Request) {
           // early, above, before any of this ordinary search pipeline runs.
           shoppingPlanDraft: null,
           externalOffers,
+          // Resolved either way by the time this turn reaches here: a
+          // FRESH comparison never gets this far (its own short-circuit
+          // above ends the turn), and the confirmation turn's own exchange
+          // is done once its results are shown — nothing left to route a
+          // buyer's next message back into.
+          awaitingComparisonPurchaseReply: false,
+          comparisonPickItem: null,
+          awaitingShoppingPlanReply: false,
         });
 
         // Recruitment-lead capture: Velte had no vendor for this request AND

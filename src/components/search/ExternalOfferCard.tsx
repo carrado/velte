@@ -79,7 +79,7 @@ export function ExternalOfferCard({
       href={offer.url}
       target="_blank"
       rel="noopener noreferrer nofollow sponsored"
-      className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all duration-200 hover:border-gray-300 hover:shadow-md"
+      className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-surface transition-all duration-200 hover:border-gray-300 hover:shadow-md"
     >
       <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden bg-gray-50">
         {images.length > 0 ? (
@@ -133,7 +133,7 @@ export function ExternalOfferCard({
                   key={url}
                   className={cn(
                     "h-1.5 w-1.5 rounded-full transition-colors",
-                    i === index ? "bg-white" : "bg-white/50",
+                    i === index ? "bg-surface" : "bg-white/50",
                   )}
                 />
               ))}
@@ -175,7 +175,7 @@ export function ExternalOfferCard({
             next to a real vendor's real price is exactly the kind of
             confident wrongness this codebase avoids everywhere else. */}
         {offer.priceText && (
-          <p className="text-[15px] font-extrabold text-[#023337]">
+          <p className="text-[15px] font-extrabold text-ink">
             {offer.priceText}
           </p>
         )}

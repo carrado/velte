@@ -13,7 +13,7 @@ const fadeUp = {
 // card competing for attention with everything around it.
 export function WhatsAppHighlight() {
   return (
-    <section className="relative bg-white border-t border-gray-100 py-10 sm:py-12">
+    <section className="relative bg-surface border-t border-gray-100 py-10 sm:py-12">
       <motion.div
         initial="hidden"
         whileInView="show"
@@ -24,7 +24,7 @@ export function WhatsAppHighlight() {
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-green-500 mb-4">
           <WhatsAppIcon size={24} className="text-white" />
         </div>
-        <h2 className="text-xl sm:text-2xl font-bold text-[#023337] tracking-tight mb-2 text-balance">
+        <h2 className="text-xl sm:text-2xl font-bold text-ink tracking-tight mb-2 text-balance">
           Chat directly on WhatsApp
         </h2>
         <p className="text-gray-500 max-w-md mx-auto">

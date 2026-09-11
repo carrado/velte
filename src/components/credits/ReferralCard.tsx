@@ -63,8 +63,8 @@ export function ReferralCard({ code }: { code: string | null }) {
   if (!code) return null;
 
   return (
-    <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-[#023337]">
+    <div className="mt-4 rounded-2xl border border-gray-200 bg-surface p-5">
+      <h2 className="text-sm font-semibold text-ink">
         Get {REFERRAL_CREDITS} credits for every friend
       </h2>
       <div className="mt-3 flex items-stretch gap-2">

@@ -42,10 +42,14 @@ export async function GET() {
        *  spend it without a second request. Null for a buyer, who has no
        *  wallet — which is what the panel branches on. */
       walletBalanceKobo: number | null;
-      /** Lifetime spend, which is the other half of the credit meter — the
-       *  ring needs a total, and `balance` alone cannot say what was
-       *  granted. */
+      /** Lifetime spend — for support, never what the meter reads (see
+       *  spentSinceTopUp below). Forwarded for shape completeness only. */
       totalSpent: number;
+      /** The credit meter's own "used" half (2026-09-09) — resets to 0 on
+       *  every top-up, unlike totalSpent above, so the ring reads usage
+       *  against the bundle just bought rather than a lifetime total. See
+       *  velte-backend's Credits.model.js for the full reasoning. */
+      spentSinceTopUp: number;
     }>("/credits", { cookie });
     return NextResponse.json({ ...data, isGuest: false });
   } catch {
@@ -60,6 +64,7 @@ export async function GET() {
       // which would tell a vendor with money in it to find a card.
       walletBalanceKobo: null,
       totalSpent: 0,
+      spentSinceTopUp: 0,
       isGuest: false,
     });
   }

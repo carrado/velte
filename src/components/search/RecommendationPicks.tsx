@@ -399,12 +399,12 @@ export function RecommendationPicks({
                 className={
                   row.label === "Top pick"
                     ? "shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-semibold text-white mt-1"
-                    : "shrink-0 rounded-full border border-orange-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-orange-600 mt-1"
+                    : "shrink-0 rounded-full border border-orange-200 bg-surface px-2 py-0.5 text-[10px] font-semibold text-orange-600 mt-1"
                 }
               >
                 {row.label}
               </span>
-              <span className="min-w-0 text-[15px] sm:text-base font-semibold text-[#023337] leading-snug underline decoration-transparent underline-offset-2 transition-colors group-hover:decoration-orange-300">
+              <span className="min-w-0 text-[15px] sm:text-base font-semibold text-ink leading-snug underline decoration-transparent underline-offset-2 transition-colors group-hover:decoration-orange-300">
                 {row.name}
               </span>
             </span>
@@ -449,7 +449,7 @@ export function TradeoffNote({
         <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 mt-1">
           Worth knowing
         </span>
-        <span className="min-w-0 text-[15px] sm:text-base font-semibold text-[#023337] leading-snug">
+        <span className="min-w-0 text-[15px] sm:text-base font-semibold text-ink leading-snug">
           {name}
         </span>
       </div>

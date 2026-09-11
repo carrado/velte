@@ -141,7 +141,7 @@ export function GoogleSignInButton({
         type="button"
         onClick={() => void handleClick()}
         disabled={busy}
-        className="w-full flex items-center justify-center gap-2.5 h-11 px-4 rounded-full bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        className="w-full flex items-center justify-center gap-2.5 h-11 px-4 rounded-full bg-surface border border-gray-200 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors cursor-pointer"
       >
         {/* Google's mark, inline rather than a remote asset — their branding
             guidelines require the official four-colour "G" on a sign-in
@@ -164,7 +164,7 @@ export function GoogleSignInButton({
             d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
           />
         </svg>
-        <span className="text-sm font-medium text-[#023337]">
+        <span className="text-sm font-medium text-ink">
           {busy ? "Signing you in…" : "Continue with Google"}
         </span>
       </button>

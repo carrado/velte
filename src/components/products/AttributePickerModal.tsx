@@ -86,7 +86,7 @@ export default function AttributePickerModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 z-10 flex flex-col max-h-[85vh]">
+      <div className="relative bg-surface rounded-xl shadow-2xl w-full max-w-lg mx-4 z-10 flex flex-col max-h-[85vh]">
         <div className="px-6 py-4 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <h2 className="text-dash-heading font-semibold text-gray-900">
@@ -199,14 +199,14 @@ export default function AttributePickerModal({
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               placeholder="Name (e.g. Installation)"
-              className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-dash-body bg-white focus:outline-none focus:ring-2 focus:ring-orange-300"
+              className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-dash-body bg-surface focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
             <input
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addCustom()}
               placeholder="Value (e.g. free within Ikeja)"
-              className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-dash-body bg-white focus:outline-none focus:ring-2 focus:ring-orange-300"
+              className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-dash-body bg-surface focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
             <button
               type="button"

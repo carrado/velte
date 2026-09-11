@@ -137,6 +137,22 @@ export function classifyScopeTool() {
         .describe(
           "When isComparison is true, the things being weighed against each other, as short searchable noun phrases — ['Toyota 2026 model', 'Lexus SUV 2026'], ['iPhone', 'Samsung'], ['2026 Toyota Camry', '2025 Lexus RX']. Include the shared need in each one where it matters ('iPhone for content creation', 'Samsung for content creation'), since each is searched separately. Resolve options named on an EARLIER turn when this message only asks which to pick ('so which one?'). Empty array when isComparison is false, or when the buyer asked which is better WITHOUT naming any options ('what phone should I get for gaming') — there is nothing to enumerate there, and inventing options would search for things they never mentioned. NORMALIZE common Nigerian vehicle shorthand rather than repeating it verbatim: 'jeep' after a brand almost always means an SUV in everyday speech, not the Jeep brand itself, and most brands people say it about (Lexus, Toyota, Honda, Mercedes/'Benz') make no vehicle actually called that — 'Lexus Jeep 2026' becomes 'Lexus SUV 2026', 'Benz Jeep' becomes 'Mercedes SUV', never searched as typed. The one exception is the Jeep brand itself ('a Jeep Wrangler', 'I want a Jeep') — leave that alone.",
         ),
+      // Shopping Plan, inferred from plain text (2026-09-10, per explicit
+      // product direction — this reverses planRule.ts's own "explicit-tool-
+      // only" note, see that file).
+      //
+      // Judged HERE rather than by a dedicated call, for exactly the reasons
+      // isComparison above is: this call already runs on every
+      // message-bearing turn and already has the history, so the judgment is
+      // free, and a keyword pre-filter would silently miss every phrasing it
+      // didn't list. "I'm moving into a new apartment, I need the essentials"
+      // names no single item and no keyword — a regex was never going to
+      // catch it.
+      isShoppingPlan: z
+        .boolean()
+        .describe(
+          "true when the buyer is describing a GOAL that resolves into a whole list of things to buy — furnishing a home, setting up an office, stocking a kitchen — rather than asking for one specific item. Judged by the shopping-plan rule given in the system prompt. false for any request naming ONE thing to find, however the budget is phrased alongside it. Read the whole message and the conversation above.",
+        ),
     }),
     execute: async ({
       inScope,
@@ -148,6 +164,7 @@ export function classifyScopeTool() {
       hasSpecificDetails,
       isComparison,
       comparisonOptions,
+      isShoppingPlan,
     }) => ({
       inScope,
       namesPlace,
@@ -158,6 +175,7 @@ export function classifyScopeTool() {
       hasSpecificDetails,
       isComparison,
       comparisonOptions,
+      isShoppingPlan,
     }),
   });
 }

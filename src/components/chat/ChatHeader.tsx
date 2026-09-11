@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { VelteLogo } from "@/components/VelteLogo";
 import { useRef, useState } from "react";
 import { useUserStore } from "@/store/userStore";
 import { useBuyerStore } from "@/store/buyerStore";
@@ -127,7 +127,7 @@ export function ChatHeader() {
   const [confirmingLogout, setConfirmingLogout] = useState(false);
 
   const menuItemClass =
-    "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-[#023337] transition-colors hover:bg-gray-50";
+    "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-ink transition-colors hover:bg-gray-50";
 
   const accountMenu = (
     <AnchoredPopover
@@ -135,7 +135,7 @@ export function ChatHeader() {
       onClose={() => setMenuOpen(false)}
       anchorRef={chipRef}
       align="right"
-      className="w-56 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+      className="w-56 overflow-hidden rounded-xl border border-gray-200 bg-surface py-1 shadow-lg"
     >
       {vendorDashboardId ? (
         <Link
@@ -197,7 +197,7 @@ export function ChatHeader() {
 
   return (
     <>
-      <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-white border-b border-gray-100 z-10">
+      <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-surface border-b border-gray-100 z-10">
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           {/* Mobile: opens the slide-over. Desktop: only rendered while the
             sidebar is collapsed — expanded, the sidebar carries its own
@@ -236,9 +236,7 @@ export function ChatHeader() {
             href={buyer && !userDetails ? "/chat" : "/"}
             className="shrink-0"
           >
-            <Image
-              src="/velte_logo_esn5dj.png"
-              alt="Velte"
+            <VelteLogo
               width={72}
               height={35}
               className="w-14 h-auto"

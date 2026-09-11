@@ -47,7 +47,7 @@ export function MarketplaceTabs({
   // the Listings branch below.
   return (
     <div>
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 sm:p-4 mb-6">
+      <div className="bg-surface rounded-2xl border border-gray-200 shadow-sm p-3 sm:p-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
           <div className="inline-flex p-1 bg-gray-100 rounded-xl shrink-0">
             <button
@@ -107,7 +107,7 @@ function tabClass(isActive: boolean) {
   return cn(
     "px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors cursor-pointer",
     isActive
-      ? "bg-white text-orange-600 shadow-sm"
+      ? "bg-surface text-orange-600 shadow-sm"
       : "text-gray-500 hover:text-gray-700",
   );
 }

@@ -60,7 +60,7 @@ export function CreditsDonut({
   const dash = CIRCUMFERENCE * fraction;
 
   return (
-    <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
+    <div className="mt-8 rounded-2xl border border-gray-200 bg-surface p-6 text-center shadow-sm">
       <div className="relative mx-auto w-[160px]">
         <svg
           width={SIZE}
@@ -106,7 +106,7 @@ export function CreditsDonut({
             tabular: tabular-nums gives every digit the width of a zero, which
             makes a large standalone number look gappy. */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-5xl leading-none font-bold text-[#023337]">
+          <span className="text-5xl leading-none font-bold text-ink">
             {known ? remaining : "—"}
           </span>
           <span className="mt-1.5 text-xs font-medium tracking-wide text-gray-500 uppercase">

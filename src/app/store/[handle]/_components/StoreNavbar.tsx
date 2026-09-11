@@ -1,14 +1,12 @@
-import Image from "next/image";
 import Link from "next/link";
+import { VelteLogo } from "@/components/VelteLogo";
 import { SparkleIcon } from "@/components/icons";
 export default function StoreNavbar() {
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <header className="bg-surface border-b border-gray-200 sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-4">
         <Link href="/" className="shrink-0">
-          <Image
-            src="/velte_logo_esn5dj.png"
-            alt="Velte"
+          <VelteLogo
             width={120}
             height={59}
             className="w-20 sm:w-[110px] h-auto"

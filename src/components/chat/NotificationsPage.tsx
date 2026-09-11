@@ -15,6 +15,7 @@ import {
 } from "@/components/icons";
 import { BellIllustration } from "@/components/icons";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import {
   deleteNotification,
   fetchNotifications,
@@ -161,7 +162,7 @@ function NotificationRow({
         <span className="flex items-baseline gap-2">
           <span
             className={cn(
-              "truncate text-sm text-[#023337]",
+              "truncate text-sm text-ink",
               // Weight, not colour, carries unread — colour alone would be
               // the only signal for anyone who can't distinguish it, and the
               // dot below is the redundant second cue.
@@ -191,7 +192,7 @@ function NotificationRow({
 
   const rowClass = cn(
     "group flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left transition-colors",
-    unread ? "border-orange-100 bg-orange-50/40" : "border-gray-100 bg-white",
+    unread ? "border-orange-100 bg-orange-50/40" : "border-gray-100 bg-surface",
     style.tint,
     deleting && "opacity-50",
   );
@@ -227,7 +228,7 @@ function NotificationRow({
         onClick={() => onDelete(notification.id)}
         disabled={deleting}
         aria-label="Remove notification"
-        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-gray-300 opacity-100 transition-colors hover:bg-white hover:text-gray-600 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer"
+        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-gray-300 opacity-100 transition-colors hover:bg-surface hover:text-gray-600 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer"
       >
         <CloseIcon size={13} />
       </button>
@@ -240,6 +241,7 @@ export function NotificationsPage() {
   const vendor = useUserStore((s) => s.user);
   const signedIn = Boolean(buyer || vendor);
   const queryClient = useQueryClient();
+  const { navigate } = useNavigation();
 
   const [filter, setFilter] = useState<"all" | "unread">("all");
 
@@ -301,7 +303,7 @@ export function NotificationsPage() {
       <div className="h-full overflow-y-auto">
         <div className="mx-auto max-w-lg px-4 py-16 text-center">
           <BellIcon size={28} className="mx-auto text-gray-300" />
-          <h1 className="mt-4 text-lg font-bold text-[#023337]">
+          <h1 className="mt-4 text-lg font-bold text-ink">
             Sign in to see your notifications
           </h1>
           <p className="mt-2 text-sm text-gray-500">
@@ -321,7 +323,7 @@ export function NotificationsPage() {
         <header className="mb-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="flex items-center gap-2 text-xl font-bold text-[#023337]">
+              <h1 className="flex items-center gap-2 text-xl font-bold text-ink">
                 Notifications
                 {unreadCount > 0 && (
                   <span className="rounded-full bg-orange-500 px-2 py-0.5 text-xs font-bold text-white">
@@ -357,7 +359,7 @@ export function NotificationsPage() {
                   className={cn(
                     "rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors cursor-pointer",
                     filter === key
-                      ? "bg-white text-[#023337] shadow-sm"
+                      ? "bg-surface text-ink shadow-sm"
                       : "text-gray-500 hover:text-gray-700",
                   )}
                 >
@@ -381,7 +383,7 @@ export function NotificationsPage() {
         )}
 
         {isError && (
-          <p className="rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-500">
+          <p className="rounded-2xl border border-gray-100 bg-surface p-4 text-sm text-gray-500">
             Couldn&apos;t load your notifications just now. Refresh to try
             again.
           </p>
@@ -392,7 +394,7 @@ export function NotificationsPage() {
             {/* The illustration set, not a UI icon — empty states are exactly
                 what it is reserved for (see the icons note in CLAUDE.md). */}
             <BellIllustration size={56} className="mx-auto" />
-            <p className="mt-4 text-sm font-semibold text-[#023337]">
+            <p className="mt-4 text-sm font-semibold text-ink">
               {filter === "unread" ? "Nothing unread" : "No notifications yet"}
             </p>
             <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
@@ -401,12 +403,13 @@ export function NotificationsPage() {
                 : "When a business answers your request, it'll show up here."}
             </p>
             {filter === "all" && (
-              <Link
-                href="/chat"
-                className="mt-5 inline-flex items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+              <button
+                type="button"
+                onClick={() => navigate("/chat")}
+                className="mt-5 inline-flex cursor-pointer items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
               >
                 Start a new search
-              </Link>
+              </button>
             )}
           </div>
         )}

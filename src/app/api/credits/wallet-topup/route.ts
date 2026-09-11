@@ -51,6 +51,10 @@ export async function POST(req: Request) {
       credits: number;
       amountKobo: number;
       walletBalanceKobo: number;
+      // Always 0 on a successful top-up — see creditsStore.ts's own comment
+      // on why the meter's "used" half resets here instead of being left
+      // untouched.
+      spentSinceTopUp: number;
       reference: string;
     }>("/credits/wallet-topup", {
       method: "POST",

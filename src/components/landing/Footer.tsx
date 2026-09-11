@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { VelteLogo } from "@/components/VelteLogo";
 
 // Real brand marks (not generic outline icons) — inline SVGs so no icon
 // library dependency is needed for just these two.
@@ -96,7 +97,7 @@ export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="bg-white border-t border-gray-200">
+    <footer className="bg-surface border-t border-gray-200">
       {/* Widened 5xl → 6xl and switched brand/groups to a justified flex row
           (2026-08-16) — the old grid-cols-6 packed everything toward the
           left edge of a narrower container; this spreads the 4 groups across
@@ -110,13 +111,7 @@ export default function Footer() {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8 mb-8">
           <div className="max-w-[260px] shrink-0">
             <Link href="/" className="flex items-center gap-2.5 mb-2.5">
-              <Image
-                src="/velte_logo_esn5dj.png"
-                alt="Velte"
-                width={56}
-                height={28}
-                priority
-              />
+              <VelteLogo width={56} height={28} priority />
             </Link>
             <p className="text-gray-500 text-sm leading-relaxed mb-3.5">
               Describe what you need — we find the nearest real vendor who

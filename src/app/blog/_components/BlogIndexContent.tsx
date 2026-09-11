@@ -50,7 +50,7 @@ export default function BlogIndexContent() {
   return (
     <>
       <Navbar />
-      <main className="bg-white min-h-screen pt-28 sm:pt-32 pb-24">
+      <main className="bg-surface min-h-screen pt-28 sm:pt-32 pb-24">
         <header className="max-w-5xl mx-auto px-5 sm:px-8 mb-14 sm:mb-16">
           <motion.div initial="hidden" animate="show" variants={stagger}>
             <motion.span
@@ -61,7 +61,7 @@ export default function BlogIndexContent() {
             </motion.span>
             <motion.h1
               variants={fadeUp}
-              className="text-4xl sm:text-5xl lg:text-6xl font-bold text-[#023337] tracking-tight text-balance mb-5 max-w-2xl"
+              className="text-4xl sm:text-5xl lg:text-6xl font-bold text-ink tracking-tight text-balance mb-5 max-w-2xl"
             >
               Guides for buying and selling, written plainly.
             </motion.h1>
@@ -111,7 +111,7 @@ export default function BlogIndexContent() {
                   <span aria-hidden>·</span>
                   <span>{post.readingTime}</span>
                 </div>
-                <h2 className="text-xl sm:text-2xl font-bold text-[#023337] leading-snug mb-2 text-balance">
+                <h2 className="text-xl sm:text-2xl font-bold text-ink leading-snug mb-2 text-balance">
                   {post.title}
                 </h2>
                 <p className="text-gray-500 leading-relaxed mb-3 line-clamp-2">
@@ -141,7 +141,7 @@ export default function BlogIndexContent() {
           </p>
           <Link
             href="/faq"
-            className="inline-flex items-center gap-1.5 text-[#023337] font-semibold text-sm hover:text-orange-600 transition-colors"
+            className="inline-flex items-center gap-1.5 text-ink font-semibold text-sm hover:text-orange-600 transition-colors"
           >
             Browse the FAQ
             <ArrowUpRightIcon className="w-3.5 h-3.5" />

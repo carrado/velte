@@ -80,7 +80,7 @@ function DateRangeFilter({
             return next;
           });
         }}
-        className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer text-dash-caption font-medium text-gray-600"
+        className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg bg-surface hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer text-dash-caption font-medium text-gray-600"
       >
         <CalendarIcon size={14} className="text-gray-400" />
         {label}
@@ -90,11 +90,11 @@ function DateRangeFilter({
         onClose={() => setOpen(false)}
         anchorRef={triggerRef}
         align="right"
-        className="sm:w-72 w-[300px] bg-white rounded-lg shadow-lg border border-gray-200 p-4 text-dash-body"
+        className="sm:w-72 w-[300px] bg-surface rounded-lg shadow-lg border border-gray-200 p-4 text-dash-body"
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-dash-secondary font-semibold text-[#023337] mb-1">
+            <label className="block text-dash-secondary font-semibold text-ink mb-1">
               Date Range
             </label>
             <div className="flex gap-2">
@@ -225,7 +225,7 @@ export default function SpendHistoryTable() {
   ];
 
   return (
-    <div className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-surface rounded-none sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <h2 className="text-dash-heading font-semibold text-gray-900">
           Spend History

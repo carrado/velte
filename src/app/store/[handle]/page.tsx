@@ -106,8 +106,8 @@ function IntroCard({
   isOwn,
 }: IntroCardProps) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-      <h3 className="text-sm font-bold text-[#023337] uppercase tracking-wide">
+    <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+      <h3 className="text-sm font-bold text-ink uppercase tracking-wide">
         Intro
       </h3>
       {store.description && (
@@ -199,7 +199,7 @@ export default async function PublicStorePage({
       : "products";
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9]">
+    <div className="min-h-screen bg-canvas">
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger

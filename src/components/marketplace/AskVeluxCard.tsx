@@ -13,7 +13,7 @@ export function AskVeluxCard({ subtext }: { subtext: string }) {
   return (
     <Link
       href="/chat"
-      className="self-start bg-white rounded-2xl border border-orange-100 shadow-sm p-4 flex flex-col items-center text-center gap-1.5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
+      className="self-start bg-surface rounded-2xl border border-orange-100 shadow-sm p-4 flex flex-col items-center text-center gap-1.5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
     >
       <Image
         src="/velte_ai_assistant.png"

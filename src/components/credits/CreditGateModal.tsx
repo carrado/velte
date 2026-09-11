@@ -51,7 +51,7 @@ export function CreditGateModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-surface shadow-2xl">
         <button
           onClick={onClose}
           aria-label="Dismiss"
@@ -64,7 +64,7 @@ export function CreditGateModal({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50">
             <LockIcon size={22} className="text-orange-500" />
           </div>
-          <h3 className="mt-4 text-base font-semibold text-[#023337]">
+          <h3 className="mt-4 text-base font-semibold text-ink">
             Not enough credits for {toolLabel}
           </h3>
           <p className="mt-1.5 text-sm leading-relaxed text-gray-500">

@@ -620,6 +620,22 @@ export function creatingRequestPhrase(): string[] {
   ];
 }
 
+// Shown for the few seconds between "Start searching" and the background job
+// actually being underway (2026-09-10). Every one of these describes work
+// that IS about to happen — no invented source names, no fake percentages,
+// and nothing claiming a search already ran. The real per-item progress
+// takes over from here (Your Plans, and the plan card's own live states), so
+// this pool only has to cover the handoff.
+export function startingPlanPhrase(): string[] {
+  return [
+    "Setting up your shopping plan…",
+    "Getting your list ready to search…",
+    "Lining up the items on your list…",
+    "Starting on your shopping plan…",
+    "Getting everything ready to search…",
+  ];
+}
+
 // The unified "genuine Velte dead end" reveal (see route.ts's own comment
 // on the block that uses these) — three stages, each with its own voice:
 // an immediate closing-the-loop BUBBLE on the search that just ran, a

@@ -47,6 +47,16 @@ interface ChatHistoryStore {
   newChatNonce: number | null;
   requestNewChat: () => void;
   clearNewChatRequest: () => void;
+
+  // The conversation id SearchHome is CURRENTLY showing (2026-09-09) —
+  // written by SearchHome itself wherever it sets its own conversationIdRef
+  // (mount rehydrate, opening a picked row, a turn's own final event, a new
+  // chat reset), read by the sidebar so deleting the open thread can also
+  // clear the thread on screen instead of leaving a deleted conversation
+  // sitting there until the next refresh. Same one-way-mirror pattern as
+  // `requestedConversationId` above, just running in the other direction.
+  activeConversationId: string | null;
+  setActiveConversationId: (conversationId: string | null) => void;
 }
 
 export const useChatHistoryStore = create<ChatHistoryStore>()((set) => ({
@@ -68,4 +78,7 @@ export const useChatHistoryStore = create<ChatHistoryStore>()((set) => ({
       isOpen: false,
     }),
   clearNewChatRequest: () => set({ newChatNonce: null }),
+  activeConversationId: null,
+  setActiveConversationId: (conversationId) =>
+    set({ activeConversationId: conversationId }),
 }));

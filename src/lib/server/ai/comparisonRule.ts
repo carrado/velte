@@ -8,6 +8,17 @@
 //     message-bearing turn so a comparison typed with no tool selected is
 //     still treated as one.
 //
+// What happens once this rule says "yes" is a TWO-PHASE thing (2026-09-09),
+// even though the rule itself doesn't change: a FRESH comparison — the
+// buyer naming two or more DIFFERENT things ("iPhone vs Samsung") — is
+// answered conversationally, from the model's own knowledge, with no Velte
+// search at all (route.ts's own short-circuit, system prompt in
+// buildComparisonAnswerSystemPrompt); the rich structured template
+// (comparisonTemplate.ts, criteria/podium/table) only ever runs once the
+// buyer confirms which one they actually want, over the different Velte
+// LISTINGS of that one item. See route.ts's own pendingComparisonPick for
+// the mechanism.
+//
 // Written as a DECISION PROCEDURE, not a list of examples (rewritten
 // 2026-09-05). The example-led version missed three real buyer messages in a
 // row — brand-level options ("Between iPhone and Samsung"), a message whose

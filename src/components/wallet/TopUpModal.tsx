@@ -63,7 +63,7 @@ export default function TopUpModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-3 sm:mx-4 max-h-[90vh] overflow-y-auto z-10">
+      <div className="relative bg-surface rounded-xl shadow-2xl w-full max-w-md mx-3 sm:mx-4 max-h-[90vh] overflow-y-auto z-10">
         <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-100">
           <h2 className="text-dash-heading font-semibold text-gray-900">
             Top Up Wallet

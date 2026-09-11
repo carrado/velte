@@ -39,7 +39,7 @@ export default function VendorBuyerRequestsPage() {
       {isLoading ? (
         <p className="text-gray-400 text-sm text-center py-8">Loading...</p>
       ) : requests.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 text-center">
+        <div className="bg-surface rounded-2xl border border-gray-200 p-6 text-center">
           <p className="text-gray-600 font-medium mb-1">
             No matching buyer requests yet.
           </p>
@@ -53,7 +53,7 @@ export default function VendorBuyerRequestsPage() {
             <Link
               key={request.id}
               href={`/${params.id}/buyer-requests/${request.id}`}
-              className="block bg-white rounded-2xl border border-gray-200 p-4 hover:border-orange-200 transition-colors"
+              className="block bg-surface rounded-2xl border border-gray-200 p-4 hover:border-orange-200 transition-colors"
             >
               <div className="flex items-start justify-between gap-3 mb-2">
                 <span className="text-xs font-semibold text-orange-500">

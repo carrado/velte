@@ -62,7 +62,7 @@ export default function StoreHero({
 
   return (
     <div
-      className="relative w-full h-[220px] sm:h-[260px] lg:h-[300px] overflow-hidden select-none bg-gray-900"
+      className="relative w-full h-[220px] sm:h-[260px] lg:h-[300px] overflow-hidden select-none bg-slab"
       onMouseEnter={() => setIsAutoPlaying(false)}
       onMouseLeave={() => setIsAutoPlaying(true)}
     >
@@ -133,7 +133,7 @@ export default function StoreHero({
                 className={cn(
                   "rounded-full transition-all duration-300",
                   i === current
-                    ? "w-5 h-1.5 bg-white"
+                    ? "w-5 h-1.5 bg-surface"
                     : "w-1.5 h-1.5 bg-white/50 hover:bg-white/80",
                 )}
               />

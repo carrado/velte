@@ -84,7 +84,7 @@ export function CreditsBar() {
         // this is the one part that can afford to give, so at 320px — where
         // 96px plus the labels is about 20px more than the row has — the bar
         // gives those pixels back instead of pushing the send button.
-        className="h-2 w-24 overflow-hidden rounded-full border bg-white"
+        className="h-2 w-24 overflow-hidden rounded-full border bg-surface"
         style={{ borderColor: METER_EMPTY }}
       >
         <span

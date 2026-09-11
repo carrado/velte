@@ -26,7 +26,7 @@ const fadeUp = {
 // Velte, same as the real product.
 export function NoMatchShowcase() {
   return (
-    <section className="relative bg-[#F1F5F9] border-t border-gray-100 py-14 sm:py-16">
+    <section className="relative bg-canvas border-t border-gray-100 py-14 sm:py-16">
       <div className="max-w-2xl mx-auto px-5 sm:px-8">
         <motion.div
           initial="hidden"
@@ -37,7 +37,7 @@ export function NoMatchShowcase() {
         >
           <motion.h2
             variants={fadeUp}
-            className="text-2xl sm:text-3xl font-bold text-[#023337] tracking-tight mb-2 text-balance"
+            className="text-2xl sm:text-3xl font-bold text-ink tracking-tight mb-2 text-balance"
           >
             Can&apos;t find it? Let Velte try.
           </motion.h2>
@@ -55,7 +55,7 @@ export function NoMatchShowcase() {
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, margin: "-80px" }}
-          className="bg-white rounded-3xl border border-gray-100 shadow-lg shadow-gray-200/50 p-5 sm:p-6 space-y-4"
+          className="bg-surface rounded-3xl border border-gray-100 shadow-lg shadow-gray-200/50 p-5 sm:p-6 space-y-4"
         >
           <motion.div variants={fadeUp} className="flex justify-end">
             <div className="max-w-[80%] bg-orange-50 border border-orange-100 rounded-2xl rounded-br-md px-4 py-2.5">

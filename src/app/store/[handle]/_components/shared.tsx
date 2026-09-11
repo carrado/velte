@@ -57,12 +57,10 @@ export function Price({ product }: { product: PublicStoreProduct }) {
   const symbol = product.currency === "USD" ? "$" : "₦";
   if (product.quoteOnRequest)
     return (
-      <p className="text-[15px] font-extrabold text-[#023337]">
-        Contact for quote
-      </p>
+      <p className="text-[15px] font-extrabold text-ink">Contact for quote</p>
     );
   return (
-    <p className="text-[15px] font-extrabold text-[#023337]">
+    <p className="text-[15px] font-extrabold text-ink">
       {fmt(product.price / 100, symbol)}
       {isRange(product) && (
         <>
@@ -162,7 +160,7 @@ export function OfferingCard({
     descOverflows || product.attributes.length > 0 || images.length > 1;
 
   return (
-    <div className="bg-white border rounded-2xl border-gray-100 shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md flex flex-col h-full">
+    <div className="bg-surface border rounded-2xl border-gray-100 shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md flex flex-col h-full">
       <div
         className={
           product.mainImageUrl ? "relative cursor-zoom-in" : "relative"

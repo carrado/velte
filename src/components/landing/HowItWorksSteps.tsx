@@ -38,7 +38,7 @@ const steps: {
 
 export function HowItWorksSteps() {
   return (
-    <section className="relative bg-white border-t border-gray-100 py-12 sm:py-14">
+    <section className="relative bg-surface border-t border-gray-100 py-12 sm:py-14">
       <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
         <motion.div
           initial="hidden"
@@ -48,7 +48,7 @@ export function HowItWorksSteps() {
         >
           <motion.h2
             variants={fadeUp}
-            className="text-xl sm:text-2xl font-bold text-[#023337] tracking-tight mb-8 text-balance"
+            className="text-xl sm:text-2xl font-bold text-ink tracking-tight mb-8 text-balance"
           >
             You don&apos;t need to search. You just need to ask.
           </motion.h2>

@@ -66,7 +66,7 @@ export function CreditsPanel({
   return (
     <div className="mx-auto max-w-3xl px-5 pb-24 sm:px-8">
       <div className="mt-8 text-center sm:mt-12">
-        <h1 className="text-3xl font-bold tracking-tight text-balance text-[#023337] sm:text-[2.4rem] sm:leading-[1.1]">
+        <h1 className="text-3xl font-bold tracking-tight text-balance text-ink sm:text-[2.4rem] sm:leading-[1.1]">
           Only pay when you&apos;re shopping
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-pretty text-gray-600 sm:text-base">
@@ -90,8 +90,8 @@ export function CreditsPanel({
           vendors: it is meaningless to a buyer and would read as a tier
           table, which is what this whole model replaced. */}
       {isVendor && (
-        <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-[#023337]">
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-surface p-5">
+          <h2 className="text-sm font-semibold text-ink">
             Your listings earn credits
           </h2>
           <p className="mt-1.5 text-sm leading-relaxed text-gray-600">
@@ -106,14 +106,14 @@ export function CreditsPanel({
               .map(({ minOfferings, credits }) => (
                 <li
                   key={minOfferings}
-                  className="flex items-baseline justify-between gap-3 bg-white px-4 py-2.5"
+                  className="flex items-baseline justify-between gap-3 bg-surface px-4 py-2.5"
                 >
                   <span className="text-sm text-gray-700">
                     {minOfferings === 0
                       ? "Getting started"
                       : `${minOfferings}+ listings`}
                   </span>
-                  <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-[#023337]">
+                  <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-ink">
                     {credits}
                   </span>
                 </li>
@@ -139,8 +139,8 @@ export function CreditsPanel({
           // their history — and it's the only way to buy more once the free
           // ten are gone. */}
       {isGuest ? (
-        <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 text-center">
-          <h2 className="text-sm font-semibold text-[#023337]">
+        <div className="mt-8 rounded-2xl border border-gray-200 bg-surface p-5 text-center">
+          <h2 className="text-sm font-semibold text-ink">
             Sign in to keep going
           </h2>
           <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-gray-600">
@@ -157,7 +157,7 @@ export function CreditsPanel({
       ) : (
         <div className="mt-8">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[#023337]">Top up</h2>
+            <h2 className="text-sm font-semibold text-ink">Top up</h2>
             {isVendor && (
               <p className="shrink-0 text-xs text-gray-500">
                 Wallet: {naira(Math.floor(walletBalanceKobo / 100))}
@@ -180,7 +180,7 @@ export function CreditsPanel({
                 <div
                   key={pack.id}
                   className={cn(
-                    "rounded-2xl border bg-white px-4 py-4",
+                    "rounded-2xl border bg-surface px-4 py-4",
                     pack.highlight
                       ? "border-orange-300 ring-1 ring-orange-200"
                       : "border-gray-200",
@@ -188,7 +188,7 @@ export function CreditsPanel({
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <span>
-                      <span className="block font-mono text-lg font-bold tabular-nums text-[#023337]">
+                      <span className="block font-mono text-lg font-bold tabular-nums text-ink">
                         {pack.credits}
                         <span className="ml-1 text-xs font-medium text-gray-500">
                           credits
@@ -200,7 +200,7 @@ export function CreditsPanel({
                         </span>
                       )}
                     </span>
-                    <span className="shrink-0 text-sm font-semibold text-[#023337]">
+                    <span className="shrink-0 text-sm font-semibold text-ink">
                       {naira(pack.priceNgn)}
                     </span>
                   </div>
@@ -231,7 +231,7 @@ export function CreditsPanel({
                       className={cn(
                         "flex-1 cursor-pointer rounded-full px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                         isVendor
-                          ? "border border-gray-200 text-[#023337] hover:bg-gray-50"
+                          ? "border border-gray-200 text-ink hover:bg-gray-50"
                           : "bg-orange-500 text-white hover:bg-orange-600",
                       )}
                     >

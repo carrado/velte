@@ -36,7 +36,7 @@ function NigerianFlag({ className }: { className?: string }) {
 // international shopping bot with Naira bolted on.
 export function BuiltForNigeria() {
   return (
-    <section className="relative bg-[#F1F5F9] border-t border-gray-100 py-10 sm:py-12">
+    <section className="relative bg-canvas border-t border-gray-100 py-10 sm:py-12">
       <motion.div
         initial="hidden"
         whileInView="show"
@@ -44,7 +44,7 @@ export function BuiltForNigeria() {
         variants={fadeUp}
         className="max-w-xl mx-auto px-5 sm:px-8 text-center"
       >
-        <h2 className="inline-flex items-center gap-2.5 text-xl sm:text-2xl font-bold text-[#023337] tracking-tight mb-2 text-balance">
+        <h2 className="inline-flex items-center gap-2.5 text-xl sm:text-2xl font-bold text-ink tracking-tight mb-2 text-balance">
           Built for Nigeria
           <NigerianFlag className="w-6 h-4 rounded-[3px] shadow-sm ring-1 ring-black/10 shrink-0" />
         </h2>

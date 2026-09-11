@@ -2,6 +2,8 @@ import { ChatHeader } from "@/components/chat/ChatHeader";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { ReferralCapture } from "@/components/chat/ReferralCapture";
 import { VendorSessionSync } from "@/components/chat/VendorSessionSync";
+import { ShoppingPlanProgressWatcher } from "@/components/chat/ShoppingPlanProgressWatcher";
+import { NavigationProgressProvider } from "@/components/chat/ChatNavigationProgressContext";
 import { CreditsFab } from "@/components/credits/CreditsFab";
 import { CreditsModalProvider } from "@/components/credits/CreditsModal";
 import { SEARCH_CONVERSATION_ID_STORAGE_KEY } from "@/lib/searchConversation";
@@ -49,25 +51,30 @@ export default function ChatLayout({
     // opens it lives in ChatHeader. It fetches its own balance on open; the
     // cost table it renders is a plain client-safe import.
     <CreditsModalProvider>
-      <div className="h-dvh flex overflow-hidden bg-white">
-        <script dangerouslySetInnerHTML={{ __html: PRE_PAINT_RESUME_CHECK }} />
-        <ReferralCapture />
-        <VendorSessionSync />
-        <ConversationSidebar />
-        {/* `min-w-0` matters: without it this flex child refuses to shrink
-          below its content's intrinsic width, and a long result card would
-          push the whole thread sideways instead of scrolling inside its own
-          container. */}
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          <ChatHeader />
-          <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
+      <NavigationProgressProvider>
+        <div className="h-dvh flex overflow-hidden bg-surface">
+          <script
+            dangerouslySetInnerHTML={{ __html: PRE_PAINT_RESUME_CHECK }}
+          />
+          <ReferralCapture />
+          <VendorSessionSync />
+          <ShoppingPlanProgressWatcher />
+          <ConversationSidebar />
+          {/* `min-w-0` matters: without it this flex child refuses to shrink
+            below its content's intrinsic width, and a long result card would
+            push the whole thread sideways instead of scrolling inside its own
+            container. */}
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <ChatHeader />
+            <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
+          </div>
+          {/* Outside the scrolling column on purpose: it is fixed to the
+              viewport, and nesting it inside an `overflow-hidden` ancestor is
+              how a fixed element ends up clipped. Inside the provider, since
+              it opens the modal. */}
+          <CreditsFab />
         </div>
-        {/* Outside the scrolling column on purpose: it is fixed to the
-            viewport, and nesting it inside an `overflow-hidden` ancestor is
-            how a fixed element ends up clipped. Inside the provider, since
-            it opens the modal. */}
-        <CreditsFab />
-      </div>
+      </NavigationProgressProvider>
     </CreditsModalProvider>
   );
 }

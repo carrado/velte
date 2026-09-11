@@ -48,7 +48,7 @@ export function SortMenu({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="shrink-0 inline-flex items-center gap-1.5 h-11 px-3.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:border-gray-300 transition-colors cursor-pointer"
+        className="shrink-0 inline-flex items-center gap-1.5 h-11 px-3.5 rounded-xl border border-gray-200 bg-surface text-sm font-semibold text-gray-700 hover:border-gray-300 transition-colors cursor-pointer"
       >
         <ArrowUpDownIcon size={14} className="text-gray-400" />
         Sort
@@ -67,7 +67,7 @@ export function SortMenu({
         anchorRef={anchorRef}
         align="right"
       >
-        <div className="w-48 bg-white rounded-xl border border-gray-200 shadow-lg py-1.5">
+        <div className="w-48 bg-surface rounded-xl border border-gray-200 shadow-lg py-1.5">
           {OPTIONS.map((opt) => (
             <button
               key={opt.value}

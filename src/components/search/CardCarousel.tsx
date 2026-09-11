@@ -116,7 +116,7 @@ export function CardCarousel<T>({
           type="button"
           onClick={() => scrollByPage(-1)}
           aria-label="Scroll left"
-          className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
+          className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-surface shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
           <ChevronLeftIcon size={16} />
         </button>
@@ -126,7 +126,7 @@ export function CardCarousel<T>({
           type="button"
           onClick={() => scrollByPage(1)}
           aria-label="Scroll right"
-          className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-8 h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
+          className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-8 h-8 rounded-full bg-surface shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
           <ChevronRightIcon size={16} />
         </button>

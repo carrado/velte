@@ -70,6 +70,53 @@ export interface SearchHistoryTurn {
   // use this, not only the long vendor-facing description, or Yes can
   // no_match after an offer that already found sector vendors.
   buyerRequestMatchQuery?: string | null;
+  // Same pattern as awaitingBuyerRequestReply above, for the OTHER
+  // two-step exchange (2026-09-09): a fresh comparison between DIFFERENT
+  // items (e.g. "iPhone vs Samsung") is answered conversationally, from the
+  // model's own knowledge, with no Velte search at all — see route.ts's own
+  // "fresh compare turn" short-circuit. That reply ends by asking whether
+  // the buyer wants the recommended pick found on Velte, and this flag is
+  // what routes their very next message back through that same exchange
+  // rather than treating "yes" as a brand-new, contentless request.
+  // Omitted for every other turn.
+  awaitingComparisonPurchaseReply?: boolean;
+  // The exact item name the comparison recommended (route.ts's own
+  // comparisonPickTool output) — what the confirmation turn actually
+  // searches Velte for, since the buyer's own "yes" names nothing itself.
+  // Null/omitted otherwise.
+  comparisonPickItem?: string | null;
+  // Structural markers for "was location/budget already asked this
+  // conversation" (2026-09-09) — route.ts's own alreadyAskedLocation-/
+  // BudgetThisConversation used to scan `content` for fixed keyword
+  // patterns (LOCATION_CLARIFY_PATTERN / BUDGET_CLARIFY_PATTERN), but both
+  // gates deliberately tell the model to phrase the question in its own
+  // words ("Write question naturally... no fixed wording") — found live: a
+  // location ask phrased as "I just need to know where to search so I can
+  // find listings near you" contains none of the regex's trigger words
+  // (city/area/location/...), so the scan missed it and the very next
+  // turn asked again, freshly worded. Set directly from the turn's own
+  // `clarification` (kind "location" for the location ask; kind "text"
+  // with `skippable: true` is the bare-query budget gate's own unique
+  // signature — nothing else in this file sets skippable), never guessed
+  // from prose — same "a known fact beats a model's reading of it"
+  // rule awaitingBuyerRequestReply above already follows. Omitted for
+  // every other turn.
+  askedLocation?: boolean;
+  askedBudget?: boolean;
+  // Same pattern as awaitingBuyerRequestReply/awaitingComparisonPurchaseReply
+  // above, for the Shopping Plan short-circuit's own "what's your total
+  // budget for this?" ask (2026-09-09 — found live: "set up a tech office
+  // space" asked this, got answered "3 million naira", and that reply fell
+  // straight through to the ORDINARY search pipeline instead of building
+  // the checklist — the Plan tool badge the buyer picked for the FIRST
+  // message is cleared by the composer once it's sent, exactly the same
+  // bug the two flags above were built to fix for their own two-step
+  // exchanges, just never applied here). True only on the turn where the
+  // draft came back null and the reply was this budget question; false
+  // once a real checklist is produced (the buyer continues that through
+  // its own UI/`/api/shopping-plan`, never back through here) and on every
+  // other turn.
+  awaitingShoppingPlanReply?: boolean;
 }
 
 // The scope check's read of WHAT the buyer is trying to do (classifyScope's
@@ -665,11 +712,32 @@ export interface ShoppingPlanCategory {
   targetBudgetKobo: number;
 }
 
+// "failed" (2026-09-10) is deliberately NOT the same as "no_match": the
+// search broke, rather than honestly finding nothing. Only one of the two is
+// worth retrying, and the buyer is told something different for each.
 export type ShoppingPlanItemStatus =
   | "pending"
   | "found"
   | "no_match"
-  | "deferred";
+  | "deferred"
+  | "failed";
+
+/** One real listing found for a plan item, beyond the chosen pick — what
+ *  makes "6 results found" an honest count and lets a buyer open an item and
+ *  choose differently. Same denormalised display snapshot the item itself
+ *  carries (see velte-backend's ShoppingPlan.model.js). */
+export interface ShoppingPlanResult {
+  id: string;
+  source: "velte" | "external";
+  productId: string | null;
+  vendorId: string | null;
+  externalOfferId: string | null;
+  name: string | null;
+  imageUrl: string | null;
+  priceKobo: number | null;
+  merchant: string | null;
+  url: string | null;
+}
 
 export interface ShoppingPlanItem {
   id: string;
@@ -688,6 +756,15 @@ export interface ShoppingPlanItem {
   priceKobo: number | null;
   merchant: string | null;
   url: string | null;
+  /** Short machine code when `status` is "failed" ("search_error",
+   *  "search_incomplete") — mapped to buyer-facing wording in the UI, never
+   *  rendered raw. Null otherwise. */
+  error: string | null;
+  /** Everything else this item's search found, ranked, pick first. Empty
+   *  while pending, and for no_match/failed. */
+  results: ShoppingPlanResult[];
+  startedAt: string | null;
+  completedAt: string | null;
 }
 
 export interface ShoppingPlanLocation {
@@ -702,9 +779,35 @@ export interface ShoppingPlan {
   goalText: string;
   totalBudgetKobo: number;
   location: ShoppingPlanLocation | null;
-  status: "draft" | "active" | "archived";
+  // "building" (2026-09-10) — the real background search is still running;
+  // see velte-backend's ShoppingPlan.model.js for the full lifecycle. Items
+  // arrive "pending" and fill in live via polling while this is true.
+  status: "draft" | "building" | "active" | "archived";
   categories: ShoppingPlanCategory[];
   items: ShoppingPlanItem[];
+  // Progress, server-computed (velte-backend's planProgress) so the list and
+  // the detail page can never disagree about it. `resolvedCount` is "how far
+  // along", `foundCount` is "how much actually found" — different numbers,
+  // and the completion wording depends on telling them apart.
+  itemCount: number;
+  resolvedCount: number;
+  foundCount: number;
+  failedCount: number;
+  noMatchCount: number;
+  // Folded into velte-backend's planProgress (2026-09-11) alongside the
+  // counts above, for the same reason — ShoppingPlanTemplate.tsx currently
+  // still derives its own `spentKobo` from `items` rather than reading this,
+  // which is fine (same formula, same source data); this exists so a future
+  // reader doesn't have to re-derive it a third time.
+  spentKobo: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  /** Whether the completion SMS went out. "failed"/"skipped" here says
+   *  nothing about the plan itself, which is complete either way. */
+  smsStatus: "pending" | "sent" | "failed" | "skipped";
+  /** Set once the buyer has seen the in-app completion toast — what stops it
+   *  re-firing on every page load after a refresh. */
+  notificationAcknowledgedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -718,7 +821,22 @@ export interface ShoppingPlanSummary {
   totalBudgetKobo: number;
   status: ShoppingPlan["status"];
   itemCount: number;
+  // How many items have been attempted at least once (2026-09-10) — the
+  // progress ring's numerator while status is "building". Equal to
+  // itemCount once resolution is done, regardless of how many came back
+  // no_match.
+  resolvedCount: number;
+  // How many actually FOUND something — the honest half of the story, and
+  // what the completion toast's "found X of Y" wording reads from.
+  foundCount: number;
+  failedCount: number;
+  noMatchCount: number;
   spentKobo: number;
+  /** Null until the buyer has seen this plan's completion toast — see
+   *  shoppingPlanProgressStore. */
+  notificationAcknowledgedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
   createdAt: string;
 }
 
@@ -937,6 +1055,16 @@ export type SearchStreamEvent =
       // exchange with a name-ask) — the short term create matching should
       // reuse. Null/omitted otherwise.
       buyerRequestMatchQuery: string | null;
+      // Same shape as the pair above, for the fresh-comparison short-circuit
+      // (2026-09-09) — see SearchHistoryTurn's own comment on both fields.
+      // True only on the turn that just answered a genuine "X vs Y"
+      // comparison conversationally and asked whether to find the pick on
+      // Velte; false on every other turn, including the confirmation turn
+      // itself once it runs the real search.
+      awaitingComparisonPurchaseReply: boolean;
+      // The recommended item's name, set alongside
+      // awaitingComparisonPurchaseReply — null/omitted otherwise.
+      comparisonPickItem: string | null;
       // Non-null only on a turn with ≥2 product results where the
       // comparison call succeeded — see SearchRecommendation's own
       // comment. Renders as badge chips on the matching cards plus a
@@ -947,6 +1075,22 @@ export type SearchStreamEvent =
       // spends any credits or does any searching. See ShoppingPlanDraft's
       // own comment. Null on every other turn.
       shoppingPlanDraft: ShoppingPlanDraft | null;
+      // Same pattern as awaitingComparisonPurchaseReply above, for the
+      // Shopping Plan short-circuit's own budget ask — see
+      // SearchHistoryTurn's matching field for the full reasoning. True
+      // only on the turn asking "what's your total budget for this?"
+      // because the draft came back null; false everywhere else.
+      awaitingShoppingPlanReply: boolean;
+      // The goal sheet's own remembered budget ceiling, in naira, as it
+      // stands going into THIS turn — injected once, by sendFinal itself,
+      // onto every final event (2026-09-10), never set per call site. What
+      // it's actually FOR: the buyer-request identity-capture flow's own
+      // "budget" step (SearchHome.tsx) reads it off the OFFER turn so it
+      // can skip re-asking a figure the buyer already gave earlier in this
+      // same conversation — found live, "office fit-out, ₦10,000,000
+      // budget" asked again for a budget during the WhatsApp-verification
+      // step. Null whenever nothing's been established yet.
+      knownBudgetNaira: number | null;
       // Off-Velte product offers (Phase 4) — populated ONLY on a genuine
       // dead end, and only when a connector is configured. Always rendered
       // as clearly not-Velte, with no chat handoff: there's no vendor
@@ -1102,6 +1246,39 @@ export interface StoredSearchTurn {
   contextNote: string | null;
   recommendation: AnyRecommendation | null;
   externalOffers: ExternalOffer[];
+  awaitingComparisonPurchaseReply: boolean;
+  comparisonPickItem: string | null;
+  // PERSISTED (2026-09-10), having briefly not been — see the backend
+  // model's own comment. route.ts ROUTES the next turn on this, and the
+  // route prefers SERVER history whenever it's complete, so a client-only
+  // copy was silently dropped the moment persistence started working.
+  awaitingShoppingPlanReply: boolean;
+  // See SearchStreamEvent's own comment — carried through so a REHYDRATED
+  // offer turn can still skip the identity-capture budget step correctly,
+  // not just a live one. Rides along inside the backend's Mixed `snapshot`
+  // blob for free; no backend schema change needed for this one (contrast
+  // askedLocation/askedBudget, which the MODEL-facing history needs as
+  // typed duplicate fields — this is client-UI-only, the model never sees
+  // it).
+  knownBudgetNaira: number | null;
+  // The unconfirmed checklist itself, PERSISTED (2026-09-11, reversing the
+  // "client-only" note this field used to carry) — found live: a buyer who
+  // refreshed the page right after seeing the checklist, before ever
+  // touching "Build my plan", came back to a bare reply with no checklist
+  // to act on. It should read exactly like any other turn on reload, same
+  // as a still-open clarifying question does. Rides along in the Mixed
+  // snapshot blob for free, same reasoning as knownBudgetNaira above.
+  //
+  // Deliberately NOT re-synced once the buyer actually confirms it (that
+  // happens in a plain client-state update, not a new persisted turn — see
+  // SearchHome's own onConfirmPlan) — a refresh AFTER confirming can show
+  // this same stale draft with its "Build my plan" button again. Left as
+  // is, on purpose: POST /api/shopping-plan is idempotent on this turn's
+  // id (see that route's own clientRef), so clicking it a second time
+  // can't create a duplicate job or double-charge — it just hands back the
+  // plan that already exists, which is a harmless outcome for a case this
+  // narrow.
+  shoppingPlanDraft: ShoppingPlanDraft | null;
 }
 
 // The active shopping task's lifecycle — derived server-side (staffly-ai-

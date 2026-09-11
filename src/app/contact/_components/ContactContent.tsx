@@ -74,7 +74,7 @@ export default function ContactContent() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#F1F5F9] min-h-screen pt-24 pb-20">
+      <main className="bg-canvas min-h-screen pt-24 pb-20">
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
           {/* Hero */}
           <motion.div
@@ -83,7 +83,7 @@ export default function ContactContent() {
             transition={{ duration: 0.6 }}
             className="text-center max-w-3xl mx-auto mb-16"
           >
-            <h1 className="text-5xl lg:text-6xl font-bold text-[#023337] mb-6">
+            <h1 className="text-5xl lg:text-6xl font-bold text-ink mb-6">
               Let’s <span className="text-orange-500">talk</span>
             </h1>
             <p className="text-gray-500 text-lg">
@@ -99,13 +99,13 @@ export default function ContactContent() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
-              className="bg-white border border-gray-200 shadow-sm rounded-2xl p-8"
+              className="bg-surface border border-gray-200 shadow-sm rounded-2xl p-8"
             >
-              <h2 className="text-2xl font-bold text-[#023337] mb-6">
+              <h2 className="text-2xl font-bold text-ink mb-6">
                 Send a message
               </h2>
               {submitted ? (
-                <div className="flex items-center gap-2 text-[#023337] bg-green-50 rounded-lg px-4 py-4">
+                <div className="flex items-center gap-2 text-ink bg-green-50 rounded-lg px-4 py-4">
                   <CheckCircleIcon className="w-5 h-5 text-green-600 shrink-0" />
                   Thanks — your message is in. We&apos;ll get back to you soon.
                 </div>
@@ -119,7 +119,7 @@ export default function ContactContent() {
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      className="w-full bg-canvas border border-gray-200 rounded-lg px-4 py-3 text-ink focus:outline-none focus:ring-1 focus:ring-orange-500"
                     />
                   </div>
                   <div>
@@ -130,7 +130,7 @@ export default function ContactContent() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      className="w-full bg-canvas border border-gray-200 rounded-lg px-4 py-3 text-ink focus:outline-none focus:ring-1 focus:ring-orange-500"
                     />
                   </div>
                   <div>
@@ -142,7 +142,7 @@ export default function ContactContent() {
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       rows={4}
-                      className="w-full min-h-[140px] sm:min-h-[120px] resize-none overflow-hidden bg-[#F1F5F9] border border-gray-200 rounded-lg px-4 py-3 text-[#023337] focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      className="w-full min-h-[140px] sm:min-h-[120px] resize-none overflow-hidden bg-canvas border border-gray-200 rounded-lg px-4 py-3 text-ink focus:outline-none focus:ring-1 focus:ring-orange-500"
                     ></textarea>
                   </div>
                   <Button
@@ -164,8 +164,8 @@ export default function ContactContent() {
               transition={{ duration: 0.5 }}
               className="space-y-6"
             >
-              <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-8">
-                <h2 className="text-2xl font-bold text-[#023337] mb-6">
+              <div className="bg-surface border border-gray-200 shadow-sm rounded-2xl p-8">
+                <h2 className="text-2xl font-bold text-ink mb-6">
                   Other ways to reach us
                 </h2>
                 <div className="space-y-4">
@@ -175,7 +175,7 @@ export default function ContactContent() {
                       <p className="text-gray-400 text-sm">Email</p>
                       <a
                         href="mailto:hello@velte.ng"
-                        className="text-[#023337] hover:text-orange-500"
+                        className="text-ink hover:text-orange-500"
                       >
                         hello@velte.ng
                       </a>
@@ -187,7 +187,7 @@ export default function ContactContent() {
                       <p className="text-gray-400 text-sm">Phone</p>
                       <a
                         href="tel:+2348163276826"
-                        className="text-[#023337] hover:text-orange-500"
+                        className="text-ink hover:text-orange-500"
                       >
                         +234 (0) 816 327 6826
                       </a>
@@ -197,7 +197,7 @@ export default function ContactContent() {
                     <MapPinIcon className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-gray-400 text-sm">Headquarters</p>
-                      <p className="text-[#023337]">
+                      <p className="text-ink">
                         Plot XI, Republic Estate, Independence Layout, Enugu,
                         Nigeria
                       </p>

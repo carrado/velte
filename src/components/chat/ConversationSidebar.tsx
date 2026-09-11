@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { buyerApi } from "@/lib/buyer-api-client";
+import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useAccountSignOut } from "@/hooks/useAccountSignOut";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
+import { DeleteConversationModal } from "@/components/chat/DeleteConversationModal";
 import { fetchNotifications } from "@/services/notifications";
 import { Avatar } from "@/components/Avatar";
 import {
@@ -23,6 +26,7 @@ import {
   MessageSquarePlusIcon,
   MessageSquareIllustration,
   ShoppingCartIcon,
+  TrashIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { SearchConversationList } from "@/types/search";
@@ -62,7 +66,7 @@ const SIDEBAR_WIDTH = 280;
 // them the thing a thumb actually aims for instead of an afterthought beside
 // the label.
 const MENU_ROW_CLASS =
-  "flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-200/50 hover:text-[#023337]";
+  "flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-200/50 hover:text-ink";
 
 function MenuLink({
   href,
@@ -82,14 +86,25 @@ function MenuLink({
   onNavigate: () => void;
   badge?: number;
 }) {
+  // A button, not a Link, since 2026-09-11 — these three rows are exactly
+  // the "vendor dashboard" navigation-progress treatment the /chat tree
+  // adopted: prefetch the destination page's own data (with the top
+  // progress bar showing it happening) and only push once it's resolved, so
+  // Notifications/Requests/Plans land already rendered instead of showing
+  // their own loading state a beat after arriving.
+  const { navigate } = useNavigation();
   return (
-    <Link
-      href={href}
-      onClick={onNavigate}
+    <button
+      type="button"
+      onClick={() => {
+        onNavigate();
+        navigate(href);
+      }}
       aria-current={active ? "page" : undefined}
       className={cn(
         MENU_ROW_CLASS,
-        active && "border-gray-200 bg-white text-[#023337]",
+        "cursor-pointer",
+        active && "border-gray-200 bg-surface text-ink",
       )}
     >
       {icon}
@@ -104,7 +119,7 @@ function MenuLink({
           {badge > 99 ? "99+" : badge}
         </span>
       )}
-    </Link>
+    </button>
   );
 }
 
@@ -202,6 +217,35 @@ export function ConversationSidebar() {
   });
   const unreadCount = notificationData?.unreadCount ?? 0;
 
+  // Delete-from-sidebar (2026-09-09). A confirm step first — same reasoning
+  // as DeleteConversationModal's own comment: unlike logout, this is
+  // genuinely irreversible. `deleteTarget` carries the title too, so the
+  // modal can name exactly which thread it's about to remove.
+  const queryClient = useQueryClient();
+  const activeConversationId = useChatHistoryStore(
+    (s) => s.activeConversationId,
+  );
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => buyerApi.del(`/api/search/conversations/${id}`),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["buyer", "conversations"],
+      });
+      // The deleted thread was the one on screen — leave it showing a
+      // conversation that no longer exists is worse than resetting to a
+      // fresh chat the buyer didn't explicitly ask to start.
+      if (activeConversationId === id) startNewChat();
+      setDeleteTarget(null);
+    },
+    onError: () => {
+      toast.error("Couldn't delete that conversation — try again.");
+    },
+  });
+
   // Escape closes the MOBILE slide-over only. On desktop the sidebar is
   // part of the page, not an overlay — Escape collapsing it would be a
   // surprise, not a convenience.
@@ -224,7 +268,13 @@ export function ConversationSidebar() {
         aria-hidden
         onClick={() => setOpen(false)}
         className={cn(
-          "fixed inset-0 z-40 bg-gray-900/20 transition-opacity duration-200 lg:hidden",
+          // Literal black, not a themed gray: `gray-900` is the reversed
+          // ramp's LIGHTEST shade in dark mode (see globals.css), which
+          // would turn this dimming scrim into a LIGHTENING one behind the
+          // mobile sidebar. A scrim's job (darken what's behind it) doesn't
+          // change with the theme, so it can't be themed the same way text
+          // and surfaces are.
+          "fixed inset-0 z-40 bg-black/20 transition-opacity duration-200 lg:hidden",
           isOpen ? "opacity-100" : "opacity-0 pointer-events-none",
         )}
       />
@@ -234,7 +284,7 @@ export function ConversationSidebar() {
         style={{ width: SIDEBAR_WIDTH }}
         className={cn(
           // Mobile: an overlay pinned to the left edge, driven by isOpen.
-          "fixed inset-y-0 left-0 z-50 shrink-0 bg-[#FAFAFA] border-r border-gray-100 flex flex-col transition-transform duration-200 ease-out",
+          "fixed inset-y-0 left-0 z-50 shrink-0 bg-canvas border-r border-gray-100 flex flex-col transition-transform duration-200 ease-out",
           isOpen ? "translate-x-0" : "-translate-x-full",
           // Desktop: a real column in the layout flow, never transformed.
           // Collapsing animates the WIDTH to zero rather than sliding it
@@ -324,12 +374,10 @@ export function ConversationSidebar() {
             <button
               type="button"
               onClick={startNewChat}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white border border-gray-200 hover:border-orange-200 hover:bg-orange-50/40 transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-surface border border-gray-200 hover:border-orange-200 hover:bg-orange-50/40 transition-colors cursor-pointer"
             >
               <MessageSquarePlusIcon size={19} className="text-orange-500" />
-              <span className="text-sm font-medium text-[#023337]">
-                New chat
-              </span>
+              <span className="text-sm font-medium text-ink">New chat</span>
             </button>
           </div>
 
@@ -342,7 +390,7 @@ export function ConversationSidebar() {
               <div className="flex flex-col items-center text-center gap-4 px-5 py-10">
                 <MessageSquareIllustration size={64} />
                 <div className="space-y-1.5">
-                  <p className="text-sm font-medium text-[#023337]">
+                  <p className="text-sm font-medium text-ink">
                     Keep your searches
                   </p>
                   <p className="text-xs text-gray-500 leading-relaxed">
@@ -385,11 +433,11 @@ export function ConversationSidebar() {
             ) : (
               <ul className="px-3 pb-4 space-y-0.5">
                 {conversations.map((c) => (
-                  <li key={c.conversationId}>
+                  <li key={c.conversationId} className="group relative">
                     <button
                       type="button"
                       onClick={() => openConversation(c.conversationId)}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-gray-200/50 transition-colors cursor-pointer group"
+                      className="w-full text-left pl-3 pr-9 py-2.5 rounded-xl hover:bg-gray-200/50 transition-colors cursor-pointer"
                     >
                       <span className="flex items-start gap-2.5">
                         <MessageSquareIcon
@@ -397,7 +445,7 @@ export function ConversationSidebar() {
                           className="text-gray-300 group-hover:text-orange-400 shrink-0 mt-0.5 transition-colors"
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm text-[#023337] truncate">
+                          <span className="block text-sm text-ink truncate">
                             {c.title}
                           </span>
                           <span className="block text-[11px] text-gray-400 mt-0.5">
@@ -418,6 +466,24 @@ export function ConversationSidebar() {
                         </span>
                       </span>
                     </button>
+                    {/* Not hover-gated (no opacity-0/group-hover reveal) —
+                        this app is mobile-first, and a hover-only affordance
+                        is simply unreachable on a phone. Subdued by default,
+                        a real "danger" color only once actually touched. */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget({
+                          id: c.conversationId,
+                          title: c.title,
+                        });
+                      }}
+                      aria-label={`Delete "${c.title}"`}
+                      className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg bg-red-50 text-red-400 transition-colors hover:bg-red-100 hover:text-red-500 cursor-pointer"
+                    >
+                      <TrashIcon size={15} />
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -432,9 +498,30 @@ export function ConversationSidebar() {
 
               Only rendered for a signed-in buyer; signed out, the column's
               whole body is already the sign-in prompt. */}
+          {/* Appearance sits OUTSIDE the `buyer &&` gate above, deliberately
+              (2026-09-10): a signed-out visitor reading /chat is looking at
+              the same dark or light app as anyone else, and a theme control
+              they can only reach by signing in is a theme control they can't
+              reach. `compact` drops the labels on the narrowest phones, where
+              this shares a cramped column. */}
+          <div className="mt-auto border-t border-gray-200/70 px-3 py-3 shrink-0">
+            <ThemeToggle compact className="w-full justify-between" />
+          </div>
+
           {buyer && <BuyerAccountFooter buyer={buyer} />}
         </div>
       </aside>
+
+      {deleteTarget && (
+        <DeleteConversationModal
+          title={deleteTarget.title}
+          busy={deleteMutation.isPending}
+          onClose={() => {
+            if (!deleteMutation.isPending) setDeleteTarget(null);
+          }}
+          onConfirm={() => deleteMutation.mutate(deleteTarget.id)}
+        />
+      )}
     </>
   );
 }
@@ -465,7 +552,7 @@ function BuyerAccountFooter({ buyer }: { buyer: Buyer }) {
             .toUpperCase()}
           className="h-7 w-7"
         />
-        <span className="min-w-0 flex-1 truncate text-sm text-[#023337]">
+        <span className="min-w-0 flex-1 truncate text-sm text-ink">
           {buyer.name ?? buyer.email}
         </span>
       </div>

@@ -46,7 +46,7 @@ export default function WalletBonusesContent() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#F1F5F9] min-h-screen pt-24 pb-20">
+      <main className="bg-canvas min-h-screen pt-24 pb-20">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 flex flex-col gap-8">
           {/* Header */}
           <header className="flex flex-col gap-4">
@@ -54,7 +54,7 @@ export default function WalletBonusesContent() {
             <span className="inline-flex self-start items-center rounded-full bg-orange-50 border border-orange-200 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-orange-700">
               Wallet Policy Update
             </span>
-            <h1 className="text-3xl sm:text-4xl font-bold text-[#023337] text-balance tracking-tight">
+            <h1 className="text-3xl sm:text-4xl font-bold text-ink text-balance tracking-tight">
               How your wallet earns from listings and referrals
             </h1>
             <p className="text-gray-500 text-base max-w-2xl">
@@ -64,10 +64,10 @@ export default function WalletBonusesContent() {
               what&apos;s in your wallet ledger.
             </p>
             <div className="flex flex-wrap gap-2 text-xs text-gray-400">
-              <span className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
+              <span className="rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5">
                 Effective 10 August 2026
               </span>
-              <span className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
+              <span className="rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5">
                 Applies to Velte vendor wallets
               </span>
             </div>
@@ -75,18 +75,14 @@ export default function WalletBonusesContent() {
 
           {/* At a glance */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
-              <p className="text-2xl font-bold text-[#023337] tabular-nums">
-                ₦2,000
-              </p>
+            <div className="rounded-2xl border border-gray-100 bg-surface shadow-sm p-5">
+              <p className="text-2xl font-bold text-ink tabular-nums">₦2,000</p>
               <p className="text-sm text-gray-500 mt-1">
                 max from listing your next 4 products or services
               </p>
             </div>
-            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
-              <p className="text-2xl font-bold text-[#023337] tabular-nums">
-                ₦1,000
-              </p>
+            <div className="rounded-2xl border border-gray-100 bg-surface shadow-sm p-5">
+              <p className="text-2xl font-bold text-ink tabular-nums">₦1,000</p>
               <p className="text-sm text-gray-500 mt-1">
                 per vendor you refer who verifies and lists 4+
               </p>
@@ -94,9 +90,9 @@ export default function WalletBonusesContent() {
           </div>
 
           {/* Product listing bonus */}
-          <section className="rounded-2xl border border-gray-100 bg-white shadow-sm p-6 sm:p-7 flex flex-col gap-5">
+          <section className="rounded-2xl border border-gray-100 bg-surface shadow-sm p-6 sm:p-7 flex flex-col gap-5">
             <div className="flex items-baseline justify-between gap-3 flex-wrap">
-              <h2 className="text-xl font-bold text-[#023337]">
+              <h2 className="text-xl font-bold text-ink">
                 Product listing bonus
               </h2>
               <span className="text-lg font-bold text-orange-600 tabular-nums whitespace-nowrap">
@@ -104,10 +100,10 @@ export default function WalletBonusesContent() {
               </span>
             </div>
             <p className="text-gray-500 text-[15px]">
-              You now earn <strong className="text-[#023337]">₦500</strong>{" "}
+              You now earn <strong className="text-ink">₦500</strong>{" "}
               automatically for each of your{" "}
-              <strong className="text-[#023337]">next 4</strong> real products
-              or services listed — no forms, no request, it lands in your wallet
+              <strong className="text-ink">next 4</strong> real products or
+              services listed — no forms, no request, it lands in your wallet
               the moment the listing is published.
             </p>
 
@@ -120,7 +116,7 @@ export default function WalletBonusesContent() {
                   <p className="text-xs font-bold uppercase tracking-wide text-orange-700">
                     {slot.label}
                   </p>
-                  <p className="text-sm font-bold text-[#023337] tabular-nums">
+                  <p className="text-sm font-bold text-ink tabular-nums">
                     {slot.amount}
                   </p>
                 </div>
@@ -160,9 +156,9 @@ export default function WalletBonusesContent() {
           </section>
 
           {/* Referral bonus */}
-          <section className="rounded-2xl border border-gray-100 bg-white shadow-sm p-6 sm:p-7 flex flex-col gap-5">
+          <section className="rounded-2xl border border-gray-100 bg-surface shadow-sm p-6 sm:p-7 flex flex-col gap-5">
             <div className="flex items-baseline justify-between gap-3 flex-wrap">
-              <h2 className="text-xl font-bold text-[#023337]">
+              <h2 className="text-xl font-bold text-ink">
                 Referral bonus — updated rule
               </h2>
               <span className="text-lg font-bold text-orange-600 tabular-nums whitespace-nowrap">
@@ -170,10 +166,9 @@ export default function WalletBonusesContent() {
               </span>
             </div>
             <p className="text-gray-500 text-[15px]">
-              Referrals still pay{" "}
-              <strong className="text-[#023337]">₦1,000</strong> with no limit
-              on how many vendors you bring in. What changed is{" "}
-              <strong className="text-[#023337]">when</strong> it pays — it now
+              Referrals still pay <strong className="text-ink">₦1,000</strong>{" "}
+              with no limit on how many vendors you bring in. What changed is{" "}
+              <strong className="text-ink">when</strong> it pays — it now
               depends on what your referral actually does after signing up, not
               just that they signed up.
             </p>
@@ -190,13 +185,13 @@ export default function WalletBonusesContent() {
                     className={`shrink-0 w-6.5 h-6.5 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 ${
                       step.required
                         ? "bg-orange-500 text-white"
-                        : "bg-white border border-gray-200 text-gray-500"
+                        : "bg-surface border border-gray-200 text-gray-500"
                     }`}
                   >
                     {i + 1}
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-[#023337]">
+                    <p className="text-sm font-semibold text-ink">
                       {step.title}
                     </p>
                     <p className="text-[13.5px] text-gray-500">{step.body}</p>
@@ -241,13 +236,13 @@ export default function WalletBonusesContent() {
 
           {/* FAQ */}
           <section>
-            <h2 className="text-lg font-bold text-[#023337] mb-2">
+            <h2 className="text-lg font-bold text-ink mb-2">
               Common questions
             </h2>
             <div className="divide-y divide-gray-200">
               {FAQS.map((item) => (
                 <div key={item.q} className="py-3.5">
-                  <p className="text-sm font-semibold text-[#023337] mb-1">
+                  <p className="text-sm font-semibold text-ink mb-1">
                     {item.q}
                   </p>
                   <p className="text-sm text-gray-500">{item.a}</p>

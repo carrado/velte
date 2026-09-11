@@ -27,7 +27,7 @@ export function FinalAskCta() {
   }
 
   return (
-    <section className="relative bg-white border-t border-gray-100 py-14 sm:py-16">
+    <section className="relative bg-surface border-t border-gray-100 py-14 sm:py-16">
       <motion.div
         initial="hidden"
         whileInView="show"
@@ -35,12 +35,12 @@ export function FinalAskCta() {
         variants={fadeUp}
         className="max-w-lg mx-auto px-5 sm:px-8 text-center"
       >
-        <h2 className="text-2xl sm:text-3xl font-bold text-[#023337] tracking-tight mb-6 text-balance">
+        <h2 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight mb-6 text-balance">
           Just ask Velte.
         </h2>
         <form
           onSubmit={handleSubmit}
-          className="flex items-center gap-1.5 bg-[#F1F5F9] rounded-full border-2 border-transparent focus-within:border-orange-300 focus-within:bg-white transition-colors pl-5 pr-1.5 h-14"
+          className="flex items-center gap-1.5 bg-canvas rounded-full border-2 border-transparent focus-within:border-orange-300 focus-within:bg-surface transition-colors pl-5 pr-1.5 h-14"
         >
           <input
             ref={inputRef}

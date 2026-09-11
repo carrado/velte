@@ -150,7 +150,7 @@ export function InstallSuggestion({
         role="dialog"
         aria-label="Add Velte to your home screen"
       >
-        <div className="relative overflow-hidden rounded-2xl bg-white shadow-[0_12px_40px_-8px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.06]">
+        <div className="relative overflow-hidden rounded-2xl bg-surface shadow-[0_12px_40px_-8px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.06]">
           <button
             type="button"
             onClick={() => setVisible(false)}

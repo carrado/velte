@@ -29,7 +29,7 @@ export default function PricingCards({
         className={`max-w-xl mx-auto rounded-2xl p-8 sm:p-10 text-center ${
           dark
             ? "bg-[#0a140d] border border-white/10"
-            : "bg-white border border-gray-200 shadow-sm"
+            : "bg-surface border border-gray-200 shadow-sm"
         }`}
       >
         <div className="w-12 h-12 rounded-2xl bg-[rgb(247,107,16)]/10 flex items-center justify-center mx-auto mb-5">

@@ -35,7 +35,7 @@ export function LogoutConfirmModal({
         className="absolute inset-0 bg-black/40"
         onClick={busy ? undefined : onClose}
       />
-      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-surface shadow-2xl">
         <button
           onClick={onClose}
           disabled={busy}
@@ -49,7 +49,7 @@ export function LogoutConfirmModal({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50">
             <LogOutIcon size={22} className="text-orange-500" />
           </div>
-          <h3 className="mt-4 text-base font-semibold text-[#023337]">
+          <h3 className="mt-4 text-base font-semibold text-ink">
             Log out of Velte?
           </h3>
           <p className="mt-1.5 text-sm leading-relaxed text-gray-500">

@@ -153,12 +153,12 @@ function CreditsOverlay({
           // backdrop — this is a surface a buyer reads and compares on, not a
           // dialog they answer. A translucent scrim over a live chat would
           // make a long pricing table hard to read for no benefit.
-          className="fixed inset-0 z-[9999] overflow-y-auto overscroll-contain bg-[#F1F5F9]"
+          className="fixed inset-0 z-[9999] overflow-y-auto overscroll-contain bg-canvas"
         >
           {/* Sticky rather than fixed, so it can't drift over the content on
               a phone's soft-keyboard viewport, and stays reachable however
               far down the FAQ someone has read. */}
-          <div className="sticky top-0 z-10 flex justify-end bg-[#F1F5F9]/80 px-4 py-3 backdrop-blur-sm sm:px-6">
+          <div className="sticky top-0 z-10 flex justify-end bg-canvas/80 px-4 py-3 backdrop-blur-sm sm:px-6">
             {/* Icon only. The word "Close" was doing no work an X does not
                 — a circled X in the top corner is the single most learned
                 control on a phone — and it made the one control on this
@@ -169,7 +169,7 @@ function CreditsOverlay({
               onClick={onClose}
               autoFocus
               aria-label="Close credits"
-              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-gray-200 bg-white text-[#023337] shadow-sm transition-colors hover:bg-gray-50"
+              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-gray-200 bg-surface text-ink shadow-sm transition-colors hover:bg-gray-50"
             >
               <CloseBoldIcon size={18} className="shrink-0" />
             </button>

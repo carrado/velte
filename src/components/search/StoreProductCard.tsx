@@ -37,7 +37,7 @@ export function StoreProductCard({
   });
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
+    <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
         {match.mainImageUrl ? (
           <ProtectedImage
@@ -54,11 +54,9 @@ export function StoreProductCard({
           {match.name}
         </p>
         {match.quoteOnRequest ? (
-          <p className="text-[15px] font-extrabold text-[#023337]">
-            Ask for price
-          </p>
+          <p className="text-[15px] font-extrabold text-ink">Ask for price</p>
         ) : (
-          <p className="text-[15px] font-extrabold text-[#023337]">
+          <p className="text-[15px] font-extrabold text-ink">
             {fmt(match.price, symbol)}
             {isRange && (
               <>

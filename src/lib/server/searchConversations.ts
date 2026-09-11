@@ -40,6 +40,12 @@ export interface EnsuredSearchConversation {
   // The goal sheet as it stood BEFORE this turn — the route applies its
   // own two locks (see applies-check in route.ts) before using any of it.
   task: ConversationTask | null;
+  /** The tool this conversation is still in the middle of, if any — the
+   *  route falls back to this whenever the message itself arrives without
+   *  one, which is every follow-up after the first (the composer clears its
+   *  badge on send). Null on a new chat, and dropped whenever the buyer
+   *  moves to an unrelated request. See the backend model's own comment. */
+  activeTool: string | null;
 }
 
 // What the route tells the backend about this turn's request, so the sheet
@@ -88,6 +94,11 @@ export async function appendSearchTurn(params: {
   recentStatuses?: string[];
   buyerLocation?: BuyerLocationUpdate;
   goal?: SearchGoalUpdate;
+  /** The session's active tool as of the END of this turn — a string to keep
+   *  it in play, `null` to drop it. `undefined` means "this caller doesn't
+   *  manage it" (the client-resolved background-item path) and leaves
+   *  whatever is stored untouched. */
+  activeTool?: string | null;
 }): Promise<void> {
   await aiSearchData(
     `/search/conversations/${encodeURIComponent(params.conversationId)}/turns`,
@@ -100,6 +111,7 @@ export async function appendSearchTurn(params: {
         recentStatuses: params.recentStatuses,
         buyerLocation: params.buyerLocation,
         goal: params.goal,
+        activeTool: params.activeTool,
       },
     },
   );
@@ -137,6 +149,21 @@ export async function getSearchConversation(params: {
   if (params.includeStale) query.set("includeStale", "true");
   return aiSearchData<StoredConversation>(
     `/search/conversations/${encodeURIComponent(params.conversationId)}?${query.toString()}`,
+  );
+}
+
+/** Deletes one conversation from the signed-in buyer's history for good
+ *  (2026-09-09) — the sidebar's own delete action. buyerId-only ownership,
+ *  same as the list this is deleting a row out of; see the backend
+ *  controller's own comment for why deviceId ownership doesn't apply here. */
+export async function deleteSearchConversation(params: {
+  conversationId: string;
+  buyerId: string;
+}): Promise<void> {
+  const query = new URLSearchParams({ buyerId: params.buyerId });
+  await aiSearchData(
+    `/search/conversations/${encodeURIComponent(params.conversationId)}?${query.toString()}`,
+    { method: "DELETE" },
   );
 }
 

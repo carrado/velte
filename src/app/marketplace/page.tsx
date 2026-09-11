@@ -26,7 +26,7 @@ export default async function MarketplacePage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9]">
+    <div className="min-h-screen bg-canvas">
       <Navbar />
       {/* Redesigned 2026-08-16 — same textured-grid header treatment /about
           and /join already use (a subtle orange dot-grid, masked to fade out
@@ -45,7 +45,7 @@ export default async function MarketplacePage() {
           }}
         />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-[#023337] tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-bold text-ink tracking-tight">
             Discover what&apos;s on Velte
           </h1>
           <p className="text-gray-500 mt-2 max-w-xl">

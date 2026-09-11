@@ -118,7 +118,10 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
         const data = (await res.json()) as {
           balance?: number;
           used?: number;
-          totalSpent?: number;
+          // The meter's own "used" half — resets to 0 on every top-up,
+          // unlike totalSpent (lifetime, ignored here on purpose). See
+          // velte-backend's Credits.model.js for the full reasoning.
+          spentSinceTopUp?: number;
           walletBalanceKobo?: number | null;
         };
         const next: Partial<CreditsStore> = {};
@@ -139,8 +142,8 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
           Date.now() - lastSpendAt < RECONCILE_GRACE_MS;
         if (!suspect) {
           if (typeof data.balance === "number") next.balance = data.balance;
-          if (typeof data.totalSpent === "number") {
-            next.used = data.totalSpent;
+          if (typeof data.spentSinceTopUp === "number") {
+            next.used = data.spentSinceTopUp;
           }
         }
         // Only a vendor's response carries a wallet. Assigning it
@@ -195,6 +198,7 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
           const data = (await res.json().catch(() => null)) as {
             balance?: number;
             walletBalanceKobo?: number;
+            spentSinceTopUp?: number;
             error?: string;
           } | null;
           if (!res.ok || typeof data?.balance !== "number") {
@@ -205,11 +209,17 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
             return;
           }
           // Both figures move together, from the one response — a refetch
-          // would show a stale wallet for as long as it took. `used` is
-          // untouched: a top-up grants, it does not spend, so every meter
-          // simply gets more room.
+          // would show a stale wallet for as long as it took. `used` resets
+          // to 0 (2026-09-05, corrected 2026-09-09): a top-up is modeled on
+          // airtime — the meter reads usage against the bundle just bought,
+          // not a running total from before it — so leaving `used` as-is
+          // would show most of the new, bigger total as already burned.
           set({
             balance: data.balance,
+            used:
+              typeof data.spentSinceTopUp === "number"
+                ? data.spentSinceTopUp
+                : 0,
             busyPack: null,
             ...(typeof data.walletBalanceKobo === "number"
               ? { walletBalanceKobo: data.walletBalanceKobo }

@@ -315,7 +315,7 @@ function LocationShareAction({
         <button
           type="button"
           onClick={() => onDecline("Search without sharing my location")}
-          className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 cursor-pointer"
+          className="rounded-lg border border-gray-200 bg-surface px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 cursor-pointer"
         >
           Search without it
         </button>

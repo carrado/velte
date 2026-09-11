@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ import { generateUUID } from "@/lib/uuid";
 import { buildProductTerm } from "@/lib/productTerm";
 import { runSearchStream } from "@/lib/searchStream";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import { CreditsBar } from "@/components/credits/CreditsBar";
 import { dedupeFinalEventStores } from "@/lib/searchTurnSnapshot";
 import {
@@ -39,6 +40,7 @@ import {
   ShoppingPlanDraftCard,
   ShoppingPlanView,
 } from "@/components/search/ShoppingPlanTemplate";
+import { PlanPhoneGate } from "@/components/search/PlanPhoneGate";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { ExternalOfferCard } from "@/components/search/ExternalOfferCard";
@@ -65,6 +67,7 @@ import {
   gettingLocationPhrase,
   scanningVendorsPhrase,
   creatingRequestPhrase,
+  startingPlanPhrase,
   sendingOtpPhrase,
   checkingOtpPhrase,
   noMatchRequestPhrase,
@@ -99,6 +102,7 @@ import type {
 } from "@/types/search";
 import { isComparisonTemplate } from "@/types/search";
 import {
+  ClipboardListIcon,
   CompassIcon,
   MapPinIcon,
   PhoneIcon,
@@ -405,6 +409,10 @@ function createLoadingTurn(
     buyerRequestMatchQuery: null,
     contextNote: null,
     recommendation: null,
+    awaitingComparisonPurchaseReply: false,
+    comparisonPickItem: null,
+    awaitingShoppingPlanReply: false,
+    planCtaId: null,
     shoppingPlanDraft: null,
     shoppingPlan: null,
     externalOffers: [],
@@ -429,11 +437,22 @@ function storedTurnToConversationTurn(
     status: "",
     error: null,
     quota: null,
-    // Client-only, never persisted server-side (see the field's own note) —
-    // a reopened conversation's plan-draft turn shows nothing to act on;
-    // the plan itself, once built, lives on /chat/plans instead.
-    shoppingPlanDraft: null,
+    // PERSISTED now (2026-09-11) — see the field's own comment. The BUILT
+    // plan (shoppingPlan, below) is a separate thing that still never
+    // rehydrates inline: it has its own durable record, reached through
+    // Your Plans, and replaying its whole priced result inline here would
+    // just be a second, potentially-stale copy of what that page already
+    // shows live.
+    shoppingPlanDraft: stored.shoppingPlanDraft,
     shoppingPlan: null,
+    // PERSISTED now (2026-09-10), so it is read through rather than reset:
+    // a buyer who refreshes mid plan-exchange — budget asked, not yet
+    // answered — resumes into that same exchange instead of having their
+    // answer fall through to an ordinary search.
+    awaitingShoppingPlanReply: stored.awaitingShoppingPlanReply,
+    // Also client-only: a reopened thread shows the plan card itself rather
+    // than replaying the one-off "I've started searching" signpost.
+    planCtaId: null,
     persisted: true,
   };
 }
@@ -472,6 +491,14 @@ function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
     contextNote: turn.contextNote,
     recommendation: turn.recommendation,
     externalOffers: turn.externalOffers,
+    awaitingComparisonPurchaseReply: turn.awaitingComparisonPurchaseReply,
+    comparisonPickItem: turn.comparisonPickItem,
+    awaitingShoppingPlanReply: turn.awaitingShoppingPlanReply,
+    // Client-resolved background items never carry a goal-sheet budget of
+    // their own — this concept only exists for a real /api/search turn.
+    knownBudgetNaira: null,
+    // Same reasoning — a background item is never a Shopping Plan turn.
+    shoppingPlanDraft: null,
   };
 }
 
@@ -635,10 +662,7 @@ function MatchingServicesThread({
 function renderInlineBold(text: string, keyPrefix: string): React.ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
     part.startsWith("**") && part.endsWith("**") ? (
-      <strong
-        key={`${keyPrefix}-${i}`}
-        className="font-semibold text-[#023337]"
-      >
+      <strong key={`${keyPrefix}-${i}`} className="font-semibold text-ink">
         {part.slice(2, -2)}
       </strong>
     ) : (
@@ -854,6 +878,23 @@ interface ConversationTurn {
   // instead (see isComparisonTemplate) — rendered by the ComparisonTemplate
   // component in place of RecommendationPicks.
   recommendation: AnyRecommendation | null;
+  // Mirrors SearchStreamEvent's own pair of the same name (2026-09-09) — a
+  // fresh comparison's own "want it found on Velte?" ask. Copied verbatim
+  // into the next call's `history`, same mechanism as
+  // awaitingBuyerRequestReply above.
+  awaitingComparisonPurchaseReply: boolean;
+  comparisonPickItem: string | null;
+  // Same mirroring, for the Shopping Plan short-circuit's own budget ask
+  // (2026-09-09) — see SearchHistoryTurn's own comment for the bug this
+  // fixes. Client-only, like shoppingPlanDraft/shoppingPlan below — never
+  // rehydrated (a reopened conversation has no live budget-ask to resume).
+  awaitingShoppingPlanReply: boolean;
+  // The plan a "I've started searching" turn points at (2026-09-10) — set
+  // only on that one synthetic turn, which renders a "View your shopping
+  // plan" CTA beneath its reply. Null everywhere else. Client-only: the plan
+  // itself is the durable record; this is just the signpost in the thread
+  // that sent the buyer to it.
+  planCtaId: string | null;
   // Shopping Plan's own two states (2026-09-06). `shoppingPlanDraft` is the
   // unconfirmed checklist from a "plan" tool turn — present only until the
   // buyer confirms it, at which point `shoppingPlan` holds the real, built
@@ -933,7 +974,7 @@ function QuotaCard({
     // assistant's voice on exactly the turns where it is asking for
     // something, which is the wrong turn to look like an advert.
     <div className={AI_MESSAGE_CLASS}>
-      <p className="text-sm leading-relaxed text-[#023337]">{quota.message}</p>
+      <p className="text-sm leading-relaxed text-ink">{quota.message}</p>
       <div className="mt-3">
         {quota.isGuest ? (
           <GoogleSignInButton />
@@ -1024,6 +1065,11 @@ function ConversationTurnView({
     }
   }, [expandedServicesVendorId]);
 
+  // For the "View your shopping plan" CTA below — the /chat tree's own
+  // vendor-dashboard-style navigation-progress treatment (2026-09-11): the
+  // plan is prefetched before the route actually changes.
+  const { navigate } = useNavigation();
+
   // Same grow-to-fit behavior as the main composer's own textarea, reused
   // here for the edit-in-place one.
   const editAutoResize = useAutoResizeTextarea(editDraft);
@@ -1077,7 +1123,7 @@ function ConversationTurnView({
                         onCancelEdit();
                       }
                     }}
-                    className="flex-1 min-w-0 resize-none bg-transparent outline-none text-[15px] sm:text-base text-[#023337] leading-relaxed"
+                    className="flex-1 min-w-0 resize-none bg-transparent outline-none text-[15px] sm:text-base text-ink leading-relaxed"
                   />
                 </div>
                 <div className="flex items-center justify-end gap-2">
@@ -1112,7 +1158,7 @@ function ConversationTurnView({
                     />
                   )}
                   {turn.query && (
-                    <p className="text-[15px] sm:text-base text-[#023337] leading-relaxed flex items-center gap-1.5">
+                    <p className="text-[15px] sm:text-base text-ink leading-relaxed flex items-center gap-1.5">
                       {/* Same MapPinIcon Settings' own location field uses (see
                           [[custom_icon_system]]) — was a literal 📍 emoji character
                           baked into the submitted text before this. */}
@@ -1638,8 +1684,30 @@ function ConversationTurnView({
                     // the text above a result grid, never the "nothing found
                     // anywhere" case below: the conversation is still open, not
                     // a dead end.
+                    //
+                    // ALSO the "I've started searching" turn (2026-09-10),
+                    // which is a plain message with one CTA under it — the
+                    // handoff from chat, where the job is started, to Your
+                    // Plans, where it's actually watched.
                     <div className={AI_MESSAGE_CLASS}>
                       <FormattedReply text={turn.reply} />
+                      {turn.planCtaId && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(`/chat/plans/${turn.planCtaId}`)
+                          }
+                          // Full-width on a phone, inline from sm up: this is
+                          // the one thing to do next on a narrow screen, and a
+                          // shrink-wrapped button in the middle of a message
+                          // is the kind of small tap target this flow can't
+                          // afford (most buyers are on mobile).
+                          className="mt-3 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-600 sm:w-auto"
+                        >
+                          <ClipboardListIcon size={15} />
+                          View your shopping plan
+                        </button>
+                      )}
                     </div>
                   ) : (
                     // A real search ran and came up completely empty, with no
@@ -1806,12 +1874,96 @@ export function SearchHome() {
   );
   const [replacingPlanItem, setReplacingPlanItem] =
     useState<PlanReplaceTarget | null>(null);
+  // Which turn's plan is waiting on a phone number before it can start
+  // (2026-09-10) — see onConfirmPlan's own comment on the gate. Null when no
+  // gate is open, which is the overwhelmingly common case (a buyer only ever
+  // goes through this once, since the number stays on their account).
+  const [phoneGateTurnId, setPhoneGateTurnId] = useState<string | null>(null);
 
-  /** Confirms a draft (minus whatever the buyer unchecked) and builds the
-   *  real thing — POST /api/shopping-plan runs the full search/verify/pick
-   *  pipeline server-side (see pickPlanItem.ts) and persists the result.
-   *  Not streamed (see that route's own comment on why) — the composer
-   *  shows a plain busy state on the confirm button meanwhile. */
+  /** The conversational "I've started, here's where to watch it" turn
+   *  (2026-09-10) — appended right after the job is underway, so the thread
+   *  itself records what happened and carries the CTA to Your Plans.
+   *
+   *  Deliberately NOT persisted (`ephemeral`): it is a signpost for this
+   *  moment, and a reopened conversation should show the plan CARD — the
+   *  real, live thing — rather than replaying a stale "I've started
+   *  searching" line about a job that finished days ago. */
+  function appendPlanStartedTurn(plan: ShoppingPlan) {
+    const turnId = generateUUID();
+    setTurns((prev) => [
+      ...prev,
+      {
+        ...createLoadingTurn(turnId, "", null, null, ""),
+        phase: "done" as const,
+        ephemeral: true,
+        planCtaId: plan.id,
+        // Wording matches the product spec closely, on purpose (2026-09-11,
+        // per explicit request) — this is the chat's entire word on the
+        // matter from here; the live per-item progress lives on Your Plans,
+        // never inline here (see startPlanBuild's own comment).
+        reply:
+          "Great — I've started searching for the items in your shopping plan. " +
+          "I'll keep working on it in the background and add results as I find them.",
+      },
+    ]);
+  }
+
+  const PLAN_POLL_MS = 3000;
+  // Generous, not a real ceiling on how long a build can take (the server
+  // keeps going regardless — see /api/shopping-plan/route.ts) — just how
+  // long this waits before giving up quietly. The credits meter simply
+  // stays as it is until the NEXT thing that happens to call `load()` —
+  // never a broken state, just briefly stale.
+  const PLAN_POLL_MAX_MS = 5 * 60 * 1000;
+
+  /** Waits for a plan to leave "building", then refreshes the credits
+   *  meter — nothing else. Deliberately does NOT touch the chat turn: the
+   *  live per-item progress belongs on Your Plans (and the cross-route
+   *  watcher/toast — ShoppingPlanProgressWatcher, mounted at the /chat
+   *  layout level), never inline in the conversation (2026-09-11, found
+   *  live — a buyer confirming a checklist got a whole searching/pending
+   *  results card replacing it right there in chat, which is the thing
+   *  this fixes: the chat's own job ends at "I've started searching",
+   *  Your Plans is where it's actually watched).
+   *
+   *  Safe to abandon silently: if the buyer navigates away, this loop just
+   *  stops mattering — nothing it does depends on SearchHome still being
+   *  mounted, since it never reaches back into turn state. */
+  async function refreshCreditsOncePlanCompletes(planId: string) {
+    const deadline = Date.now() + PLAN_POLL_MAX_MS;
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, PLAN_POLL_MS));
+      let status: string | null = null;
+      try {
+        const res = await fetch(`/api/shopping-plan/${planId}`);
+        if (res.ok) {
+          const data = (await res.json().catch(() => null)) as {
+            plan?: ShoppingPlan;
+          } | null;
+          status = data?.plan?.status ?? null;
+        }
+      } catch {
+        // A failed poll just tries again next tick.
+      }
+      if (status && status !== "building") {
+        // The charge for this plan lands server-side once the background
+        // resolve finishes (see the confirm route's own comment on why it
+        // moved here from plan-creation time) — this is the first moment
+        // the meter has anything new to show.
+        void useCreditsStore.getState().load();
+        return;
+      }
+      if (Date.now() >= deadline) return;
+    }
+  }
+
+  /** Confirms a draft (minus whatever the buyer unchecked) — POST
+   *  /api/shopping-plan creates the plan immediately (status "building",
+   *  every item "pending") and the real search/verify/pick pipeline
+   *  (pickPlanItem.ts) keeps running server-side after this response, so
+   *  `buildingPlanTurnId`'s busy state only covers this brief create call,
+   *  not the whole build. The build itself is never shown inline in chat —
+   *  see startPlanBuild's own comment — it's watched from Your Plans. */
   async function onConfirmPlan(turn: ConversationTurn) {
     const draft = turn.shoppingPlanDraft;
     if (!draft || buildingPlanTurnId) return;
@@ -1821,12 +1973,42 @@ export function SearchHome() {
     );
     if (!items.length) return;
 
-    setBuildingPlanTurnId(turn.id);
+    // THE PHONE GATE (2026-09-10). The plan is built to keep running after
+    // the buyer leaves, which means the completion has to reach them
+    // somewhere other than this page — so a number Velte can actually text
+    // is collected BEFORE any searching starts, not discovered to be
+    // missing at the end. Held here rather than inside the gate component so
+    // cancelling genuinely starts nothing: `startPlanBuild` is only ever
+    // called past this point.
+    const buyer = useBuyerStore.getState().buyer;
+    if (!buyer?.phoneVerified || !buyer.phone) {
+      setPhoneGateTurnId(turn.id);
+      return;
+    }
+
+    await startPlanBuild(turn.id, { ...draft, items });
+  }
+
+  /** Starts the background job for one confirmed checklist, and narrates the
+   *  handoff: a brief "setting this up" status, then the plan card itself
+   *  takes over showing real per-item progress.
+   *
+   *  `clientRef` is the TURN id — the stable reference for this one "start
+   *  searching" click. A double tap, a retry, or two tabs racing all send the
+   *  same ref, and the backend returns the plan that already exists instead
+   *  of starting (and charging for) the whole multi-item search twice. */
+  async function startPlanBuild(turnId: string, draft: ShoppingPlanDraft) {
+    setBuildingPlanTurnId(turnId);
+    // The status phase — replaces the old bare spinner on the button with
+    // something that says what is actually happening.
+    updateTurn(turnId, {
+      status: pickAvoiding(startingPlanPhrase(), shownStatusesRef.current),
+    });
     try {
       const res = await fetch("/api/shopping-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft: { ...draft, items } }),
+        body: JSON.stringify({ draft, clientRef: turnId }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -1835,11 +2017,32 @@ export function SearchHome() {
         );
         return;
       }
-      updateTurn(turn.id, {
-        shoppingPlan: body.plan,
+      // The confirmed checklist turn just closes here — its own reply text
+      // ("Here's a starting checklist…") stands as-is, with the interactive
+      // card gone now that it's been acted on. It deliberately does NOT
+      // pick up `shoppingPlan` (2026-09-11, reversed — see
+      // refreshCreditsOncePlanCompletes's own comment): that used to swap
+      // this same turn into the live per-item progress view, which put a
+      // whole "searching…/found" card inline in the middle of an otherwise
+      // ordinary conversation. The turn appended right below (next) is the
+      // chat's entire word on the matter from here.
+      updateTurn(turnId, {
         shoppingPlanDraft: null,
+        status: "",
       });
-      void useCreditsStore.getState().load();
+      if (body.plan?.status === "building") {
+        // The conversational confirmation, as its own turn — so the thread
+        // reads like Velte told the buyer what it's doing, and carries the
+        // CTA over to where the work is actually visible. Code-authored
+        // rather than a model round trip: there is nothing here for a model
+        // to decide, and this codebase already keeps deterministic moments
+        // (buyerRequestStatusReply, the checklist's own lines) out of the
+        // LLM's hands for exactly that reason.
+        appendPlanStartedTurn(body.plan as ShoppingPlan);
+        void refreshCreditsOncePlanCompletes(body.plan.id);
+      } else {
+        void useCreditsStore.getState().load();
+      }
     } catch {
       toast.error("Couldn't build your shopping plan just now.");
     } finally {
@@ -2014,6 +2217,17 @@ export function SearchHome() {
   // search runs exactly like the old stateless flow.
   const deviceIdRef = useRef<string | null>(null);
   const conversationIdRef = useRef<string | null>(null);
+  // Mirrors conversationIdRef.current onto chatHistoryStore too (2026-09-09)
+  // — the ref alone is invisible outside this component, and the sidebar
+  // (a world away in chat/layout.tsx) needs to know which conversation is
+  // ON SCREEN right now so deleting that exact row can also clear the
+  // thread here, instead of leaving a deleted conversation sitting there
+  // until the next refresh. Every place that would otherwise write
+  // conversationIdRef.current directly goes through this instead.
+  const setConversationId = useCallback((id: string | null) => {
+    conversationIdRef.current = id;
+    useChatHistoryStore.getState().setActiveConversationId(id);
+  }, []);
   // Bumped whenever a session COMPLETES with something to show. The install
   // suggestion watches this rather than a timer: the app is worth offering
   // right after Velte has just proved useful, never 30 seconds after arrival
@@ -2105,7 +2319,7 @@ export function SearchHome() {
       dropResumeGate();
       return;
     }
-    conversationIdRef.current = storedId;
+    setConversationId(storedId);
     // A stored id means there WAS a chat — hold the hero back and show the
     // loading screen until the fetch settles (see rehydrating's comment).
     setRehydrating(true);
@@ -2117,7 +2331,7 @@ export function SearchHome() {
         if (!res.ok) {
           if (res.status === 400 || res.status === 404) {
             clearStoredConversationId();
-            conversationIdRef.current = null;
+            setConversationId(null);
           }
           return;
         }
@@ -2171,7 +2385,11 @@ export function SearchHome() {
               last?.buyerRequestOffer?.status === "needs_signin"
             ) {
               setIdentityCapture({
-                budgetKobo: null,
+                // See the live-turn handler's own comment on knownBudgetNaira.
+                budgetKobo:
+                  last.knownBudgetNaira != null
+                    ? Math.round(last.knownBudgetNaira * 100)
+                    : null,
                 offer: last.buyerRequestOffer,
                 imageUrl: last.imageUrl,
                 matchQuery: last.buyerRequestMatchQuery,
@@ -2206,7 +2424,9 @@ export function SearchHome() {
         setRehydrating(false);
       }
     })();
-  }, []);
+    // setConversationId is stable (useCallback, empty deps) — listing it
+    // doesn't change this effect's "run once on mount" behavior.
+  }, [setConversationId]);
 
   // The client-side persist path (see ConversationTurn's own comment):
   // main /api/search turns arrive already persisted (onFinal marks them),
@@ -2533,7 +2753,7 @@ export function SearchHome() {
         // Only adopt the thread once its turns are actually in hand — a
         // failed load must leave the buyer where they were, not on a blank
         // screen pointing at a conversation that never arrived.
-        conversationIdRef.current = requestedConversationId;
+        setConversationId(requestedConversationId);
         storeConversationId(requestedConversationId);
 
         // Same seeding the mount rehydrate does, for the same reasons —
@@ -2569,7 +2789,11 @@ export function SearchHome() {
           last?.buyerRequestOffer?.status === "needs_signin"
         ) {
           setIdentityCapture({
-            budgetKobo: null,
+            // See the live-turn handler's own comment on knownBudgetNaira.
+            budgetKobo:
+              last.knownBudgetNaira != null
+                ? Math.round(last.knownBudgetNaira * 100)
+                : null,
             offer: last.buyerRequestOffer,
             imageUrl: last.imageUrl,
             matchQuery: last.buyerRequestMatchQuery,
@@ -2603,7 +2827,7 @@ export function SearchHome() {
     return () => {
       cancelled = true;
     };
-  }, [requestedConversationId, clearHistoryRequest]);
+  }, [requestedConversationId, clearHistoryRequest, setConversationId]);
 
   // "New chat" from the history drawer. Deliberately does NOT touch the
   // location refs: location describes the BUYER, not the request, and
@@ -2614,7 +2838,7 @@ export function SearchHome() {
   const clearNewChatRequest = useChatHistoryStore((s) => s.clearNewChatRequest);
   useEffect(() => {
     if (!newChatNonce) return;
-    conversationIdRef.current = null;
+    setConversationId(null);
     clearStoredConversationId();
     // Status-phrase memory is per-conversation, same as the seeding both
     // load paths do — carrying it into a brand new thread would suppress
@@ -2631,7 +2855,7 @@ export function SearchHome() {
     // synchronous, so doing it first happened to work — but it left the
     // reset one `await` away from the wedge that bug had.
     clearNewChatRequest();
-  }, [newChatNonce, clearNewChatRequest]);
+  }, [newChatNonce, clearNewChatRequest, setConversationId]);
 
   // A queue of every not-yet-resolved item deferred off a dual-intent turn
   // (see route.ts's own comment on where this branches off the normal
@@ -3356,6 +3580,17 @@ export function SearchHome() {
           // exchange).
           awaitingBuyerRequestReply: t.awaitingBuyerRequestReply,
           buyerRequestMatchQuery: t.buyerRequestMatchQuery,
+          awaitingComparisonPurchaseReply: t.awaitingComparisonPurchaseReply,
+          comparisonPickItem: t.comparisonPickItem,
+          awaitingShoppingPlanReply: t.awaitingShoppingPlanReply,
+          // Structural, not guessed from `content` — see SearchHistoryTurn's
+          // own comment on the freeform-phrasing bug this fixes.
+          // `skippable: true` is the bare-query budget gate's own unique
+          // signature (nothing else in route.ts sets it).
+          askedLocation: t.clarification?.kind === "location",
+          askedBudget:
+            t.clarification?.kind === "text" &&
+            t.clarification.skippable === true,
         },
       ]);
 
@@ -3466,7 +3701,7 @@ export function SearchHome() {
           // rehydrate). The turn itself was already persisted server-side,
           // so the client persist effect must skip it.
           if (event.conversationId) {
-            conversationIdRef.current = event.conversationId;
+            setConversationId(event.conversationId);
             storeConversationId(event.conversationId);
           }
           // The credit meter, everywhere it's shown (CreditsBar on mobile,
@@ -3536,6 +3771,10 @@ export function SearchHome() {
             recommendation: event.recommendation,
             shoppingPlanDraft: event.shoppingPlanDraft,
             externalOffers: event.externalOffers,
+            awaitingComparisonPurchaseReply:
+              event.awaitingComparisonPurchaseReply,
+            comparisonPickItem: event.comparisonPickItem,
+            awaitingShoppingPlanReply: event.awaitingShoppingPlanReply,
           });
           // A buyer who already has a verified session (a prior visit's
           // identity cookie still valid) skips the composer's own
@@ -3571,7 +3810,15 @@ export function SearchHome() {
                 ? event.buyerRequestOffer.phone
                 : "";
             setIdentityCapture({
-              budgetKobo: null,
+              // Pre-filled from the goal sheet when the buyer already gave
+              // a figure earlier this conversation (2026-09-10) — see
+              // SearchStreamEvent's own comment on knownBudgetNaira. The
+              // budget STEP itself (further down) skips straight past
+              // asking again whenever this is already non-null.
+              budgetKobo:
+                event.knownBudgetNaira != null
+                  ? Math.round(event.knownBudgetNaira * 100)
+                  : null,
               offer: event.buyerRequestOffer,
               imageUrl: currentImageUrl,
               matchQuery: event.buyerRequestMatchQuery,
@@ -4316,8 +4563,15 @@ export function SearchHome() {
       );
       const pending = takeRefusedSearch();
       // No held search is an ordinary outcome, not a fault: plenty of people
-      // top up from the header with nothing waiting on it.
-      if (!pending) return;
+      // top up from the header with nothing waiting on it — but the credits
+      // meter still needs to catch up (2026-09-09, found live: a plain
+      // top-up from the panel left the header/donut showing the OLD balance
+      // until a second, manual refresh — see pollCreditsAfterTopUp's own
+      // comment for why one `load()` on mount isn't enough here).
+      if (!pending) {
+        void pollCreditsAfterTopUp();
+        return;
+      }
       void resumeAfterCardTopUp(pending);
     } catch {
       /* no URL access (or malformed) — nothing held, nothing to resume */
@@ -4346,6 +4600,32 @@ export function SearchHome() {
       if (balance != null && balance >= cost) return;
       if (Date.now() >= deadline) return;
       await new Promise((resolve) => setTimeout(resolve, CREDIT_GRANT_POLL_MS));
+    }
+  }
+
+  /** Same race as waitForCreditGrant above (credits land by webhook, not by
+   *  the redirect that brings the buyer back), for the plain "topped up from
+   *  the panel, nothing was waiting on it" case — found live: the header and
+   *  the donut both call `load()` once on mount, which can easily win the
+   *  race against the webhook and read the OLD balance, with nothing after
+   *  it to try again. There's no specific cost to wait for here (unlike
+   *  waitForCreditGrant, which knows exactly what balance would let the held
+   *  search through), so this polls until the balance visibly rises from
+   *  whatever it read on ITS OWN first call, or the same grace period as
+   *  waitForCreditGrant runs out — the store is reactive either way, so
+   *  every `load()` along the way already repaints the meter live; this
+   *  loop only decides when to stop asking. */
+  async function pollCreditsAfterTopUp(): Promise<void> {
+    const { load } = useCreditsStore.getState();
+    await load();
+    const baseline = useCreditsStore.getState().balance;
+    const deadline = Date.now() + CREDIT_GRANT_WAIT_MS;
+    for (;;) {
+      if (Date.now() >= deadline) return;
+      await new Promise((resolve) => setTimeout(resolve, CREDIT_GRANT_POLL_MS));
+      await load();
+      const balance = useCreditsStore.getState().balance;
+      if (balance != null && baseline != null && balance > baseline) return;
     }
   }
 
@@ -4472,8 +4752,32 @@ export function SearchHome() {
   // retaining the number in the first place.
   async function handleUseSavedNumber() {
     if (!identityCapture || identitySubmitting) return;
-    // Identity is settled, so the last thing to ask is the budget. No REST
-    // call here any more — confirming a saved number is a pure client-side
+    // Identity is settled, so ordinarily the last thing to ask is the
+    // budget — but not when the buyer already gave one earlier THIS
+    // conversation (2026-09-10, found live: "office fit-out, ₦10,000,000
+    // budget" got asked again during WhatsApp verification). `budgetKobo`
+    // arrives pre-filled from the goal sheet in that case (see
+    // knownBudgetNaira's own comment), so finish straight away instead of
+    // asking a second time.
+    if (identityCapture.budgetKobo != null) {
+      const turnId = appendIdentityTurn(
+        `Use ${identityCapture.phone}`,
+        pickAvoiding(creatingRequestPhrase(), []),
+      );
+      setIdentitySubmitting(true);
+      try {
+        await finishBuyerRequest(identityCapture, turnId);
+      } catch (err) {
+        updateTurn(turnId, {
+          phase: "done",
+          error: err instanceof Error ? err.message : "Something went wrong.",
+        });
+      } finally {
+        setIdentitySubmitting(false);
+      }
+      return;
+    }
+    // No REST call here — confirming a saved number is a pure client-side
     // advance, and the request only goes out once the budget step resolves.
     const turnId = appendIdentityTurn(`Use ${identityCapture.phone}`, "");
     updateTurn(turnId, {
@@ -4588,13 +4892,32 @@ export function SearchHome() {
         { phone: identityCapture.phone, otp: value },
       );
       if (buyer) useBuyerStore.getState().setBuyer(buyer);
+      // Verified — but the request does not always go out yet. The budget
+      // step is ordinarily the last one (asking for it AFTER identity means
+      // a buyer who skips it has still finished everything that was
+      // actually required) — UNLESS a budget was already given earlier
+      // this conversation (2026-09-10 — see knownBudgetNaira's own
+      // comment), in which case there is nothing left to ask and this
+      // finishes the request immediately instead.
+      if (identityCapture.budgetKobo != null) {
+        updateTurn(turnId, {
+          phase: "loading",
+          reply: pickAvoiding(creatingRequestPhrase(), []),
+        });
+        try {
+          await finishBuyerRequest(identityCapture, turnId);
+        } catch (err) {
+          updateTurn(turnId, {
+            phase: "done",
+            error: err instanceof Error ? err.message : "Something went wrong.",
+          });
+        }
+        return;
+      }
       // Same turn, still "loading" — the shimmer just switches to a new
       // line, per explicit request ("the status phrase should also
       // indicate that it is creating the request now before displaying
       // that the request has been created").
-      // Verified — but the request does not go out yet. The budget step is
-      // the last one, and asking for it AFTER identity means a buyer who
-      // skips it has still finished everything that was actually required.
       updateTurn(turnId, {
         phase: "done",
         reply: "Verified. One last thing — what are you looking to spend?",
@@ -4763,7 +5086,7 @@ export function SearchHome() {
         // just below, just one value with no multi-step progression.
         // Reverts to the ordinary textarea the instant it's submitted
         // (handleNameSubmit clears nameCapture before sending it on).
-        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
+        <div className="flex flex-col bg-surface rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
           <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
             <UserIcon size={12} className="text-orange-400 shrink-0" />
             What&apos;s your name?
@@ -4801,7 +5124,7 @@ export function SearchHome() {
         // and dropping them back to a blank composer would lose the thread
         // they were told this was for. Straight to "choose" when the account
         // they just signed into already has a proven number.
-        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
+        <div className="flex flex-col bg-surface rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
           <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
             <PhoneIcon size={12} className="text-orange-400 shrink-0" />
             Sign in so a vendor knows who they&apos;re replying to.
@@ -4832,12 +5155,12 @@ export function SearchHome() {
         // input composer because there is nothing to type — the number is
         // already known and verified; the only question is whether it's
         // still the right one to give a vendor.
-        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
+        <div className="flex flex-col bg-surface rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
           <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
             <PhoneIcon size={12} className="text-orange-400 shrink-0" />A vendor
             will reach you on WhatsApp — use this number?
           </label>
-          <p className="text-base font-semibold text-[#023337] tracking-wide">
+          <p className="text-base font-semibold text-ink tracking-wide">
             {identityCapture.phone}
           </p>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -4867,7 +5190,7 @@ export function SearchHome() {
         // as the SAME composer, not a different UI dropped in. Reverts to
         // the ordinary textarea the moment identityCapture clears
         // (handleIdentitySubmit, on a real terminal result).
-        <div className="flex flex-col bg-white rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
+        <div className="flex flex-col bg-surface rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
           <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
             {identityCapture.step === "budget" ? (
               <>
@@ -4971,7 +5294,7 @@ export function SearchHome() {
           )}
         </div>
       ) : (
-        <div className="flex flex-col bg-white rounded-[28px] border border-gray-200 shadow-sm focus-within:border-gray-300 focus-within:shadow-md transition-shadow">
+        <div className="flex flex-col bg-surface rounded-[28px] border border-gray-200 shadow-sm focus-within:border-gray-300 focus-within:shadow-md transition-shadow">
           {/* Badge + textarea share one row so the badge reads as
               "attached to" the input, not a separate line above it — the
               badge is `shrink-0`, the textarea takes the rest. It is
@@ -5050,7 +5373,7 @@ export function SearchHome() {
               onClose={() => setToolMenuOpen(false)}
               anchorRef={toolMenuBtnRef}
               align="left"
-              className="w-[240px] bg-white rounded-2xl shadow-lg border border-gray-200 p-1.5"
+              className="w-[240px] bg-surface rounded-2xl shadow-lg border border-gray-200 p-1.5"
             >
               {/* Search by Photo is NOT a ComposerTool — it never sets
                   activeTool, it just opens the same file picker the
@@ -5074,7 +5397,7 @@ export function SearchHome() {
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer text-left"
               >
                 <Camera size={17} className="shrink-0 text-gray-500" />
-                <span className="flex-1 text-sm font-medium text-[#023337]">
+                <span className="flex-1 text-sm font-medium text-ink">
                   Search with a photo
                 </span>
               </button>
@@ -5100,7 +5423,7 @@ export function SearchHome() {
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer text-left"
                     >
                       <ToolIcon size={17} className="shrink-0 text-gray-500" />
-                      <span className="flex-1 text-sm font-medium text-[#023337]">
+                      <span className="flex-1 text-sm font-medium text-ink">
                         {meta.label}
                       </span>
                     </button>
@@ -5127,7 +5450,7 @@ export function SearchHome() {
                 type="button"
                 onClick={handleStop}
                 title="Stop generating"
-                className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-gray-800 hover:bg-gray-900 text-white transition-colors"
+                className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-slab hover:bg-slab text-white transition-colors"
               >
                 <Square size={13} fill="currentColor" />
               </button>
@@ -5156,7 +5479,7 @@ export function SearchHome() {
     // content column beside chat/layout.tsx's own sidebar (that layout owns
     // the actual viewport-height boundary now; ChatHeader replaced the
     // <header> that used to live here). See chat/layout.tsx's own comment.
-    <div className="h-full bg-white flex flex-col overflow-hidden relative">
+    <div className="h-full bg-surface flex flex-col overflow-hidden relative">
       {creditGateTool && (
         <CreditGateModal
           toolLabel={creditGateTool.label}
@@ -5204,8 +5527,8 @@ export function SearchHome() {
                 alt="Velte"
                 className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover shadow-md shadow-gray-300/40 shrink-0"
               />
-              <div className="bg-white border border-gray-100 shadow-sm rounded-3xl rounded-tl-lg px-4 py-3 sm:px-5 sm:py-4 flex-1 min-w-0">
-                <h1 className="text-[16px] sm:text-lg font-semibold text-[#023337] leading-snug">
+              <div className="bg-surface border border-gray-100 shadow-sm rounded-3xl rounded-tl-lg px-4 py-3 sm:px-5 sm:py-4 flex-1 min-w-0">
+                <h1 className="text-[16px] sm:text-lg font-semibold text-ink leading-snug">
                   {VELUX_GREETING}
                 </h1>
                 <p className="text-gray-500 text-sm sm:text-[15px] leading-relaxed mt-1.5">
@@ -5325,7 +5648,7 @@ export function SearchHome() {
                         className={cn(
                           "max-w-lg mx-auto bg-white/95 backdrop-blur-md rounded-full border-2 border-gray-100 shadow-lg shadow-gray-400/15 pl-2 pr-5 h-12 flex items-center gap-2.5",
                           backgroundBar.kind !== "queued" &&
-                            "cursor-pointer hover:bg-white hover:border-orange-200 transition-colors",
+                            "cursor-pointer hover:bg-surface hover:border-orange-200 transition-colors",
                         )}
                       >
                         <img
@@ -5348,7 +5671,7 @@ export function SearchHome() {
                                   : "bg-emerald-500",
                               )}
                             />
-                            <span className="truncate text-sm font-medium min-w-0 text-[#023337]">
+                            <span className="truncate text-sm font-medium min-w-0 text-ink">
                               {backgroundBar.text}
                             </span>
                           </>
@@ -5361,6 +5684,29 @@ export function SearchHome() {
             </div>
           </div>
         </>
+      )}
+
+      {/* The phone gate in front of a plan's background search — see
+          onConfirmPlan's own comment. Rendered here (portaled to body by the
+          component itself) rather than inside the turn, so it survives the
+          thread re-rendering underneath it. Closing it starts nothing. */}
+      {phoneGateTurnId && (
+        <PlanPhoneGate
+          onClose={() => setPhoneGateTurnId(null)}
+          onVerified={() => {
+            const gatedTurnId = phoneGateTurnId;
+            setPhoneGateTurnId(null);
+            const gatedTurn = turns.find((t) => t.id === gatedTurnId);
+            const draft = gatedTurn?.shoppingPlanDraft;
+            if (!gatedTurn || !draft) return;
+            const removed = draftRemovedKeys.get(gatedTurn.id) ?? EMPTY_SET;
+            const items = draft.items.filter(
+              (it) => !removed.has(`${it.category}|${it.label}`),
+            );
+            if (!items.length) return;
+            void startPlanBuild(gatedTurn.id, { ...draft, items });
+          }}
+        />
       )}
     </div>
   );

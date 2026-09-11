@@ -23,7 +23,7 @@ export default function SortMenu<T extends string = string>({
       <button
         ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
-        className="p-2 border border-[#d1d5db] rounded bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
+        className="p-2 border border-[#d1d5db] rounded bg-surface hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
       >
         <ArrowUpDownIcon size={18} className="text-[#6a717f]" />
       </button>
@@ -32,7 +32,7 @@ export default function SortMenu<T extends string = string>({
         onClose={() => setOpen(false)}
         anchorRef={triggerRef}
         align="right"
-        className="w-48 bg-white rounded-lg shadow-lg border border-[#e5e7eb] py-1"
+        className="w-48 bg-surface rounded-lg shadow-lg border border-[#e5e7eb] py-1"
       >
         {options.map((opt) => (
           <button

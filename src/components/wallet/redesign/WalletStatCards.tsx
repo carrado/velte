@@ -79,7 +79,7 @@ function StatCard({
   const display = format(animated);
 
   return (
-    <div className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5">
+    <div className="bg-surface rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <div
@@ -93,7 +93,7 @@ function StatCard({
         </div>
         {accessory}
       </div>
-      <p className="text-xl font-bold text-[#023337] tabular-nums">{display}</p>
+      <p className="text-xl font-bold text-ink tabular-nums">{display}</p>
       {sub && <p className="text-dash-caption text-gray-400 mt-1">{sub}</p>}
     </div>
   );
@@ -123,7 +123,7 @@ export default function WalletStatCards({
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="h-28 rounded-none sm:rounded-2xl bg-white border border-gray-100 shadow-sm animate-pulse"
+            className="h-28 rounded-none sm:rounded-2xl bg-surface border border-gray-100 shadow-sm animate-pulse"
           />
         ))}
       </div>

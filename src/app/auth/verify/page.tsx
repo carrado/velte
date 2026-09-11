@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import Image from "next/image";
+import { VelteLogo } from "@/components/VelteLogo";
 import { usersApi } from "@/services/users";
 import {
   ArrowRightIcon,
@@ -81,17 +81,11 @@ function VerifyForm() {
     >
       {/* Logo */}
       <Link href="/" className="flex items-center gap-2.5 justify-center mb-3">
-        <Image
-          src="/velte_logo_esn5dj.png"
-          alt="Velte logo"
-          width={72}
-          height={35}
-          priority
-        />
+        <VelteLogo alt="Velte logo" width={72} height={35} priority />
       </Link>
 
       {/* Card */}
-      <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
+      <div className="bg-surface border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
         {/* Header */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
@@ -205,7 +199,7 @@ function VerifyForm() {
 // Main page component with Suspense
 export default function VerifyPage() {
   return (
-    <div className="h-screen bg-[#F1F5F9] overflow-hidden">
+    <div className="h-screen bg-canvas overflow-hidden">
       {/* Background effects */}
       <div
         className="absolute inset-0 opacity-[0.025]"
