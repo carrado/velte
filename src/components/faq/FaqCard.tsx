@@ -26,7 +26,7 @@ export default function FaqCard({
       transition={{ duration: 0.35, ease: "easeOut" }}
       whileHover={{ y: -3 }}
       className={cn(
-        "group relative rounded-2xl bg-white overflow-hidden transition-colors duration-200 border",
+        "group relative rounded-2xl bg-surface overflow-hidden transition-colors duration-200 border",
         open
           ? "border-orange-300 shadow-xl shadow-orange-500/[0.08]"
           : "border-gray-200 hover:border-orange-200 shadow-sm",
@@ -61,7 +61,7 @@ export default function FaqCard({
         <span
           className={cn(
             "font-semibold text-[15px] sm:text-base transition-colors duration-200",
-            open ? "text-orange-600" : "text-[#023337]",
+            open ? "text-orange-600" : "text-ink",
           )}
         >
           {faq.question}

@@ -17,11 +17,11 @@ export default function StoreFooter({
   sectors,
 }: StoreFooterProps) {
   return (
-    <footer className="border-t border-gray-200 bg-white mt-10">
+    <footer className="border-t border-gray-200 bg-surface mt-10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[#023337]">
+            <div className="flex items-center gap-2 text-ink">
               <StoreIcon size={16} className="text-orange-500" />
               <span className="font-bold">{name}</span>
               <span className="text-gray-400 font-normal">@{handle}</span>

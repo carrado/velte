@@ -61,3 +61,20 @@ export async function getOptionalUserId(): Promise<string | null> {
   const session = await verifySession(token);
   return session?.userId ?? null;
 }
+
+/** The vendor-side twin of getOptionalBuyerAuth: the id AND the cookie header
+ *  to forward, for a route that must keep working without a session but wants
+ *  to act as the vendor when one exists. Added for search metering, which
+ *  applies to a signed-in vendor browsing /chat exactly as it does to a
+ *  buyer — they just arrive on a different cookie. Never redirects or throws;
+ *  null means no session, or an invalid one. */
+export async function getOptionalVendorAuth(): Promise<{
+  userId: string;
+  cookie: string;
+} | null> {
+  const token = (await cookies()).get(AUTH_COOKIE)?.value;
+  if (!token) return null;
+  const session = await verifySession(token);
+  if (!session) return null;
+  return { userId: session.userId, cookie: `${AUTH_COOKIE}=${token}` };
+}

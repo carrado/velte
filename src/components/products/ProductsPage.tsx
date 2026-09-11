@@ -64,13 +64,13 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 z-10">
+      <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
               <DollarSignIcon size={16} className="text-orange-600" />
             </div>
-            <h2 className="text-dash-heading font-semibold text-[#023337]">
+            <h2 className="text-dash-heading font-semibold text-ink">
               {isQuote ? "Set Price" : "Change Price"}
             </h2>
           </div>
@@ -248,9 +248,7 @@ export default function ProductsPage() {
       <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h2 className="text-dash-title font-black text-[#023337]">
-              My Listings
-            </h2>
+            <h2 className="text-dash-title font-black text-ink">My Listings</h2>
             {totalInView > 0 && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-dash-caption font-semibold bg-orange-50 text-orange-600">
                 {totalInView} {totalInView === 1 ? "listing" : "listings"}
@@ -272,7 +270,7 @@ export default function ProductsPage() {
       </div>
 
       {/* ── Products panel ───────────────────────────────────────────────── */}
-      <div className="bg-white sm:rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-surface sm:rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {/* Toolbar — search is the only tool here now. */}
         <div className="px-4 pt-4 pb-4 sm:px-5 border-b border-gray-100">
           <div className="relative">

@@ -12,7 +12,7 @@ export function ExternalBusinessCard({ match }: { match: NearbyBusiness }) {
   )}`;
 
   return (
-    <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-4 space-y-2.5">
+    <div className="bg-surface rounded-2xl border border-dashed border-gray-200 p-4 space-y-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">

@@ -1,14 +1,28 @@
 import { NextResponse } from "next/server";
 
 import { fail, jsonError } from "@/lib/server/guards";
-import { requireBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
 import { backendData } from "@/lib/server/backend";
 import type { BuyerRequest } from "@/types/buyerRequest";
 
 // POST /api/buyer-requests
+//
+// Requires a session (2026-08-29, per explicit product direction). It was
+// briefly open to anyone holding a `phoneToken` from verify-otp — a bare
+// proof of one number from someone with no account — on the reasoning that
+// reaching out was the single thing an anonymous buyer most needed to do.
+// Posting a request now requires a real account, so that token is gone from
+// both ends: the backend guards this route with verifyBuyerAuth, and the OTP
+// endpoints that minted it are behind a session too.
+//
+// Refused HERE as well as upstream, rather than relying on the backend's
+// 401: this saves a round trip on a state the browser already knows it is
+// in, and the message is the one the UI acts on.
 export async function POST(req: Request) {
-  const gate = await requireBuyerAuth();
-  if ("response" in gate) return gate.response;
+  const auth = await getOptionalBuyerAuth();
+  if (!auth) {
+    return jsonError(401, "Sign in to send this request.");
+  }
 
   const body = await req.json().catch(() => null);
   if (!body) return jsonError(400, "A request payload is required.");
@@ -20,7 +34,11 @@ export async function POST(req: Request) {
     const { created, request } = await backendData<{
       created: boolean;
       request?: BuyerRequest;
-    }>("/buyer-requests", { method: "POST", body, cookie: gate.cookie });
+    }>("/buyer-requests", {
+      method: "POST",
+      body,
+      cookie: auth.cookie,
+    });
     return NextResponse.json(
       { created, request: request ?? null },
       { status: created ? 201 : 200 },

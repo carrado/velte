@@ -30,7 +30,7 @@ export default function MobileCard({
   className,
 }: MobileCardProps) {
   return (
-    <div className={cn("bg-white border-b border-gray-100 p-4", className)}>
+    <div className={cn("bg-surface border-b border-gray-100 p-4", className)}>
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           {initials && (

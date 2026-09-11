@@ -141,7 +141,7 @@ export default function ReferralPage() {
   return (
     <div className="flex flex-col gap-5">
       {/* Hero — code + link + share */}
-      <div className="relative overflow-hidden rounded-none sm:rounded-2xl bg-white border border-gray-100 shadow-sm p-6 sm:p-7">
+      <div className="relative overflow-hidden rounded-none sm:rounded-2xl bg-surface border border-gray-100 shadow-sm p-6 sm:p-7">
         <div className="pointer-events-none absolute -top-24 -right-20 w-72 h-72 bg-orange-100/70 rounded-full blur-3xl" />
 
         <div className="relative">
@@ -163,13 +163,13 @@ export default function ReferralPage() {
           {/* Code display */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex-1 flex items-center justify-between gap-3 rounded-xl border-2 border-dashed border-orange-200 bg-orange-50/50 px-5 py-3.5">
-              <span className="text-2xl sm:text-3xl font-black tracking-[0.2em] text-[#023337]">
+              <span className="text-2xl sm:text-3xl font-black tracking-[0.2em] text-ink">
                 {isLoading ? "······" : code}
               </span>
               <button
                 onClick={() => copy(code, "code")}
                 disabled={isLoading}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-white border border-orange-200 rounded-lg text-dash-caption font-semibold text-orange-600 hover:bg-orange-50 transition-colors cursor-pointer disabled:opacity-50"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-surface border border-orange-200 rounded-lg text-dash-caption font-semibold text-orange-600 hover:bg-orange-50 transition-colors cursor-pointer disabled:opacity-50"
               >
                 {copiedCode ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
                 {copiedCode ? "Copied" : "Copy"}
@@ -211,7 +211,7 @@ export default function ReferralPage() {
         {kpis.map(({ key, label, value, icon: Icon, iconClass }) => (
           <div
             key={key}
-            className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5"
+            className="bg-surface rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5"
           >
             <div className="flex items-center gap-2 mb-3">
               <div
@@ -221,13 +221,13 @@ export default function ReferralPage() {
               </div>
               <span className="text-dash-secondary text-gray-400">{label}</span>
             </div>
-            <p className="text-xl font-bold text-[#023337]">{value}</p>
+            <p className="text-xl font-bold text-ink">{value}</p>
           </div>
         ))}
       </div>
 
       {/* How it works */}
-      <div className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+      <div className="bg-surface rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
         <h2 className="text-dash-heading font-semibold text-gray-900 mb-5">
           How it works
         </h2>
@@ -254,7 +254,7 @@ export default function ReferralPage() {
       </div>
 
       {/* Recent referrals */}
-      <div className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+      <div className="bg-surface rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
         <h2 className="text-dash-heading font-semibold text-gray-900 mb-1">
           Recent Referrals
         </h2>

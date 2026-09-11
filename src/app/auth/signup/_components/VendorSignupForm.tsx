@@ -173,7 +173,7 @@ export default function VendorSignupForm() {
     <>
       <div className="mb-8">
         <WizardProgress step={step} />
-        <h1 className="text-2xl font-bold text-[#023337] mb-2 tracking-tight">
+        <h1 className="text-2xl font-bold text-ink mb-2 tracking-tight">
           {step === 1 ? "Get started with Velte" : "Tell buyers what you do"}
         </h1>
         <p className="text-gray-500 text-sm">

@@ -36,6 +36,17 @@ interface BackendOptions {
   body?: unknown;
   /** Raw `Cookie` header value to forward (carries the session). */
   cookie?: string;
+  /** Extra headers — for a caller that authenticates to the backend some
+   *  other way than a buyer session (a shared secret, say), which has no
+   *  cookie to forward. */
+  headers?: Record<string, string>;
+  /** Aborts the upstream call (2026-09-05, for the guest network gate) — a
+   *  slow or hung backend must not delay a search turn, and this is the one
+   *  BFF call in the codebase that sits directly in front of the model call
+   *  rather than answering a page load, so it is the one that actually
+   *  needs its own timeout rather than just eating whatever the network
+   *  gives it. */
+  signal?: AbortSignal;
 }
 
 // Pulls a human-readable string out of an upstream error field — the field
@@ -82,16 +93,20 @@ function fieldsFrom(data: unknown): Record<string, string> | undefined {
 
 async function doFetch(
   path: string,
-  { method = "GET", body, cookie }: BackendOptions,
+  { method = "GET", body, cookie, headers, signal }: BackendOptions,
 ): Promise<{ res: Response; data: unknown }> {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
       ...(cookie ? { Cookie: cookie } : {}),
+      // Last, so a caller-supplied header wins over the defaults above —
+      // but note Cookie is set from its own option, not from here.
+      ...(headers ?? {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
+    signal,
   });
 
   let data: unknown = null;

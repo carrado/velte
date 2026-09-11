@@ -196,12 +196,12 @@ function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-surface sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="flex items-center gap-2.5 px-5 py-4 border-b border-gray-100">
         <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
           <Icon size={13} className="text-orange-500" />
         </div>
-        <h3 className="text-dash-heading font-bold text-[#023337]">
+        <h3 className="text-dash-heading font-bold text-ink">
           {title}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </h3>
@@ -221,7 +221,7 @@ function FieldLabel({
   required?: boolean;
 }) {
   return (
-    <label className="block text-dash-body font-bold text-[#023337] mb-2">
+    <label className="block text-dash-body font-bold text-ink mb-2">
       {children}
       {required && <span className="text-red-500 ml-0.5">*</span>}
       {optional && (
@@ -249,7 +249,7 @@ function Toggle({
     >
       <div
         className={cn(
-          "absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform",
+          "absolute top-1 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform",
           value ? "translate-x-6" : "translate-x-1",
         )}
       />
@@ -284,7 +284,7 @@ function CheckboxField({
       <div
         className={cn(
           "w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors border",
-          checked ? `${bg} border-transparent` : "border-gray-300 bg-white",
+          checked ? `${bg} border-transparent` : "border-gray-300 bg-surface",
         )}
       >
         {checked && (
@@ -332,7 +332,7 @@ function EditProductSkeleton() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4"
+              className="bg-surface rounded-2xl border border-gray-100 p-5 space-y-4"
             >
               <div className="h-5 w-32 bg-gray-200 rounded-lg" />
               <div className="h-11 bg-gray-100 rounded-md" />
@@ -344,7 +344,7 @@ function EditProductSkeleton() {
           {[1, 2].map((i) => (
             <div
               key={i}
-              className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4"
+              className="bg-surface rounded-2xl border border-gray-100 p-5 space-y-4"
             >
               <div className="h-5 w-24 bg-gray-200 rounded-lg" />
               <div className="h-56 bg-gray-100 rounded-md" />
@@ -380,7 +380,7 @@ function PublishProgressModal({
   // clipping bug already fixed for dropdowns via AnchoredPopover).
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm flex flex-col items-center gap-5">
+      <div className="bg-surface rounded-2xl shadow-2xl p-8 w-full max-w-sm flex flex-col items-center gap-5">
         {/* Icon */}
         <div
           className={cn(
@@ -399,7 +399,7 @@ function PublishProgressModal({
 
         {/* Title + description */}
         <div className="text-center space-y-1.5">
-          <h2 className="text-dash-heading font-black text-[#023337]">
+          <h2 className="text-dash-heading font-black text-ink">
             {done
               ? isEditMode
                 ? "Changes Saved!"
@@ -432,7 +432,7 @@ function PublishProgressModal({
           </div>
           <div className="flex justify-between items-center mt-1.5">
             <p className="text-dash-caption text-gray-400 truncate">{step}</p>
-            <p className="text-dash-caption font-bold text-[#023337] ml-2 shrink-0">
+            <p className="text-dash-caption font-bold text-ink ml-2 shrink-0">
               {progress}%
             </p>
           </div>
@@ -440,8 +440,8 @@ function PublishProgressModal({
 
         {/* Tip card */}
         {!done && !isEditMode && (
-          <div className="w-full bg-[#F1F5F9] rounded-xl p-3.5">
-            <p className="text-dash-caption font-semibold text-[#023337] mb-0.5">
+          <div className="w-full bg-canvas rounded-xl p-3.5">
+            <p className="text-dash-caption font-semibold text-ink mb-0.5">
               Did you know?
             </p>
             <p className="text-dash-caption text-gray-500 leading-relaxed">
@@ -1473,7 +1473,7 @@ export default function AddProductPage({
           <PackageIcon size={28} className="text-gray-300" />
         </div>
         <div>
-          <p className="text-dash-heading font-bold text-[#023337]">
+          <p className="text-dash-heading font-bold text-ink">
             Product not found
           </p>
           <p className="text-dash-body text-gray-400 mt-1">
@@ -1622,7 +1622,7 @@ export default function AddProductPage({
         <div className="flex items-start px-5 sm:px-0 justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <div>
-              <h2 className="text-dash-title font-black text-[#023337]">
+              <h2 className="text-dash-title font-black text-ink">
                 {isEditMode ? "Edit Listing" : "Add Listing"}
               </h2>
               <p className="text-dash-body text-gray-400 mt-0.5">
@@ -1674,10 +1674,10 @@ export default function AddProductPage({
                             "text-left px-3 py-2.5 rounded-md border transition-colors cursor-pointer",
                             active
                               ? "border-orange-500 bg-orange-50"
-                              : "border-gray-200 bg-white hover:border-orange-300",
+                              : "border-gray-200 bg-surface hover:border-orange-300",
                           )}
                         >
-                          <p className="text-dash-body font-bold text-[#023337]">
+                          <p className="text-dash-body font-bold text-ink">
                             {leaf.label}
                           </p>
                         </button>
@@ -1726,10 +1726,10 @@ export default function AddProductPage({
                           "text-left px-3 py-2.5 rounded-md border transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
                           kind === value
                             ? "border-orange-500 bg-orange-50"
-                            : "border-gray-200 bg-white hover:border-orange-300",
+                            : "border-gray-200 bg-surface hover:border-orange-300",
                         )}
                       >
-                        <p className="text-dash-body font-bold text-[#023337]">
+                        <p className="text-dash-body font-bold text-ink">
                           {label}
                         </p>
                         <p className="text-dash-caption text-gray-400 mt-0.5">
@@ -1774,7 +1774,7 @@ export default function AddProductPage({
                         : (sectorConfig?.productNamePlaceholder ??
                           "e.g., Wireless Headphones")
                   }
-                  className={`w-full h-11 px-3 bg-gray-50 border rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 ${fieldErrors.name ? "border-red-400" : "border-gray-200"}`}
+                  className={`w-full h-11 px-3 bg-gray-50 border rounded-md text-dash-body text-ink placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 ${fieldErrors.name ? "border-red-400" : "border-gray-200"}`}
                 />
                 {fieldErrors.name && (
                   <p className="text-dash-caption text-red-500 mt-1">
@@ -1804,7 +1804,7 @@ export default function AddProductPage({
                           "Describe the product features and benefits…")
                   }
                   rows={4}
-                  className="w-full px-3 py-3 min-h-[140px] sm:min-h-[120px] bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none overflow-hidden"
+                  className="w-full px-3 py-3 min-h-[140px] sm:min-h-[120px] bg-gray-50 border border-gray-200 rounded-md text-dash-body text-ink placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none overflow-hidden"
                 />
                 <div className="flex items-center justify-between mt-1.5">
                   {isService ? (
@@ -1846,7 +1846,7 @@ export default function AddProductPage({
                     onValueChange={(v) => setSelectedCategory(v ?? "")}
                     disabled={categoryLockedBySector}
                   >
-                    <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus-visible:ring-2 focus-visible:ring-orange-500/30">
+                    <SelectTrigger className="w-full h-11 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-ink focus-visible:ring-2 focus-visible:ring-orange-500/30">
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1874,7 +1874,7 @@ export default function AddProductPage({
               {isService && (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-dash-body font-bold text-[#023337]">
+                    <p className="text-dash-body font-bold text-ink">
                       Quote on request
                     </p>
                     <p className="text-dash-caption text-gray-400 mt-0.5">
@@ -1888,7 +1888,7 @@ export default function AddProductPage({
               {/* Quote-on-request note — no price to enter */}
               {isQuote && (
                 <div className="bg-orange-50/70 border border-orange-100 rounded-2xl p-4">
-                  <p className="text-dash-body font-bold text-[#023337]">
+                  <p className="text-dash-body font-bold text-ink">
                     Buyers will see &quot;Contact for quote&quot;
                   </p>
                   <p className="text-dash-caption text-gray-500 mt-1 leading-relaxed">
@@ -1916,7 +1916,7 @@ export default function AddProductPage({
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
                       placeholder="0.00"
-                      className="flex-1 min-w-0 px-3 pt-3 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                      className="flex-1 min-w-0 px-3 pt-3 text-dash-body font-bold text-ink bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
                     />
                     <div className="relative">
                       <button
@@ -1933,7 +1933,7 @@ export default function AddProductPage({
                       {currencyPopoverOpen && (
                         <div
                           ref={currencyDropdownRef}
-                          className="absolute right-0 top-full mt-1 z-50 bg-white rounded-md shadow-lg border border-gray-200 py-1 min-w-[100px]"
+                          className="absolute right-0 top-full mt-1 z-50 bg-surface rounded-md shadow-lg border border-gray-200 py-1 min-w-[100px]"
                         >
                           {[
                             ["NGN", "₦ NGN"],
@@ -2000,7 +2000,7 @@ export default function AddProductPage({
                           value={priceMax}
                           onChange={(e) => setPriceMax(e.target.value)}
                           placeholder="0.00"
-                          className="flex-1 min-w-0 text-dash-body font-bold text-[#023337] bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
+                          className="flex-1 min-w-0 text-dash-body font-bold text-ink bg-transparent !border-none shadow-none placeholder:text-gray-400 focus:!outline-none !outline-none focus-visible:ring-0"
                         />
                       </div>
                       <p className="text-dash-caption text-gray-400 mt-1.5">
@@ -2027,7 +2027,7 @@ export default function AddProductPage({
                       <p className="text-dash-caption font-semibold text-orange-500 uppercase tracking-wider mb-3">
                         Buyers will see
                       </p>
-                      <p className="text-[1.6rem] font-black text-[#023337] leading-none">
+                      <p className="text-[1.6rem] font-black text-ink leading-none">
                         {lo > 0 ? (
                           showRange ? (
                             <>
@@ -2074,7 +2074,7 @@ export default function AddProductPage({
                             onChange={(e) =>
                               setManufacturingDate(e.target.value)
                             }
-                            className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
+                            className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-ink focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
                           />
                           <CalendarIcon
                             size={16}
@@ -2095,7 +2095,7 @@ export default function AddProductPage({
                           value={expirationDate}
                           onClick={() => openDatePicker(expirationDateRef)}
                           onChange={(e) => setExpirationDate(e.target.value)}
-                          className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
+                          className="w-full h-11 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-ink focus:outline-none focus:ring-2 focus:ring-orange-500/30 [&::-webkit-calendar-picker-indicator]:hidden"
                         />
                         <CalendarIcon
                           size={16}
@@ -2143,7 +2143,7 @@ export default function AddProductPage({
                       "flex items-center justify-center gap-2 h-10 px-5 rounded-lg border text-dash-body font-semibold transition-colors cursor-pointer",
                       mediaTab === value
                         ? "border-orange-500 bg-orange-50 text-orange-600"
-                        : "border-gray-200 bg-white text-gray-400 hover:border-orange-300 hover:text-gray-600",
+                        : "border-gray-200 bg-surface text-gray-400 hover:border-orange-300 hover:text-gray-600",
                     )}
                   >
                     <Icon
@@ -2183,7 +2183,7 @@ export default function AddProductPage({
                         />
                       ) : (
                         <div className="flex flex-col items-center gap-2 pointer-events-none">
-                          <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-2xl bg-surface border border-gray-200 flex items-center justify-center">
                             <ImageIcon size={20} className="text-gray-300" />
                           </div>
                           <span className="text-dash-body text-gray-400">
@@ -2199,7 +2199,7 @@ export default function AddProductPage({
                           e.stopPropagation();
                           mainImageRef.current?.click();
                         }}
-                        className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                        className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-surface text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
                       >
                         <ImageIcon size={13} /> Browse
                       </button>
@@ -2210,7 +2210,7 @@ export default function AddProductPage({
                               e.stopPropagation();
                               mainImageRef.current?.click();
                             }}
-                            className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                            className="absolute bottom-3 right-[72px] flex items-center gap-1.5 px-3 h-8 bg-surface rounded-lg shadow text-dash-caption text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                           >
                             <RefreshIcon size={12} /> Replace
                           </button>
@@ -2219,7 +2219,7 @@ export default function AddProductPage({
                               e.stopPropagation();
                               clearMainImage();
                             }}
-                            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-surface rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                           >
                             <TrashIcon size={12} /> Clear
                           </button>
@@ -2273,7 +2273,7 @@ export default function AddProductPage({
                   <button
                     type="button"
                     onClick={clearVideo}
-                    className="absolute top-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-white rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                    className="absolute top-3 right-3 flex items-center gap-1.5 px-3 h-8 bg-surface rounded-lg shadow text-dash-caption text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                   >
                     <TrashIcon size={12} /> Remove
                   </button>
@@ -2301,7 +2301,7 @@ export default function AddProductPage({
                     {videoStatus === "uploading" ||
                     videoStatus === "processing" ? (
                       <div className="flex flex-col items-center gap-3 w-full px-10">
-                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-2xl bg-surface border border-gray-200 flex items-center justify-center">
                           <LoaderIcon
                             size={20}
                             className="text-orange-500 animate-spin"
@@ -2331,7 +2331,7 @@ export default function AddProductPage({
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-2 pointer-events-none">
-                        <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-2xl bg-surface border border-gray-200 flex items-center justify-center">
                           <VideoIcon size={20} className="text-gray-300" />
                         </div>
                         <span className="text-dash-body text-gray-400">
@@ -2352,7 +2352,7 @@ export default function AddProductPage({
                           e.stopPropagation();
                           videoInputRef.current?.click();
                         }}
-                        className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-white text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                        className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 h-8 border border-gray-200 rounded-lg bg-surface text-dash-caption text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
                       >
                         <VideoIcon size={13} /> Browse
                       </button>
@@ -2405,7 +2405,7 @@ export default function AddProductPage({
                               "px-2.5 py-1 rounded-lg text-dash-caption font-medium border transition-colors cursor-pointer",
                               active
                                 ? "bg-orange-500 text-white border-orange-500"
-                                : "bg-white text-gray-600 border-gray-200 hover:border-orange-300 hover:bg-orange-50",
+                                : "bg-surface text-gray-600 border-gray-200 hover:border-orange-300 hover:bg-orange-50",
                             )}
                           >
                             {active && <span className="mr-1">✓</span>}
@@ -2467,7 +2467,7 @@ export default function AddProductPage({
                           ? "e.g. home-service, same-day — press Enter"
                           : "Type a tag then press Enter or Space"
                     }
-                    className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                    className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-ink placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                   />
                 </div>
 
@@ -2513,7 +2513,7 @@ export default function AddProductPage({
                                   setAttributeValue(field.name, e.target.value)
                                 }
                                 placeholder={field.example}
-                                className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                                className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-ink placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                               />
                             </div>
                           ))}
@@ -2543,7 +2543,7 @@ export default function AddProductPage({
                               className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-md"
                             >
                               <div className="text-dash-body">
-                                <span className="font-semibold text-[#023337]">
+                                <span className="font-semibold text-ink">
                                   {attr.name}:
                                 </span>{" "}
                                 <span className="text-gray-600">
@@ -2578,7 +2578,7 @@ export default function AddProductPage({
                 {/* Currently available toggle */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-dash-body font-bold text-[#023337]">
+                    <p className="text-dash-body font-bold text-ink">
                       Currently Available
                     </p>
                     <p className="text-dash-caption text-gray-400 mt-0.5">
@@ -2608,7 +2608,7 @@ export default function AddProductPage({
                       className="text-green-500 mt-0.5 flex-shrink-0"
                     />
                     <div className="flex-1">
-                      <p className="text-dash-body font-bold text-[#023337]">
+                      <p className="text-dash-body font-bold text-ink">
                         No extra choices for this listing
                       </p>
                       <p className="text-dash-caption text-gray-400 mt-0.5">
@@ -2703,7 +2703,7 @@ export default function AddProductPage({
                               className="w-full flex items-center justify-between px-3.5 py-3 bg-gray-50 hover:bg-orange-50 transition-colors cursor-pointer"
                             >
                               <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-dash-body font-semibold text-[#023337] truncate">
+                                <span className="text-dash-body font-semibold text-ink truncate">
                                   {group.name}
                                 </span>
                                 <div className="flex gap-1 flex-shrink-0">
@@ -2766,7 +2766,7 @@ export default function AddProductPage({
                                     key={opt.id}
                                     className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg"
                                   >
-                                    <span className="flex-1 text-dash-body text-[#023337]">
+                                    <span className="flex-1 text-dash-body text-ink">
                                       {opt.name}
                                     </span>
                                     <div className="relative flex-shrink-0">
@@ -2814,7 +2814,7 @@ export default function AddProductPage({
                                               val,
                                             );
                                         }}
-                                        className="w-24 h-8 pl-8 pr-2 bg-white border border-gray-200 rounded-lg text-dash-caption text-[#023337]"
+                                        className="w-24 h-8 pl-8 pr-2 bg-surface border border-gray-200 rounded-lg text-dash-caption text-ink"
                                       />
                                     </div>
                                     <button
@@ -2893,11 +2893,11 @@ export default function AddProductPage({
             w-[260px] sidebar, and the mobile bottom offset clears
             BottomNav (fixed, ~4.5rem tall, mobile-only). */}
         {isEditMode && (
-          <div className="flex justify-end fixed inset-x-0 lg:left-[260px] bottom-[calc(env(safe-area-inset-bottom)+4rem)] md:bottom-0 z-40 py-2 bg-white border-t border-gray-100 px-5 gap-3">
+          <div className="flex justify-end fixed inset-x-0 lg:left-[260px] bottom-[calc(env(safe-area-inset-bottom)+4rem)] md:bottom-0 z-40 py-2 bg-surface border-t border-gray-100 px-5 gap-3">
             <button
               onClick={() => navigate(`/${userId}/products`)}
               disabled={isSubmitting}
-              className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#023337] text-dash-body font-bold px-4 h-10 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1.5 border border-gray-200 bg-surface text-ink text-dash-body font-bold px-4 h-10 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>

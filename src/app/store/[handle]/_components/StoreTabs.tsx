@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { reportLead } from "@/lib/reportLead";
-import { buildWhatsappLink } from "@/lib/whatsapp";
+import { buildChatLink } from "@/lib/chatLink";
 import type { PublicStoreTab, StoreTabsProps } from "@/types/store";
 import { OfferingCard } from "./shared";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -27,10 +26,11 @@ export default function StoreTabs({
   const [active, setActive] = useState<PublicStoreTab>(defaultTab);
   const isEmpty = goods.length === 0 && services.length === 0;
 
-  const whatsappHref = buildWhatsappLink(
-    whatsapp,
-    `Hi ${storeName}! I found your store on Velte.`,
-  );
+  const whatsappHref = buildChatLink({
+    vendorId,
+    source: "browse",
+    message: `Hi ${storeName}! I found your store on Velte.`,
+  });
 
   if (isEmpty) {
     return (
@@ -38,7 +38,7 @@ export default function StoreTabs({
         <aside className="hidden lg:block">
           <div className="lg:sticky lg:top-24 space-y-4">{sidebar}</div>
         </aside>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10 text-center">
+        <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10 text-center">
           {isOwn ? (
             <OwnListingBadge label="This is your store" />
           ) : whatsappHref ? (
@@ -56,7 +56,6 @@ export default function StoreTabs({
                 href={whatsappHref}
                 label="Ask on WhatsApp"
                 className="mt-5"
-                onClick={() => reportLead(vendorId, undefined, "browse")}
               />
             </>
           ) : (
@@ -96,7 +95,7 @@ export default function StoreTabs({
                 className={cn(
                   "px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors cursor-pointer",
                   active === tab.key
-                    ? "bg-white text-orange-600 shadow-sm"
+                    ? "bg-surface text-orange-600 shadow-sm"
                     : "text-gray-500 hover:text-gray-700",
                 )}
               >

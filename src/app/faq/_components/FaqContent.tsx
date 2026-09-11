@@ -70,7 +70,7 @@ export default function FaqContent() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#F1F5F9] min-h-screen pt-24 pb-20">
+      <main className="bg-canvas min-h-screen pt-24 pb-20">
         {/* Hero */}
         <section className="relative overflow-hidden">
           <div
@@ -100,7 +100,7 @@ export default function FaqContent() {
                 animate="show"
                 variants={wordContainer}
                 style={{ perspective: 800 }}
-                className="text-4xl lg:text-5xl xl:text-6xl font-bold text-[#023337] mb-5 text-balance tracking-tight flex flex-wrap justify-center lg:justify-start gap-x-3"
+                className="text-4xl lg:text-5xl xl:text-6xl font-bold text-ink mb-5 text-balance tracking-tight flex flex-wrap justify-center lg:justify-start gap-x-3"
               >
                 {headline.split(" ").map((word, i) => {
                   const isLast = i === headline.split(" ").length - 1;
@@ -136,11 +136,11 @@ export default function FaqContent() {
                 transition={{ duration: 0.5, delay: 0.45 }}
                 className="flex items-center justify-center lg:justify-start gap-2 text-xs text-gray-400 font-medium mb-8"
               >
-                <span className="text-[#023337] font-bold">
+                <span className="text-ink font-bold">
                   <FaqCountUp value={counts.all} />
                 </span>
                 answers across
-                <span className="text-[#023337] font-bold">2</span>
+                <span className="text-ink font-bold">2</span>
                 categories
               </motion.div>
 
@@ -156,7 +156,7 @@ export default function FaqContent() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search a question…"
-                  className="w-full h-11 pl-10 pr-4 rounded-full bg-white border border-gray-200 text-sm text-[#023337] placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+                  className="w-full h-11 pl-10 pr-4 rounded-full bg-surface border border-gray-200 text-sm text-ink placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
                 />
               </motion.div>
 
@@ -191,7 +191,7 @@ export default function FaqContent() {
               <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center mb-4">
                 <SearchXIcon className="w-5 h-5 text-orange-500" />
               </div>
-              <p className="text-[#023337] font-semibold mb-1">
+              <p className="text-ink font-semibold mb-1">
                 No matches for &ldquo;{query}&rdquo;
               </p>
               <p className="text-gray-400 text-sm">
@@ -231,7 +231,7 @@ export default function FaqContent() {
               }}
             />
             <div className="relative bg-gradient-to-br from-orange-500/[0.08] to-[#F1F5F9] rounded-3xl p-12 text-center">
-              <h3 className="text-3xl font-bold text-[#023337] mb-4 text-balance">
+              <h3 className="text-3xl font-bold text-ink mb-4 text-balance">
                 Still have a question?
               </h3>
               <p className="text-gray-500 mb-6 max-w-xl mx-auto">

@@ -13,7 +13,6 @@ import { FinalAskCta } from "@/components/landing/FinalAskCta";
 import { RegisterCta } from "@/components/landing/RegisterCta";
 import FAQ from "@/components/landing/FAQ";
 import Footer from "@/components/landing/Footer";
-import StandaloneHomeRedirect from "@/components/StandaloneHomeRedirect";
 
 // Velte's homepage — redesigned for the pivot (replaces the old
 // pre-pivot "WhatsApp AI Sales Rep" marketing site that used to live at
@@ -114,7 +113,6 @@ export default function HomePage() {
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <StandaloneHomeRedirect />
       <Navbar />
       <FloatingAskBar />
       <Hero />

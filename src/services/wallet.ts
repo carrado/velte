@@ -9,48 +9,49 @@ import type {
   WalletStats,
 } from "@/types/wallet";
 
-/** Tiered per-lead pricing (per explicit request) — the LOWER a vendor's
- * wallet balance, the MORE each lead costs, incentivizing bigger top-ups
- * instead of small, frequent ones. Mirrors `LEAD_TIERS` in velte-backend's
- * utils/leadPricing.js — keep these in sync until the price is served from
- * the wallet/stats response instead. Ordered highest-balance-first so
- * `leadCostForBalance`'s own linear scan returns on the first tier the
- * balance actually clears. */
-export const LEAD_TIERS = [
-  { minBalanceKobo: 1_000_000, costKobo: 50_000 }, // ≥ ₦10,000 → ₦500/lead
-  { minBalanceKobo: 500_000, costKobo: 70_000 }, // ₦5,000–₦9,999 → ₦700/lead
-  { minBalanceKobo: 0, costKobo: 100_000 }, // < ₦5,000 → ₦1,000/lead
-];
+/** ONE PRICE, FOR EVERYBODY: ₦1,000 per lead (2026-09-03).
+ *
+ *  Replaced three balance-tiers (₦500 / ₦700 / ₦1,000, cheaper the more you
+ *  held) and the trap they created: a vendor on ₦10,500 who spent ₦600
+ *  dropped a tier and paid ₦200 more on EVERY lead afterwards — ₦4,000 over
+ *  twenty leads, to save ₦600. Invisible, and it punished using the product.
+ *  Every piece of machinery built to contain that (the 30-day spend lookback,
+ *  the last-purchase short-circuit in velte-backend’s wallet controller)
+ *  existed only because the price moved with the balance. A flat price
+ *  deletes the problem rather than managing it.
+ *
+ *  It reads as a rise — everyone now pays what only the lowest-balance
+ *  vendors used to. It is not one in practice, because it shipped alongside
+ *  charge-on-CONTACT: a vendor is no longer billed for accepting a request
+ *  that goes nowhere, only for a buyer who actually reached them. Higher per
+ *  lead, far fewer leads charged.
+ *
+ *  Mirrors velte-backend’s utils/leadPricing.js — keep these in sync until
+ *  the price is served from the wallet/stats response instead. */
+export const LEAD_COST_KOBO = 100_000; // ₦1,000
 
-/** The per-lead rate that applies to a given wallet balance right now. */
-export function leadCostForBalance(balanceKobo: number): number {
-  for (const tier of LEAD_TIERS) {
-    if (balanceKobo >= tier.minBalanceKobo) return tier.costKobo;
-  }
-  return LEAD_TIERS[LEAD_TIERS.length - 1].costKobo;
+/** The per-lead rate. Takes no balance any more and returns a constant, but
+ *  stays a function so call sites read the same and there is one obvious
+ *  place to put variable pricing back if it ever returns. */
+export function leadCost(): number {
+  return LEAD_COST_KOBO;
 }
 
-/** The most expensive tier's own rate — the minimum balance needed to
- * afford at least one more lead, whatever tier that lead ends up costing
- * (every OTHER tier's own minBalanceKobo comfortably covers its own,
- * cheaper costKobo, so this one flat floor is all "can they afford a
- * lead at all" needs — see velte-backend's own MIN_LEAD_COST_KOBO). */
-export const MIN_LEAD_COST_KOBO = LEAD_TIERS[LEAD_TIERS.length - 1].costKobo;
+/** The balance needed to afford one more lead. The same number as the rate
+ *  now that there is only one rate — kept separate because “what does it
+ *  cost” and “can they afford it” are different questions, and only the
+ *  first is a price. */
+export const MIN_LEAD_COST_KOBO = LEAD_COST_KOBO;
 
 /** How many more leads a balance can still cover, capped at `cap` — callers
- * only ever need to distinguish a few buckets ("0", "1", "2+"), never an
- * exact count for a large balance, so this stops simulating once it hits
- * the cap rather than walking the whole balance down to zero. */
+ *  only ever need to distinguish a few buckets ("0", "1", "2+"), never an
+ *  exact count for a large balance. A plain divide now that the price is
+ *  flat; it used to simulate the drain tier by tier. Clamped at 0 so a
+ *  negative balance (possible under charge-on-contact, which lets a
+ *  connection through even if the wallet moved after the accept) reports
+ *  none rather than a negative count. */
 export function leadsRemaining(balanceKobo: number, cap = 2): number {
-  let remaining = balanceKobo;
-  let count = 0;
-  while (count < cap) {
-    const cost = leadCostForBalance(remaining);
-    if (remaining < cost) break;
-    remaining -= cost;
-    count += 1;
-  }
-  return count;
+  return Math.max(0, Math.min(Math.floor(balanceKobo / LEAD_COST_KOBO), cap));
 }
 
 export const walletApi = {

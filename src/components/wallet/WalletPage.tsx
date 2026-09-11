@@ -135,7 +135,7 @@ export default function WalletPage() {
       )}
 
       {/* Hero balance card */}
-      <div className="relative overflow-hidden rounded-none sm:rounded-2xl bg-white border border-gray-100 shadow-sm p-6 sm:p-7">
+      <div className="relative overflow-hidden rounded-none sm:rounded-2xl bg-surface border border-gray-100 shadow-sm p-6 sm:p-7">
         {/* soft warm glow — pure ambience, no data */}
         <div className="pointer-events-none absolute -top-24 -right-20 w-72 h-72 bg-orange-100/70 rounded-full blur-3xl" />
 
@@ -165,7 +165,7 @@ export default function WalletPage() {
             </div>
           </div>
 
-          <p className="text-4xl sm:text-[2.75rem] leading-tight font-black text-[#023337] mb-6">
+          <p className="text-4xl sm:text-[2.75rem] leading-tight font-black text-ink mb-6">
             {isLoading ? "—" : formatNaira(wallet?.balanceKobo ?? 0)}
           </p>
 
@@ -201,7 +201,7 @@ export default function WalletPage() {
           after the KPI row) so it's visible without scrolling. */}
       <button
         onClick={() => navigate(`/${userId}/referrals`)}
-        className="lg:hidden flex items-center gap-3 rounded-none sm:rounded-2xl bg-white border border-gray-100 shadow-sm p-4 sm:p-5 text-left hover:bg-gray-50 transition-colors cursor-pointer"
+        className="lg:hidden flex items-center gap-3 rounded-none sm:rounded-2xl bg-surface border border-gray-100 shadow-sm p-4 sm:p-5 text-left hover:bg-gray-50 transition-colors cursor-pointer"
       >
         <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
           <GiftIcon size={16} className="text-orange-500" />
@@ -229,7 +229,7 @@ export default function WalletPage() {
         {kpis.map(({ key, label, value, sub, icon: Icon, iconClass }) => (
           <div
             key={key}
-            className="bg-white rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5"
+            className="bg-surface rounded-none sm:rounded-2xl border border-gray-100 shadow-sm p-5"
           >
             <div className="flex items-center gap-2 mb-3">
               <div
@@ -239,7 +239,7 @@ export default function WalletPage() {
               </div>
               <span className="text-dash-secondary text-gray-400">{label}</span>
             </div>
-            <p className="text-xl font-bold text-[#023337]">{value}</p>
+            <p className="text-xl font-bold text-ink">{value}</p>
             {sub && (
               <p className="text-dash-caption text-gray-400 mt-1">{sub}</p>
             )}

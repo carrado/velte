@@ -53,7 +53,12 @@ export function VendorDetailModal({
   onClose: () => void;
   isOwn: boolean;
   chatHref: string | null;
-  onChatClick: () => void;
+  // Optional since 2026-08-27: the WhatsApp CTA is now a plain link to
+  // /api/chat, which bills the lead server-side — there is no click beacon
+  // left to fire. Kept on the type for any caller that still wants to react
+  // to the click for its own reasons (analytics, closing the modal), but
+  // nothing is required to.
+  onChatClick?: () => void;
 }) {
   return (
     <DetailSheet
@@ -92,7 +97,7 @@ export function VendorDetailModal({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95"
+          className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-surface text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95"
         >
           <CloseIcon size={20} strokeWidth={2.5} />
         </button>
@@ -116,9 +121,7 @@ export function VendorDetailModal({
         </div>
 
         <div className="flex items-center gap-1 min-w-0">
-          <p className="font-bold text-[#023337] text-base truncate">
-            {item.name}
-          </p>
+          <p className="font-bold text-ink text-base truncate">{item.name}</p>
           <BadgeCheckIcon
             size={16}
             className="text-orange-500 shrink-0 fill-orange-500/15"

@@ -305,7 +305,7 @@ export default function TermsContent() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#F1F5F9] min-h-screen">
+      <main className="bg-canvas min-h-screen">
         {/* ---------- Hero ---------- */}
         <section className="relative overflow-hidden pt-32 pb-20">
           {/* Grid background */}
@@ -340,7 +340,7 @@ export default function TermsContent() {
                   The agreement between us
                 </span>
 
-                <h1 className="text-4xl sm:text-5xl font-bold text-[#023337] leading-[1.1] tracking-tight mb-5 text-balance">
+                <h1 className="text-4xl sm:text-5xl font-bold text-ink leading-[1.1] tracking-tight mb-5 text-balance">
                   Terms &amp; Conditions
                 </h1>
                 <p className="text-lg text-gray-500 leading-relaxed max-w-lg mb-7">
@@ -358,7 +358,7 @@ export default function TermsContent() {
                   ].map((chip) => (
                     <span
                       key={chip}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1.5"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 bg-surface border border-gray-200 shadow-sm rounded-full px-3 py-1.5"
                     >
                       <CheckCircleIcon
                         className="w-3.5 h-3.5"
@@ -402,10 +402,10 @@ export default function TermsContent() {
                   initial={{ opacity: 0, x: 16 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.9 }}
-                  className="absolute -right-3 top-6 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
+                  className="absolute -right-3 top-6 hidden sm:flex items-center gap-2 bg-surface border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
                 >
                   <ScrollTextIcon className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                  <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
+                  <span className="text-ink text-[11px] font-medium whitespace-nowrap">
                     Plain-language terms
                   </span>
                 </motion.div>
@@ -413,10 +413,10 @@ export default function TermsContent() {
                   initial={{ opacity: 0, x: -16 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 1.3 }}
-                  className="absolute -left-3 bottom-8 hidden sm:flex items-center gap-2 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
+                  className="absolute -left-3 bottom-8 hidden sm:flex items-center gap-2 bg-surface border border-orange-200 rounded-xl px-3 py-2 shadow-lg"
                 >
                   <LandmarkIcon className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                  <span className="text-[#023337] text-[11px] font-medium whitespace-nowrap">
+                  <span className="text-ink text-[11px] font-medium whitespace-nowrap">
                     Governed by Nigerian law
                   </span>
                 </motion.div>
@@ -435,7 +435,7 @@ export default function TermsContent() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: i * 0.08 }}
-                className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5 hover:border-gray-300 transition-colors"
+                className="bg-surface border border-gray-200 shadow-sm rounded-2xl p-5 hover:border-gray-300 transition-colors"
               >
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
@@ -443,7 +443,7 @@ export default function TermsContent() {
                 >
                   <pillar.icon className="w-5 h-5" style={{ color: ORANGE }} />
                 </div>
-                <h3 className="text-[#023337] font-semibold mb-1.5">
+                <h3 className="text-ink font-semibold mb-1.5">
                   {pillar.title}
                 </h3>
                 <p className="text-gray-500 text-sm leading-relaxed">
@@ -461,7 +461,7 @@ export default function TermsContent() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="relative overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
+            className="relative overflow-hidden rounded-3xl border border-gray-200 bg-surface shadow-sm"
           >
             <div className="grid lg:grid-cols-2 gap-0 items-stretch">
               {/* Text */}
@@ -476,7 +476,7 @@ export default function TermsContent() {
                   <ShieldAlertIcon className="w-3.5 h-3.5" />
                   Using Velte responsibly
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-bold text-[#023337] mb-4 leading-tight">
+                <h2 className="text-2xl sm:text-3xl font-bold text-ink mb-4 leading-tight">
                   A simple deal: we match honestly, you list honestly.
                 </h2>
                 <p className="text-gray-500 leading-relaxed mb-6">
@@ -535,7 +535,7 @@ export default function TermsContent() {
                     <a
                       key={s.id}
                       href={`#${s.id}`}
-                      className="block text-sm text-gray-400 hover:text-[#023337] border-l border-gray-200 hover:border-orange-500 pl-3 py-1.5 transition-colors"
+                      className="block text-sm text-gray-400 hover:text-ink border-l border-gray-200 hover:border-orange-500 pl-3 py-1.5 transition-colors"
                     >
                       {s.title}
                     </a>
@@ -566,7 +566,7 @@ export default function TermsContent() {
                         style={{ color: ORANGE }}
                       />
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-semibold text-[#023337]">
+                    <h2 className="text-xl sm:text-2xl font-semibold text-ink">
                       {section.title}
                     </h2>
                   </div>

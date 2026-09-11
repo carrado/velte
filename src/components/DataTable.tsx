@@ -36,7 +36,7 @@ export default function DataTable<T>({
                 <th
                   key={col.key}
                   className={cn(
-                    "text-left px-3 py-3 text-dash-caption font-medium text-[#023337] whitespace-nowrap",
+                    "text-left px-3 py-3 text-dash-caption font-medium text-ink whitespace-nowrap",
                     col.headerClassName,
                   )}
                 >

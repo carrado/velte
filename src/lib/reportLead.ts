@@ -1,5 +1,9 @@
 import type { LeadSource } from "@/types/common";
 import { generateUUID } from "@/lib/uuid";
+import {
+  getSearchDeviceId,
+  getStoredConversationId,
+} from "@/lib/searchConversation";
 
 // Anonymous, per-browser buyer id — never tied to an account, just enough
 // for the backend to recognize "the same buyer clicked again" and apply the
@@ -53,6 +57,41 @@ export function reportLead(
   source: LeadSource,
   requestId?: string,
 ) {
+  // A WhatsApp click from the AI-search surface is also the persisted
+  // shopping task's terminal transition (Phase 1 follow-up — see
+  // docs/velte-ai-search-flow-plan.md): flip it to handed_off with a
+  // second best-effort beacon riding alongside the billing one below.
+  // Search-source clicks only — a browse-page click has no conversation
+  // to conclude — and silently skipped when no conversation exists
+  // (stateless session, storage unavailable).
+  if (source === "search") {
+    try {
+      const conversationId = getStoredConversationId();
+      const deviceId = getSearchDeviceId();
+      if (conversationId && deviceId) {
+        const handoffBody = JSON.stringify({ conversationId, deviceId });
+        const handoffUrl = "/api/search/conversation/handoff";
+        const handoffQueued =
+          typeof navigator !== "undefined" &&
+          !!navigator.sendBeacon &&
+          navigator.sendBeacon(
+            handoffUrl,
+            new Blob([handoffBody], { type: "application/json" }),
+          );
+        if (!handoffQueued) {
+          fetch(handoffUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: handoffBody,
+            keepalive: true,
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      /* never let task bookkeeping interfere with the handoff itself */
+    }
+  }
+
   const url = "/api/search/lead";
   const body = JSON.stringify({
     vendorId,

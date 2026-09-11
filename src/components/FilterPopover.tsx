@@ -44,7 +44,7 @@ export default function FilterPopover({
             return next;
           });
         }}
-        className="p-2 border border-[#d1d5db] rounded bg-white hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
+        className="p-2 border border-[#d1d5db] rounded bg-surface hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer"
       >
         <FilterIcon size={18} className="text-[#6a717f]" />
       </button>
@@ -53,12 +53,12 @@ export default function FilterPopover({
         onClose={() => setOpen(false)}
         anchorRef={triggerRef}
         align="right"
-        className="sm:w-80 w-[340px] bg-white rounded-lg shadow-lg border border-[#e5e7eb] p-4 text-dash-body"
+        className="sm:w-80 w-[340px] bg-surface rounded-lg shadow-lg border border-[#e5e7eb] p-4 text-dash-body"
       >
         <div className="space-y-4">
           {showDateRange && (
             <div>
-              <label className="block text-dash-secondary font-semibold text-[#023337] mb-1">
+              <label className="block text-dash-secondary font-semibold text-ink mb-1">
                 Date Range
               </label>
               <div className="flex gap-2">
@@ -83,7 +83,7 @@ export default function FilterPopover({
           )}
           {fields.map((field) => (
             <div key={field.key}>
-              <label className="block text-dash-secondary font-semibold text-[#023337] mb-1">
+              <label className="block text-dash-secondary font-semibold text-ink mb-1">
                 {field.label}
               </label>
               <Select

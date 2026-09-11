@@ -32,7 +32,7 @@ export default function NotFound() {
   return (
     <>
       <Navbar />
-      <main className="relative bg-[#F1F5F9] min-h-screen pt-28 pb-24 overflow-hidden">
+      <main className="relative bg-canvas min-h-screen pt-28 pb-24 overflow-hidden">
         <div className="pointer-events-none absolute -top-16 -left-24 w-72 h-72 bg-orange-500/[0.08] rounded-full blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 -right-20 w-80 h-80 bg-orange-500/[0.07] rounded-full blur-3xl" />
 
@@ -58,7 +58,7 @@ export default function NotFound() {
 
           <motion.h1
             variants={fadeUp}
-            className="text-3xl sm:text-4xl font-bold text-[#023337] tracking-tight text-balance mb-3"
+            className="text-3xl sm:text-4xl font-bold text-ink tracking-tight text-balance mb-3"
           >
             This address doesn&rsquo;t exist on{" "}
             <span className="text-orange-500">Velte</span>.
@@ -86,7 +86,7 @@ export default function NotFound() {
             </Link>
             <Link
               href="/"
-              className="text-sm font-medium text-gray-500 hover:text-[#023337] transition-colors px-6 py-3"
+              className="text-sm font-medium text-gray-500 hover:text-ink transition-colors px-6 py-3"
             >
               Back to home
             </Link>

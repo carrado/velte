@@ -29,7 +29,7 @@ const image: FaqSectionImage = {
 
 export default function FAQ() {
   return (
-    <section className="relative bg-[#F1F5F9] border-t border-gray-200 py-20">
+    <section className="relative bg-canvas border-t border-gray-200 py-20">
       <div className="max-w-6xl mx-auto px-5 sm:px-8">
         <motion.div
           initial="hidden"
@@ -80,7 +80,7 @@ export default function FAQ() {
               <span className="inline-block text-xs font-semibold tracking-widest text-orange-500 uppercase mb-3">
                 Questions
               </span>
-              <h2 className="text-3xl sm:text-4xl font-bold text-[#023337] tracking-tight text-balance">
+              <h2 className="text-3xl sm:text-4xl font-bold text-ink tracking-tight text-balance">
                 Frequently asked
               </h2>
             </motion.div>

@@ -7,10 +7,13 @@ import { cn } from "@/lib/utils";
 import Providers from "./providers";
 import { Toaster } from "sonner";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import { StandalonePublicGuard } from "@/components/StandalonePublicGuard";
 import ReferralCapture from "@/components/ReferralCapture";
 import MetaPixel from "@/components/MetaPixel";
 import BlockedAccountModal from "@/components/BlockedAccountModal";
 import { ScrollToTopButton } from "@/components/ScrollToTopButton";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { THEME_PRE_PAINT_SCRIPT } from "@/lib/theme";
 
 // Swapped from Inter 2026-08-17 — matching buvvo.ng's own choice. The
 // `geist` package (Vercel's own, self-hosted — no Google Fonts network
@@ -219,6 +222,26 @@ export const viewport: Viewport = {
   themeColor: "#000000",
 };
 
+// Blocks the installed PWA from ever painting a marketing page. Runs before
+// React, before hydration, before anything is drawn. Deliberately tiny and
+// dependency-free — it is inlined into every HTML response.
+//
+// Wrapped in try/catch because matchMedia can throw in exotic embedded
+// webviews, and a crash here would take the whole document down with it. A
+// failure just means the React guard handles it a beat later, with a flash.
+const PRE_PAINT_STANDALONE_GUARD = `try{
+var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+if (standalone) {
+  var p = location.pathname;
+  var blocked = ["/about","/blog","/careers","/contact","/faq","/how-it-works","/join","/pricing"];
+  var hit = p === "/";
+  for (var i = 0; i < blocked.length && !hit; i++) {
+    if (p === blocked[i] || p.indexOf(blocked[i] + "/") === 0) hit = true;
+  }
+  if (hit) location.replace("/welcome");
+}
+}catch(e){}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -232,40 +255,77 @@ export default function RootLayout({
         GeistSans.variable,
         GeistMono.variable,
       )}
+      // The theme script below adds/removes `class="dark"` and sets
+      // `data-theme`/`color-scheme` on this element before React hydrates, so
+      // the server's markup and the live DOM legitimately differ here. This
+      // suppresses the warning for THIS element's attributes only — it does
+      // not extend to the tree inside it.
+      suppressHydrationWarning
     >
+      <head>
+        {/* Theme, before the first paint (2026-09-10) — in <head> rather than
+            <body> so it runs before any of the page renders, not after the
+            first chunk of markup has already been laid out. The server cannot
+            know this browser's theme (preference in localStorage, device
+            setting readable only on the client), so without this every load
+            would paint the LIGHT app and snap to dark on hydration. See
+            lib/theme.ts for why it's written as a tiny inline try/catch. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_PRE_PAINT_SCRIPT }} />
+      </head>
       <body>
+        {/* Runs synchronously during HTML parsing, BEFORE anything paints —
+            same pre-paint pattern chat/layout.tsx uses for its resume check.
+            Without it the marketing page is server-rendered and painted, then
+            yanked away once React hydrates and StandalonePublicGuard runs,
+            which is exactly the visible flash the "/" redirect in proxy.ts was
+            added to kill. The server cannot do this one: display-mode is a
+            client fact, and the PWA shares its cookie jar with the ordinary
+            browser, so any server-side marker would hide these pages from the
+            normal browser too. Kept in sync with
+            lib/standalonePublicRoutes.ts by hand — it is a handful of literal
+            paths, and the guard below is the backstop if they ever drift. */}
+        <script
+          dangerouslySetInnerHTML={{ __html: PRE_PAINT_STANDALONE_GUARD }}
+        />
         <MetaPixel />
         {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
           <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
         )}
         <Providers>
-          <ServiceWorkerRegistrar />
-          <ReferralCapture />
-          <BlockedAccountModal />
-          <ScrollToTopButton />
-          {children}
-          <Toaster
-            position="top-right"
-            richColors
-            // Sonner's default mobile offset is a flat 16px from every edge —
-            // it doesn't know about the iOS notch/status bar or Android's
-            // cutouts. With viewportFit:"cover" this app draws under those
-            // areas, so the toast needs the same env(safe-area-inset-*)
-            // padding already used for the header/bottom bars elsewhere,
-            // or it renders clipped/overlapping the status bar on mobile.
-            mobileOffset={{
-              top: "calc(env(safe-area-inset-top) + 16px)",
-              right: "calc(env(safe-area-inset-right) + 16px)",
-            }}
-            toastOptions={{
-              classNames: {
-                error: "bg-red-600 text-white border-red-600",
-                success: "bg-green-600 text-white border-green-600",
-                warning: "bg-yellow-500 text-black border-yellow-500",
-                info: "bg-blue-600 text-white border-blue-600",
-              },
-            }}
-          />
+          {/* Outermost of the in-app providers: the theme applies to the
+              dashboard, /chat, the marketing pages and the public store/pay
+              pages alike — there is no per-surface theme, and anything that
+              renders can ask for the current one. */}
+          <ThemeProvider>
+            <ServiceWorkerRegistrar />
+            <StandalonePublicGuard />
+            <ReferralCapture />
+            <BlockedAccountModal />
+            <ScrollToTopButton />
+            {children}
+            <Toaster
+              position="top-right"
+              richColors
+              // Sonner's default mobile offset is a flat 16px from every edge —
+              // it doesn't know about the iOS notch/status bar or Android's
+              // cutouts. With viewportFit:"cover" this app draws under those
+              // areas, so the toast needs the same env(safe-area-inset-*)
+              // padding already used for the header/bottom bars elsewhere,
+              // or it renders clipped/overlapping the status bar on mobile.
+              mobileOffset={{
+                top: "calc(env(safe-area-inset-top) + 16px)",
+                right: "calc(env(safe-area-inset-right) + 16px)",
+              }}
+              toastOptions={{
+                classNames: {
+                  error: "bg-red-600 text-white border-red-600",
+                  success: "bg-green-600 text-white border-green-600",
+                  warning: "bg-yellow-500 text-black border-yellow-500",
+                  info: "bg-blue-600 text-white border-blue-600",
+                },
+              }}
+            />
+          </ThemeProvider>
         </Providers>
       </body>
     </html>

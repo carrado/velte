@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import Image from "next/image";
+import { VelteLogo } from "@/components/VelteLogo";
 import { passwordApi } from "@/services/password";
 import { ArrowRightIcon, MailIcon } from "@/components/icons";
 
@@ -54,7 +54,7 @@ export default function ForgotPassword() {
   });
 
   return (
-    <div className="h-screen bg-[#F1F5F9] overflow-hidden sm:p-5">
+    <div className="h-screen bg-canvas overflow-hidden sm:p-5">
       {/* Background effects */}
       <div
         className="absolute inset-0 opacity-[0.025]"
@@ -76,17 +76,11 @@ export default function ForgotPassword() {
             href="/"
             className="flex items-center gap-2.5 justify-center mb-3"
           >
-            <Image
-              src="/velte_logo_esn5dj.png"
-              alt="Velte logo"
-              width={72}
-              height={35}
-              priority
-            />
+            <VelteLogo alt="Velte logo" width={72} height={35} priority />
           </Link>
 
           {/* Card */}
-          <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
+          <div className="bg-surface border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
             {/* Header */}
             <div className="mb-8 text-center">
               <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">

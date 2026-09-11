@@ -33,7 +33,7 @@ export function KindToggle({
           className={cn(
             "px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-colors cursor-pointer",
             value === opt.value
-              ? "bg-white text-orange-600 shadow-sm"
+              ? "bg-surface text-orange-600 shadow-sm"
               : "text-gray-500 hover:text-gray-700",
           )}
         >

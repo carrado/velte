@@ -33,7 +33,7 @@ const scope = [
 
 export function AskAnythingScope() {
   return (
-    <section className="relative bg-white border-t border-gray-100 py-10 sm:py-12">
+    <section className="relative bg-surface border-t border-gray-100 py-10 sm:py-12">
       <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
         <motion.div
           initial="hidden"
@@ -55,7 +55,7 @@ export function AskAnythingScope() {
               <motion.div
                 key={label}
                 variants={fadeUp}
-                className="inline-flex items-center gap-2 bg-[#F1F5F9] rounded-full px-4 py-2"
+                className="inline-flex items-center gap-2 bg-canvas rounded-full px-4 py-2"
               >
                 <Icon size={17} className="text-orange-500 shrink-0" />
                 <span className="text-sm font-semibold text-gray-700">

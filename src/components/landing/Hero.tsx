@@ -80,7 +80,7 @@ export default function Hero() {
   }
 
   return (
-    <section className="relative overflow-hidden bg-[#F1F5F9] pt-24 pb-12 sm:pt-28 sm:pb-16">
+    <section className="relative overflow-hidden bg-canvas pt-24 pb-12 sm:pt-28 sm:pb-16">
       {/* Soft glows — same subtle background texture the rest of the site
           already uses (Profile/Home hero cards), not an AI-product effect
           specific to this box. */}
@@ -98,7 +98,7 @@ export default function Hero() {
 
           <motion.h1
             variants={fadeUp}
-            className="text-[2.3rem] sm:text-5xl lg:text-[3.2rem] font-bold text-[#023337] leading-[1.12] tracking-tight mb-4 text-balance"
+            className="text-[2.3rem] sm:text-5xl lg:text-[3.2rem] font-bold text-ink leading-[1.12] tracking-tight mb-4 text-balance"
           >
             Just tell Velte
             <br />
@@ -118,7 +118,7 @@ export default function Hero() {
             onSubmit={handleSubmit}
             className="text-left"
           >
-            <div className="flex flex-col bg-white rounded-[28px] border-2 border-gray-100 shadow-xl shadow-gray-300/30 focus-within:border-orange-300 transition-colors">
+            <div className="flex flex-col bg-surface rounded-[28px] border-2 border-gray-100 shadow-xl shadow-gray-300/30 focus-within:border-orange-300 transition-colors">
               <textarea
                 {...autoResize}
                 rows={1}
@@ -154,7 +154,7 @@ export default function Hero() {
                   key={prompt}
                   type="button"
                   onClick={() => go(prompt)}
-                  className="text-xs sm:text-[13px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full px-3.5 py-2 hover:border-orange-300 hover:text-orange-700 hover:bg-orange-50 transition-colors cursor-pointer"
+                  className="text-xs sm:text-[13px] font-medium text-gray-600 bg-surface border border-gray-200 rounded-full px-3.5 py-2 hover:border-orange-300 hover:text-orange-700 hover:bg-orange-50 transition-colors cursor-pointer"
                 >
                   {prompt}
                 </button>

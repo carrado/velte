@@ -56,6 +56,15 @@ const TYPE_CONFIG: Record<
     bg: "bg-green-100",
     color: "text-green-600",
   },
+  // Added 2026-09-05, when notifications stopped being vendor-only. A
+  // VENDOR sees these too: they are on the receiving end of buyer requests —
+  // so the dashboard needs its own rendering for them rather than falling
+  // through to the generic bell.
+  "buyer-request": {
+    icon: MessageCircleIcon,
+    bg: "bg-sky-100",
+    color: "text-sky-600",
+  },
   system: { icon: BellIcon, bg: "bg-gray-100", color: "text-gray-500" },
 };
 
@@ -156,7 +165,7 @@ function NotificationItem({
         onClose={() => setMenuOpen(false)}
         anchorRef={menuTriggerRef}
         align="auto"
-        className="w-40 bg-white rounded-lg shadow-lg border border-gray-100 py-1"
+        className="w-40 bg-surface rounded-lg shadow-lg border border-gray-100 py-1"
       >
         {!notification.read && (
           <button
@@ -220,7 +229,7 @@ export function NotificationList({
 
   return (
     <div className={cn("flex flex-col px-3 sm:px-0", className)}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 sticky top-0 bg-surface z-10">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-gray-900">
             Notifications

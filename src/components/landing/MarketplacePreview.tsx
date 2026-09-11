@@ -10,8 +10,7 @@ import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { buildWhatsappLink } from "@/lib/whatsapp";
-import { reportLead } from "@/lib/reportLead";
+import { buildChatLink } from "@/lib/chatLink";
 import { MARKETPLACE_SCROLL_FLAG } from "@/lib/scrollToMarketplace";
 import type { MarketplacePreviewItem } from "@/types/store";
 import {
@@ -68,13 +67,14 @@ export function MarketplaceCard({
   const isService = item.kind === "service";
   const KindIcon = isService ? WrenchIcon : PackageIcon;
 
-  const chatHref = buildWhatsappLink(
-    item.whatsapp,
-    isService
+  const chatHref = buildChatLink({
+    vendorId: item.vendorId,
+    productId: item.mainImageUrl ? item.id : undefined,
+    source: "browse",
+    message: isService
       ? `Hi ${item.storeName}! I'm interested in your "${item.name}" service. I found you on Velte.`
       : `Hi ${item.storeName}! Is "${item.name}" still available? I found you on Velte.`,
-    item.mainImageUrl ? item.id : undefined,
-  );
+  });
 
   const images = resolveGalleryImages(item.mainImageUrl, item.thumbnailUrls);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -106,7 +106,7 @@ export function MarketplaceCard({
     // live as "distorted" cards, not a polished reveal. The hover lift is
     // untouched — it was always plain CSS (hover:shadow-lg + the
     // hover:-translate-y-0.5 below), never motion-driven.
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex flex-col">
+    <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex flex-col">
       <div
         className={`relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden ${item.mainImageUrl ? "cursor-zoom-in" : ""}`}
         onClick={() => item.mainImageUrl && setLightboxOpen(true)}
@@ -159,11 +159,11 @@ export function MarketplaceCard({
           </button>
         )}
         {item.quoteOnRequest ? (
-          <p className="text-[14px] font-extrabold text-[#023337]">
+          <p className="text-[14px] font-extrabold text-ink">
             Contact for quote
           </p>
         ) : (
-          <p className="text-[14px] font-extrabold text-[#023337]">
+          <p className="text-[14px] font-extrabold text-ink">
             {fmt(price, symbol)}
             {isRange && (
               <>
@@ -202,7 +202,6 @@ export function MarketplaceCard({
             href={chatHref}
             label="Chat"
             className="w-full mt-auto !py-2 !text-xs"
-            onClick={() => reportLead(item.vendorId, item.id, "browse")}
           />
         )}
       </div>
@@ -227,7 +226,6 @@ export function MarketplaceCard({
         isOwn={false}
         chatHref={chatHref}
         chatLabel="Chat"
-        onChatClick={() => reportLead(item.vendorId, item.id, "browse")}
       />
 
       <ImageLightbox
@@ -294,7 +292,7 @@ export function MarketplacePreview({
     // scrollToMarketplace / the mount effect above).
     <section
       id="marketplace"
-      className="relative bg-[#F1F5F9] border-t border-gray-100 py-12 sm:py-16 scroll-mt-20"
+      className="relative bg-canvas border-t border-gray-100 py-12 sm:py-16 scroll-mt-20"
     >
       <div className="max-w-4xl mx-auto px-3 sm:px-8">
         <motion.div
@@ -306,7 +304,7 @@ export function MarketplacePreview({
         >
           <motion.h2
             variants={fadeUp}
-            className="text-2xl sm:text-3xl font-bold text-[#023337] tracking-tight text-balance"
+            className="text-2xl sm:text-3xl font-bold text-ink tracking-tight text-balance"
           >
             Discover what&apos;s available near you
           </motion.h2>

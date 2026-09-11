@@ -9,7 +9,8 @@ import {
 // kept in its own file for the same reason that one is: a single localized
 // spot to swap models/providers later.
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+// See router.ts — the llama-3.3 id was decommissioned by Groq.
+const GROQ_MODEL = "openai/gpt-oss-20b";
 
 interface SectorInput {
   label: string;

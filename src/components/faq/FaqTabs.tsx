@@ -35,7 +35,7 @@ export default function FaqTabs({
             onClick={() => onChange(tab.key)}
             className={cn(
               "relative cursor-pointer pb-3 text-sm font-semibold transition-colors duration-200 whitespace-nowrap flex items-center gap-1.5",
-              isActive ? "text-[#023337]" : "text-gray-400 hover:text-gray-600",
+              isActive ? "text-ink" : "text-gray-400 hover:text-gray-600",
             )}
           >
             {tab.label}

@@ -136,7 +136,7 @@ export function VeluxShowcase() {
   }, []);
 
   return (
-    <section className="relative bg-white border-t border-gray-100 py-14 sm:py-16">
+    <section className="relative bg-surface border-t border-gray-100 py-14 sm:py-16">
       <div className="max-w-5xl mx-auto px-5 sm:px-8">
         <motion.div
           initial="hidden"
@@ -152,7 +152,7 @@ export function VeluxShowcase() {
           <div>
             <motion.h2
               variants={fadeUp}
-              className="text-2xl sm:text-3xl font-bold text-[#023337] tracking-tight mb-2 text-balance"
+              className="text-2xl sm:text-3xl font-bold text-ink tracking-tight mb-2 text-balance"
             >
               You don&apos;t need to know what to search for
             </motion.h2>
@@ -191,24 +191,24 @@ export function VeluxShowcase() {
 
             <Link
               href="/chat"
-              className="group relative block rounded-[2.75rem] bg-gray-900 p-2.5 shadow-2xl shadow-gray-900/20 ring-1 ring-black/5 hover:-translate-y-1 transition-transform"
+              className="group relative block rounded-[2.75rem] bg-slab p-2.5 shadow-2xl shadow-gray-900/20 ring-1 ring-black/5 hover:-translate-y-1 transition-transform"
             >
               {/* Side buttons — pure device chrome, decorative only */}
-              <div className="absolute -left-[3px] top-24 w-[3px] h-8 bg-gray-800 rounded-l-sm" />
-              <div className="absolute -left-[3px] top-36 w-[3px] h-12 bg-gray-800 rounded-l-sm" />
-              <div className="absolute -right-[3px] top-32 w-[3px] h-16 bg-gray-800 rounded-r-sm" />
+              <div className="absolute -left-[3px] top-24 w-[3px] h-8 bg-slab rounded-l-sm" />
+              <div className="absolute -left-[3px] top-36 w-[3px] h-12 bg-slab rounded-l-sm" />
+              <div className="absolute -right-[3px] top-32 w-[3px] h-16 bg-slab rounded-r-sm" />
 
               <div
                 ref={frameRef}
-                className="relative bg-[#F1F5F9] rounded-[2.15rem] overflow-hidden aspect-[9/18.5]"
+                className="relative bg-canvas rounded-[2.15rem] overflow-hidden aspect-[9/18.5]"
               >
                 {/* Dynamic island */}
-                <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[76px] h-[22px] bg-gray-900 rounded-full z-10" />
+                <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[76px] h-[22px] bg-slab rounded-full z-10" />
 
                 {/* Status bar */}
-                <div className="flex items-center justify-between px-6 pt-3.5 pb-1 text-[11px] font-semibold text-[#023337]">
+                <div className="flex items-center justify-between px-6 pt-3.5 pb-1 text-[11px] font-semibold text-ink">
                   <span>9:41</span>
-                  <div className="flex items-center gap-1 text-[#023337]">
+                  <div className="flex items-center gap-1 text-ink">
                     <SignalIcon size={12} />
                     <WifiIcon size={12} />
                     <BatteryIcon size={14} />
@@ -224,10 +224,8 @@ export function VeluxShowcase() {
                     height={20}
                     className="rounded-full object-cover shrink-0"
                   />
-                  <span className="text-[12px] font-bold text-[#023337]">
-                    Velte
-                  </span>
-                  <span className="ml-auto text-[9px] font-medium text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5">
+                  <span className="text-[12px] font-bold text-ink">Velte</span>
+                  <span className="ml-auto text-[9px] font-medium text-gray-400 bg-surface border border-gray-200 rounded-full px-2 py-0.5">
                     velte.ng
                   </span>
                 </div>
@@ -239,7 +237,7 @@ export function VeluxShowcase() {
                       <div className="w-7 h-7 rounded-lg bg-orange-200/50 flex items-center justify-center shrink-0">
                         <CameraIcon size={12} className="text-orange-600" />
                       </div>
-                      <p className="text-[10.5px] text-[#023337] font-medium">
+                      <p className="text-[10.5px] text-ink font-medium">
                         [photo attached]
                       </p>
                     </div>
@@ -253,7 +251,7 @@ export function VeluxShowcase() {
                       height={20}
                       className="rounded-full object-cover shrink-0 mt-0.5"
                     />
-                    <div className="flex-1 min-w-0 bg-white rounded-2xl rounded-tl-md border border-gray-100 p-2.5 shadow-sm">
+                    <div className="flex-1 min-w-0 bg-surface rounded-2xl rounded-tl-md border border-gray-100 p-2.5 shadow-sm">
                       <p className="text-[10.5px] text-gray-600 leading-relaxed mb-2.5">
                         This looks like a structured leather bag — I found 2
                         similar options nearby.
@@ -262,7 +260,7 @@ export function VeluxShowcase() {
                         {EXAMPLE_RESULTS.map((r) => (
                           <div
                             key={r.name}
-                            className="flex items-center justify-between gap-2 bg-[#F1F5F9] rounded-lg px-2 py-1.5"
+                            className="flex items-center justify-between gap-2 bg-canvas rounded-lg px-2 py-1.5"
                           >
                             <div className="min-w-0">
                               <p className="text-[9.5px] font-semibold text-gray-800 truncate">
@@ -278,7 +276,7 @@ export function VeluxShowcase() {
                                 />
                               </div>
                             </div>
-                            <p className="text-[10px] font-bold text-[#023337] shrink-0">
+                            <p className="text-[10px] font-bold text-ink shrink-0">
                               {r.price}
                             </p>
                           </div>

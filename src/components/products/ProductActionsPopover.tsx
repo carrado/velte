@@ -34,7 +34,7 @@ export default function ProductActionsPopover({
       <button
         ref={triggerRef}
         onClick={() => setPopoverOpen(!popoverOpen)}
-        className="p-1.5 rounded-md text-gray-500 hover:text-gray-700 bg-white/90 hover:bg-white backdrop-blur-sm transition-colors cursor-pointer"
+        className="p-1.5 rounded-md text-gray-500 hover:text-gray-700 bg-white/90 hover:bg-surface backdrop-blur-sm transition-colors cursor-pointer"
       >
         <MoreHorizontalIcon size={16} />
       </button>
@@ -43,7 +43,7 @@ export default function ProductActionsPopover({
         onClose={() => setPopoverOpen(false)}
         anchorRef={triggerRef}
         align="auto"
-        className="w-44 bg-white rounded-lg shadow-lg border border-gray-100 py-1"
+        className="w-44 bg-surface rounded-lg shadow-lg border border-gray-100 py-1"
       >
         <button
           onClick={() => {

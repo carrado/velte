@@ -254,3 +254,54 @@ export const BabyIcon = createIcon("BabyIcon", {
     </>
   ),
 });
+
+// ── Theme switching (2026-09-10) ────────────────────────────────────────────
+// The three states of the appearance control — see ThemeToggle. Duotone like
+// everything else in this set: a soft filled silhouette plus the detail on
+// top, both driven by `currentColor` so the selected/unselected colouring in
+// the toggle drives them without either icon knowing about themes.
+
+export const SunIcon = createIcon("SunIcon", {
+  base: <circle cx="12" cy="12" r="4.6" />,
+  accent: (
+    <g
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+    >
+      <path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5l1.5 1.5M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5" />
+    </g>
+  ),
+});
+
+export const MoonIcon = createIcon("MoonIcon", {
+  base: <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />,
+  accent: (
+    <path
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"
+    />
+  ),
+});
+
+// "Follow my device" — a display, because that is what the setting points at.
+export const MonitorIcon = createIcon("MonitorIcon", {
+  base: <rect x="2.8" y="4" width="18.4" height="12" rx="2.2" />,
+  accent: (
+    <g
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="2.8" y="4" width="18.4" height="12" rx="2.2" />
+      <path d="M8.5 20h7M12 16v4" />
+    </g>
+  ),
+});

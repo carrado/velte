@@ -120,7 +120,7 @@ export function ImageLightbox({
                 setIndex((i) => (i - 1 + images.length) % images.length)
               }
               aria-label="Previous photo"
-              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
             >
               <ChevronLeftIcon size={22} strokeWidth={2.5} />
             </button>
@@ -128,7 +128,7 @@ export function ImageLightbox({
               type="button"
               onClick={() => setIndex((i) => (i + 1) % images.length)}
               aria-label="Next photo"
-              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
             >
               <ChevronRightIcon size={22} strokeWidth={2.5} />
             </button>
@@ -138,7 +138,7 @@ export function ImageLightbox({
                   key={url}
                   className={cn(
                     "h-1.5 rounded-full transition-all",
-                    i === index ? "w-5 bg-white" : "w-1.5 bg-white/40",
+                    i === index ? "w-5 bg-surface" : "w-1.5 bg-white/40",
                   )}
                 />
               ))}

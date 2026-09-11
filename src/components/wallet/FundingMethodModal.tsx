@@ -112,7 +112,7 @@ export default function FundingMethodModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 z-10 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-surface rounded-xl shadow-2xl w-full max-w-md mx-4 z-10 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-dash-heading font-semibold text-gray-900">
             Funding Method
@@ -178,7 +178,7 @@ export default function FundingMethodModal({
                     ? { transform: `translateX(${dragX}px)` }
                     : undefined
                 }
-                className={`absolute top-0.5 left-0 w-5 h-5 bg-white rounded-full ${
+                className={`absolute top-0.5 left-0 w-5 h-5 bg-surface rounded-full ${
                   dragX !== null
                     ? ""
                     : `transition-transform ${
@@ -290,7 +290,7 @@ export default function FundingMethodModal({
               !checkoutMutation.isPending && setRedirectOpen(false)
             }
           />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 z-10 px-6 py-5">
+          <div className="relative bg-surface rounded-xl shadow-2xl w-full max-w-sm mx-4 z-10 px-6 py-5">
             <h3 className="text-dash-body font-semibold text-gray-900 mb-1.5">
               One more step
             </h3>

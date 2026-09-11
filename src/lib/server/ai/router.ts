@@ -1,5 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGroq } from "@ai-sdk/groq";
+
+import { recordCall } from "@/lib/server/ai/usage";
 import {
   APICallError,
   RetryError,
@@ -49,7 +51,15 @@ type ProviderEntry = {
   model: () => LanguageModel;
   providerOptions?: Parameters<typeof generateText>[0]["providerOptions"];
 };
-const PROVIDERS: Record<"openai" | "openai-strong" | "groq", ProviderEntry> = {
+const PROVIDERS: Record<
+  | "openai"
+  | "openai-strong"
+  | "openai-reasoning"
+  | "openai-max"
+  | "groq"
+  | "qwen",
+  ProviderEntry
+> = {
   openai: { model: (): LanguageModel => openai("gpt-4o-mini") },
   // A stronger, genuinely reasoning-capable tier for route.ts's own main
   // pipeline (the multi-step tool-choice + sector-rule + reply-phrasing
@@ -75,8 +85,34 @@ const PROVIDERS: Record<"openai" | "openai-strong" | "groq", ProviderEntry> = {
     model: (): LanguageModel => openai("gpt-5-mini"),
     providerOptions: { openai: { reasoningEffort: "low" } },
   },
-  // Same model already live in generateBusinessDescription.ts.
-  groq: { model: (): LanguageModel => groq("llama-3.3-70b-versatile") },
+  // `openai/gpt-oss-20b`, not llama-3.3-70b-versatile (2026-08-26).
+  // Groq decommissioned the llama-3.3 id — the API answers "The model
+  // `llama-3.3-70b-versatile` does not exist or you do not have access to
+  // it" — which had quietly made every Groq fallback in this codebase dead
+  // weight: callLLM only ever reached it after OpenAI failed, so nothing
+  // surfaced the breakage until a call was pointed at Groq FIRST. Verified
+  // live against Groq's model list: gpt-oss-120b refuses forced tool calls,
+  // qwen3.8-27b works, gpt-oss-20b works and keeps OpenAI-lineage tool
+  // calling, which is what the rest of this pipeline is written against.
+  groq: { model: (): LanguageModel => groq("openai/gpt-oss-20b") },
+  // A second, independent Groq-hosted family. Same host, different model
+  // lineage — which is the point: when Groq retires an id (it retired
+  // llama-3.3 out from under this router), having only one entry there
+  // means the whole rung dies at once. Registered so a provider order can
+  // name it; nothing routes here by default until it earns it on the evals.
+  qwen: { model: (): LanguageModel => groq("qwen/qwen3.8-27b") },
+  // MEASUREMENT TIERS — registered so the evals can name them, not wired
+  // into any live provider order. Both exist to answer one question with
+  // numbers instead of intuition: does more reasoning actually buy this
+  // pipeline anything, and is it worth the latency a buyer waits through?
+  "openai-reasoning": {
+    model: (): LanguageModel => openai("gpt-5-mini"),
+    providerOptions: { openai: { reasoningEffort: "medium" } },
+  },
+  "openai-max": {
+    model: (): LanguageModel => openai("gpt-5"),
+    providerOptions: { openai: { reasoningEffort: "medium" } },
+  },
 };
 type ProviderName = keyof typeof PROVIDERS;
 
@@ -125,22 +161,54 @@ interface GenerateTextOpts {
 export async function callLLM(
   opts: GenerateTextOpts,
   order: ProviderName[] = ["openai", "groq"],
+  // Names this call site in the cost log ("main-loop", "verify-matches", …).
+  // Optional so adding a new call site can never break the build, but an
+  // unlabelled call is invisible in the per-call-site breakdown that makes
+  // the data actionable — always pass one. See usage.ts.
+  label = "unlabelled",
 ) {
   let lastErr: unknown;
   for (const name of order) {
     try {
       const entry = PROVIDERS[name];
+      // Built once and reused for both the call and the cost record — this
+      // used to be two `entry.model()` calls, which constructed the model
+      // twice and risked the log naming a different instance than the one
+      // that actually answered.
+      const model = entry.model();
+      const startedAt = Date.now();
       // The provider's own default providerOptions (if any — currently
       // only "openai-strong"'s reasoningEffort) wins over whatever the
       // caller passed for THIS attempt specifically, rather than a plain
       // opts.providerOptions passthrough — see PROVIDERS' own comment for
       // why: it must never leak onto a fallback provider that doesn't
       // support it.
-      return await generateText({
-        model: entry.model(),
+      const result = await generateText({
+        model,
         ...opts,
         providerOptions: entry.providerOptions ?? opts.providerOptions,
       });
+
+      // Recorded HERE rather than at the call sites because this is the one
+      // place that knows which provider actually answered after a 429
+      // fallback — a call that started on "openai-strong" and finished on
+      // "groq" costs what Groq costs, and attributing it to the requested
+      // provider would quietly bias every average.
+      const usage = result.usage;
+      recordCall({
+        label,
+        provider: name,
+        // LanguageModel is a union — a provider entry may be a bare model-id
+        // string rather than an instance, so this can't just read .modelId.
+        model: typeof model === "string" ? model : model.modelId,
+        inputTokens: usage?.inputTokens ?? 0,
+        outputTokens: usage?.outputTokens ?? 0,
+        reasoningTokens: usage?.outputTokenDetails?.reasoningTokens ?? 0,
+        cachedInputTokens: usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+        images: countImages(opts.messages),
+        ms: Date.now() - startedAt,
+      });
+      return result;
     } catch (err) {
       lastErr = err;
       if (!isRateLimitedOrUnavailable(err)) throw err;
@@ -149,4 +217,24 @@ export async function callLLM(
   throw lastErr instanceof Error
     ? lastErr
     : new Error("All LLM providers unavailable");
+}
+
+/** Image parts across every message in the request. Counted rather than
+ *  inferred from token totals because images are billed as input tokens and
+ *  are therefore invisible in the usage numbers on their own — and "how
+ *  much do photos actually cost us" is the specific question this whole
+ *  instrumentation exists to answer. */
+function countImages(messages: ModelMessage[]): number {
+  let count = 0;
+  for (const message of messages) {
+    if (!Array.isArray(message.content)) continue;
+    for (const part of message.content) {
+      if (part.type === "image") count += 1;
+      // The non-deprecated shape the codebase actually emits — see
+      // verifyMatches / recommendResults.
+      else if (part.type === "file" && part.mediaType?.startsWith("image"))
+        count += 1;
+    }
+  }
+  return count;
 }
