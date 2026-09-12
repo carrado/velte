@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons/hero";
 
 // Generic horizontal carousel for a row of result cards (products, stores,
 // external suggestions, …) — Google Places-style: one card per slide in a

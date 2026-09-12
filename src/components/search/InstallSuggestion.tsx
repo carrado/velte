@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { installPromptStore } from "@/lib/installPromptStore";
 import { cn } from "@/lib/utils";
-import { CloseIcon, DownloadIcon } from "@/components/icons";
+import { CloseIcon, DownloadIcon } from "@/components/icons/hero";
 
 // The install nudge for /chat.
 //

@@ -5,7 +5,7 @@ import {
   ChevronRightIcon,
   ExternalLinkIcon,
   SearchIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 import { cn } from "@/lib/utils";
 import type { ExternalOffer } from "@/types/search";
 
@@ -181,9 +181,13 @@ export function ExternalOfferCard({
         )}
         {/* Real spec pairs the page published (see ExternalOffer.attributes)
             — capped at 3 and comma-joined rather than a full table, since
-            this is a compact card, not the listing's own page. Absent on
-            most listings today (only Jiji's page is parsed for these),
-            which is a normal, silent gap, not an error state. */}
+            this is a compact card, not the listing's own page. Currently
+            always empty — Jiji had a verified attribute extractor at one
+            point, removed 2026-09-12 along with Konga's photo-gallery
+            reader when both were briefly retired from the connector's shop
+            list; neither was rebuilt when the two came back the same day.
+            A normal, silent gap, not an error state, until one is
+            hand-verified against a real page again. */}
         {offer.attributes.length > 0 && (
           <p className="text-xs text-gray-500">
             {offer.attributes

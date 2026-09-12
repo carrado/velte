@@ -1,7 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { CloseIcon, MapPinIcon } from "@/components/icons";
+import { CloseIcon, MapPinIcon } from "@/components/icons/hero";
 // Shown once per page load whenever the browser's own geolocation
 // permission is still undecided ("prompt") — explains what the location is
 // actually used for BEFORE the native browser prompt fires, instead of that

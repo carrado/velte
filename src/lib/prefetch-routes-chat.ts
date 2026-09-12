@@ -1,7 +1,3 @@
-import {
-  fetchMyShoppingPlans,
-  fetchShoppingPlan,
-} from "@/services/shoppingPlans";
 import { fetchMyRequests } from "@/services/buyerRequests";
 import { fetchNotifications } from "@/services/notifications";
 import { useBuyerStore } from "@/store/buyerStore";
@@ -17,9 +13,9 @@ import type { PrefetchTask } from "@/lib/prefetch-routes";
 // vendor dashboard never has to consider — see the buyer check below).
 
 export function getChatRouteKey(href: string): string {
-  // "/chat/plans" → "plans", "/chat/plans/abc" → "plans/abc", "/chat" → "".
-  // Mirrors prefetch-routes.ts's own getRouteKey, just stripping the "chat"
-  // segment (this tree's shell root) instead of a userId.
+  // "/chat/requests" → "requests", "/chat" → "". Mirrors prefetch-routes.ts's
+  // own getRouteKey, just stripping the "chat" segment (this tree's shell
+  // root) instead of a userId.
   const segments = href.split("/").filter(Boolean);
   return segments.slice(1).join("/");
 }
@@ -33,25 +29,7 @@ export function getChatPrefetchTasks(routeKey: string): PrefetchTask[] {
   const buyer = useBuyerStore.getState().buyer;
   if (!buyer) return [];
 
-  const planMatch = routeKey.match(/^plans\/([^/]+)$/);
-  if (planMatch) {
-    const id = planMatch[1];
-    return [
-      {
-        queryKey: ["buyer", "shopping-plan", id],
-        queryFn: () => fetchShoppingPlan(id),
-      },
-    ];
-  }
-
   switch (routeKey) {
-    case "plans":
-      return [
-        {
-          queryKey: ["buyer", "shopping-plans"],
-          queryFn: fetchMyShoppingPlans,
-        },
-      ];
     case "requests":
       return [
         {
@@ -74,7 +52,7 @@ export function getChatPrefetchTasks(routeKey: string): PrefetchTask[] {
 }
 
 /** Every href in this tree is already an absolute in-app path
- *  ("/chat/plans", "/chat/requests/<id>", …) — nothing to prefix, unlike
+ *  ("/chat/requests", "/chat/requests/<id>", …) — nothing to prefix, unlike
  *  the vendor dashboard's userId-aware normalizeDashboardHref. */
 export function normalizeChatHref(href: string): string {
   return href;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -11,10 +11,14 @@ import { useBuyerStore } from "@/store/buyerStore";
 import { useAccountSignOut } from "@/hooks/useAccountSignOut";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { CreditsSidebarMeter } from "@/components/credits/CreditsSidebarMeter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
 import { DeleteConversationModal } from "@/components/chat/DeleteConversationModal";
-import { fetchNotifications } from "@/services/notifications";
+import {
+  fetchNotifications,
+  markNotificationRead,
+} from "@/services/notifications";
 import { Avatar } from "@/components/Avatar";
 import {
   BellIcon,
@@ -24,10 +28,13 @@ import {
   MenuIcon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
-  MessageSquareIllustration,
   ShoppingCartIcon,
   TrashIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
+// The sign-in prompt's own illustration stays on the original duotone set,
+// per explicit request — every icon on this page moved to Heroicons except
+// this one.
+import { MessageSquareIllustration } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { SearchConversationList } from "@/types/search";
 import type { Buyer } from "@/types/buyer";
@@ -86,11 +93,11 @@ function MenuLink({
   onNavigate: () => void;
   badge?: number;
 }) {
-  // A button, not a Link, since 2026-09-11 — these three rows are exactly
+  // A button, not a Link, since 2026-09-11 — these rows are exactly
   // the "vendor dashboard" navigation-progress treatment the /chat tree
   // adopted: prefetch the destination page's own data (with the top
   // progress bar showing it happening) and only push once it's resolved, so
-  // Notifications/Requests/Plans land already rendered instead of showing
+  // Notifications/Requests land already rendered instead of showing
   // their own loading state a beat after arriving.
   const { navigate } = useNavigation();
   return (
@@ -147,6 +154,7 @@ export function ConversationSidebar() {
   const requestConversation = useChatHistoryStore((s) => s.requestConversation);
   const requestNewChat = useChatHistoryStore((s) => s.requestNewChat);
   const router = useRouter();
+  const { navigate } = useNavigation();
 
   // Opening a chat has to GET YOU TO THE CHAT (2026-09-05).
   //
@@ -216,12 +224,56 @@ export function ConversationSidebar() {
     refetchInterval: 60_000,
   });
   const unreadCount = notificationData?.unreadCount ?? 0;
+  const queryClient = useQueryClient();
+
+  // Shopping Lists (2026-09-12) — a toast on completion, in ADDITION to the
+  // bell above (which already updates from this same 60s poll, no extra
+  // request needed). Reuses that poll rather than starting a second one —
+  // see this file's own comment on why one poll already covers "the buyer
+  // is in a different conversation than the one that started the search".
+  //
+  // `toastedRef` guards against re-firing the same toast on every refetch —
+  // this effect re-runs whenever notificationData changes, which happens
+  // every 60s regardless of whether anything new arrived.
+  //
+  // `duration: Infinity` (2026-09-12, explicit request) — a search this
+  // buyer waited on shouldn't vanish off-screen if they're away from the
+  // tab when it lands; it stays up until they act on it. The action
+  // (`View`) is the only dismissal, and it does double duty: navigate AND
+  // mark read, same as clicking the row in the bell's own list, so the
+  // unread badge doesn't keep counting a toast the buyer already acted on.
+  const toastedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const n of notificationData?.notifications ?? []) {
+      if (n.type !== "shopping-list" || n.read) continue;
+      if (toastedRef.current.has(n.id)) continue;
+      toastedRef.current.add(n.id);
+      const toastId = toast.success(n.title, {
+        description: n.body,
+        duration: Infinity,
+        action: n.href
+          ? {
+              label: "View",
+              onClick: () => {
+                markNotificationRead(n.id).catch(() => {});
+                queryClient.invalidateQueries({ queryKey: ["notifications"] });
+                toast.dismiss(toastId);
+                // navigate(), not router.push — the same prefetch-then-push
+                // convention the sidebar's own menu rows use (see MenuRow's
+                // header comment), so the destination lands already
+                // rendered instead of showing its own loading state.
+                navigate(n.href!);
+              },
+            }
+          : undefined,
+      });
+    }
+  }, [notificationData, navigate, queryClient]);
 
   // Delete-from-sidebar (2026-09-09). A confirm step first — same reasoning
   // as DeleteConversationModal's own comment: unlike logout, this is
   // genuinely irreversible. `deleteTarget` carries the title too, so the
   // modal can name exactly which thread it's about to remove.
-  const queryClient = useQueryClient();
   const activeConversationId = useChatHistoryStore(
     (s) => s.activeConversationId,
   );
@@ -321,6 +373,14 @@ export function ConversationSidebar() {
             </button>
           </header>
 
+          {/* The credit meter's mobile home (2026-09-12) — see
+              CreditsSidebarMeter's own header comment. OUTSIDE the `buyer &&`
+              gate below on purpose: a signed-out guest is exactly who most
+              needs to see a balance draining, and the meter itself already
+              renders `lg:hidden` so desktop (which has CreditsFab) never
+              shows a second one. */}
+          <CreditsSidebarMeter />
+
           {/* Section one — the app's surfaces that aren't a conversation.
               Signed-in only, per the note at the top of this file. */}
           {buyer && (
@@ -342,21 +402,18 @@ export function ConversationSidebar() {
                   onNavigate={closeOnMobile}
                 />
                 <MenuLink
-                  href="/chat/plans"
+                  href="/chat/shopping-list"
                   icon={<ShoppingCartIcon size={19} className="shrink-0" />}
-                  label="Your plans"
-                  active={
-                    pathname === "/chat/plans" ||
-                    pathname.startsWith("/chat/plans/")
-                  }
+                  label="Shopping Lists"
+                  active={pathname === "/chat/shopping-list"}
                   onNavigate={closeOnMobile}
                 />
-                {/* The credit meter used to sit here as a third row. It went
-                    back to the header (2026-09-01) where it is visible without
-                    opening or expanding anything — a prepaid balance the
-                    reader has to go looking for is one they stop trusting —
-                    and rendering it in both places would have meant two live
-                    meters and two balance fetches for one number. */}
+                {/* The credit meter briefly sat here as a third row
+                    (2026-09-01), then moved to the header, then to the
+                    composer — see CreditsSidebarMeter's own header comment
+                    for the full history. It's back in this sidebar again
+                    (2026-09-12), but ABOVE this buyer-gated nav, not in it —
+                    a guest with no buyer cookie needs to see it too. */}
               </nav>
 
               <div className="mx-3 mb-3 border-t border-gray-200/70 shrink-0" />

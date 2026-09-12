@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { callLLM } from "@/lib/server/ai/router";
 import { COMPARE_TOOL_RULE } from "@/lib/server/ai/comparisonRule";
-import { PLAN_TOOL_RULE } from "@/lib/server/ai/planRule";
 import type { ComposerTool } from "@/types/search";
 
 // The composer's "+" tool badge (2026-09-06) is a PROMISE, not a hint — the
@@ -31,12 +30,10 @@ const PROVIDER_ORDER = ["openai", "groq"] as const;
 
 const TOOL_LABEL: Record<ComposerTool, string> = {
   compare: "Compare",
-  plan: "Shopping Plan",
 };
 
 const TOOL_RULE: Record<ComposerTool, string> = {
   compare: COMPARE_TOOL_RULE,
-  plan: PLAN_TOOL_RULE,
 };
 
 function alignmentTool() {
@@ -57,12 +54,10 @@ function alignmentTool() {
 // COMPARE_TOOL_RULE is shared verbatim with the scope check (2026-09-05) —
 // classifyScopeTool's own isComparison judges the SAME question for a buyer
 // who never selected the tool at all, and the two may not drift into
-// disagreeing definitions. See comparisonRule.ts. PLAN_TOOL_RULE has no such
-// sibling — a Shopping Plan is explicit-tool-only, never auto-detected from
-// plain text — but is still kept in its own file for the same reason:
-// re-exported so existing importers of this module keep working; the
-// definitions themselves live in their own files.
-export { COMPARE_TOOL_RULE, PLAN_TOOL_RULE };
+// disagreeing definitions. See comparisonRule.ts. Re-exported so existing
+// importers of this module keep working; the definition itself lives in
+// its own file.
+export { COMPARE_TOOL_RULE };
 
 function systemPromptFor(activeTool: ComposerTool): string {
   const label = TOOL_LABEL[activeTool];
@@ -132,8 +127,6 @@ export async function checkToolAlignment(params: {
 export function toolMismatchReply(activeTool: ComposerTool): string {
   const label = TOOL_LABEL[activeTool];
   const example =
-    activeTool === "compare"
-      ? 'name two or more things to weigh against each other — e.g. "iPhone 15 vs Samsung S24"'
-      : 'describe a broader goal and budget across several things — e.g. "moving into a new apartment, ₦2m, need the essentials"';
+    'name two or more things to weigh against each other — e.g. "iPhone 15 vs Samsung S24"';
   return `That doesn't look like a ${label} request — for this tool, ${example}. You can also tap the ${label} icon again to turn it off and just search normally.`;
 }

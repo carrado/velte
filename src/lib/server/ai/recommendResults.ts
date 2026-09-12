@@ -399,9 +399,10 @@ export function offerSummary(offer: ExternalOffer, photoCount: number) {
     // the seller talking, which the prompt says out loud.
     description: offer.description ?? null,
     // Real spec pairs the listing's own page published — Condition, RAM,
-    // Storage, Camera and the like (see ExternalOffer.attributes). Empty on
-    // most listings today (only Jiji's page is parsed for these), which the
-    // model is told is normal, not a gap to guess at.
+    // Storage, Camera and the like (see ExternalOffer.attributes). Always
+    // empty today — Jiji's own extractor was removed 2026-09-12 and not
+    // rebuilt when Jiji itself came back the same day — which the model is
+    // told is normal, not a gap to guess at.
     attributes: offer.attributes.length
       ? Object.fromEntries(offer.attributes.map((a) => [a.name, a.value]))
       : null,

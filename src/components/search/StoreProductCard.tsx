@@ -6,7 +6,7 @@ import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { useUserStore } from "@/store/userStore";
 import { buildChatLink } from "@/lib/chatLink";
 import type { StoreProductItem } from "@/types/search";
-import { StoreIcon } from "@/components/icons";
+import { StoreIcon } from "@/components/icons/hero";
 
 // One item from getVendorProductsTool — a SPECIFIC, already-identified
 // store's own catalog, shown under a section header naming that store

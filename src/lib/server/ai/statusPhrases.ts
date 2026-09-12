@@ -620,22 +620,6 @@ export function creatingRequestPhrase(): string[] {
   ];
 }
 
-// Shown for the few seconds between "Start searching" and the background job
-// actually being underway (2026-09-10). Every one of these describes work
-// that IS about to happen — no invented source names, no fake percentages,
-// and nothing claiming a search already ran. The real per-item progress
-// takes over from here (Your Plans, and the plan card's own live states), so
-// this pool only has to cover the handoff.
-export function startingPlanPhrase(): string[] {
-  return [
-    "Setting up your shopping plan…",
-    "Getting your list ready to search…",
-    "Lining up the items on your list…",
-    "Starting on your shopping plan…",
-    "Getting everything ready to search…",
-  ];
-}
-
 // The unified "genuine Velte dead end" reveal (see route.ts's own comment
 // on the block that uses these) — three stages, each with its own voice:
 // an immediate closing-the-loop BUBBLE on the search that just ran, a
@@ -1002,5 +986,51 @@ export function resumingAfterTopUpPhrase(): string[] {
     "Credits are in. Back to what you asked for…",
     "All set — carrying on with your search…",
     "Sorted. Looking that up for you now…",
+  ];
+}
+
+// Shopping Lists (2026-09-12) — the "what do you actually need" pass, before
+// any pricing. `goalText` is the buyer's own project description, snippeted
+// the same way every other query-quoting phrase in this file already is.
+export function researchingShoppingListPhrase(goalText: string): string[] {
+  const g = snippet(goalText, 60);
+  return [
+    `Working out what you'll need for "${g}"…`,
+    `Thinking through everything "${g}" actually calls for…`,
+    `Mapping out the essentials for "${g}"…`,
+    `Breaking "${g}" down into what to shop for…`,
+    `Figuring out the full list for "${g}"…`,
+  ];
+}
+
+// The pricing/market-research pass, once the item list itself is settled.
+// `itemCount` is only known once the model has actually named the items, so
+// this pool is shown second, never first.
+export function buildingShoppingListPhrase(itemCount: number): string[] {
+  return [
+    `Checking what these ${itemCount} items typically cost in Nigeria…`,
+    `Estimating realistic Nigerian market prices for ${itemCount} items…`,
+    `Working out a fair price range for each of the ${itemCount} items…`,
+    `Cross-checking expected costs across ${itemCount} items…`,
+    `Putting your budget together for ${itemCount} items…`,
+  ];
+}
+
+// The per-item best-pick pass (spec §18) — client-consumable, same carve-out
+// as gettingLocationPhrase's own comment: this runs entirely inside the
+// Shopping List results page's own short-lived fetch, not the SSE stream,
+// so it has no server-side push() to go through.
+export function pickingBestForItemPhrase(
+  label: string,
+  index: number,
+  total: number,
+): string[] {
+  const l = snippet(label, 40);
+  return [
+    `Comparing the options for "${l}" (${index} of ${total})…`,
+    `Weighing price against quality for "${l}"…`,
+    `Checking which "${l}" offers the best value…`,
+    `Narrowing down the strongest match for "${l}"…`,
+    `Balancing budget and quality for "${l}"…`,
   ];
 }

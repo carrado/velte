@@ -4,15 +4,15 @@
 // Google Shopping has price + thumbnail but only a google.com redirect for
 // a link; Google organic has the real product-page URL but no image and no
 // price at all. Once the connector started preferring direct links (so
-// buyers land on Jumia/Konga instead of back in a search engine), most
+// buyers land on the shop itself instead of back in a search engine), most
 // offers came from the organic side — and rendered as grey placeholder
 // tiles. A product card with no product on it is barely a card.
 //
 // So the missing half is read from the product page itself. Every Nigerian
 // retailer in the connector's list publishes `og:image` (checked live on
-// Jumia, Konga and oraimo), which is exactly the thing that was missing and
-// costs no API credits — just an HTTP GET of a page we are already about to
-// send the buyer to.
+// Jumia and oraimo), which is exactly the thing that was missing and costs
+// no API credits — just an HTTP GET of a page we are already about to send
+// the buyer to.
 //
 // Three rules, same spirit as the connector contract:
 //   1. NEVER THROW, never reject. A page that is slow, blocked or malformed
@@ -29,42 +29,26 @@
 // Widened 2026-08-27 from "the missing half of a card" to "everything the
 // evaluation needs": the listing's FULL photo gallery and its description,
 // not just one image and a price. Reported live — a phone search's top pick
-// was a Jiji listing whose first photo was clean and whose later photos
-// showed a broken screen. The pick call only ever saw photo one.
+// had a clean first photo and damage further down its gallery. The pick
+// call only ever saw photo one.
 //
-// What the probe found (real pages, that day), because it decided the shape
-// of everything below:
-//   - Jiji  — 3-5 photos, server-rendered, bytes ~1.9k-14.5k. Also the
-//             fastest of the three. Its og:description is the SELLER's own
-//             words, which is the most useful text of the three.
-//   - Konga — 4 photos under /media/catalog/product/, first at byte ~2.3k.
 //   - Jumia — photo #1 only; the rest of its gallery is loaded by JS and is
 //             simply not in the HTML. Guessing 2.jpg/3.jpg would violate
 //             rule 2, so Jumia stays single-image and honest about it.
-//   - Seller-declared condition is worthless: 7/7 Jiji iPhone 12 listings
-//             declared "No cracks". Only the photos carry the truth, which
-//             is why the gallery matters more than any text field.
-//   - JSON-LD (Jumia/Konga only, absent on Jiji) sits at byte 110k-147k,
-//             past this file's cap, and carries only marketing copy. Not
-//             worth a 300kb read, so it is deliberately NOT parsed.
 //
-// Widened again 2026-09-04 — ATTRIBUTES, not just photos and a blurb.
-// Checked live: a Jiji listing's og:description is often as thin as
-// "Samsung A15, 6 gb 128 gb available for sale", which tells a comparison
-// call almost nothing. But the SAME page server-renders a real spec table
-// as plain HTML — `<div class="b-advert-attribute__value">…</div><div
-// class="b-advert-attribute__key">…</div>` pairs, value before key — sitting
-// at byte ~23k, well inside the existing 100kb cap. Ten real pairs came back
-// off one ordinary listing: Condition, Physical Condition (the seller's own
-// damage claim — "No cracks", same one this file already knows to distrust
-// against the photos), Internal Storage, Ram, Card Slot, Rear/Front Camera,
-// Display Type, Operating System, Color. This is the actual difference
-// between "6GB RAM, 128GB, Used" and a comparison call guessing from a
-// title. Jiji-only for now (2026-09-04) — Konga's equivalent page renders
-// its results client-side, so getting its own attribute table needs a
-// separately verified extractor, same discipline every other per-merchant
-// rule here follows; it does not fall back to a wrong guess in the
-// meantime, it simply has none.
+// Konga and Jiji retired 2026-09-12, along with their MERCHANTS entries in
+// serper.ts and the hand-verified extractors this file used to carry for
+// them (a photo-gallery reader for each, plus Jiji's own attribute-table
+// parser — see git history if a Shopify/WooCommerce/Bumpa equivalent is
+// ever worth building the same way: read the real page BY HAND first, same
+// as every rule in this file). Every merchant now goes through the generic
+// pass below only — og:image/twitter:image/itemprop=image for photos, and
+// no attribute extractor at all until one is verified against a real
+// Shopify, WooCommerce or Bumpa listing page. That's a real regression in
+// richness for whatever Jiji listings used to surface (its gallery and its
+// spec table were the best of any source this file read), traded for not
+// carrying scraper code for a shop no longer in the list — never fabricate
+// or assume the new platforms share Jiji's markup shape.
 
 // Deliberately tight. This runs after the buyer has already been told Velte
 // had nothing, on top of a search that has already spent its time — a
@@ -78,20 +62,20 @@ const TIMEOUT_MS = 5000;
 // politer and, in practice, faster than being throttled.
 const CONCURRENCY = 3;
 
-// Product pages are large (Jumia's runs past 150kb, Konga's past 290kb) and
-// the stream is dropped once nothing we want can still appear, so a heavy
-// page still costs a fraction of its real size.
+// Product pages are large (Jumia's runs past 150kb) and the stream is
+// dropped once nothing we want can still appear, so a heavy page still
+// costs a fraction of its real size.
 //
 // Raised from 60kb when galleries arrived, because measurement said so and
-// a first guess said otherwise. Where each page's photos actually sit:
-//   - Jiji  — the whole gallery inside ~14.5kb.
-//   - Konga — photo 1 at byte ~2.3k, but photos 2-4 at bytes 74.9k, 76.6k
-//             and 78.2k. Under the old 60kb cap Konga returned its primary
-//             and NOTHING else, which looked exactly like a site that
-//             publishes one photo.
-// 100kb clears Konga's tail with room to spare and still stops well short
-// of these pages' real size. The batch timeout, not this number, is what
-// ultimately bounds the work.
+// a first guess said otherwise — Konga's photos 2-4 sat at bytes 74.9k,
+// 76.6k and 78.2k, and the old 60kb cap returned its primary and NOTHING
+// else, which looked exactly like a site that publishes one photo. Konga
+// itself is retired from the connector's list (2026-09-12), but the cap it
+// justified stays: 100kb still clears Jumia's own tail with room to spare
+// and stops well short of these pages' real size, and is a reasonable
+// starting point for whatever a Shopify/WooCommerce/Bumpa page's gallery
+// markup turns out to need once someone reads one BY HAND to check. The
+// batch timeout, not this number, is what ultimately bounds the work.
 //
 // The other half of the same fix was deleting the </head> early-exit below:
 // </head> lands at bytes 3.8k-13k, i.e. BEFORE every gallery here, so
@@ -107,7 +91,8 @@ const MAX_GALLERY = 6;
 
 // The listing's own words, clipped — long enough to carry "UK used, Grade
 // A, minor scratches", short enough that marketing boilerplate (Konga's
-// runs past 5,000 characters) can't crowd out the comparison prompt.
+// ran past 5,000 characters, before it was retired 2026-09-12) can't crowd
+// out the comparison prompt.
 const MAX_DESCRIPTION = 400;
 
 // A browser-ish UA: several of these storefronts sit behind bot protection
@@ -226,154 +211,55 @@ function plainText(value: string): string {
     .trim();
 }
 
-function base64urlDecode(value: string): string | null {
-  try {
-    const norm = value.replace(/-/g, "+").replace(/_/g, "/");
-    const pad = norm.length % 4 === 0 ? "" : "=".repeat(4 - (norm.length % 4));
-    return atob(norm + pad);
-  } catch {
-    return null;
-  }
-}
-
-// ---- Per-merchant gallery extraction --------------------------------
+// ---- Per-merchant gallery/attribute extraction ----------------------
 //
-// Each shape below was read off a real product page (2026-08-27), never
-// inferred from the platform. A merchant with no entry here falls through to
-// the generic pass, which can only find what the page publishes about itself
-// — so an unknown shop degrades to the old single-image behaviour rather
-// than to something wrong.
+// Historically held a hand-verified extractor per merchant here (Jiji's
+// photo-gallery + size-variant picker, Konga's Cloudinary photo reader,
+// Jiji's own server-rendered spec-table parser) — each shape read off a
+// real product page, never inferred from the platform. Both merchants were
+// retired 2026-09-12 (see serper.ts) and their extractors removed with
+// them rather than left as dead code pointing at a shop no longer in the
+// list.
+//
+// What's left is ONLY the generic pass every merchant already fell back to
+// when it had no dedicated entry here: whatever og:image/twitter:image/
+// itemprop=image tags the page itself publishes. That's still the ONLY
+// pass Jumia ever got — its gallery is rendered client-side and simply
+// isn't in the HTML, and inventing /2.jpg, /3.jpg from the /1.jpg it does
+// publish would violate this file's second rule (NEVER FABRICATE).
+//
+// A Shopify/WooCommerce/Bumpa-specific extractor (multi-photo gallery,
+// real spec attributes) is a real gap this leaves — deliberately not
+// guessed at here. If it's worth building, do it the same way Jiji's was:
+// read a real listing page from each platform BY HAND first, and never
+// assume one platform's markup shape from another's.
 
-const JIJI_PHOTO =
-  /https?:\/\/pictures-nigeria\.jijistatic\.net\/(\d+)_([A-Za-z0-9_-]+)\.(?:jpe?g|png|webp)/gi;
-
-const KONGA_PHOTO =
-  /https?:\/\/www-konga-com-res\.cloudinary\.com\/(?:image\/upload\/[^/]*\/)?media\/catalog\/product\/([A-Za-z0-9]\/[A-Za-z0-9]\/[A-Za-z0-9_]+\.(?:jpe?g|png|webp))/gi;
-
-// Big enough to see a cracked screen, small enough that six of them don't
-// stall the comparison call that fetches every one.
-const TARGET_WIDTH = 512;
-
-/** A stable identity for one PHOTO, independent of whichever size/format
- *  variant a URL points at. Without it the primary image reappears as its
- *  own first gallery entry — Jiji serves the same shot as both a 300px jpg
- *  (its og:image) and a 1600px webp (its slider). */
-function photoKey(url: string): string {
-  const jiji = /pictures-nigeria\.jijistatic\.net\/(\d+)_/i.exec(url);
-  if (jiji) return `jiji:${jiji[1]}`;
-  const konga =
-    /media\/catalog\/product\/([A-Za-z0-9]\/[A-Za-z0-9]\/[A-Za-z0-9_]+)\./i.exec(
-      url,
-    );
-  if (konga) return `konga:${konga[1]}`;
-  return url.split("?")[0].toLowerCase();
-}
-
-/** Jiji's variant token is base64url of "<width>-<height>-<hash>", so the
- *  same photo can be requested at any published size. The smallest variant
- *  at or above TARGET_WIDTH wins; when none qualifies the largest available
- *  does, which still beats dropping the photo. */
-function pickJijiVariant(variants: { url: string; token: string }[]): string {
-  const sized = variants.map((v) => {
-    const decoded = base64urlDecode(v.token);
-    const width = decoded ? Number(/^(\d+)-/.exec(decoded)?.[1]) : NaN;
-    return { url: v.url, width: Number.isFinite(width) ? width : 0 };
-  });
-  const big = sized
-    .filter((v) => v.width >= TARGET_WIDTH)
-    .sort((a, b) => a.width - b.width)[0];
-  if (big) return big.url;
-  return sized.sort((a, b) => b.width - a.width)[0].url;
-}
-
-// Jiji's server-rendered spec table. VALUE comes before KEY in the DOM —
-// verified against a live page, never assumed from the class names alone.
-// The `<!--[-->…<!--]-->`/`<!---->` around the value are Vue's own hydration
-// comment markers (this is a Nuxt page whose client-side store happens to
-// be empty, but the server-rendered markup itself is real); stripped here
-// rather than left in, since they carry no content of their own.
-const JIJI_ATTRIBUTE =
-  /<div class="b-advert-attribute__value"[^>]*>(?:<!--\[-->)?([^<]*)(?:<!--\]-->)?<!---->\s*<\/div><div class="b-advert-attribute__key">([^<]*)<\/div>/g;
-
-// A hard ceiling on how many spec pairs leave here for one listing — plenty
-// for a comparison call (ten came back off an ordinary phone listing) and
-// small enough that a listing with an unusually long table can't crowd out
-// everything else in the prompt.
-const MAX_ATTRIBUTES = 12;
-
-function extractAttributes(
-  html: string,
-  pageUrl: string,
-): { name: string; value: string }[] {
-  let host = "";
-  try {
-    host = new URL(pageUrl).hostname;
-  } catch {
-    return [];
-  }
-  // Jiji-only for now — see this file's own top comment on why a merchant
-  // with no extractor here simply publishes none, rather than a guess.
-  if (!host.includes("jiji.ng")) return [];
-
-  const out: { name: string; value: string }[] = [];
-  for (const m of html.matchAll(JIJI_ATTRIBUTE)) {
-    const value = plainText(m[1]);
-    const name = plainText(m[2]);
-    if (!name || !value) continue;
-    out.push({ name, value });
-    if (out.length >= MAX_ATTRIBUTES) break;
-  }
-  return out;
+/** Real spec pairs (Condition, RAM, Storage, …) the listing's own page
+ *  published — see ExternalOffer.attributes. Always empty today: no
+ *  merchant currently in the connector's list has a verified extractor
+ *  (Jiji's was retired with it 2026-09-12). Kept as its own function,
+ *  rather than deleted outright, so a future Shopify/WooCommerce/Bumpa
+ *  extractor has an obvious place to land — cap whatever it returns at
+ *  around a dozen pairs, the way Jiji's did: plenty for a comparison call,
+ *  small enough that a long table can't crowd out everything else in the
+ *  prompt. */
+function extractAttributes(): { name: string; value: string }[] {
+  return [];
 }
 
 /** Every distinct photo on the page, in document order — one canonical URL
  *  per photo, not one per size variant. */
-function extractGallery(html: string, pageUrl: string): string[] {
-  let host = "";
-  try {
-    host = new URL(pageUrl).hostname;
-  } catch {
-    host = "";
-  }
-
+function extractGallery(html: string): string[] {
   const ordered: string[] = [];
   const seen = new Set<string>();
   const push = (url: string) => {
     if (GENERIC_IMAGE.test(url)) return;
-    const key = photoKey(url);
+    const key = url.split("?")[0].toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
     ordered.push(url);
   };
 
-  if (host.includes("jiji.ng")) {
-    // Group every size variant under its photo id, then choose one each.
-    const byPhoto = new Map<string, { url: string; token: string }[]>();
-    const order: string[] = [];
-    for (const m of html.matchAll(JIJI_PHOTO)) {
-      const [url, photoId, token] = m;
-      if (!byPhoto.has(photoId)) {
-        byPhoto.set(photoId, []);
-        order.push(photoId);
-      }
-      byPhoto.get(photoId)!.push({ url, token });
-    }
-    for (const photoId of order) push(pickJijiVariant(byPhoto.get(photoId)!));
-  } else if (host.includes("konga.com")) {
-    // Normalised onto one transform so a w_32 sprite and a w_3840 original
-    // of the same shot collapse to a single, sensibly-sized request.
-    for (const m of html.matchAll(KONGA_PHOTO)) {
-      push(
-        `https://www-konga-com-res.cloudinary.com/image/upload/f_auto,q_auto,w_${TARGET_WIDTH},c_limit/media/catalog/product/${m[1]}`,
-      );
-    }
-  }
-
-  // The generic pass, and the ONLY pass for Jumia: whatever the page
-  // publishes about itself. Jumia's gallery is rendered client-side and is
-  // simply not in the HTML — inventing /2.jpg, /3.jpg from the /1.jpg it
-  // does publish would break this file's second rule, so Jumia stays
-  // single-image.
   for (const value of allMetaContent(html, [
     "og:image",
     "og:image:secure_url",
@@ -467,7 +353,7 @@ export async function fetchPageMeta(
           // browser on another origin, so every photo is resolved against
           // the page it came from rather than shipped broken. One that
           // won't resolve is dropped, never passed through.
-          const photos = extractGallery(html, url)
+          const photos = extractGallery(html)
             .map((raw) => resolve(raw, url))
             .filter((u): u is string => Boolean(u));
 
@@ -485,12 +371,15 @@ export async function fetchPageMeta(
               ? resolve(declared, url)
               : (photos[0] ?? null);
 
-          // Everything that isn't the primary, compared by PHOTO rather
-          // than by URL so a different size of the same shot doesn't come
-          // back as a second image.
-          const primaryKey = primary ? photoKey(primary) : null;
+          // Everything that isn't the primary. extractGallery already dedupes
+          // by URL (minus its query string); without Jiji's own size-variant
+          // picker there's no per-merchant notion of "same photo, different
+          // size" left to collapse here, so a plain URL comparison is enough.
+          const primaryKey = primary
+            ? primary.split("?")[0].toLowerCase()
+            : null;
           const galleryUrls = photos
-            .filter((u) => photoKey(u) !== primaryKey)
+            .filter((u) => u.split("?")[0].toLowerCase() !== primaryKey)
             .slice(0, MAX_GALLERY);
 
           const rawDescription = metaContent(html, [
@@ -503,7 +392,7 @@ export async function fetchPageMeta(
             : null;
 
           const priceText = priceFromMeta(html);
-          const attributes = extractAttributes(html, url);
+          const attributes = extractAttributes();
           if (
             !primary &&
             !galleryUrls.length &&

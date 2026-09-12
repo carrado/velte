@@ -14,8 +14,10 @@ import {
   SearchIcon,
   StoreIcon,
   UsersIcon,
-  ClipboardListIllustration,
-} from "@/components/icons";
+} from "@/components/icons/hero";
+// The "Buyer request" empty state's own illustration stays on the original
+// duotone set, per explicit request.
+import { ClipboardListIllustration } from "@/components/icons";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import { Avatar } from "@/components/Avatar";
@@ -615,7 +617,11 @@ export function RequestsPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-4 py-8">
+      {/* Full width, not centered (2026-09-12, explicit request) — this and
+          Notifications are the two pages reached from the sidebar menu
+          rather than the narrow chat thread, so there's no reason to cap
+          them to the thread's own reading width. */}
+      <div className="px-4 py-8 sm:px-6 lg:px-10 xl:px-14">
         <header className="mb-6">
           <h1 className="text-xl font-bold text-ink">Your requests</h1>
           <p className="mt-1 text-sm text-gray-500">

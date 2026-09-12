@@ -14,7 +14,7 @@ import type { ExternalOffer } from "@/types/search";
 // "here's where it's selling" tapped through and landed on a Google
 // results page, having to start shopping over again. `/search`, restricted
 // to a curated list of Nigerian retailers, returns what was actually
-// wanted: direct product-page URLs on jumia/konga/slot/oraimo/etc.
+// wanted: direct product-page URLs on jumia/slot/oraimo/etc.
 //
 // So the two are merged — shopping supplies the card, organic supplies the
 // destination — and anything that can't be given a real merchant
@@ -42,7 +42,7 @@ const DEFAULT_LIMIT = 6;
 //
 // Widened 2026-08-26, after "gas cooker" returned zero offers: a tally of
 // 20 real queries showed the original seven-shop list was missing most of
-// the market — jiji, electromart, alabamart, hogfurniture, zit, fouani,
+// the market — electromart, alabamart, hogfurniture, zit, fouani,
 // mumzcentral, kultra and a long tail besides.
 //
 // Two layers:
@@ -58,7 +58,17 @@ const DEFAULT_LIMIT = 6;
 //      recognisably Nigerian storefront whose URL matches the shapes the
 //      common shop platforms use. Shopify, WooCommerce and Wix all put
 //      products under a recognisable path, so most of the tail is reachable
-//      without naming anyone.
+//      without naming anyone — this is also what carries every small
+//      Shopify/WooCommerce/Bumpa merchant that isn't named below.
+//
+// Konga and Jiji were retired 2026-09-12, then brought back the same day
+// with a tighter rule: NEITHER carries a `search` fallback (see their
+// entries below). Every other named merchant falls back to its own search
+// page when a shopping result can't be matched to a real product page;
+// these two explicitly don't — an unmatched Jiji/Konga result is DROPPED,
+// same treatment oraimo already gets below, rather than ever sending a
+// buyer to a Jiji/Konga catalogue or search-results page. Every offer that
+// DOES surface from them is guaranteed to be that exact product's own page.
 //
 // What is deliberately NOT widened is the market. Google Shopping's results
 // for these queries are full of eBay, Alibaba, made-in-china, desertcart
@@ -104,7 +114,13 @@ const GENERIC_PRODUCT_PATH =
 // A missing entry costs one shop's results; it can never produce a wrong
 // one, which is why this list is safe to grow casually.
 const NG_SHOPS_ON_GENERIC_TLDS = new Set([
-  "konga.com",
+  // Bumpa's own free-tier storefront domain (2026-09-12) — a Bumpa merchant
+  // with no custom domain lives at "<store>.bumpa.shop"
+  // (e.g. viewshoponlinestore.bumpa.shop), so matching the suffix rather
+  // than an exact domain reaches every one of them. A Pro-plan merchant on
+  // their own domain instead falls through to the ordinary .ng / generic-TLD
+  // checks like any other independent storefront.
+  "bumpa.shop",
   "alabamart.com",
   "fouanistore.com",
   "hogfurniture.co",
@@ -141,15 +157,17 @@ const MERCHANTS: Merchant[] = [
     domain: "konga.com",
     label: "Konga",
     productPath: /\/product\//i,
-    search: (q) =>
-      `https://www.konga.com/search?search=${encodeURIComponent(q)}`,
+    // No `search` — direct-link-only for this merchant (2026-09-12,
+    // explicit product decision): an unmatched shopping result is dropped
+    // rather than sent to Konga's own search-results page, unlike every
+    // other merchant here that has one.
   },
   {
-    // The most common source of direct product links in the tally, and the
-    // only one whose product URLs carry no product-ish path segment at all
-    // — they're /city/category/slug-HASH, sometimes with an extra region
-    // segment. Recognised by the trailing hash instead: a category page has
-    // neither the depth nor the suffix.
+    // The most common source of direct product links in the original
+    // tally, and the only one whose product URLs carry no product-ish path
+    // segment at all — they're /city/category/slug-HASH, sometimes with an
+    // extra region segment. Recognised by the trailing hash instead: a
+    // category page has neither the depth nor the suffix.
     domain: "jiji.ng",
     label: "Jiji",
     // The trailing token must carry an UPPERCASE letter. Depth and a
@@ -160,7 +178,11 @@ const MERCHANTS: Merchant[] = [
     // slugs are plain lowercase words.
     productPath:
       /\/[^/]+\/[^/]+\/[^/]+-(?=[A-Za-z0-9]*[A-Z])[A-Za-z0-9]{6,}(\.html)?$/,
-    search: (q) => `https://jiji.ng/search?query=${encodeURIComponent(q)}`,
+    // No `search` — same direct-link-only rule as Konga above. Jiji's own
+    // search results are a classifieds LISTING page, several steps further
+    // from "this exact product" than even an ordinary shop's search page,
+    // which makes dropping the unmatched case here more important, not
+    // less.
   },
   {
     // ng., not bare oraimo.com: the brand runs a storefront per country and
@@ -280,6 +302,13 @@ const MERCHANTS: Merchant[] = [
 // long list, and these five accounted for most direct product links in the
 // tally. Everything else still reaches the buyer through the shopping call
 // plus its merchant search page.
+//
+// jiji.ng and konga.com belong here MORE than most, now that they're
+// direct-link-only (see their MERCHANTS entries above): this `site:`
+// restriction is what makes the organic call surface their real product
+// pages at all, which is the ONLY way either of them can ever produce an
+// offer — with no `search` fallback of their own, an offer that isn't in
+// this organic set simply doesn't happen for them.
 const SITE_RESTRICTED_DOMAINS = [
   "jumia.com.ng",
   "konga.com",

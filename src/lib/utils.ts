@@ -13,13 +13,12 @@ export function formatNaira(kobo: number): string {
   })}`;
 }
 
-/** "3h ago", "2d ago", falling back to a plain date past a week — moved here
- *  (2026-09-11) from RequestsPage.tsx's own local copy once PlansPage.tsx
- *  needed the identical thing, so both read a timestamp the same way rather
- *  than keeping two hand-rolled copies in sync by hand. `now` is passed in
- *  rather than read here so a caller re-rendering on a tick (a live list)
- *  recomputes from one shared clock instead of each row reading Date.now()
- *  at a slightly different instant. */
+/** "3h ago", "2d ago", falling back to a plain date past a week — shared
+ *  here so every timestamp on the page reads the same way rather than each
+ *  caller keeping its own hand-rolled copy. `now` is passed in rather than
+ *  read here so a caller re-rendering on a tick (a live list) recomputes
+ *  from one shared clock instead of each row reading Date.now() at a
+ *  slightly different instant. */
 export function timeAgo(iso: string, now: number): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";

@@ -44,7 +44,7 @@
 // ---------------------------------------------------------------------
 
 /** Everything a buyer can spend credits on. */
-export type CreditAction = "text" | "photo" | "plan";
+export type CreditAction = "text" | "photo" | "shopping_list_item";
 
 /**
  * What every action costs — a SIGNED-IN account (buyer or vendor) and a
@@ -68,18 +68,17 @@ export const CREDIT_COST: Record<CreditAction, number> = {
    *  thing, and the comparison call. */
   photo: 8,
 
-  /** Shopping Plan (2026-09-06) — ESTIMATE, flagged for confirmation once
-   *  real [cost] lines exist (see this file's own "informed estimates" note
-   *  above). This is genuinely the heaviest action in the table: N category
-   *  items, each running a Velte search, a possible external gap-fill
-   *  search, and a verification call — multiplied across a whole apartment's
-   *  worth of categories, not one item. Priced well above `photo` for that
-   *  reason, not as a round number. Unreachable by a guest in practice
-   *  regardless of price — Shopping Plan is signed-in only (a multi-week,
-   *  persisted commitment isn't a guest-honour-system fit), so the composer
-   *  gates a signed-out tap straight to the sign-in prompt before ever
-   *  checking a cost. */
-  plan: 20,
+  /** Shopping Lists (2026-09-12) — one background search for ONE item on a
+   *  buyer's shopping list (Velte catalog first, then external if nothing
+   *  matched), charged the moment that item's own attempt actually
+   *  completes — never at list-generation time, and never for an item the
+   *  background job doesn't reach. Priced the same as an ordinary `text`
+   *  turn: it's the same underlying search, just run for one list item
+   *  instead of the buyer's own typed message. The generation step itself
+   *  (the market-researched draft, before any real search runs) is billed
+   *  as an ordinary `text` turn by route.ts's existing per-turn charge —
+   *  it needs no separate action here. */
+  shopping_list_item: 3,
 };
 
 /**
@@ -160,7 +159,7 @@ export function canAfford(balance: number, action: CreditAction): boolean {
 export const ACTION_LABEL: Record<CreditAction, string> = {
   text: "search",
   photo: "photo search",
-  plan: "shopping plan",
+  shopping_list_item: "shopping list item",
 };
 
 /**

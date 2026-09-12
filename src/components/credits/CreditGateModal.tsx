@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom";
 
-import { CloseIcon, LockIcon } from "@/components/icons";
+import { CloseIcon, LockIcon } from "@/components/icons/hero";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { useCreditsModal } from "@/components/credits/CreditsModal";
 

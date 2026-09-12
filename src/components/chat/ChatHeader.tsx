@@ -12,7 +12,7 @@ import {
   MenuIcon,
   StoreIcon,
   WalletIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 import { cn } from "@/lib/utils";
 import { getInitial } from "@/lib/initials";
 import { Avatar } from "@/components/Avatar";
@@ -58,7 +58,8 @@ export function ChatHeader() {
 
   // The credit METER (the balance/used figures) still isn't in this header
   // (2026-09-01, per explicit request) — that stays the floating ring from
-  // `lg` up (credits/CreditsFab.tsx) and CreditsBar below it. What IS here
+  // `lg` up (credits/CreditsFab.tsx) and the sidebar's own donut
+  // (CreditsSidebarMeter, 2026-09-12) below it. What IS here
   // now (2026-09-05, per explicit request, reversing the "one gauge is
   // enough" call above) is a plain "Top up" CTA — <CreditsButton>, the same
   // ready-made trigger every other top-up entry point uses. Shown in EVERY

@@ -10,8 +10,6 @@ import { generateUUID } from "@/lib/uuid";
 import { buildProductTerm } from "@/lib/productTerm";
 import { runSearchStream } from "@/lib/searchStream";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
-import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
-import { CreditsBar } from "@/components/credits/CreditsBar";
 import { dedupeFinalEventStores } from "@/lib/searchTurnSnapshot";
 import {
   clearRefusedSearch,
@@ -36,11 +34,7 @@ import {
   pickBadgesFor,
 } from "@/components/search/RecommendationPicks";
 import { ComparisonTemplate } from "@/components/search/ComparisonTemplate";
-import {
-  ShoppingPlanDraftCard,
-  ShoppingPlanView,
-} from "@/components/search/ShoppingPlanTemplate";
-import { PlanPhoneGate } from "@/components/search/PlanPhoneGate";
+import { ShoppingListCard } from "@/components/search/ShoppingListCard";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { ExternalOfferCard } from "@/components/search/ExternalOfferCard";
@@ -55,7 +49,9 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { useUserStore } from "@/store/userStore";
 import { usersApi } from "@/services/users";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
+import { useQueryClient } from "@tanstack/react-query";
 import { buyerApi } from "@/lib/buyer-api-client";
+import { ApiError } from "@/lib/api-client";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useCreditsStore } from "@/store/creditsStore";
 import { isBillableTurn } from "@/lib/turnBillable";
@@ -67,7 +63,6 @@ import {
   gettingLocationPhrase,
   scanningVendorsPhrase,
   creatingRequestPhrase,
-  startingPlanPhrase,
   sendingOtpPhrase,
   checkingOtpPhrase,
   noMatchRequestPhrase,
@@ -88,12 +83,10 @@ import type {
   MatchQuality,
   MatchTier,
   NearbyBusiness,
+  ShoppingListSnapshot,
   SearchHistoryTurn,
   ExternalOffer,
   SearchItemOutcome,
-  ShoppingPlan,
-  ShoppingPlanDraft,
-  ShoppingPlanItem,
   StoreMatch,
   StoredConversation,
   StoredSearchTurn,
@@ -102,7 +95,6 @@ import type {
 } from "@/types/search";
 import { isComparisonTemplate } from "@/types/search";
 import {
-  ClipboardListIcon,
   CompassIcon,
   MapPinIcon,
   PhoneIcon,
@@ -110,8 +102,7 @@ import {
   UserIcon,
   WalletIcon,
   ScaleIcon,
-  ShoppingCartIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 // Composer icons only (upload spinner, remove-photo, camera, send) are
 // lucide-react, not the custom set — reverted 2026-08-17 per explicit
 // request, scoped to just this textarea; every other icon on this page
@@ -154,19 +145,6 @@ const RECENT_STATUS_MEMORY = 8;
 // `max-w-md` stays, but purely as a reading-width cap for the longer
 // dead-end and offer messages — it's a measure, not a box.
 const AI_MESSAGE_CLASS = "max-w-md";
-
-// Stable reference for a per-turn Set lookup with no entry yet — avoids a
-// fresh empty Set (and the re-render it would cause downstream) on every
-// turn that never touched its draft checklist.
-const EMPTY_SET: Set<string> = new Set();
-
-/** Which item, on which turn, a "Replace" tap is currently re-searching —
- *  Shopping Plan's own single in-flight edit, same lifted-to-SearchHome
- *  shape expandedServicesVendorId already uses for a cross-turn UI state. */
-interface PlanReplaceTarget {
-  turnId: string;
-  itemId: string;
-}
 
 // Found live: the gate used to fire even when the buyer's OWN message
 // already named a place ("...in Lekki") — it only ever checked device
@@ -411,10 +389,7 @@ function createLoadingTurn(
     recommendation: null,
     awaitingComparisonPurchaseReply: false,
     comparisonPickItem: null,
-    awaitingShoppingPlanReply: false,
-    planCtaId: null,
-    shoppingPlanDraft: null,
-    shoppingPlan: null,
+    shoppingList: null,
     externalOffers: [],
     error: null,
     quota: null,
@@ -437,22 +412,6 @@ function storedTurnToConversationTurn(
     status: "",
     error: null,
     quota: null,
-    // PERSISTED now (2026-09-11) — see the field's own comment. The BUILT
-    // plan (shoppingPlan, below) is a separate thing that still never
-    // rehydrates inline: it has its own durable record, reached through
-    // Your Plans, and replaying its whole priced result inline here would
-    // just be a second, potentially-stale copy of what that page already
-    // shows live.
-    shoppingPlanDraft: stored.shoppingPlanDraft,
-    shoppingPlan: null,
-    // PERSISTED now (2026-09-10), so it is read through rather than reset:
-    // a buyer who refreshes mid plan-exchange — budget asked, not yet
-    // answered — resumes into that same exchange instead of having their
-    // answer fall through to an ordinary search.
-    awaitingShoppingPlanReply: stored.awaitingShoppingPlanReply,
-    // Also client-only: a reopened thread shows the plan card itself rather
-    // than replaying the one-off "I've started searching" signpost.
-    planCtaId: null,
     persisted: true,
   };
 }
@@ -493,12 +452,11 @@ function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
     externalOffers: turn.externalOffers,
     awaitingComparisonPurchaseReply: turn.awaitingComparisonPurchaseReply,
     comparisonPickItem: turn.comparisonPickItem,
-    awaitingShoppingPlanReply: turn.awaitingShoppingPlanReply,
     // Client-resolved background items never carry a goal-sheet budget of
     // their own — this concept only exists for a real /api/search turn.
     knownBudgetNaira: null,
-    // Same reasoning — a background item is never a Shopping Plan turn.
-    shoppingPlanDraft: null,
+    // Same reasoning — a background item is never a Shopping List turn.
+    shoppingList: null,
   };
 }
 
@@ -884,25 +842,12 @@ interface ConversationTurn {
   // awaitingBuyerRequestReply above.
   awaitingComparisonPurchaseReply: boolean;
   comparisonPickItem: string | null;
-  // Same mirroring, for the Shopping Plan short-circuit's own budget ask
-  // (2026-09-09) — see SearchHistoryTurn's own comment for the bug this
-  // fixes. Client-only, like shoppingPlanDraft/shoppingPlan below — never
-  // rehydrated (a reopened conversation has no live budget-ask to resume).
-  awaitingShoppingPlanReply: boolean;
-  // The plan a "I've started searching" turn points at (2026-09-10) — set
-  // only on that one synthetic turn, which renders a "View your shopping
-  // plan" CTA beneath its reply. Null everywhere else. Client-only: the plan
-  // itself is the durable record; this is just the signpost in the thread
-  // that sent the buyer to it.
-  planCtaId: string | null;
-  // Shopping Plan's own two states (2026-09-06). `shoppingPlanDraft` is the
-  // unconfirmed checklist from a "plan" tool turn — present only until the
-  // buyer confirms it, at which point `shoppingPlan` holds the real, built
-  // plan this turn produced. Both null on every ordinary turn. Client-only,
-  // like `error`/`quota` below — a reopened conversation finds the plan
-  // itself on /chat/plans, not replayed inline here.
-  shoppingPlanDraft: ShoppingPlanDraft | null;
-  shoppingPlan: ShoppingPlan | null;
+  // Non-null only on a turn where the AI determined the buyer's request is
+  // a whole-project need and built a market-researched item list — see
+  // ShoppingListSnapshot's own comment in types/search.ts. Renders the
+  // summary+table card (ShoppingListCard) in place of the ordinary
+  // products/stores section.
+  shoppingList: ShoppingListSnapshot | null;
   // Off-Velte offers, only ever present on a genuine dead end (Phase 4).
   // Rendered in their own clearly-labelled section with an outbound link
   // and NO chat CTA — there's no vendor relationship behind these.
@@ -994,6 +939,8 @@ function ConversationTurnView({
   onAnswerClarification,
   onLocationShared,
   onPickItem,
+  onGetShoppingListItems,
+  onShoppingListChange,
   expandedServicesVendorId,
   onToggleServices,
   isEditing,
@@ -1003,12 +950,6 @@ function ConversationTurnView({
   onSaveEdit,
   onCancelEdit,
   canEdit,
-  draftRemovedKeys,
-  buildingPlanTurnId,
-  replacingPlanItem,
-  onToggleDraftItem,
-  onConfirmPlan,
-  onReplacePlanItem,
 }: {
   turn: ConversationTurn;
   isLatest: boolean;
@@ -1019,6 +960,17 @@ function ConversationTurnView({
   onPickItem: (
     chosen: { item: BackgroundSearchItem; label: string },
     deferred: { item: BackgroundSearchItem; label: string },
+  ) => void;
+  // "Get these items" on a Shopping List card (2026-09-12) — lifted up to
+  // SearchHome the same way every other side-effecting action here is,
+  // since this component has no access to updateTurn/buyerApi of its own.
+  onGetShoppingListItems: (turn: ConversationTurn) => void;
+  // A draft-list edit (add/remove/quantity, spec's own "let buyers change
+  // it" requirement) — writes straight onto the turn via updateTurn, same
+  // reasoning as onGetShoppingListItems above.
+  onShoppingListChange: (
+    turn: ConversationTurn,
+    list: ShoppingListSnapshot,
   ) => void;
   // Which store's "matching services" panel is open, if any, across the
   // WHOLE conversation, not just this turn — lifted up to SearchHome (see
@@ -1039,15 +991,6 @@ function ConversationTurnView({
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   canEdit: boolean;
-  // Shopping Plan's own turn-scoped state, lifted to SearchHome for the
-  // same reason expandedServicesVendorId above is — see PlanReplaceTarget's
-  // own comment.
-  draftRemovedKeys: Map<string, Set<string>>;
-  buildingPlanTurnId: string | null;
-  replacingPlanItem: PlanReplaceTarget | null;
-  onToggleDraftItem: (turnId: string, category: string, label: string) => void;
-  onConfirmPlan: (turn: ConversationTurn) => void;
-  onReplacePlanItem: (turn: ConversationTurn, item: ShoppingPlanItem) => void;
 }) {
   // Scrolls the panel into view the moment it opens — a buyer who clicked
   // "View matching services" on a card scrolled into the middle of a
@@ -1064,11 +1007,6 @@ function ConversationTurnView({
       });
     }
   }, [expandedServicesVendorId]);
-
-  // For the "View your shopping plan" CTA below — the /chat tree's own
-  // vendor-dashboard-style navigation-progress treatment (2026-09-11): the
-  // plan is prefetched before the route actually changes.
-  const { navigate } = useNavigation();
 
   // Same grow-to-fit behavior as the main composer's own textarea, reused
   // here for the edit-in-place one.
@@ -1279,39 +1217,20 @@ function ConversationTurnView({
               !turn.stopped &&
               !turn.quota && (
                 <div className="space-y-6">
-                  {turn.shoppingPlanDraft || turn.shoppingPlan ? (
-                    // Shopping Plan's own turn shape (2026-09-06) — never a
-                    // product/store carousel, so this takes priority over
-                    // the ordinary results/dead-end split below entirely.
+                  {turn.shoppingList ? (
+                    // The Shopping List's own turn shape (2026-09-12) —
+                    // takes priority over the ordinary results/dead-end
+                    // split below, same precedence any other distinct turn
+                    // content gets.
                     <>
                       <FormattedReply text={turn.reply} />
-                      {turn.shoppingPlan ? (
-                        <ShoppingPlanView
-                          plan={turn.shoppingPlan}
-                          replacingItemId={
-                            replacingPlanItem?.turnId === turn.id
-                              ? replacingPlanItem.itemId
-                              : null
-                          }
-                          onReplaceItem={(item) =>
-                            onReplacePlanItem(turn, item)
-                          }
-                        />
-                      ) : (
-                        turn.shoppingPlanDraft && (
-                          <ShoppingPlanDraftCard
-                            draft={turn.shoppingPlanDraft}
-                            busy={buildingPlanTurnId === turn.id}
-                            removedKeys={
-                              draftRemovedKeys.get(turn.id) ?? EMPTY_SET
-                            }
-                            onToggleItem={(category, label) =>
-                              onToggleDraftItem(turn.id, category, label)
-                            }
-                            onConfirm={() => onConfirmPlan(turn)}
-                          />
-                        )
-                      )}
+                      <ShoppingListCard
+                        list={turn.shoppingList}
+                        onGetItems={() => onGetShoppingListItems(turn)}
+                        onListChange={(list) =>
+                          onShoppingListChange(turn, list)
+                        }
+                      />
                     </>
                   ) : turn.products.length > 0 ||
                     turn.stores.length > 0 ||
@@ -1684,30 +1603,8 @@ function ConversationTurnView({
                     // the text above a result grid, never the "nothing found
                     // anywhere" case below: the conversation is still open, not
                     // a dead end.
-                    //
-                    // ALSO the "I've started searching" turn (2026-09-10),
-                    // which is a plain message with one CTA under it — the
-                    // handoff from chat, where the job is started, to Your
-                    // Plans, where it's actually watched.
                     <div className={AI_MESSAGE_CLASS}>
                       <FormattedReply text={turn.reply} />
-                      {turn.planCtaId && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigate(`/chat/plans/${turn.planCtaId}`)
-                          }
-                          // Full-width on a phone, inline from sm up: this is
-                          // the one thing to do next on a narrow screen, and a
-                          // shrink-wrapped button in the middle of a message
-                          // is the kind of small tap target this flow can't
-                          // afford (most buyers are on mobile).
-                          className="mt-3 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-600 sm:w-auto"
-                        >
-                          <ClipboardListIcon size={15} />
-                          View your shopping plan
-                        </button>
-                      )}
                     </div>
                   ) : (
                     // A real search ran and came up completely empty, with no
@@ -1787,12 +1684,12 @@ const VELUX_GREETING = "Hi, I'm Velte — what are you looking for?";
 const VELUX_SUBTEXT =
   "Describe it in your own words or a photo — I'll match it against real vendor inventory nearby, ranked by meaning, distance and trust. Never guessed, never invented.";
 
-// The composer's "+" tool menu (2026-09-06, "plan" added same day) — a
-// small, fixed set (see ComposerTool's own comment in types/search.ts for
-// why it's these two and not the full 9-capability list) rendered both as
-// the dropdown's own options and as the badge attached to the textarea once
-// picked. Icon component, not a rendered element, so the same config drives
-// both places at whatever size each needs.
+// The composer's "+" tool menu (2026-09-06) — a small, fixed set (see
+// ComposerTool's own comment in types/search.ts for why it's just this one
+// and not the full 9-capability list) rendered both as the dropdown's own
+// options and as the badge attached to the textarea once picked. Icon
+// component, not a rendered element, so the same config drives both places
+// at whatever size each needs.
 const COMPOSER_TOOL_META: Record<
   ComposerTool,
   { label: string; icon: IconComponent; placeholder: string }
@@ -1802,21 +1699,16 @@ const COMPOSER_TOOL_META: Record<
     icon: ScaleIcon,
     placeholder: "e.g. 'iPhone 15 vs Samsung S24'",
   },
-  plan: {
-    label: "Shopping Plan",
-    icon: ShoppingCartIcon,
-    placeholder: "e.g. 'Moving into a new apartment, ₦2m, need the essentials'",
-  },
 };
 
 /** What picking a tool is about to cost, for the credit-gate check at
- *  selection time. Shopping Plan has its own real price (CREDIT_COST.plan);
- *  Compare has no price of its own — it rides on whatever the underlying
- *  turn already is — so this checks against the cheapest possible one
- *  (text) rather than a guess at whether a photo will follow. A buyer who
- *  can't even afford that can't afford Compare either way. */
-function composerToolCost(tool: ComposerTool): number {
-  return tool === "plan" ? CREDIT_COST.plan : CREDIT_COST.text;
+ *  selection time. Compare has no fixed price at the moment it's picked —
+ *  it rides on whatever the underlying turn already is — so this checks
+ *  against the cheapest possible outcome (a plain text turn) rather than
+ *  guessing high or low. A buyer who can't even afford that can't afford
+ *  the tool regardless of what follows. */
+function composerToolCost(): number {
+  return CREDIT_COST.text;
 }
 
 // Velte's buyer-facing search (build-order step d/e), at /chat —
@@ -1834,6 +1726,9 @@ export function SearchHome() {
   const [query, setQuery] = useState("");
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const isSending = turns.some((t) => t.phase === "loading");
+  // Invalidates ConversationSidebar's own ["buyer", "conversations"] query
+  // — see the onFinal handler below for why.
+  const queryClient = useQueryClient();
 
   // Which store's "matching services" panel is open, if any — across the
   // WHOLE conversation, not per turn (see ConversationTurnView's own
@@ -1845,246 +1740,6 @@ export function SearchHome() {
   >(null);
   function toggleServices(vendorId: string) {
     setExpandedServicesVendorId((cur) => (cur === vendorId ? null : vendorId));
-  }
-
-  // Shopping Plan's own client state (2026-09-06) — three small pieces,
-  // same "lift the cross-turn bit to SearchHome" shape as
-  // expandedServicesVendorId above.
-  //
-  // `draftRemovedKeys` is per-TURN (a buyer can have more than one draft
-  // open across a long conversation, in principle), keyed by turn id ->
-  // the "category|label" keys they've unchecked before confirming.
-  const [draftRemovedKeys, setDraftRemovedKeys] = useState<
-    Map<string, Set<string>>
-  >(new Map());
-  function onToggleDraftItem(turnId: string, category: string, label: string) {
-    const key = `${category}|${label}`;
-    setDraftRemovedKeys((prev) => {
-      const next = new Map(prev);
-      const current = new Set(next.get(turnId) ?? EMPTY_SET);
-      if (current.has(key)) current.delete(key);
-      else current.add(key);
-      next.set(turnId, current);
-      return next;
-    });
-  }
-
-  const [buildingPlanTurnId, setBuildingPlanTurnId] = useState<string | null>(
-    null,
-  );
-  const [replacingPlanItem, setReplacingPlanItem] =
-    useState<PlanReplaceTarget | null>(null);
-  // Which turn's plan is waiting on a phone number before it can start
-  // (2026-09-10) — see onConfirmPlan's own comment on the gate. Null when no
-  // gate is open, which is the overwhelmingly common case (a buyer only ever
-  // goes through this once, since the number stays on their account).
-  const [phoneGateTurnId, setPhoneGateTurnId] = useState<string | null>(null);
-
-  /** The conversational "I've started, here's where to watch it" turn
-   *  (2026-09-10) — appended right after the job is underway, so the thread
-   *  itself records what happened and carries the CTA to Your Plans.
-   *
-   *  Deliberately NOT persisted (`ephemeral`): it is a signpost for this
-   *  moment, and a reopened conversation should show the plan CARD — the
-   *  real, live thing — rather than replaying a stale "I've started
-   *  searching" line about a job that finished days ago. */
-  function appendPlanStartedTurn(plan: ShoppingPlan) {
-    const turnId = generateUUID();
-    setTurns((prev) => [
-      ...prev,
-      {
-        ...createLoadingTurn(turnId, "", null, null, ""),
-        phase: "done" as const,
-        ephemeral: true,
-        planCtaId: plan.id,
-        // Wording matches the product spec closely, on purpose (2026-09-11,
-        // per explicit request) — this is the chat's entire word on the
-        // matter from here; the live per-item progress lives on Your Plans,
-        // never inline here (see startPlanBuild's own comment).
-        reply:
-          "Great — I've started searching for the items in your shopping plan. " +
-          "I'll keep working on it in the background and add results as I find them.",
-      },
-    ]);
-  }
-
-  const PLAN_POLL_MS = 3000;
-  // Generous, not a real ceiling on how long a build can take (the server
-  // keeps going regardless — see /api/shopping-plan/route.ts) — just how
-  // long this waits before giving up quietly. The credits meter simply
-  // stays as it is until the NEXT thing that happens to call `load()` —
-  // never a broken state, just briefly stale.
-  const PLAN_POLL_MAX_MS = 5 * 60 * 1000;
-
-  /** Waits for a plan to leave "building", then refreshes the credits
-   *  meter — nothing else. Deliberately does NOT touch the chat turn: the
-   *  live per-item progress belongs on Your Plans (and the cross-route
-   *  watcher/toast — ShoppingPlanProgressWatcher, mounted at the /chat
-   *  layout level), never inline in the conversation (2026-09-11, found
-   *  live — a buyer confirming a checklist got a whole searching/pending
-   *  results card replacing it right there in chat, which is the thing
-   *  this fixes: the chat's own job ends at "I've started searching",
-   *  Your Plans is where it's actually watched).
-   *
-   *  Safe to abandon silently: if the buyer navigates away, this loop just
-   *  stops mattering — nothing it does depends on SearchHome still being
-   *  mounted, since it never reaches back into turn state. */
-  async function refreshCreditsOncePlanCompletes(planId: string) {
-    const deadline = Date.now() + PLAN_POLL_MAX_MS;
-    for (;;) {
-      await new Promise((resolve) => setTimeout(resolve, PLAN_POLL_MS));
-      let status: string | null = null;
-      try {
-        const res = await fetch(`/api/shopping-plan/${planId}`);
-        if (res.ok) {
-          const data = (await res.json().catch(() => null)) as {
-            plan?: ShoppingPlan;
-          } | null;
-          status = data?.plan?.status ?? null;
-        }
-      } catch {
-        // A failed poll just tries again next tick.
-      }
-      if (status && status !== "building") {
-        // The charge for this plan lands server-side once the background
-        // resolve finishes (see the confirm route's own comment on why it
-        // moved here from plan-creation time) — this is the first moment
-        // the meter has anything new to show.
-        void useCreditsStore.getState().load();
-        return;
-      }
-      if (Date.now() >= deadline) return;
-    }
-  }
-
-  /** Confirms a draft (minus whatever the buyer unchecked) — POST
-   *  /api/shopping-plan creates the plan immediately (status "building",
-   *  every item "pending") and the real search/verify/pick pipeline
-   *  (pickPlanItem.ts) keeps running server-side after this response, so
-   *  `buildingPlanTurnId`'s busy state only covers this brief create call,
-   *  not the whole build. The build itself is never shown inline in chat —
-   *  see startPlanBuild's own comment — it's watched from Your Plans. */
-  async function onConfirmPlan(turn: ConversationTurn) {
-    const draft = turn.shoppingPlanDraft;
-    if (!draft || buildingPlanTurnId) return;
-    const removed = draftRemovedKeys.get(turn.id) ?? EMPTY_SET;
-    const items = draft.items.filter(
-      (it) => !removed.has(`${it.category}|${it.label}`),
-    );
-    if (!items.length) return;
-
-    // THE PHONE GATE (2026-09-10). The plan is built to keep running after
-    // the buyer leaves, which means the completion has to reach them
-    // somewhere other than this page — so a number Velte can actually text
-    // is collected BEFORE any searching starts, not discovered to be
-    // missing at the end. Held here rather than inside the gate component so
-    // cancelling genuinely starts nothing: `startPlanBuild` is only ever
-    // called past this point.
-    const buyer = useBuyerStore.getState().buyer;
-    if (!buyer?.phoneVerified || !buyer.phone) {
-      setPhoneGateTurnId(turn.id);
-      return;
-    }
-
-    await startPlanBuild(turn.id, { ...draft, items });
-  }
-
-  /** Starts the background job for one confirmed checklist, and narrates the
-   *  handoff: a brief "setting this up" status, then the plan card itself
-   *  takes over showing real per-item progress.
-   *
-   *  `clientRef` is the TURN id — the stable reference for this one "start
-   *  searching" click. A double tap, a retry, or two tabs racing all send the
-   *  same ref, and the backend returns the plan that already exists instead
-   *  of starting (and charging for) the whole multi-item search twice. */
-  async function startPlanBuild(turnId: string, draft: ShoppingPlanDraft) {
-    setBuildingPlanTurnId(turnId);
-    // The status phase — replaces the old bare spinner on the button with
-    // something that says what is actually happening.
-    updateTurn(turnId, {
-      status: pickAvoiding(startingPlanPhrase(), shownStatusesRef.current),
-    });
-    try {
-      const res = await fetch("/api/shopping-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft, clientRef: turnId }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        toast.error(
-          body?.error ?? "Couldn't build your shopping plan just now.",
-        );
-        return;
-      }
-      // The confirmed checklist turn just closes here — its own reply text
-      // ("Here's a starting checklist…") stands as-is, with the interactive
-      // card gone now that it's been acted on. It deliberately does NOT
-      // pick up `shoppingPlan` (2026-09-11, reversed — see
-      // refreshCreditsOncePlanCompletes's own comment): that used to swap
-      // this same turn into the live per-item progress view, which put a
-      // whole "searching…/found" card inline in the middle of an otherwise
-      // ordinary conversation. The turn appended right below (next) is the
-      // chat's entire word on the matter from here.
-      updateTurn(turnId, {
-        shoppingPlanDraft: null,
-        status: "",
-      });
-      if (body.plan?.status === "building") {
-        // The conversational confirmation, as its own turn — so the thread
-        // reads like Velte told the buyer what it's doing, and carries the
-        // CTA over to where the work is actually visible. Code-authored
-        // rather than a model round trip: there is nothing here for a model
-        // to decide, and this codebase already keeps deterministic moments
-        // (buyerRequestStatusReply, the checklist's own lines) out of the
-        // LLM's hands for exactly that reason.
-        appendPlanStartedTurn(body.plan as ShoppingPlan);
-        void refreshCreditsOncePlanCompletes(body.plan.id);
-      } else {
-        void useCreditsStore.getState().load();
-      }
-    } catch {
-      toast.error("Couldn't build your shopping plan just now.");
-    } finally {
-      setBuildingPlanTurnId(null);
-    }
-  }
-
-  /** "Replace this item" — re-runs the search/pick pipeline for ONE item,
-   *  excluding whatever is currently selected, and persists whatever comes
-   *  back (including a genuine no_match). */
-  async function onReplacePlanItem(
-    turn: ConversationTurn,
-    item: ShoppingPlanItem,
-  ) {
-    if (!turn.shoppingPlan || replacingPlanItem) return;
-    setReplacingPlanItem({ turnId: turn.id, itemId: item.id });
-    try {
-      const res = await fetch(
-        `/api/shopping-plan/${turn.shoppingPlan.id}/items/${item.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            label: item.label,
-            targetBudgetKobo: item.targetBudgetKobo,
-            excludeProductId: item.productId,
-            excludeExternalOfferId: item.externalOfferId,
-            location: turn.shoppingPlan.location,
-          }),
-        },
-      );
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        toast.error(body?.error ?? "Couldn't replace that item.");
-        return;
-      }
-      updateTurn(turn.id, { shoppingPlan: body.plan });
-    } catch {
-      toast.error("Couldn't replace that item.");
-    } finally {
-      setReplacingPlanItem(null);
-    }
   }
 
   // Editing a past buyer message — ChatGPT-style: swaps that one bubble
@@ -2462,11 +2117,23 @@ export function SearchHome() {
           deviceId,
           turn: turnToStoredSnapshot(turn),
         }),
-      }).catch(() => {
-        /* see comment above — the in-tab history fallback covers this */
-      });
+      })
+        .then((res) => {
+          // Same sidebar-freshness reasoning as onFinal's own invalidation
+          // — this is the OTHER way a turn gets persisted (a background
+          // item's own resolution), and the sidebar's turnCount/recency
+          // should reflect it just as promptly.
+          if (res.ok && useBuyerStore.getState().buyer) {
+            void queryClient.invalidateQueries({
+              queryKey: ["buyer", "conversations"],
+            });
+          }
+        })
+        .catch(() => {
+          /* see comment above — the in-tab history fallback covers this */
+        });
     }
-  }, [turns]);
+  }, [turns, queryClient]);
 
   // The MAIN search's own in-flight controller (ChatGPT-style Stop button —
   // see handleStop/runSearchIntoTurn) — one at a time by construction: the
@@ -3524,6 +3191,48 @@ export function SearchHome() {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
+  // Shopping Lists (2026-09-12) — "Get these items". Starts the durable
+  // background job (velte-backend) and flips this turn's card to its
+  // "already started" state, idempotent on the TURN'S OWN id as clientRef:
+  // a double-click on the same card always resumes the same job rather than
+  // creating a duplicate (spec §34) — see /api/shopping-list/start's own
+  // comment. NO status-phrase treatment for the follow-up message (spec
+  // §8) — it's a plain, already-persisted turn appended straight in "done".
+  async function startShoppingListSearch(turn: ConversationTurn) {
+    if (!turn.shoppingList || turn.shoppingList.jobId) return;
+    try {
+      const { jobId, message } = await buyerApi.post<{
+        jobId: string;
+        message: string;
+      }>("/api/shopping-list/start", {
+        goalText: turn.shoppingList.goalText,
+        items: turn.shoppingList.items,
+        budgetNaira: turn.shoppingList.budgetNaira,
+        conversationId: conversationIdRef.current,
+        deviceId: deviceIdRef.current ?? getSearchDeviceId(),
+        clientRef: turn.id,
+      });
+      updateTurn(turn.id, {
+        shoppingList: { ...turn.shoppingList, jobId },
+      });
+      setTurns((prev) => [
+        ...prev,
+        {
+          ...createLoadingTurn(generateUUID(), "", null, null, ""),
+          phase: "done",
+          reply: message,
+          persisted: true,
+        },
+      ]);
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't start that search — try again.",
+      );
+    }
+  }
+
   // Appends rather than replaces (unlike updateTurn's plain patch) — a
   // functional setTurns update so it's correct even if two "reply" events
   // land close together, without needing the caller to read current state
@@ -3582,7 +3291,6 @@ export function SearchHome() {
           buyerRequestMatchQuery: t.buyerRequestMatchQuery,
           awaitingComparisonPurchaseReply: t.awaitingComparisonPurchaseReply,
           comparisonPickItem: t.comparisonPickItem,
-          awaitingShoppingPlanReply: t.awaitingShoppingPlanReply,
           // Structural, not guessed from `content` — see SearchHistoryTurn's
           // own comment on the freeform-phrasing bug this fixes.
           // `skippable: true` is the bare-query budget gate's own unique
@@ -3591,6 +3299,9 @@ export function SearchHome() {
           askedBudget:
             t.clarification?.kind === "text" &&
             t.clarification.skippable === true,
+          askedShoppingListDetails:
+            t.clarification?.kind === "text" &&
+            t.clarification.listDetails === true,
         },
       ]);
 
@@ -3703,11 +3414,27 @@ export function SearchHome() {
           if (event.conversationId) {
             setConversationId(event.conversationId);
             storeConversationId(event.conversationId);
+            // The sidebar's own conversation list (ConversationSidebar.tsx)
+            // has no other way to learn a turn just landed — its query has
+            // a 30s staleTime and nothing else here ever invalidates it, so
+            // without this a brand-new chat's first message (this route.ts
+            // already persists unconditionally, task "complete" or not)
+            // simply never appeared there until something UNRELATED
+            // happened to refetch it. Fires on every turn, not just the
+            // first, so an ongoing thread's recency/turn-count stays
+            // current too. A no-op for a signed-out guest — the query is
+            // `enabled: Boolean(buyer)` and never mounted for one.
+            if (useBuyerStore.getState().buyer) {
+              void queryClient.invalidateQueries({
+                queryKey: ["buyer", "conversations"],
+              });
+            }
           }
-          // The credit meter, everywhere it's shown (CreditsBar on mobile,
-          // CreditsFab's ring + CreditsDonut on desktop — all three read
-          // the same store), reflecting a turn the instant it lands rather
-          // than waiting for whatever next happened to re-open the panel.
+          // The credit meter, everywhere it's shown (CreditsSidebarMeter on
+          // mobile, CreditsFab's ring + CreditsDonut on desktop — all three
+          // read the same store), reflecting a turn the instant it lands
+          // rather than waiting for whatever next happened to re-open the
+          // panel.
           //
           // A signed-in balance is SPENT here optimistically before the
           // reconciling `load()` runs, not just re-fetched (2026-09-05,
@@ -3769,12 +3496,11 @@ export function SearchHome() {
             buyerRequestMatchQuery: event.buyerRequestMatchQuery,
             contextNote,
             recommendation: event.recommendation,
-            shoppingPlanDraft: event.shoppingPlanDraft,
             externalOffers: event.externalOffers,
             awaitingComparisonPurchaseReply:
               event.awaitingComparisonPurchaseReply,
             comparisonPickItem: event.comparisonPickItem,
-            awaitingShoppingPlanReply: event.awaitingShoppingPlanReply,
+            shoppingList: event.shoppingList,
           });
           // A buyer who already has a verified session (a prior visit's
           // identity cookie still valid) skips the composer's own
@@ -5413,9 +5139,7 @@ export function SearchHome() {
                         setToolMenuOpen(false);
                         // Checked at SELECTION time, not send time — see
                         // CreditGateModal's own comment.
-                        if (
-                          creditGateBlocks(meta.label, composerToolCost(toolId))
-                        ) {
+                        if (creditGateBlocks(meta.label, composerToolCost())) {
                           return;
                         }
                         setActiveTool(toolId);
@@ -5431,12 +5155,6 @@ export function SearchHome() {
                 },
               )}
             </AnchoredPopover>
-            {/* The credit meter, on phones only (2026-09-01). This row is
-                `justify-between` around two buttons, so the middle was empty
-                space already on screen — the balance costs no height here,
-                and it sits beside the button that spends it. From `lg` up the
-                floating ring (credits/CreditsFab) has the job instead. */}
-            <CreditsBar />
             {/* Swaps to a Stop button the instant a search goes "loading" —
                 ChatGPT-style — instead of just disabling Send; clicking it
                 calls handleStop, which aborts searchAbortRef's own
@@ -5562,6 +5280,12 @@ export function SearchHome() {
                     onAnswerClarification={handleClarificationAnswer}
                     onLocationShared={handleLocationShared}
                     onPickItem={handleItemPick}
+                    onGetShoppingListItems={(t) =>
+                      void startShoppingListSearch(t)
+                    }
+                    onShoppingListChange={(t, list) =>
+                      updateTurn(t.id, { shoppingList: list })
+                    }
                     expandedServicesVendorId={expandedServicesVendorId}
                     onToggleServices={toggleServices}
                     isEditing={editingTurnId === turn.id}
@@ -5571,12 +5295,6 @@ export function SearchHome() {
                     onSaveEdit={() => void handleSaveEdit(turn)}
                     onCancelEdit={handleCancelEdit}
                     canEdit={!isSending}
-                    draftRemovedKeys={draftRemovedKeys}
-                    buildingPlanTurnId={buildingPlanTurnId}
-                    replacingPlanItem={replacingPlanItem}
-                    onToggleDraftItem={onToggleDraftItem}
-                    onConfirmPlan={onConfirmPlan}
-                    onReplacePlanItem={onReplacePlanItem}
                   />
                 </div>
               ))}
@@ -5684,29 +5402,6 @@ export function SearchHome() {
             </div>
           </div>
         </>
-      )}
-
-      {/* The phone gate in front of a plan's background search — see
-          onConfirmPlan's own comment. Rendered here (portaled to body by the
-          component itself) rather than inside the turn, so it survives the
-          thread re-rendering underneath it. Closing it starts nothing. */}
-      {phoneGateTurnId && (
-        <PlanPhoneGate
-          onClose={() => setPhoneGateTurnId(null)}
-          onVerified={() => {
-            const gatedTurnId = phoneGateTurnId;
-            setPhoneGateTurnId(null);
-            const gatedTurn = turns.find((t) => t.id === gatedTurnId);
-            const draft = gatedTurn?.shoppingPlanDraft;
-            if (!gatedTurn || !draft) return;
-            const removed = draftRemovedKeys.get(gatedTurn.id) ?? EMPTY_SET;
-            const items = draft.items.filter(
-              (it) => !removed.has(`${it.category}|${it.label}`),
-            );
-            if (!items.length) return;
-            void startPlanBuild(gatedTurn.id, { ...draft, items });
-          }}
-        />
       )}
     </div>
   );

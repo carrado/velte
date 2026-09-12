@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 
-import { CheckIcon, CopyIcon } from "@/components/icons";
+import { CheckIcon, CopyIcon } from "@/components/icons/hero";
 import { REFERRAL_CREDITS } from "@/lib/credits";
 
 // The buyer's own referral link (2026-08-31).

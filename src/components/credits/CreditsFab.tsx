@@ -16,8 +16,9 @@ import { METER_EMPTY, METER_FILL } from "@/lib/creditMeter";
 // The composer is an in-flow row at the bottom of the chat column and takes
 // the full width on small screens, where a floating badge would both cover
 // the send button and eat scarce reading width. Below `lg` the same meter
-// stays in the header instead, which is why ChatHeader's copy is `lg:hidden`
-// — between them exactly one is visible at any width.
+// lives in the conversation sidebar instead, as CreditsSidebarMeter (moved
+// there 2026-09-12, from an earlier composer-row bar) — between the two
+// exactly one is visible at any width.
 //
 // The white disc is not decoration: this floats over conversation text, and a
 // ring drawn straight onto the thread would sit on whatever happened to be

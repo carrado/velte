@@ -87,8 +87,7 @@ export function buildTurnSnapshot(
     externalOffers: event.externalOffers,
     awaitingComparisonPurchaseReply: event.awaitingComparisonPurchaseReply,
     comparisonPickItem: event.comparisonPickItem,
-    awaitingShoppingPlanReply: event.awaitingShoppingPlanReply,
     knownBudgetNaira: event.knownBudgetNaira,
-    shoppingPlanDraft: event.shoppingPlanDraft,
+    shoppingList: event.shoppingList,
   };
 }

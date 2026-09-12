@@ -4,7 +4,6 @@
 // silently drift out of sync with it.
 
 import { COMPARE_TOOL_RULE } from "@/lib/server/ai/comparisonRule";
-import { PLAN_TOOL_RULE } from "@/lib/server/ai/planRule";
 import type { SectorClarifiers } from "@/types/sectors";
 
 // A function of whether buyerLocation was supplied, not a constant — the
@@ -276,12 +275,6 @@ ${COMPARE_TOOL_RULE}
 Getting this right matters in both directions. A missed comparison means the buyer who asked "which of these should I buy?" gets handed a plain list and no answer to their actual question. A false one means someone who just wants to find a charger gets a weighing-up they never asked for. Judge what the buyer is actually asking, using the whole message and the conversation above.
 
 comparisonOptions — when isComparison is true, list the things being weighed, as short searchable phrases in the buyer's own terms: "Toyota 2026 model and Lexus Jeep 2026 model, which should I buy" gives ["Toyota 2026 model", "Lexus Jeep 2026 model"]. Fold a shared need into each ("a good phone for content creation, iPhone or Samsung" gives ["iPhone for content creation", "Samsung for content creation"]) — each one is searched separately, so each has to stand on its own. Resolve options named on an earlier turn when this message only asks which to pick. Empty when isComparison is false, or when they asked which is better without naming any options at all — never invent options the buyer didn't mention.
-
-isShoppingPlan — whether this turn is a GOAL that resolves into a whole list of things to buy, rather than a request for one thing. Judge it by exactly this rule, and by nothing else:
-
-${PLAN_TOOL_RULE}
-
-Both directions cost something real here. A missed plan means someone who said "I'm furnishing a new flat with ₦2m" gets one generic search instead of the budgeted checklist the product exists to give them. A false one means someone who wants a single fridge gets handed a whole list they never asked for. Two specific things NOT to mistake for a plan: a COMPARISON (weighing named alternatives — isComparison above covers that, and the two are never both true), and a buyer naming several separate things they each want found right now ("I need a plumber and also a caterer") — that is two ordinary searches, not a budgeted project.
 
 Call classifyScope exactly once, with no other text and no other tool call.`;
 }

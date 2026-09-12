@@ -2,7 +2,11 @@
 
 import { createPortal } from "react-dom";
 
-import { AlertTriangleIcon, CloseIcon, LoaderIcon } from "@/components/icons";
+import {
+  AlertTriangleIcon,
+  CloseIcon,
+  LoaderIcon,
+} from "@/components/icons/hero";
 
 // "Are you sure?" before deleting a conversation from the sidebar
 // (2026-09-09) — unlike LogoutConfirmModal right next to this file (whose

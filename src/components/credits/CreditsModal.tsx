@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
-import { CloseBoldIcon } from "@/components/icons";
+import { CloseBoldIcon } from "@/components/icons/hero";
 import { CreditsPanel } from "@/components/credits/CreditsPanel";
 import { useCredits } from "@/hooks/useCredits";
 import { useBuyerStore } from "@/store/buyerStore";

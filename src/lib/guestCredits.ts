@@ -189,3 +189,38 @@ export function refundGuestCredits(cost: number): void {
     // Best-effort, exactly like the server-side refund.
   }
 }
+
+/**
+ * Zeroes this browser's guest ledger — called the moment it's known to
+ * belong to a SIGNED-IN buyer (see buyerStore.ts's own `setBuyer`), which is
+ * every sign-in AND every restored session on page load, not just a live
+ * Google popup (2026-09-11).
+ *
+ * WHY: this cookie is otherwise completely independent of auth state —
+ * logging in or out never touched it before this existed. A guest who
+ * signed in WITHOUT ever spending as a guest first (the common case: most
+ * people sign in before they've burned anything) kept an untouched,
+ * full GUEST_CREDITS balance sitting in this same browser the whole time
+ * they were signed in. Logging out didn't cost them that balance — it
+ * REVEALED it, on demand, any time their real balance ran low. That's a
+ * standing "log out for 10 free credits" button, not the same thing as the
+ * accepted "clear your browser data" ceiling this module's own top comment
+ * is about: clearing data takes deliberate effort and most people never
+ * will; logging out is one click every signed-in buyer already sees.
+ *
+ * This closes exactly that gap and nothing more: it does not try to defend
+ * against clearing cookies/incognito/a second browser, which remains the
+ * same honour-system ceiling as before — only against the specific, free,
+ * repeatable move of toggling auth state on ONE browser to reach a balance
+ * that was never actually earned by being a guest.
+ */
+export function exhaustGuestCredits(): void {
+  if (typeof window === "undefined") return;
+  try {
+    write({ balance: 0, spent: [] });
+  } catch {
+    // Best-effort, like every other guest-ledger write here — a browser
+    // that can't persist this couldn't have honoured a guest balance to
+    // begin with, so there's nothing this failure needs to protect.
+  }
+}

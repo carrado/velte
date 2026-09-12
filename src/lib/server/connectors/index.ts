@@ -8,8 +8,8 @@ export type { ExternalConnector } from "@/lib/server/connectors/types";
 
 // Phase 4's orchestrator — the one place that decides WHETHER external
 // sources run and merges what they return. Connectors themselves stay
-// dumb (see types.ts), so adding Konga or a Jumia affiliate feed later is
-// a new file plus one line in this array.
+// dumb (see types.ts), so adding a Shopify affiliate feed or a Jumia one
+// later is a new file plus one line in this array.
 const CONNECTORS: ExternalConnector[] = [serperConnector];
 
 // Ceiling on what a dead end shows. This is a consolation list, not a

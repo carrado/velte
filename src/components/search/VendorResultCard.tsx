@@ -16,7 +16,7 @@ import {
   ChevronRightIcon,
   MapPinIcon,
   StoreIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 export function VendorResultCard({
   match,

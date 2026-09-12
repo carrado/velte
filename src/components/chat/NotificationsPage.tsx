@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { toast } from "sonner";
 
 import {
@@ -12,7 +11,7 @@ import {
   CloseIcon,
   TagIcon,
   WalletIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 import { BellIllustration } from "@/components/icons";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
@@ -53,6 +52,12 @@ const TYPE_STYLE: Record<
     icon: <ClipboardListIcon size={15} />,
     ring: "bg-sky-50 text-sky-600",
     tint: "group-hover:border-sky-200",
+  },
+  "shopping-list": {
+    label: "Shopping List",
+    icon: <ClipboardListIcon size={15} />,
+    ring: "bg-orange-50 text-orange-600",
+    tint: "group-hover:border-orange-200",
   },
   lead: {
     label: "Lead",
@@ -146,6 +151,7 @@ function NotificationRow({
 }) {
   const style = TYPE_STYLE[notification.type] ?? TYPE_STYLE.system;
   const unread = !notification.read;
+  const { navigate } = useNavigation();
 
   const inner = (
     <>
@@ -200,16 +206,22 @@ function NotificationRow({
   return (
     <li className="relative">
       {notification.href ? (
-        // A notification with a destination is a link, so it opens in a new
-        // tab on a middle-click and shows its target on hover — the ordinary
-        // affordances a <button> would quietly remove.
-        <Link
-          href={notification.href}
-          onClick={() => unread && onRead(notification.id)}
-          className={rowClass}
+        // A button, not a Link (2026-09-12, matches the sidebar's own
+        // MenuRow convention) — navigate() prefetches the destination
+        // before pushing, so it lands already rendered instead of showing
+        // its own loading state a beat after arriving. Trades away a
+        // Link's middle-click/new-tab affordance on purpose, for routing
+        // that behaves the same way everywhere in /chat.
+        <button
+          type="button"
+          onClick={() => {
+            if (unread) onRead(notification.id);
+            navigate(notification.href!);
+          }}
+          className={cn(rowClass, "cursor-pointer")}
         >
           {inner}
-        </Link>
+        </button>
       ) : (
         <button
           type="button"
@@ -319,7 +331,11 @@ export function NotificationsPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-4 py-8">
+      {/* Full width, not centered (2026-09-12, explicit request) — this and
+          Your requests are the two pages reached from the sidebar menu
+          rather than the narrow chat thread, so there's no reason to cap
+          them to the thread's own reading width. */}
+      <div className="px-4 py-8 sm:px-6 lg:px-10 xl:px-14">
         <header className="mb-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

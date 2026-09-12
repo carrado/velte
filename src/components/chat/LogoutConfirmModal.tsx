@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom";
 
-import { CloseIcon, LogOutIcon, LoaderIcon } from "@/components/icons";
+import { CloseIcon, LogOutIcon, LoaderIcon } from "@/components/icons/hero";
 
 // "Are you sure?" before a chat-surface sign-out (2026-09-05).
 //

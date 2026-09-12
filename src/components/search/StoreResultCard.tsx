@@ -8,7 +8,7 @@ import { VendorDetailModal } from "@/components/VendorDetailModal";
 import { useUserStore } from "@/store/userStore";
 import { buildChatLink } from "@/lib/chatLink";
 import type { StoreMatch } from "@/types/search";
-import { MapPinIcon, StoreIcon, WrenchIcon } from "@/components/icons";
+import { MapPinIcon, StoreIcon, WrenchIcon } from "@/components/icons/hero";
 
 // Prefix "phone repair shop" → "a phone repair shop", "electronics store" →
 // "an electronics store" — a light grammar touch for the WhatsApp message

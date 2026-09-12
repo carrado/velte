@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircleIcon } from "@/components/icons";
+import { CheckCircleIcon } from "@/components/icons/hero";
 import type { BuyerRequestOffer } from "@/types/search";
 
 /* Renders createBuyerRequestTool's outcome (see BuyerRequestOffer's own

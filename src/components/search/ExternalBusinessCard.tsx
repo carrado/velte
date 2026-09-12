@@ -1,5 +1,9 @@
 import type { NearbyBusiness } from "@/types/search";
-import { ExternalLinkIcon, MapPinIcon, StoreIcon } from "@/components/icons";
+import {
+  ExternalLinkIcon,
+  MapPinIcon,
+  StoreIcon,
+} from "@/components/icons/hero";
 
 // A real nearby business from Google Places (searchStores Tier 5) — no
 // Velte relationship, so deliberately NOT styled like VendorResultCard/
