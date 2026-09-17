@@ -57,7 +57,7 @@ export default function SectorMultiSelect({
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
           disabled={index === 0}
           aria-label="Previous category"
-          className="w-7 h-7 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-500 hover:text-orange-600 hover:border-orange-300 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0"
+          className="w-7 h-7 rounded-full bg-surface border border-gray-200 shadow-sm flex items-center justify-center text-gray-500 hover:text-orange-600 hover:border-orange-300 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0"
         >
           <ChevronLeftIcon size={14} />
         </button>
@@ -76,7 +76,7 @@ export default function SectorMultiSelect({
           onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
           disabled={index === total - 1}
           aria-label="Next category"
-          className="w-7 h-7 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-500 hover:text-orange-600 hover:border-orange-300 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0"
+          className="w-7 h-7 rounded-full bg-surface border border-gray-200 shadow-sm flex items-center justify-center text-gray-500 hover:text-orange-600 hover:border-orange-300 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0"
         >
           <ChevronRightIcon size={14} />
         </button>

@@ -109,7 +109,7 @@ export default function DashboardRootLayout({
   return (
     <NavigationProgressProvider>
       {meStatus !== "ready" && <AppInitOverlay status={meStatus} />}
-      <div className="flex flex-col h-screen bg-[#F1F5F9] overflow-hidden">
+      <div className="flex flex-col h-screen bg-canvas overflow-hidden">
         <div className="flex flex-1 min-h-0">
           <Sidebar />
 

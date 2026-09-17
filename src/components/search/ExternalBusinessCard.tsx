@@ -1,5 +1,31 @@
 import type { NearbyBusiness } from "@/types/search";
-import { ExternalLinkIcon, MapPinIcon, StoreIcon } from "@/components/icons";
+import {
+  ExternalLinkIcon,
+  MapPinIcon,
+  PhoneIcon,
+  StoreIcon,
+} from "@/components/icons/hero";
+
+// Bare digits for a `tel:` link — Google's nationalPhoneNumber comes
+// formatted for display ("0801 234 5678"), which most phone dialers handle
+// fine as-is, but stripping punctuation is cheap insurance against a dialer
+// that doesn't. Left as a plain string otherwise (never renumbered/guessed
+// into a different format) since this is Google's own number, not one
+// Velte has any reason to reinterpret.
+function telHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
+}
+
+// Strips the scheme/www for display ("https://www.example.com/" →
+// "example.com") — the full URL is still what the link itself points at,
+// this is just what's shown so it doesn't crowd a compact card.
+function displayHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 // A real nearby business from Google Places (searchStores Tier 5) — no
 // Velte relationship, so deliberately NOT styled like VendorResultCard/
@@ -12,7 +38,7 @@ export function ExternalBusinessCard({ match }: { match: NearbyBusiness }) {
   )}`;
 
   return (
-    <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-4 space-y-2.5">
+    <div className="bg-surface rounded-2xl border border-dashed border-gray-200 p-4 space-y-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
@@ -37,6 +63,32 @@ export function ExternalBusinessCard({ match }: { match: NearbyBusiness }) {
           {match.distanceKm != null && ` · ${match.distanceKm}km away`}
         </span>
       </div>
+
+      {/* Both rows below are optional on a real Google listing — see
+          NearbyBusiness's own comment. `tel:`/a plain link, deliberately
+          never a WhatsApp deep link: Velte has no way to know whether
+          Google's own number is even reachable on WhatsApp, unlike a
+          vendor's own `whatsapp` field. */}
+      {match.phone && (
+        <a
+          href={telHref(match.phone)}
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          <PhoneIcon size={13} className="shrink-0" />
+          <span>{match.phone}</span>
+        </a>
+      )}
+      {match.website && (
+        <a
+          href={match.website}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          <ExternalLinkIcon size={13} className="shrink-0" />
+          <span className="truncate">{displayHost(match.website)}</span>
+        </a>
+      )}
 
       <a
         href={mapsHref}

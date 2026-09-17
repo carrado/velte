@@ -77,7 +77,12 @@ export function ListingDetailModal({
   isOwn: boolean;
   chatHref: string | null;
   chatLabel: string;
-  onChatClick: () => void;
+  // Optional since 2026-08-27: the WhatsApp CTA is now a plain link to
+  // /api/chat, which bills the lead server-side — there is no click beacon
+  // left to fire. Kept on the type for any caller that still wants to react
+  // to the click for its own reasons (analytics, closing the modal), but
+  // nothing is required to.
+  onChatClick?: () => void;
   vendor?: ListingDetailVendor | null;
   priceInKobo?: boolean;
 }) {
@@ -198,7 +203,7 @@ export function ListingDetailModal({
                     key={url}
                     className={cn(
                       "h-1.5 w-1.5 rounded-full transition-colors",
-                      i === imgIndex ? "bg-white" : "bg-white/50",
+                      i === imgIndex ? "bg-surface" : "bg-white/50",
                     )}
                   />
                 ))}
@@ -215,7 +220,7 @@ export function ListingDetailModal({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95"
+          className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-surface text-gray-900 shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95"
         >
           <CloseIcon size={20} strokeWidth={2.5} />
         </button>
@@ -276,11 +281,11 @@ export function ListingDetailModal({
         )}
         <div className="pt-2 border-t border-gray-100">
           {item.quoteOnRequest ? (
-            <p className="text-[15px] font-extrabold text-[#023337]">
+            <p className="text-[15px] font-extrabold text-ink">
               Contact for quote
             </p>
           ) : (
-            <p className="text-[15px] font-extrabold text-[#023337]">
+            <p className="text-[15px] font-extrabold text-ink">
               {fmt(price, symbol)}
               {isRange && (
                 <>

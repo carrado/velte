@@ -134,14 +134,30 @@ export function ClarificationPrompt({
 
   // "text" is the only remaining possibility here by elimination (the
   // Clarification union has exactly these 5 kinds) — per explicit request,
-  // it now answers through SearchHome.tsx's own composer (the same
+  // it answers through SearchHome.tsx's own composer (the same
   // dedicated-input treatment "name" above already gets) instead of a
   // separate, fixed-height input here: whatever detail the buyer needs to
   // write may run longer than a small pill input comfortably fits, and the
-  // composer already auto-resizes to whatever they type. The parent gates
-  // this component from ever mounting for a "text" clarification in the
-  // first place (ConversationTurnView's own check, mirroring the "name"
-  // one above), so this is just a defensive no-op, not the real gate.
+  // composer already auto-resizes to whatever they type. A SKIPPABLE text
+  // clarification (route.ts's deterministic bare-query attribute gate) is
+  // the one case this still renders something: a single skip pill — the
+  // details ask must never be a wall, same flexibility the location ask's
+  // own "Search without it" already gives — while typed answers keep going
+  // through the composer as usual. The parent's mount gate only lets a
+  // "text" clarification through when it's skippable.
+  if (clarification.skippable) {
+    const skipText = "Just search with what I've already told you";
+    return (
+      <button
+        type="button"
+        title={skipText}
+        onClick={() => onAnswer(skipText)}
+        className={pillClassName}
+      >
+        Skip — just search
+      </button>
+    );
+  }
   return null;
 }
 
@@ -299,7 +315,7 @@ function LocationShareAction({
         <button
           type="button"
           onClick={() => onDecline("Search without sharing my location")}
-          className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 cursor-pointer"
+          className="rounded-lg border border-gray-200 bg-surface px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 cursor-pointer"
         >
           Search without it
         </button>

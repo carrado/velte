@@ -39,14 +39,14 @@ function MockCard({
     <motion.div
       animate={{ y: [0, -10, 0] }}
       transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut", delay }}
-      className={`absolute w-[280px] rounded-2xl bg-white border border-gray-200 shadow-xl shadow-gray-300/40 p-5 ${className ?? ""}`}
+      className={`absolute w-[280px] rounded-2xl bg-surface border border-gray-200 shadow-xl shadow-gray-300/40 p-5 ${className ?? ""}`}
     >
       <span
         aria-hidden
         className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl bg-gradient-to-b from-orange-400 to-orange-600"
       />
       <div className="flex items-start justify-between gap-3 mb-2">
-        <p className="font-semibold text-[#023337] text-sm leading-snug">{q}</p>
+        <p className="font-semibold text-ink text-sm leading-snug">{q}</p>
         <span className="grid place-items-center w-6 h-6 rounded-full bg-orange-500 shrink-0">
           <PlusIcon className="w-3.5 h-3.5 text-white rotate-45" />
         </span>

@@ -35,7 +35,7 @@ const MAX_DESCRIPTION = 600;
 const MAX_GALLERY = 6;
 
 const inputClass =
-  "w-full h-11 px-3.5 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-[#023337] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-300";
+  "w-full h-11 px-3.5 bg-gray-50 border border-gray-200 rounded-lg text-dash-body text-ink placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-300";
 
 function SectionCard({
   icon: Icon,
@@ -49,15 +49,13 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white sm:rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+    <div className="bg-surface sm:rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
       <div className="flex items-start gap-3 mb-4">
         <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
           <Icon size={15} className="text-orange-500" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-dash-heading font-bold text-[#023337]">
-            {title}
-          </h3>
+          <h3 className="text-dash-heading font-bold text-ink">{title}</h3>
           <p className="text-dash-secondary text-gray-400">{hint}</p>
         </div>
       </div>
@@ -153,8 +151,8 @@ export default function StorePage() {
   if (isLoading || !form) {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
-        <div className="h-40 bg-white sm:rounded-2xl border border-gray-100 animate-pulse" />
-        <div className="h-72 bg-white sm:rounded-2xl border border-gray-100 animate-pulse" />
+        <div className="h-40 bg-surface sm:rounded-2xl border border-gray-100 animate-pulse" />
+        <div className="h-72 bg-surface sm:rounded-2xl border border-gray-100 animate-pulse" />
       </div>
     );
   }
@@ -235,7 +233,7 @@ export default function StorePage() {
   return (
     <div className={cn("max-w-3xl mx-auto space-y-4", dirty && "pb-16")}>
       {/* ── Store overview ─────────────────────────────────────────────── */}
-      <div className="bg-white sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-surface sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4 min-w-0">
@@ -254,7 +252,7 @@ export default function StorePage() {
                 )}
               </div>
               <div className="min-w-0">
-                <h2 className="text-dash-title font-black text-[#023337] truncate">
+                <h2 className="text-dash-title font-black text-ink truncate">
                   {form.name.trim() || "Your store"}
                 </h2>
                 <p className="text-dash-secondary text-orange-600 truncate">
@@ -310,7 +308,7 @@ export default function StorePage() {
           ) : (
             <>
               <div className="flex items-center justify-between mb-1.5">
-                <p className="text-dash-secondary font-semibold text-[#023337]">
+                <p className="text-dash-secondary font-semibold text-ink">
                   Storefront {percent}% complete
                 </p>
                 <p className="text-dash-caption text-gray-400">
@@ -368,7 +366,7 @@ export default function StorePage() {
                   )
                 }
                 maxLength={30}
-                className="flex-1 min-w-0 pr-3.5 h-full bg-transparent text-dash-body text-[#023337] focus:outline-none"
+                className="flex-1 min-w-0 pr-3.5 h-full bg-transparent text-dash-body text-ink focus:outline-none"
               />
             </div>
             {!handleValid && form.handle !== "" ? (
@@ -495,7 +493,12 @@ export default function StorePage() {
                     form.gallery.filter((u) => u !== url),
                   )
                 }
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-900/80 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-gray-900"
+                // `bg-slab`, not `bg-gray-900` — this badge sits ON a photo
+                // and must stay a dark circle in both themes. `gray-900` is
+                // the reversed ramp's LIGHTEST shade in dark mode, which
+                // would turn it into a near-white badge with unreadable
+                // white-on-white text.
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slab/80 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-slab"
                 aria-label="Remove photo"
               >
                 <CloseIcon size={11} />
@@ -538,7 +541,7 @@ export default function StorePage() {
            scroll container); lg:left matches the w-[260px] sidebar, and the
            mobile bottom offset clears the BottomNav. */
         <div className="fixed inset-x-0 lg:left-[260px] bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] md:bottom-6 z-40 px-4 sm:px-6 pointer-events-none">
-          <div className="max-w-3xl mx-auto pointer-events-auto flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-xl pl-4 pr-2 py-2 shadow-lg">
+          <div className="max-w-3xl mx-auto pointer-events-auto flex items-center justify-between gap-3 bg-surface border border-gray-200 rounded-xl pl-4 pr-2 py-2 shadow-lg">
             <p className="text-dash-secondary text-gray-500 min-w-0 truncate">
               {!isValid
                 ? "Fix the highlighted fields to save"

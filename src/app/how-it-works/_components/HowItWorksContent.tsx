@@ -108,7 +108,7 @@ export default function HowItWorksContent() {
   return (
     <>
       <Navbar />
-      <main className="bg-white min-h-screen pt-28 sm:pt-32 pb-24">
+      <main className="bg-surface min-h-screen pt-28 sm:pt-32 pb-24">
         <section className="max-w-2xl mx-auto px-5 sm:px-8 text-center mb-12">
           <motion.div initial="hidden" animate="show" variants={stagger}>
             <motion.span
@@ -119,7 +119,7 @@ export default function HowItWorksContent() {
             </motion.span>
             <motion.h1
               variants={fadeUp}
-              className="text-4xl sm:text-5xl font-bold text-[#023337] tracking-tight text-balance mb-4"
+              className="text-4xl sm:text-5xl font-bold text-ink tracking-tight text-balance mb-4"
             >
               Two paths. Same rule: nothing invented.
             </motion.h1>
@@ -212,14 +212,14 @@ export default function HowItWorksContent() {
                       variants={fadeUp}
                       className="relative flex gap-5"
                     >
-                      <div className="relative z-10 w-14 h-14 rounded-2xl bg-white border-2 border-orange-400 flex items-center justify-center shrink-0 shadow-sm shadow-orange-200/50">
+                      <div className="relative z-10 w-14 h-14 rounded-2xl bg-surface border-2 border-orange-400 flex items-center justify-center shrink-0 shadow-sm shadow-orange-200/50">
                         <Icon className="w-6 h-6 text-orange-500" />
                       </div>
                       <div className="pt-1.5">
                         <p className="text-[11px] font-bold text-orange-400 tracking-widest uppercase mb-1">
                           Step {i + 1}
                         </p>
-                        <h3 className="text-lg font-bold text-[#023337] mb-1.5">
+                        <h3 className="text-lg font-bold text-ink mb-1.5">
                           {step.title}
                         </h3>
                         <p className="text-sm text-gray-500 leading-relaxed">
@@ -241,7 +241,7 @@ export default function HowItWorksContent() {
                 <div className="pt-1.5">
                   <Link
                     href={journey.cta.href}
-                    className="inline-flex items-center gap-2 text-[#023337] font-bold hover:text-orange-600 transition-colors"
+                    className="inline-flex items-center gap-2 text-ink font-bold hover:text-orange-600 transition-colors"
                   >
                     {journey.cta.label}
                     <ArrowRightIcon className="w-4 h-4" />

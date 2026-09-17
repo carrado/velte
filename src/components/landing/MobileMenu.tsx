@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { VelteLogo } from "@/components/VelteLogo";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import {
@@ -149,7 +150,7 @@ function AccordionSection({
         aria-expanded={open}
         className="w-full flex items-center justify-between py-4 text-left cursor-pointer"
       >
-        <span className="text-base font-bold text-[#023337]">{label}</span>
+        <span className="text-base font-bold text-ink">{label}</span>
         <motion.span whileTap={{ scale: 0.85 }}>
           <ChevronDownIcon
             size={16}
@@ -206,7 +207,7 @@ function NavRow({
         onClick={onNavigate}
         className={cn(
           "flex items-center gap-3 py-2.5 -mx-1 px-2 rounded-xl transition-colors",
-          active ? "bg-white" : "hover:bg-white/60",
+          active ? "bg-surface" : "hover:bg-white/60",
         )}
       >
         {children}
@@ -264,12 +265,7 @@ export function MobileMenu({
             className="fixed inset-y-0 right-0 z-[100] w-[86%] max-w-sm sm:hidden bg-orange-50 shadow-2xl flex flex-col"
           >
             <div className="flex items-center justify-between px-5 h-16 border-b border-orange-100 shrink-0">
-              <Image
-                src="/velte_logo_esn5dj.png"
-                alt="Velte"
-                width={64}
-                height={31}
-              />
+              <VelteLogo width={64} height={31} />
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 type="button"
@@ -301,7 +297,7 @@ export function MobileMenu({
                         onNavigate={onClose}
                         active={pathname === href}
                       >
-                        <div className="relative z-10 w-10 h-10 rounded-2xl bg-white flex items-center justify-center shrink-0 overflow-hidden">
+                        <div className="relative z-10 w-10 h-10 rounded-2xl bg-surface flex items-center justify-center shrink-0 overflow-hidden">
                           {image ? (
                             <Image
                               src={image}
@@ -317,7 +313,7 @@ export function MobileMenu({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[#023337]">
+                          <p className="text-sm font-semibold text-ink">
                             {title}
                           </p>
                           <p className="text-[12px] text-gray-400 truncate">
@@ -348,10 +344,10 @@ export function MobileMenu({
                       onNavigate={onClose}
                       active={pathname === href}
                     >
-                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-white flex items-center justify-center shrink-0">
+                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-surface flex items-center justify-center shrink-0">
                         <Icon size={18} className="text-orange-500" />
                       </div>
-                      <span className="text-sm font-semibold text-[#023337]">
+                      <span className="text-sm font-semibold text-ink">
                         {title}
                       </span>
                     </NavRow>
@@ -377,10 +373,10 @@ export function MobileMenu({
                       onNavigate={onClose}
                       active={pathname === href}
                     >
-                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-white flex items-center justify-center shrink-0">
+                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-surface flex items-center justify-center shrink-0">
                         <Icon size={18} className="text-orange-500" />
                       </div>
-                      <span className="text-sm font-semibold text-[#023337]">
+                      <span className="text-sm font-semibold text-ink">
                         {title}
                       </span>
                     </NavRow>

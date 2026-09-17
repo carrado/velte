@@ -34,6 +34,37 @@ export const CloseIcon = createIcon("CloseIcon", {
   ),
 });
 
+/** The same X with heavier bars, for a control that is the only thing on its
+ *  surface and has to read as a target at a glance — the credits modal's
+ *  close button, which carries no label beside it.
+ *
+ *  A separate glyph rather than a prop, because these icons are FILLED shapes
+ *  with `stroke="none"`: `strokeWidth` is accepted by every icon in this set
+ *  and does nothing to any of them, so weight can only come from geometry.
+ *  3 units against CloseIcon's 2, on the same 24 grid. */
+export const CloseBoldIcon = createIcon("CloseBoldIcon", {
+  accent: (
+    <>
+      <rect
+        x="10.5"
+        y="3"
+        width="3"
+        height="18"
+        rx="1.5"
+        transform="rotate(45 12 12)"
+      />
+      <rect
+        x="10.5"
+        y="3"
+        width="3"
+        height="18"
+        rx="1.5"
+        transform="rotate(-45 12 12)"
+      />
+    </>
+  ),
+});
+
 export const CheckIcon = createIcon("CheckIcon", {
   accent: <path d="M9.8 16.2 4.9 11.3 3.5 12.7 9.8 19 20.5 8.3 19.1 6.9Z" />,
 });

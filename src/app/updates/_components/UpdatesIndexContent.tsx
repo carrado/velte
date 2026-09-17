@@ -20,10 +20,10 @@ export default function UpdatesIndexContent() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#F1F5F9] min-h-screen pt-24 pb-20">
+      <main className="bg-canvas min-h-screen pt-24 pb-20">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 flex flex-col gap-6">
           <header className="flex flex-col gap-3">
-            <h1 className="text-3xl sm:text-4xl font-bold text-[#023337] tracking-tight">
+            <h1 className="text-3xl sm:text-4xl font-bold text-ink tracking-tight">
               Updates
             </h1>
             <p className="text-gray-500 max-w-xl">
@@ -38,13 +38,13 @@ export default function UpdatesIndexContent() {
               <Link
                 key={entry.slug}
                 href={`/updates/${entry.slug}`}
-                className="group rounded-2xl border border-gray-100 bg-white shadow-sm p-5 sm:p-6 flex items-center justify-between gap-4 hover:border-orange-200 transition-colors"
+                className="group rounded-2xl border border-gray-100 bg-surface shadow-sm p-5 sm:p-6 flex items-center justify-between gap-4 hover:border-orange-200 transition-colors"
               >
                 <div className="min-w-0">
                   <p className="text-xs text-gray-400 mb-1">
                     {fmtDate(entry.publishedAt)}
                   </p>
-                  <p className="font-semibold text-[#023337] truncate">
+                  <p className="font-semibold text-ink truncate">
                     {entry.title}
                   </p>
                   <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">

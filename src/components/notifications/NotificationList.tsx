@@ -13,8 +13,8 @@ import {
 import type { AppNotification, NotificationType } from "@/types/notification";
 import {
   BellIcon,
-  BellIllustration,
   CheckIcon,
+  ClipboardListIcon,
   CreditCardIcon,
   GiftIcon,
   MessageCircleIcon,
@@ -23,7 +23,10 @@ import {
   ShoppingCartIcon,
   TrashIcon,
   WalletIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
+// This list's own empty-state illustration stays on the original duotone
+// set, per explicit request.
+import { BellIllustration } from "@/components/icons";
 
 function formatDate(iso: string): string {
   const date = new Date(iso);
@@ -55,6 +58,24 @@ const TYPE_CONFIG: Record<
     icon: MessageCircleIcon,
     bg: "bg-green-100",
     color: "text-green-600",
+  },
+  // Added 2026-09-05, when notifications stopped being vendor-only. A
+  // VENDOR sees these too: they are on the receiving end of buyer requests —
+  // so the dashboard needs its own rendering for them rather than falling
+  // through to the generic bell.
+  "buyer-request": {
+    icon: MessageCircleIcon,
+    bg: "bg-sky-100",
+    color: "text-sky-600",
+  },
+  // 2026-09-12 — a Shopping List's background search job finished. A
+  // distinct icon from "order"'s ShoppingCartIcon on purpose: this is a
+  // buyer being told their OWN search is ready, not a vendor being told
+  // about a sale.
+  "shopping-list": {
+    icon: ClipboardListIcon,
+    bg: "bg-violet-100",
+    color: "text-violet-600",
   },
   system: { icon: BellIcon, bg: "bg-gray-100", color: "text-gray-500" },
 };
@@ -156,7 +177,7 @@ function NotificationItem({
         onClose={() => setMenuOpen(false)}
         anchorRef={menuTriggerRef}
         align="auto"
-        className="w-40 bg-white rounded-lg shadow-lg border border-gray-100 py-1"
+        className="w-40 bg-surface rounded-lg shadow-lg border border-gray-100 py-1"
       >
         {!notification.read && (
           <button
@@ -220,7 +241,7 @@ export function NotificationList({
 
   return (
     <div className={cn("flex flex-col px-3 sm:px-0", className)}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 sticky top-0 bg-surface z-10">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-gray-900">
             Notifications

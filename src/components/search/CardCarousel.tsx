@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons/hero";
 
 // Generic horizontal carousel for a row of result cards (products, stores,
 // external suggestions, …) — Google Places-style: one card per slide in a
@@ -72,7 +72,10 @@ export function CardCarousel<T>({
   // results" share one visual language — just no arrows / nothing to swipe.
   if (items.length === 1) {
     return (
-      <div className={cn("max-w-full", slideClassName)}>
+      <div
+        data-slide-id={getKey(items[0])}
+        className={cn("max-w-full", slideClassName)}
+      >
         {renderItem(items[0])}
       </div>
     );
@@ -96,6 +99,12 @@ export function CardCarousel<T>({
           <div
             key={getKey(item)}
             data-carousel-slide
+            // Addressable by id so the recommendation block above can scroll
+            // straight to the card it is talking about (see
+            // RecommendationPicks' own scrollToCard). Set on the SLIDE, not
+            // the card, because the slide is what the scroll container
+            // actually positions.
+            data-slide-id={getKey(item)}
             className={cn("shrink-0 snap-start", slideClassName)}
           >
             {renderItem(item)}
@@ -107,7 +116,7 @@ export function CardCarousel<T>({
           type="button"
           onClick={() => scrollByPage(-1)}
           aria-label="Scroll left"
-          className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
+          className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-surface shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
           <ChevronLeftIcon size={16} />
         </button>
@@ -117,7 +126,7 @@ export function CardCarousel<T>({
           type="button"
           onClick={() => scrollByPage(1)}
           aria-label="Scroll right"
-          className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-8 h-8 rounded-full bg-white shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
+          className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-8 h-8 rounded-full bg-surface shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
           <ChevronRightIcon size={16} />
         </button>

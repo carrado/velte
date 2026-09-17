@@ -7,17 +7,16 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { reportLead } from "@/lib/reportLead";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
-import { buildWhatsappLink } from "@/lib/whatsapp";
+import { buildChatLink } from "@/lib/chatLink";
 import type { VendorMatch } from "@/types/search";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   MapPinIcon,
   StoreIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 export function VendorResultCard({
   match,
@@ -34,10 +33,16 @@ export function VendorResultCard({
   // intent). Defaults true for every other context, where this card is the
   // only place a chat CTA exists at all.
   showChatButton = true,
+  // "Velte's picks" chip labels for THIS card (e.g. ["Top pick",
+  // "Nearest"]) — computed by ConversationTurnView from the turn's
+  // SearchRecommendation, empty/omitted for every card the comparison
+  // didn't single out (and on turns with no recommendation at all).
+  pickBadges,
 }: {
   match: VendorMatch;
   showViewStore?: boolean;
   showChatButton?: boolean;
+  pickBadges?: string[];
 }) {
   const symbol = match.currency === "USD" ? "$" : "₦";
   const isRange = match.priceMax != null && match.priceMax > match.price;
@@ -46,11 +51,16 @@ export function VendorResultCard({
   const currentUserId = useUserStore((s) => s.user?.id);
   const isOwn = currentUserId != null && currentUserId === match.vendorId;
 
-  const chatHref = buildWhatsappLink(
-    match.whatsapp,
-    `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
-    match.mainImageUrl ? match.productId : undefined,
-  );
+  // Points at /api/chat, which resolves the number and bills the lead
+  // server-side — the number is never in this page (2026-08-27, see
+  // chatLink.ts). Billing moved with it, so there's no onClick beacon any
+  // more: following the link IS the billable event.
+  const chatHref = buildChatLink({
+    vendorId: match.vendorId,
+    productId: match.mainImageUrl ? match.productId : undefined,
+    source: "search",
+    message: `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
+  });
 
   // Main image first, then whatever else the vendor uploaded — a buyer
   // shouldn't be stuck with just whichever single photo was set as "main"
@@ -87,7 +97,7 @@ export function VendorResultCard({
     descOverflows || match.attributes.length > 0 || images.length > 1;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
+    <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div
         className={`relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden ${images.length > 0 ? "cursor-zoom-in" : ""}`}
         onClick={() => images.length > 0 && setLightboxOpen(true)}
@@ -100,6 +110,27 @@ export function VendorResultCard({
           />
         ) : (
           <StoreIcon size={28} className="text-gray-300" />
+        )}
+        {pickBadges && pickBadges.length > 0 && (
+          // Overlaid on the photo, e-commerce style, so the content block's
+          // own tight name/price grid stays untouched. "Top pick" gets the
+          // solid accent; the rest stay quiet so a card carrying two chips
+          // doesn't shout twice.
+          <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+            {pickBadges.map((label) => (
+              <span
+                key={label}
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm",
+                  label === "Top pick"
+                    ? "bg-orange-500 text-white"
+                    : "bg-white/95 text-orange-600 border border-orange-100",
+                )}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
         )}
         {hasGallery && (
           <>
@@ -125,7 +156,7 @@ export function VendorResultCard({
                   key={url}
                   className={cn(
                     "h-1.5 w-1.5 rounded-full transition-colors",
-                    i === imgIndex ? "bg-white" : "bg-white/50",
+                    i === imgIndex ? "bg-surface" : "bg-white/50",
                   )}
                 />
               ))}
@@ -138,11 +169,9 @@ export function VendorResultCard({
           {match.name}
         </p>
         {match.quoteOnRequest ? (
-          <p className="text-[15px] font-extrabold text-[#023337]">
-            Ask for price
-          </p>
+          <p className="text-[15px] font-extrabold text-ink">Ask for price</p>
         ) : (
-          <p className="text-[15px] font-extrabold text-[#023337]">
+          <p className="text-[15px] font-extrabold text-ink">
             {fmt(match.price, symbol)}
             {isRange && (
               <>
@@ -212,9 +241,6 @@ export function VendorResultCard({
                 href={chatHref}
                 label="Chat with vendor"
                 className="w-full"
-                onClick={() =>
-                  reportLead(match.vendorId, match.productId, "search")
-                }
               />
             )}
             {showViewStore && match.storeHandle && (
@@ -260,9 +286,6 @@ export function VendorResultCard({
         }}
         chatHref={chatHref}
         chatLabel="Chat with vendor"
-        onChatClick={() =>
-          reportLead(match.vendorId, match.productId, "search")
-        }
       />
 
       <ImageLightbox

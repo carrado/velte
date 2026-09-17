@@ -1,17 +1,25 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { buildProductTerm } from "@/lib/productTerm";
+import { isVagueReference } from "@/lib/productTerm";
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
-import { looksLikeServiceTask } from "@/lib/server/ai/sectorClarifiers";
+import {
+  allowsNearbyBusinesses,
+  looksLikeServiceTask,
+} from "@/lib/server/ai/sectorClarifiers";
 import {
   searchingPhrase,
   foundCountPhrase,
   directMatchPhrase,
   similarMatchPhrase,
   noProductMatchPhrase,
+  checkingPhotosPhrase,
 } from "@/lib/server/ai/statusPhrases";
+import {
+  rejectedMatchesNote,
+  verifyItemMatches,
+} from "@/lib/server/ai/verifyMatches";
 import type {
   BuyerLocation,
   MatchTier,
@@ -23,7 +31,9 @@ import type {
 const inputSchema = z.object({
   product: z
     .string()
-    .describe("The specific product or service the buyer is looking for."),
+    .describe(
+      "The specific product or service the buyer is looking for — the bare item/service name ONLY ('phone', 'ankara dress', 'haircut'), never a full descriptive phrase with qualities stitched on. A quality, spec, or feature the buyer mentioned (a good camera, high storage, a certain color) belongs in `attributes` as its own short entry, never appended here with a connector word — 'phone' + attributes ['good camera', 'high storage'] is correct, 'phone with good camera and high storage' as this field's whole value is not: joined with attributes, it becomes the actual search term shown to the buyer verbatim, and a clause-shaped term reads like it was lifted straight from their sentence instead of a real search.",
+    ),
   // Found live: for a vague repair request naming no symptom at all ("fix
   // my Infinix Hot 50i phone"), the model started ENUMERATING plausible
   // things that might be wrong — "screen replacement", "battery",
@@ -41,7 +51,7 @@ const inputSchema = z.object({
     .array(z.string())
     .optional()
     .describe(
-      "Specific attributes — color, size, brand, material, style, condition, etc. — but ONLY ones the buyer's own words actually named, or that you can genuinely see in an attached photo (for a photo, describe everything visually identifiable, not just the bare category, so matching can tell an exact match from a loosely related one). Never invent, guess, or list out plausible-sounding attributes the buyer never mentioned and no photo shows — e.g. for a bare repair request naming no symptom ('fix my phone', 'my laptop isn't working'), do NOT enumerate possible causes or parts ('screen', 'battery', 'software issue') as if the buyer had named them; leave this empty instead. An empty/omitted attributes list is the correct, honest output far more often than a guessed one.",
+      "Specific attributes — color, size, brand, material, style, condition, camera/storage/spec, etc. — but ONLY ones the buyer's own words actually named, or that you can genuinely see in an attached photo (for a photo, describe everything visually identifiable, not just the bare category, so matching can tell an exact match from a loosely related one). Never invent, guess, or list out plausible-sounding attributes the buyer never mentioned and no photo shows — e.g. for a bare repair request naming no symptom ('fix my phone', 'my laptop isn't working'), do NOT enumerate possible causes or parts ('screen', 'battery', 'software issue') as if the buyer had named them; leave this empty instead. An empty/omitted attributes list is the correct, honest output far more often than a guessed one. EACH ENTRY IS ONE SHORT, STANDALONE TRAIT (found live: 'with good camera and high storage' as a single entry got joined onto `product` verbatim, connector words and all, producing 'smartphone with good camera and high storage' as the actual search term — a real search term must never read like a clause lifted from the buyer's own sentence) — split a request naming several things into separate short entries ('good camera', 'high storage'), never one long phrase strung together with 'with'/'and'/'for'. And never include a bare intensifier with no real trait attached ('nice', 'good', 'great', 'quality') — 'nice camera' has a real trait (camera) worth keeping; 'nice' alone, or trailing on its own after the real traits are already listed, names nothing a search can filter on and must be dropped.",
     ),
   // Optional on purpose: set this ONLY when the buyer's own message names or
   // clearly implies a specific place. Omit it entirely otherwise — the
@@ -58,13 +68,69 @@ const inputSchema = z.object({
     .number()
     .optional()
     .describe("Search radius in km. Defaults to 10 if not specified."),
+  // The diagram's "extract budget" box made structural (Phase 2 follow-on):
+  // a stated ceiling becomes a real, code-enforced price filter in the
+  // retrieval backend — never just prose riding along in the query text.
+  maxBudgetNaira: z
+    .number()
+    .optional()
+    .describe(
+      "The buyer's stated maximum budget, converted to plain Naira — ONLY when their own words state one ('under 200k' → 200000, 'below ₦1.5m' → 1500000, 'between 100k and 150k' → 150000, '50-70k budget' → 70000). Omit entirely when no budget is mentioned — never guess one from the product category, and never treat a target price the buyer hopes to NEGOTIATE DOWN TO as a hard cap unless they phrase it as a limit.",
+    ),
 });
+
+// Attribute values that describe the ABSENCE of an attribute. The tool
+// schema already tells the model at length not to invent attributes, and it
+// mostly obeys — but measured live on "I need a good laptop for my
+// business", gpt-5-mini returned:
+//
+//   ["business laptop", "reliable", "durable", "good performance",
+//    "suitable for business use", "Windows or macOS, buyer didn't specify"]
+//
+// That last entry is not an attribute, it is the model narrating its own
+// uncertainty — and it goes straight into buildProductTerm, so the text
+// that gets embedded and matched against real listings ends with "buyer
+// didn't specify". A stronger model produces cleaner attributes (verified:
+// gpt-5 returned just ["20000mAh"] where gpt-5-mini returned
+// ["20000mAh", "powerbank", "portable charger"]), but it costs 4.5x the
+// latency — and this is the same defect for free, caught in code where a
+// prompt instruction was never going to be reliable.
+const NON_ATTRIBUTE =
+  /\b(did ?n[o']?t specify|not specified|unspecified|no preference|any (brand|colour|color|size|type)|n\/a|none specified|buyer did)\b/i;
+
+// The SAME defect as NON_ATTRIBUTE above, a different shape of it (found
+// live: "standing fan" → attributes ["living room", "oscillation?",
+// "remote?"] — the buyer never asked a question, the MODEL did, silently
+// wondering to itself whether oscillation/remote control mattered, and
+// that self-questioning leaked straight through as if it were a real
+// attribute. Landed verbatim in the buyer-facing dead-end line: `Couldn't
+// find "standing fan living room oscillation? remote?" on Velte at all` —
+// a real attribute a buyer actually stated never ends in a question mark;
+// only the model's own uncertainty does. Checked separately from
+// NON_ATTRIBUTE's phrase list because this is a PUNCTUATION tell, not a
+// wording one — no fixed phrase to match, just "does this end with '?'".
+const SELF_QUESTIONING = /\?\s*$/;
+
+export function usableAttributes(attributes?: string[]): string[] | undefined {
+  if (!attributes?.length) return attributes;
+  const kept = attributes
+    .map((a) => a.trim())
+    .filter(
+      (a) =>
+        a.length > 0 &&
+        a.length <= 60 &&
+        !NON_ATTRIBUTE.test(a) &&
+        !SELF_QUESTIONING.test(a),
+    );
+  return kept.length ? kept : undefined;
+}
 
 export interface SearchProductsCoreInput {
   product: string;
   attributes?: string[];
   location?: string;
   radiusKm?: number;
+  maxBudgetNaira?: number;
 }
 
 export interface SearchProductsCoreResult {
@@ -73,6 +139,13 @@ export interface SearchProductsCoreResult {
   matchQuality: MatchQuality;
   externalSuggestions: NearbyBusiness[];
   locationNote?: string;
+  // Present only when the photo/kind-of-item check actually dropped
+  // something (see verifyMatches.ts) — a factual note for the model about
+  // WHY the result set is thinner (or empty) than the catalog's own hit
+  // count, plus an explicit ban on offering what was dropped. Shaped
+  // exactly like locationNote: a resolved fact handed over, never something
+  // for the model to re-derive.
+  filteredNote?: string;
 }
 
 /**
@@ -89,31 +162,80 @@ export interface SearchProductsCoreResult {
  * prompt mandating it — even though a real Velte vendor's own product
  * listing ("Web & Mobile App development") matched the same query directly.
  */
+/**
+ * A budget the model actually meant. The schema above says "omit entirely
+ * when no budget is mentioned" — and found live (2026-09-05) the model sends
+ * `0` instead, on a query with no budget in it anywhere ("I want to buy a
+ * new phone, which one do I pick, Infinix and Samsung").
+ *
+ * A zero ceiling is not a harmless bit of noise. It is `!= null`, so every
+ * budget-aware path downstream treats it as a REAL cap: the buyer is told
+ * nothing shows "a confirmed price under ₦0", and — far worse —
+ * fetchExternalOffers hard-drops every listing whose price exceeds it, which
+ * is every priced listing in existence. What survives is exactly the junk
+ * with no price on it. A prompt instruction cannot be the only guard against
+ * that, so this normalizes it at every boundary the value is read at.
+ */
+export function usableBudget(
+  value: number | null | undefined,
+): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
 export async function searchProductsCore(
-  { product, attributes, location, radiusKm }: SearchProductsCoreInput,
+  {
+    product,
+    attributes,
+    location,
+    radiusKm,
+    maxBudgetNaira: rawMaxBudgetNaira,
+  }: SearchProductsCoreInput,
   {
     buyerLocation,
     push,
     isImageQuery = false,
     imageUrl,
     weakResultsOut,
+    locationLabel,
+    allowNearbyBusinesses,
   }: {
     buyerLocation?: BuyerLocation;
     push?: (candidates: string[]) => void;
     isImageQuery?: boolean;
     imageUrl?: string;
     weakResultsOut?: { current: VendorMatch[] };
+    // DISPLAY ONLY (Phase 5) — the reverse-geocoded name of the buyer's
+    // own coordinates, used to say "near Independence Layout, Enugu"
+    // instead of the vague "your area" in the status line. Deliberately
+    // NOT the `location` search parameter: this never re-geocodes and
+    // never influences what gets searched, so a wrong or stale label can
+    // only ever cost a slightly-off status phrase, never a wrong search.
+    locationLabel?: string;
+    // Google Places (the retrieval backend's Tier 5) — SERVICE requests
+    // only, per explicit product decision (2026-08-26). See
+    // allowsNearbyBusinesses below for the full reasoning. `undefined`
+    // falls back to the text heuristic; route.ts passes the scope check's
+    // own read of buyer intent instead, which is a far better signal than
+    // keyword-matching the query.
+    allowNearbyBusinesses?: boolean;
   } = {},
 ): Promise<
   SearchProductsCoreResult | { error: "location-not-found"; message: string }
 > {
+  // Normalized at the boundary, so nothing below — the retrieval backend's
+  // own price filter included — can ever be handed a zero ceiling. See
+  // usableBudget's own comment for what a stray 0 actually did on screen.
+  const maxBudgetNaira = usableBudget(rawMaxBudgetNaira);
+
   // Best-effort status text before we know the resolved coordinates —
   // an explicit place is shown as-is; otherwise "your area" if a
   // device location is known, or nothing (nationwide phrasing) if not.
   push?.(
     searchingPhrase(
       product,
-      location ?? (buyerLocation ? "your area" : undefined),
+      location ?? (buyerLocation ? (locationLabel ?? "your area") : undefined),
     ),
   );
 
@@ -126,7 +248,45 @@ export async function searchProductsCore(
   }
   const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
-  const queryText = buildProductTerm(product, attributes);
+  const cleanAttributes = usableAttributes(attributes);
+  // SEARCHED with `product` ALONE now (2026-09-15, explicit request) —
+  // every buyer-facing sentence built from `buildProductTerm(product,
+  // attributes)` elsewhere (route.ts's dead-end phrasing, background-item
+  // labels, the goal sheet's own itemTerm) is untouched, since none of them
+  // read from this function's own local variables. What changed is what
+  // gets SEARCHED with: this used to be that same merged term, so "phone"
+  // plus an attribute like "good camera" became ONE string fed straight
+  // into both the vector search AND the rerank step — and rerank in
+  // particular (a cross-encoder, far more sensitive to exact phrasing than
+  // raw embedding similarity) could mark down a perfectly good phone whose
+  // own listing text just didn't happen to echo those specific words. See
+  // `attributesText` below for where the attributes went instead: a soft
+  // ranking boost on the retrieval backend (retrieval.service.js's
+  // rankCandidates), applied AFTER a listing already qualifies as a real
+  // match on the bare item, never a reason to drop one that qualifies but
+  // says nothing about camera or storage.
+  const queryText = product.trim();
+  const attributesText = cleanAttributes?.join(", ") || undefined;
+  // See isVagueReference's own comment — "all of them", "the best" carry no
+  // real product to search for. Returned as a clean, honest zero-result
+  // search (matchTier null, same shape genuine "nothing found" already
+  // takes) rather than spending a real vector-search call — and the
+  // network round trip that would follow it — on a term with nothing in it
+  // to match against. Checked against the bare product term now, same
+  // reasoning as above — a vague PRODUCT is still vague regardless of what
+  // attributes ride alongside it.
+  if (isVagueReference(queryText)) {
+    return {
+      results: [],
+      matchTier: null,
+      matchQuality: undefined,
+      externalSuggestions: [],
+    };
+  }
+  const includeNearbyBusinesses = allowsNearbyBusinesses(
+    queryText,
+    allowNearbyBusinesses,
+  );
   let results: VendorMatch[],
     weakResults: VendorMatch[],
     matchTier: MatchTier,
@@ -144,11 +304,17 @@ export async function searchProductsCore(
         method: "POST",
         body: {
           queryText,
+          attributesText,
           lat: coords?.lat,
           lng: coords?.lng,
           radiusKm: radiusKm ?? 10,
           isImageQuery,
           imageUrl,
+          maxBudgetNaira,
+          // Honored by staffly-ai-backend's retrieval service, which skips
+          // the Places call entirely when false — so a product dead end
+          // costs nothing at Google, not just "fetched and thrown away".
+          includeNearbyBusinesses,
         },
       }));
   } catch (err) {
@@ -161,6 +327,88 @@ export async function searchProductsCore(
       err,
     );
     throw err;
+  }
+
+  // The kind-of-item gate (verifyMatches.ts). Retrieval matches on MEANING,
+  // which puts sneakers right next to a corporate shoe and a phone case
+  // right next to a phone — so a candidate clearing the relevance floor is
+  // not yet evidence that it's the thing the buyer asked for. This asks
+  // that question directly, with the vendor's own photo as the evidence,
+  // and drops what fails.
+  //
+  // Placed HERE, not in route.ts, on purpose: everything downstream of this
+  // function reads from what it returns — the status line below, the
+  // model's own reply text, the recommendation picks, the dead-end/
+  // reach-out fallback, the demand log. Filtering at the source is what
+  // makes all of them correct at once; filtering later would still leave
+  // the reply describing a listing that's no longer on screen (which is the
+  // exact bug this fixes, in a new place).
+  //
+  // Both buckets go in together: `weakResults` is rendered to the buyer too
+  // ("A couple more options — not an exact match"), and a wrong KIND of item
+  // is wrong there as well — "not an exact match" is a claim about degree,
+  // not a license to show a different product entirely.
+  // Used to gate this to "similar" only (2026-08-26 through 2026-09-15).
+  // "direct" is the backend's own statement that it found a close/exact
+  // hit, and running verification on every search would have added a
+  // fourth blocking LLM round trip — one that also fetches vendor images —
+  // to searches that were assumed never at risk.
+  //
+  // That assumption is now falsified by a real "direct" mismatch (found
+  // live: "agbada" returned an "agbada beads set" — a decorative accessory
+  // whose LISTING NAME literally contains the buyer's search term, which is
+  // exactly the shape that scores highest on a text/embedding hybrid and
+  // gets tagged "direct" — as the TOP recommendation pick, unverified,
+  // because "direct" skipped this gate entirely). A listing's own name
+  // containing the buyer's words is not evidence it's the right KIND of
+  // item; it can be the strongest signal for a wrong one, the same way a
+  // phone CASE outranks a phone on a title match. Verifying only "similar"
+  // protected exactly the turns where retrieval was already honest about
+  // being unsure, and left the confident-but-wrong case — the one that
+  // becomes a buyer's TOP CHOICE — completely unchecked.
+  //
+  // Runs on both tiers now. Cost is still bounded (MAX_CANDIDATES in
+  // verifyMatches.ts), and correctness beats latency here: a buyer shown
+  // the wrong item with full confidence is a worse failure than a slightly
+  // slower reply.
+  let filteredNote: string | undefined;
+  const verifiable = [...results, ...weakResults];
+  if (verifiable.length) {
+    push?.(checkingPhotosPhrase(product));
+    const { rejected } = await verifyItemMatches({
+      product,
+      attributes: cleanAttributes,
+      candidates: verifiable,
+      isImageQuery,
+      imageUrl,
+    });
+    if (rejected.length) {
+      const droppedIds = new Set(rejected.map((r) => r.match.productId));
+      results = results.filter((r) => !droppedIds.has(r.productId));
+      weakResults = weakResults.filter((w) => !droppedIds.has(w.productId));
+      filteredNote = rejectedMatchesNote(rejected, product) ?? undefined;
+      // Worth a log line either way: this is the one place a real vendor's
+      // listing gets removed from a buyer's results, so a bad gate has to
+      // be diagnosable from the server logs rather than only from a
+      // complaint.
+      console.info(
+        `[search] dropped ${rejected.length} wrong-kind match(es) for "${product}":`,
+        rejected.map((r) => `${r.match.name} → ${r.actualItem}`),
+      );
+      if (!results.length) {
+        // Tier and quality describe a result set that no longer exists.
+        // Leaving "similar" behind would put the "No exact match, but N
+        // similar items" heading over an empty section.
+        matchTier = null;
+        matchQuality = undefined;
+        // And weak matches can't stand alone: they're framed as a
+        // supplement to real results ("a couple MORE options"), and the
+        // frontend's own turn shape treats them as always-empty-when-
+        // products-is. An empty set here is a genuine dead end, which the
+        // zero-result path below already handles properly.
+        weakResults = [];
+      }
+    }
   }
 
   if (results.length) {
@@ -215,8 +463,14 @@ export async function searchProductsCore(
     results,
     matchTier,
     matchQuality,
-    externalSuggestions: externalSuggestions ?? [],
+    // Belt to the backend flag's braces: an older backend that doesn't
+    // know the flag yet still can't put shops-that-sell-things in front of
+    // a buyer who asked for a THING.
+    externalSuggestions: includeNearbyBusinesses
+      ? (externalSuggestions ?? [])
+      : [],
     ...(locationNote ? { locationNote } : {}),
+    ...(filteredNote ? { filteredNote } : {}),
   };
 }
 
@@ -258,15 +512,49 @@ export function searchProductsTool(
   isImageQuery = false,
   imageUrl?: string,
   weakResultsOut?: { current: VendorMatch[] },
+  // Display-only place label for the status line — see searchProductsCore.
+  locationLabel?: string,
+  // The ceiling already established for THIS request (route.ts's goal
+  // sheet, applied only once both its locks pass). Used ONLY when the
+  // model's own call omits a budget: a buyer who set ₦700k three turns ago
+  // shouldn't have it silently forgotten just because this turn's phrasing
+  // didn't repeat it. A budget the model DOES pass always wins — that's
+  // either the buyer restating one or deliberately tightening it ("find me
+  // something cheaper").
+  rememberedBudgetNaira?: number | null,
+  // The scope check's own read of buyer intent, resolved to a yes/no by
+  // route.ts — see allowsNearbyBusinesses. Omitted means "decide from the
+  // query text".
+  allowNearbyBusinesses?: boolean,
 ) {
   return tool({
     description:
       "Search the live catalog for a SPECIFIC PRODUCT OR SERVICE by meaning, proximity, and trust — use this when the buyer names an item they want to buy (e.g. 'white sneakers', 'Tecno fast charger'). For a buyer describing a kind of business/vendor/shop instead of an item, use searchStores. Returns real listings only — never invent a vendor, price, or stock level beyond what this tool returns.",
     inputSchema,
-    execute: async ({ product, attributes, location, radiusKm }) =>
+    execute: async ({
+      product,
+      attributes,
+      location,
+      radiusKm,
+      maxBudgetNaira,
+    }) =>
       searchProductsCore(
-        { product, attributes, location, radiusKm },
-        { buyerLocation, push, isImageQuery, imageUrl, weakResultsOut },
+        {
+          product,
+          attributes,
+          location,
+          radiusKm,
+          maxBudgetNaira: maxBudgetNaira ?? rememberedBudgetNaira ?? undefined,
+        },
+        {
+          buyerLocation,
+          push,
+          isImageQuery,
+          imageUrl,
+          weakResultsOut,
+          locationLabel,
+          allowNearbyBusinesses,
+        },
       ),
   });
 }

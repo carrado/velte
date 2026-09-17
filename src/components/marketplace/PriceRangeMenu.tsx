@@ -55,7 +55,7 @@ export function PriceRangeMenu({
           "shrink-0 inline-flex items-center gap-1.5 h-11 px-3.5 rounded-xl border text-sm font-semibold transition-colors cursor-pointer",
           active
             ? "border-orange-300 bg-orange-50 text-orange-700"
-            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
+            : "border-gray-200 bg-surface text-gray-700 hover:border-gray-300",
         )}
       >
         <TagIcon
@@ -79,7 +79,7 @@ export function PriceRangeMenu({
         anchorRef={anchorRef}
         align="right"
       >
-        <div className="w-64 bg-white rounded-xl border border-gray-200 shadow-lg p-4">
+        <div className="w-64 bg-surface rounded-xl border border-gray-200 shadow-lg p-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
             Price range (₦)
           </p>

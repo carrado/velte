@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import Image from "next/image";
+import { VelteLogo } from "@/components/VelteLogo";
 import { passwordSchema } from "@/lib/password-utils";
 import { PasswordStrengthMeter } from "@/components/passwordStrengthMeter";
 import {
@@ -22,7 +22,7 @@ import {
   EyeOffIcon,
   KeyIcon,
   LockIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // Shared FieldError component (can be moved to a shared file later)
 function FieldError({ message }: { message: string | undefined }) {
@@ -76,7 +76,7 @@ function ResetPasswordForm() {
         transition={{ duration: 0.5 }}
         className="relative w-full max-w-[440px]"
       >
-        <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl text-center">
+        <div className="bg-surface border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl text-center">
           <AlertCircleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">
             Invalid Request
@@ -104,15 +104,10 @@ function ResetPasswordForm() {
       className="relative w-full max-w-[440px]"
     >
       <Link href="/" className="flex items-center gap-2.5 justify-center mb-3">
-        <Image
-          src="/velte_logo_esn5dj.png"
-          alt="Velte"
-          width={72}
-          height={35}
-        />
+        <VelteLogo width={72} height={35} />
       </Link>
 
-      <div className="bg-white border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
+      <div className="bg-surface border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">
             Reset your password
@@ -288,7 +283,7 @@ function ResetPasswordForm() {
 // Main page component – wraps the form in Suspense
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center p-5">
+    <div className="min-h-screen bg-canvas flex items-center justify-center p-5">
       <Suspense fallback={<div>Loading...</div>}>
         <ResetPasswordForm />
       </Suspense>

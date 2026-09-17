@@ -18,7 +18,11 @@ import type { SignupForm } from "../schema";
 import WizardProgress from "./WizardProgress";
 import Step1BusinessAccount from "./Step1BusinessAccount";
 import Step2SectorDescription from "./Step2SectorDescription";
-import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "@/components/icons";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckIcon,
+} from "@/components/icons/hero";
 
 /* /auth/signup's only form again (2026-08-16 — the Buyer/Vendor toggle it
    briefly shared the page with is gone, see that page's own comment). Was
@@ -173,7 +177,7 @@ export default function VendorSignupForm() {
     <>
       <div className="mb-8">
         <WizardProgress step={step} />
-        <h1 className="text-2xl font-bold text-[#023337] mb-2 tracking-tight">
+        <h1 className="text-2xl font-bold text-ink mb-2 tracking-tight">
           {step === 1 ? "Get started with Velte" : "Tell buyers what you do"}
         </h1>
         <p className="text-gray-500 text-sm">

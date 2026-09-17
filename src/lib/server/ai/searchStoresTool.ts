@@ -2,7 +2,13 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
+import { isVagueReference } from "@/lib/productTerm";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
+import { allowsNearbyBusinesses } from "@/lib/server/ai/sectorClarifiers";
+import {
+  usableAttributes,
+  usableBudget,
+} from "@/lib/server/ai/searchProductsTool";
 import {
   searchingPhrase,
   foundCountPhrase,
@@ -37,12 +43,33 @@ const inputSchema = z.object({
     .number()
     .optional()
     .describe("Search radius in km. Defaults to 10 if not specified."),
+  // Both fields below (2026-09-17) are NEVER used to filter or narrow which
+  // vendors this call returns — searchStores matches on businessType alone,
+  // same as before. They exist purely so a real detail the buyer already
+  // gave (over this message or an earlier turn of the SAME request) reaches
+  // the vendor's own WhatsApp handoff message instead of being dropped —
+  // see StoreResultCard's own comment on why a vendor deciding whether to
+  // reply wants this even though the search itself never needed it.
+  attributes: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Specific details about the SERVICE/JOB the buyer wants this vendor for — timeframe, event date, quantity, a distinguishing spec, or anything else genuinely relevant to a vendor deciding whether and how to respond — but ONLY ones the buyer's own words actually gave, this message or an earlier turn of this same request. Same rule as searchProducts' own attributes: never invent or guess a plausible-sounding one, an empty/omitted list is correct far more often than a guessed one, and each entry is one short standalone trait, never a clause stitched together with 'and'/'with'/'for'.",
+    ),
+  maxBudgetNaira: z
+    .number()
+    .optional()
+    .describe(
+      "The buyer's stated budget for this job, in plain Naira, ONLY when their own words state one — same conversion rule as searchProducts' own maxBudgetNaira. Omit entirely when no budget is mentioned.",
+    ),
 });
 
 export interface SearchStoresCoreInput {
   businessType: string;
   location?: string;
   radiusKm?: number;
+  attributes?: string[];
+  maxBudgetNaira?: number;
 }
 
 export interface SearchStoresCoreResult {
@@ -75,13 +102,31 @@ export interface SearchStoresCoreResult {
  * — see route.ts's own comment on that fallback.
  */
 export async function searchStoresCore(
-  { businessType, location, radiusKm }: SearchStoresCoreInput,
+  {
+    businessType,
+    location,
+    radiusKm,
+    attributes,
+    maxBudgetNaira,
+  }: SearchStoresCoreInput,
   {
     buyerLocation,
     push,
+    locationLabel,
+    allowNearbyBusinesses,
   }: {
     buyerLocation?: BuyerLocation;
     push?: (candidates: string[]) => void;
+    // DISPLAY ONLY (Phase 5) — the reverse-geocoded name of the buyer's
+    // own coordinates, so the status line can say "near Independence
+    // Layout, Enugu" instead of "your area". Never the `location` search
+    // parameter: it doesn't re-geocode and can't change what's searched.
+    locationLabel?: string;
+    // Google Places (Tier 5) — service requests only. See
+    // allowsNearbyBusinesses. A store search reads as a service one when
+    // its own businessType does ("phone repair shop" yes, "electronics
+    // store" no); route.ts overrides that with the scope check's intent.
+    allowNearbyBusinesses?: boolean;
   } = {},
 ): Promise<
   SearchStoresCoreResult | { error: "location-not-found"; message: string }
@@ -89,7 +134,7 @@ export async function searchStoresCore(
   push?.(
     searchingPhrase(
       businessType,
-      location ?? (buyerLocation ? "your area" : undefined),
+      location ?? (buyerLocation ? (locationLabel ?? "your area") : undefined),
     ),
   );
 
@@ -102,6 +147,25 @@ export async function searchStoresCore(
   }
   const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
+  // See productTerm.ts's isVagueReference — "all of them", "the best" name
+  // no real kind of business to search for. Same treatment searchProducts-
+  // Core gives it: a clean, honest zero-result search rather than a real
+  // lookup (and the external Places/Serper fallback it could otherwise
+  // trigger) on a term with nothing in it to match against.
+  if (isVagueReference(businessType)) {
+    return {
+      results: [],
+      furtherResults: [],
+      matchTier: null,
+      matchQuality: undefined,
+      externalSuggestions: [],
+    };
+  }
+
+  const includeNearbyBusinesses = allowsNearbyBusinesses(
+    businessType,
+    allowNearbyBusinesses,
+  );
   let results: StoreMatch[],
     furtherResults: StoreMatch[],
     matchTier: MatchTier,
@@ -122,6 +186,9 @@ export async function searchStoresCore(
           lat: coords?.lat,
           lng: coords?.lng,
           radiusKm: radiusKm ?? 10,
+          // See searchProductsCore's own comment — the backend skips the
+          // Places call outright when this is false.
+          includeNearbyBusinesses,
         },
       }));
   } catch (err) {
@@ -132,6 +199,10 @@ export async function searchStoresCore(
     );
     throw err;
   }
+
+  // Dropped here as well as at the backend flag, so an older backend that
+  // doesn't know the flag yet still can't leak Places into a product turn.
+  if (!includeNearbyBusinesses) externalSuggestions = null;
 
   if (results.length) {
     push?.(foundCountPhrase(results.length, "vendor", matchTier));
@@ -146,10 +217,26 @@ export async function searchStoresCore(
   // message scoped to what actually matched it, rather than every result
   // across every call sharing one turn-level query (see StoreMatch's own
   // matchedQuery comment).
-  results = results.map((s) => ({ ...s, matchedQuery: businessType }));
+  //
+  // Same tagging, same reasoning, for attributes/budget (2026-09-17) — see
+  // StoreResultCard's own comment on what these become in the WhatsApp
+  // message. Cleaned through the exact same guards searchProductsCore
+  // applies to its own attributes/budget (self-questioning/placeholder
+  // filtering, a non-finite or non-positive budget dropped) rather than a
+  // second copy of that logic.
+  const cleanAttributes = usableAttributes(attributes) ?? [];
+  const cleanBudget = usableBudget(maxBudgetNaira) ?? null;
+  results = results.map((s) => ({
+    ...s,
+    matchedQuery: businessType,
+    matchedAttributes: cleanAttributes,
+    matchedBudgetNaira: cleanBudget,
+  }));
   furtherResults = furtherResults.map((s) => ({
     ...s,
     matchedQuery: businessType,
+    matchedAttributes: cleanAttributes,
+    matchedBudgetNaira: cleanBudget,
   }));
 
   // Same mechanical-fact reasoning as searchProductsCore's own
@@ -190,15 +277,26 @@ export async function searchStoresCore(
 export function searchStoresTool(
   buyerLocation?: BuyerLocation,
   push?: (candidates: string[]) => void,
+  // Display-only place label for the status line — see searchStoresCore.
+  locationLabel?: string,
+  // See allowsNearbyBusinesses — route.ts resolves this from the scope
+  // check's seekingKind; omitted means "decide from the query text".
+  allowNearbyBusinesses?: boolean,
 ) {
   return tool({
     description:
       "Search for a TYPE OF BUSINESS/VENDOR/SHOP, not a specific product — use this when the buyer describes what kind of vendor they want (e.g. 'a phone repair shop', 'an electronics store near me', 'a tailor') rather than naming an item to buy. For a specific product, use searchProducts instead. Returns real vendor storefronts only.",
     inputSchema,
-    execute: async ({ businessType, location, radiusKm }) =>
+    execute: async ({
+      businessType,
+      location,
+      radiusKm,
+      attributes,
+      maxBudgetNaira,
+    }) =>
       searchStoresCore(
-        { businessType, location, radiusKm },
-        { buyerLocation, push },
+        { businessType, location, radiusKm, attributes, maxBudgetNaira },
+        { buyerLocation, push, locationLabel, allowNearbyBusinesses },
       ),
   });
 }

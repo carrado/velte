@@ -16,7 +16,7 @@ export default function SimilarVendors({
 
   return (
     <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10">
-      <h2 className="text-lg sm:text-xl font-bold text-[#023337] mb-4">
+      <h2 className="text-lg sm:text-xl font-bold text-ink mb-4">
         Other vendors you may like
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

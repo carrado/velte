@@ -76,6 +76,34 @@ export interface AttributePresetGroup {
   items: AttributePreset[];
 }
 
+// ── DB-backed schema overrides (Phase 2, docs/velte-ai-search-flow-plan.md)
+// The three in-code preset tables a CategorySchema document can override —
+// see staffly-ai-backend's CategorySchema.model.js for the kind/key
+// addressing. Rows are fetched (cached, TTL) by
+// src/lib/server/attributeSchemas.ts and win over the in-code presets in
+// sectorClarifiers.ts; an empty collection means everything behaves exactly
+// as shipped.
+export type CategorySchemaKind =
+  | "service_group"
+  | "product_category"
+  | "product_general";
+
+export interface CategorySchemaRow {
+  kind: CategorySchemaKind;
+  key: string;
+  items: AttributePreset[];
+}
+
+/** The fetched rows folded into lookup form for sectorClarifiers.ts — each
+ * map is keyed the same way its in-code table is (service group name /
+ * product category id); `productGeneral` overrides GENERAL_PRODUCT_PRESETS
+ * when non-null. */
+export interface AttributeSchemaOverrides {
+  serviceGroups: Map<string, AttributePreset[]>;
+  productCategories: Map<string, AttributePreset[]>;
+  productGeneral: AttributePreset[] | null;
+}
+
 export interface AttributePickerModalProps {
   open: boolean;
   title: string;

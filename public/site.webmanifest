@@ -1,18 +1,18 @@
 {
   "name": "Velte",
   "short_name": "Velte",
-  "description": "Deploy an intelligent AI agent on your WhatsApp Business number that answers product questions, negotiates prices, checks inventory, and closes sales — 24/7.",
+  "description": "Describe what you need and Velte finds it — real vendors near you, with prices, photos and a way to reach them.",
   "id": "/",
-  "start_url": "/?source=pwa",
+  "start_url": "/launch?source=pwa",
   "scope": "/",
   "lang": "en",
   "dir": "ltr",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "theme_color": "#000000",
-  "background_color": "#000000",
-  "categories": ["business", "productivity"],
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "categories": ["shopping", "business", "productivity"],
   "icons": [
     {
       "src": "/velte_manifest.png",
@@ -35,14 +35,14 @@
   ],
   "shortcuts": [
     {
-      "name": "Dashboard",
-      "url": "/dashboard",
-      "description": "Go to your sales dashboard"
+      "name": "New search",
+      "url": "/chat",
+      "description": "Ask Velte to find something"
     },
     {
-      "name": "Orders",
-      "url": "/orders",
-      "description": "View your orders"
+      "name": "Watching",
+      "url": "/chat/watches",
+      "description": "Prices Velte is watching for you"
     }
   ]
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { CloseIcon, MapPinIcon } from "@/components/icons";
+import { CloseIcon, MapPinIcon } from "@/components/icons/hero";
 // Shown once per page load whenever the browser's own geolocation
 // permission is still undecided ("prompt") — explains what the location is
 // actually used for BEFORE the native browser prompt fires, instead of that
@@ -25,7 +25,7 @@ export function LocationPermissionModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40" onClick={onDismiss} />
-      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-surface shadow-2xl">
         <button
           onClick={onDismiss}
           aria-label="Dismiss"
@@ -38,7 +38,7 @@ export function LocationPermissionModal({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50">
             <MapPinIcon size={22} className="text-orange-500" />
           </div>
-          <h3 className="mt-4 text-base font-semibold text-[#023337]">
+          <h3 className="mt-4 text-base font-semibold text-ink">
             Find vendors near you
           </h3>
           <p className="mt-1.5 text-sm leading-relaxed text-gray-500">

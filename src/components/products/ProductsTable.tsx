@@ -87,7 +87,7 @@ function ProductCard({
   const userId = pathname.split("/").filter(Boolean)[0];
 
   return (
-    <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
+    <div className="group bg-surface rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="relative w-full aspect-square overflow-hidden bg-gray-50">
         {product.isSuspended && (
           <SuspendedOverlay userId={userId} productId={product.id} />
@@ -158,7 +158,7 @@ function ProductCard({
 
       {/* Content */}
       <div className="p-3.5">
-        <p className="text-dash-body font-bold text-[#023337] mb-1.5 line-clamp-2 min-h-[2.5em]">
+        <p className="text-dash-body font-bold text-ink mb-1.5 line-clamp-2 min-h-[2.5em]">
           {product.name}
         </p>
 
@@ -222,7 +222,7 @@ function ProductRow({
   const showQuoteAction = product.kind === "service" && !product.quoteOnRequest;
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden active:bg-gray-50 transition-colors">
+    <div className="bg-surface border border-gray-100 rounded-xl overflow-hidden active:bg-gray-50 transition-colors">
       <button
         onClick={() => navigate(`/${userId}/products/${product.id}`)}
         className="w-full flex items-center gap-3 px-4 pt-3 text-left cursor-pointer"
@@ -253,7 +253,7 @@ function ProductRow({
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="text-dash-body font-semibold text-[#023337] truncate">
+          <p className="text-dash-body font-semibold text-ink truncate">
             {product.name}
           </p>
 

@@ -56,6 +56,37 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
+  /* ── The app's own three surfaces/ink (2026-09-10, for dark mode) ───────
+   *
+   * These replace what used to be hardcoded arbitrary values scattered
+   * across ~550 call sites: `text-[#023337]` (257×), `bg-white` (256×) and
+   * `bg-[#F1F5F9]` (33×). They are declared here as `var(--…)` indirections
+   * — inside `@theme inline`, which inlines the REFERENCE rather than the
+   * resolved colour — so a utility compiles to `color: var(--ink)` and the
+   * `.dark` block below can swap every one of them at once, with no call
+   * site knowing anything about themes.
+   *
+   * The names are roles, not colours, on purpose: `ink` is "the strongest
+   * text", not "dark teal", which is what lets it become near-white in dark
+   * without the class name turning into a lie.
+   *
+   *   ink     — headings/strongest text. Was #023337, which the palette
+   *             rule has always said is a TEXT colour and never a surface.
+   *   canvas  — the page behind the cards. Was #F1F5F9.
+   *   surface — a card/panel sitting on the canvas. Was plain white.
+   *
+   * `text-white` is deliberately NOT tokenised: it sits on orange buttons
+   * and coloured chips, where it must stay white in both themes. Only
+   * `bg-white` (a surface) moved. */
+  --color-ink: var(--ink);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  /* An always-dark slab — a deliberately dark section in LIGHT mode (the
+   * few `bg-gray-900` heroes). Without this they'd invert to near-white in
+   * dark mode along with the rest of the grey ramp, which is exactly
+   * backwards for something whose whole point is being dark. */
+  --color-slab: var(--slab);
+
   /*
    * Dashboard (/[id]/*) type scale — fluid between phone and desktop.
    * Pairing: display/title → bold/semibold; body → normal/medium; caption/micro → medium for uppercase labels.
@@ -109,6 +140,17 @@
   --sidebar-ring: oklch(0.708 0 0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+
+  /* The app's own roles, light theme — the values these had before they
+     were tokenised, unchanged, so light mode looks exactly as it did. */
+  --ink: #023337;
+  --canvas: #f1f5f9;
+  --surface: #ffffff;
+  --slab: #111827;
+  /* Tells the browser which way its own furniture goes — form controls,
+     scrollbars, the caret, `Highlight`. Without it a dark app keeps light
+     scrollbars and white autofill boxes. */
+  color-scheme: light;
 }
 
 .dark {
@@ -143,6 +185,151 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* ══ DARK THEME ═════════════════════════════════════════════════════════
+   *
+   * Everything below re-points EXISTING colour tokens rather than asking
+   * 227 components to learn about themes. Tailwind v4 compiles
+   * `text-gray-500` to `color: var(--color-gray-500)`, so redefining that
+   * variable here flips every one of its ~1,378 call sites at once. The
+   * alternative — a `dark:` variant beside every colour class — would have
+   * meant editing well over two thousand class names by hand, and every new
+   * component written afterwards would have had to remember to do the same.
+   *
+   * The cost of this approach is that it only works while class names
+   * describe a ROLE the theme can reinterpret. That holds for greys (text
+   * and surfaces) and for the app's own three tokens; it does NOT hold for
+   * `text-white` on an orange button, which is why that one was left alone.
+   *
+   * A cool neutral, not pure black: #0e1116 rather than #000 keeps the
+   * shadows and borders that the light design leans on actually visible,
+   * and OLED-black backgrounds make white text smear on scroll. */
+  color-scheme: dark;
+
+  --ink: #eaeff3;
+  --canvas: #0e1116;
+  --surface: #171c23;
+  /* Unchanged between themes — the point of a slab is that it is dark. */
+  --slab: #111827;
+
+  /* ── The grey ramp, reversed ─────────────────────────────────────────
+   * Light: 50 = lightest surface … 900 = darkest text.
+   * Dark:  50 = darkest surface … 900 = lightest text.
+   * So the SAME class keeps its meaning ("50 is a faint fill", "900 is the
+   * strongest text") while the values turn over.
+   *
+   * gray-50 is deliberately a touch lighter than `--surface`, not equal to
+   * it: it is overwhelmingly used as `hover:bg-gray-50` on a card, and a
+   * hover you cannot see is a hover that looks broken. */
+  --color-gray-50: #1d242c;
+  --color-gray-100: #262e38;
+  --color-gray-200: #313a45;
+  --color-gray-300: #3f4954;
+  --color-gray-400: #737d89;
+  --color-gray-500: #909aa6;
+  --color-gray-600: #acb5bf;
+  --color-gray-700: #c7ced6;
+  --color-gray-800: #e0e5ea;
+  --color-gray-900: #eff3f6;
+  --color-gray-950: #f9fbfc;
+  /* Slate is used interchangeably with gray in a few places; kept in step
+     so the two never disagree about which way is up. */
+  --color-slate-50: #1d242c;
+  --color-slate-100: #262e38;
+  --color-slate-200: #313a45;
+  --color-slate-300: #3f4954;
+  --color-slate-400: #737d89;
+  --color-slate-500: #909aa6;
+  --color-slate-600: #acb5bf;
+  --color-slate-700: #c7ced6;
+  --color-slate-800: #e0e5ea;
+  --color-slate-900: #eff3f6;
+
+  /* ── Tinted panels ───────────────────────────────────────────────────
+   * ~518 call sites use a `-50`/`-100`/`-200` tint as a soft coloured
+   * panel (`bg-orange-50` alone is 256 of them). Left untouched these stay
+   * near-white and glare against a dark page — the single most visible way
+   * a retrofitted dark mode goes wrong, and it would land on exactly the
+   * parts of Velte that are most colourful.
+   *
+   * Each becomes a dark, low-chroma wash of its own hue: still obviously
+   * "the orange panel", just at the other end of the lightness scale. */
+  --color-orange-50: #2a1d10;
+  --color-orange-100: #37260f;
+  --color-orange-200: #4a3216;
+  --color-red-50: #2b1618;
+  --color-red-100: #3a1c1e;
+  --color-red-200: #4d2427;
+  --color-green-50: #12241a;
+  --color-green-100: #17301f;
+  --color-green-200: #1e3f29;
+  --color-emerald-50: #12241d;
+  --color-emerald-100: #163023;
+  --color-emerald-200: #1c3f2e;
+  --color-amber-50: #2a2010;
+  --color-amber-100: #372a0f;
+  --color-amber-200: #4a3a18;
+  --color-sky-50: #10202c;
+  --color-sky-100: #142a3a;
+  --color-sky-200: #1b3950;
+  --color-blue-50: #111d2e;
+  --color-blue-100: #16263c;
+  --color-blue-200: #1d3352;
+  /* Added 2026-09-12 (Shopping Lists' "selected" status pill, and the
+     wallet/referral notification types, ViewProductPage, sectorHeroThemes —
+     all missed when this ramp was first built). Same wash logic as its
+     neighbours above. */
+  --color-violet-50: #1e1a32;
+  --color-violet-100: #262140;
+  --color-violet-200: #332c54;
+
+  /* ── Text on those panels ────────────────────────────────────────────
+   * The mid/dark shades (600–800) are what the light theme puts ON those
+   * tints, and they'd be unreadable against the dark washes above. Lifted
+   * to the bright end of each hue so the pairing survives the flip — a dark
+   * panel with dark text is the second way this kind of retrofit fails. */
+  --color-orange-600: #fb923c;
+  --color-orange-700: #fdba74;
+  --color-orange-800: #fed7aa;
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+  --color-green-600: #4ade80;
+  --color-green-700: #86efac;
+  --color-green-800: #bbf7d0;
+  --color-emerald-600: #34d399;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-amber-600: #fbbf24;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-sky-600: #38bdf8;
+  --color-sky-700: #7dd3fc;
+  --color-sky-800: #bae6fd;
+  --color-blue-600: #60a5fa;
+  --color-blue-700: #93c5fd;
+  --color-blue-800: #bfdbfe;
+  --color-violet-600: #a78bfa;
+  --color-violet-700: #c4b5fd;
+  --color-violet-800: #ddd6fe;
+}
+
+/* The shimmering "Velte is working on this" status text (see its own
+   comment further down) is a hardcoded gradient of greys, so it can't ride
+   the ramp above — it needs its own dark pairing or the sweep disappears
+   into the background. */
+.dark .status-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    rgba(144, 154, 166, 0.55) 0%,
+    rgba(144, 154, 166, 0.55) 38%,
+    rgba(239, 243, 246, 0.95) 50%,
+    rgba(144, 154, 166, 0.55) 62%,
+    rgba(144, 154, 166, 0.55) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
 }
 
 @layer base {
@@ -200,6 +387,25 @@ button {
   -webkit-background-clip: text;
   color: transparent;
   animation: status-shimmer-sweep 2.2s ease-in-out infinite;
+}
+
+/* ── /chat resume gate — pre-paint hero/loader swap ────────────────────────
+   Keyed off the data-velte-resume root attribute that chat/layout.tsx's
+   inline script sets BEFORE first paint when a stored conversation exists
+   in localStorage (see that script's comment). Until React hydrates and
+   SearchHome's own `rehydrating` state takes over, these rules are what
+   decide which of the two server-rendered <main>s is visible: a returning
+   buyer sees the static resume loader immediately (never the fresh-start
+   greeting flashing first), everyone else sees the hero exactly as before.
+   SearchHome removes the attribute once the rehydrate fetch settles. */
+.velte-resume-loader {
+  display: none;
+}
+html[data-velte-resume] .velte-resume-loader {
+  display: flex;
+}
+html[data-velte-resume] .velte-resume-hero {
+  display: none;
 }
 
 /* ── PWA: splash animation + installed-app chrome ──────────────────────────── */
@@ -267,5 +473,53 @@ button {
     -webkit-backdrop-filter: blur(10px) saturate(140%);
     z-index: 2147483646;
     pointer-events: none;
+  }
+}
+
+/* The "look at this one" flash, applied for ~1.6s by RecommendationPicks'
+   scrollToCard when a buyer taps a pick row (2026-08-29). A ring rather than
+   a background so it frames whatever card is inside without touching the
+   card's own colours, and on the SLIDE so it works for product cards and
+   external offer cards alike.
+
+   `box-shadow`, not `outline` or a border: it draws outside the box without
+   affecting layout, so nothing shifts as it fades — a card that nudged
+   sideways as the eye arrived would defeat the point of pointing at it. */
+/* The ring that marks the card a pick or a table row just scrolled to.
+   Reworked 2026-09-05: it used to reach full strength at 25% and spend the
+   remaining 1.2s fading out, so by the time the smooth scroll had actually
+   landed the ring was already half gone — the buyer arrived at the carousel
+   with nothing left telling them WHICH card they'd asked for. It now snaps
+   on quickly, HOLDS at full strength for a good couple of seconds, and only
+   then fades. */
+@keyframes velte-pick-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgb(249 115 22 / 0);
+  }
+  6% {
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0);
+  }
+}
+
+.velte-pick-flash {
+  border-radius: 1rem;
+  /* Keep in step with FLASH_DURATION_MS in RecommendationPicks.tsx, which
+     removes the class — a shorter timeout there would cut the ring off
+     mid-hold. */
+  animation: velte-pick-flash 4s ease-out forwards;
+}
+
+/* Someone who has asked the OS for less motion still gets the scroll (that
+   is the navigation, not decoration) but a steady ring instead of a pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .velte-pick-flash {
+    animation: none;
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0.45);
   }
 }

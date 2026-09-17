@@ -31,7 +31,7 @@ import {
   MapPinIcon,
   PhoneIcon,
   UserIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 function PasswordStrengthMeter({ password }: { password: string }) {
   const strength = passwordStrength(password);
@@ -342,7 +342,7 @@ export default function Step1BusinessAccount({
               <SelectTrigger className="bg-transparent border-black/[0.3] w-full text-black h-11 focus:border-orange-500/50 focus:ring-orange-500/20">
                 <SelectValue placeholder="Select your state" />
               </SelectTrigger>
-              <SelectContent className="bg-white border-black/[0.3] z-50 text-black max-h-60">
+              <SelectContent className="bg-surface border-black/[0.3] z-50 text-black max-h-60">
                 <SelectGroup>
                   {NIGERIA_STATES.map((s) => (
                     <SelectItem key={s} value={s}>

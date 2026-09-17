@@ -30,7 +30,7 @@ export default function TabBar<T extends string = string>({
           className={cn(
             "flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer text-dash-body font-medium transition-colors whitespace-nowrap",
             activeTab === tab.key
-              ? "bg-white text-[#111827] shadow-sm"
+              ? "bg-surface text-[#111827] shadow-sm"
               : "text-[#4b5563] hover:text-[#111827]",
           )}
         >

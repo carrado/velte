@@ -129,7 +129,7 @@ export default function OnboardingTour() {
       )}
 
       <div
-        className="absolute rounded-xl bg-white p-4 shadow-xl transition-all duration-200 ease-out"
+        className="absolute rounded-xl bg-surface p-4 shadow-xl transition-all duration-200 ease-out"
         style={{
           width: cardWidth,
           left: cardLeft,

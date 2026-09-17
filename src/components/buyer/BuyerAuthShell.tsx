@@ -6,7 +6,7 @@ import {
   MapPinIcon,
   MessageSquarePlusIcon,
   ShieldCheckIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // Shared two-column shell — originally the buyer-only auth screens' look,
 // now (2026-08-15 login/signup unification) the shell for the ONE login
@@ -52,7 +52,7 @@ export function BuyerAuthShell({
   panel?: AuthPanelContent;
 }) {
   return (
-    <div className="min-h-screen flex bg-[#F1F5F9]">
+    <div className="min-h-screen flex bg-canvas">
       <div className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:w-[440px] lg:z-10 shrink-0 overflow-hidden bg-gradient-to-br from-[#023337] via-[#0b4a4e] to-orange-600">
         <div
           className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-orange-400/20 blur-3xl pointer-events-none"

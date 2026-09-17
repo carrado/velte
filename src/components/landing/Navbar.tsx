@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { Button } from "../ui/button";
 import { MobileMenu } from "@/components/landing/MobileMenu";
-import Image from "next/image";
+import { VelteLogo } from "@/components/VelteLogo";
 import { CloseIcon, ListIcon } from "@/components/icons";
 
 // Simplified 2026-08-15 (full homepage redesign) to Logo … How it works |
@@ -73,9 +73,7 @@ export default function Navbar({
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
         <div className="flex items-center h-16 gap-6">
           <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-            <Image
-              src="/velte_logo_esn5dj.png"
-              alt="Velte"
+            <VelteLogo
               width={72}
               height={35}
               className="w-14 sm:w-[72px] h-auto"

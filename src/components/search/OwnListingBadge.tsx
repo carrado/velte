@@ -1,4 +1,4 @@
-import { BadgeCheckIcon } from "@/components/icons";
+import { BadgeCheckIcon } from "@/components/icons/hero";
 // Shown in place of the WhatsApp CTA when a logged-in vendor's search turns
 // up their own listing/store — there's nobody to chat with (and the chat
 // click would bill them their own lead).

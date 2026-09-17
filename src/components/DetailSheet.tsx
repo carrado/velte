@@ -135,7 +135,7 @@ export function DetailSheet({
             // its natural content height and the backdrop's own scroll (see
             // above) reveals whatever doesn't fit the viewport, exactly
             // like scrolling the page.
-            className="flex w-full flex-col bg-white sm:max-w-md rounded-t-2xl sm:rounded-2xl max-h-[92vh] sm:max-h-none sm:my-10 sm:mx-auto"
+            className="flex w-full flex-col bg-surface sm:max-w-md rounded-t-2xl sm:rounded-2xl max-h-[92vh] sm:max-h-none sm:my-10 sm:mx-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Grab handle — the one place a drag can start (see
@@ -168,7 +168,7 @@ export function DetailSheet({
                 against the backdrop's scroll instead — stays glued to the
                 viewport's bottom edge while the page scrolls, rather than
                 becoming unreachable at the bottom of a long card. */}
-            <div className="shrink-0 border-t border-gray-100 bg-white p-4 sm:p-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-5 sm:sticky sm:bottom-0">
+            <div className="shrink-0 border-t border-gray-100 bg-surface p-4 sm:p-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-5 sm:sticky sm:bottom-0">
               {footer}
             </div>
           </motion.div>
