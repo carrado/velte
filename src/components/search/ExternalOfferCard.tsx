@@ -16,7 +16,20 @@ import type { ExternalOffer } from "@/types/search";
 // card. No WhatsApp button (there's no vendor relationship and no lead to
 // bill), no "Sold by" line, no trust or distance signals — none of which
 // exist for these — and an explicit source badge naming where it came
-// from. The only action is an outbound link, marked as such.
+// from. Every action is an outbound link, marked as such — there is no
+// third option that stays on Velte.
+//
+// TWO separate links, not one big card-sized anchor any more (2026-09-14):
+// the photo always opens the real product page, and the footer pill is
+// its own plain "View on X" / "Search X" link — splitting them is what
+// makes this possible without an `<a>` nested inside another `<a>`, which
+// is invalid HTML and unreliable to click.
+//
+// A checkout hand-off (a checkbox here that added the offer to a real
+// merchant cart) lived on this card briefly on 2026-09-14 and was removed
+// the same day — explicit product decision, keeping this as a plain
+// hand-off for now rather than building the product around cart
+// automation. See git history if it's ever worth reviving.
 //
 // Images are plain <img>: they come from arbitrary merchant CDNs, so
 // next/image's configured-domains requirement can't be satisfied, and
@@ -62,9 +75,9 @@ export function ExternalOfferCard({
   const index = Math.min(imgIndex, Math.max(images.length - 1, 0));
   const hasGallery = images.length > 1;
 
-  // The whole card is one big <a>, so a nav button has to cancel the
-  // navigation as well as the bubble — without preventDefault, flipping to
-  // photo two would open the shop instead.
+  // The photo area is its own <a> now (see the header comment), so a nav
+  // button only has to stop the click from bubbling up to THAT anchor —
+  // there's no longer an outer card-wide link to cancel navigation on.
   const step = (delta: number) => (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -75,13 +88,13 @@ export function ExternalOfferCard({
   };
 
   return (
-    <a
-      href={offer.url}
-      target="_blank"
-      rel="noopener noreferrer nofollow sponsored"
-      className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-surface transition-all duration-200 hover:border-gray-300 hover:shadow-md"
-    >
-      <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden bg-gray-50">
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-surface transition-all duration-200 hover:border-gray-300 hover:shadow-md">
+      <a
+        href={offer.url}
+        target="_blank"
+        rel="noopener noreferrer nofollow sponsored"
+        className="relative flex aspect-square w-full items-center justify-center overflow-hidden bg-gray-50"
+      >
         {images.length > 0 ? (
           // Only the visible photo is ever in the DOM, so the extra images
           // cost nothing until a buyer actually flips to them.
@@ -165,7 +178,7 @@ export function ExternalOfferCard({
             ))}
           </div>
         )}
-      </div>
+      </a>
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <p className="line-clamp-2 min-h-[2.5em] text-sm font-medium leading-snug text-gray-800">
           {offer.title}
@@ -182,12 +195,10 @@ export function ExternalOfferCard({
         {/* Real spec pairs the page published (see ExternalOffer.attributes)
             — capped at 3 and comma-joined rather than a full table, since
             this is a compact card, not the listing's own page. Currently
-            always empty — Jiji had a verified attribute extractor at one
-            point, removed 2026-09-12 along with Konga's photo-gallery
-            reader when both were briefly retired from the connector's shop
-            list; neither was rebuilt when the two came back the same day.
-            A normal, silent gap, not an error state, until one is
-            hand-verified against a real page again. */}
+            always empty — no merchant in the connector's list (Jumia or a
+            named Shopify/WooCommerce store, 2026-09-13/14) has a verified
+            attribute extractor yet. A normal, silent gap, not an error
+            state, until one is hand-verified against a real page. */}
         {offer.attributes.length > 0 && (
           <p className="text-xs text-gray-500">
             {offer.attributes
@@ -196,7 +207,7 @@ export function ExternalOfferCard({
               .join(" · ")}
           </p>
         )}
-        {/* Found live: a "View on Jiji" label reads as this exact listing's
+        {/* Found live: a "View on Slot" label reads as this exact listing's
             own page no matter what's actually underneath it — and when the
             organic lookup couldn't confidently match this listing to a real
             product page, what's underneath is the shop's own search results
@@ -204,7 +215,12 @@ export function ExternalOfferCard({
             real, useful destination — the right shop, a pre-filled query —
             just not what "View" promises, so the label and icon change to
             say which one this tap actually is. */}
-        <span className="mt-auto inline-flex items-center gap-1 pt-1 text-xs font-semibold text-orange-600">
+        <a
+          href={offer.url}
+          target="_blank"
+          rel="noopener noreferrer nofollow sponsored"
+          className="mt-auto inline-flex items-center gap-1.5 self-start pt-1 text-xs font-semibold text-orange-600"
+        >
           {offer.isDirectLink ? (
             <>
               View on {offer.merchant ?? "site"}
@@ -216,8 +232,8 @@ export function ExternalOfferCard({
               <SearchIcon size={12} className="shrink-0" />
             </>
           )}
-        </span>
+        </a>
       </div>
-    </a>
+    </div>
   );
 }

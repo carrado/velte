@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import { BuyerAuthShell } from "@/components/buyer/BuyerAuthShell";
 import type { AuthPanelContent } from "@/types/common";
 import VendorSignupForm from "./_components/VendorSignupForm";
-import { StoreIcon, TrendingUpIcon, WalletIcon } from "@/components/icons";
+import { StoreIcon, TrendingUpIcon, WalletIcon } from "@/components/icons/hero";
 
 /* Vendor-only signup. A buyer isn't an account at all (2026-08-18) — just a
    one-time verified phone number, collected inline mid-conversation the

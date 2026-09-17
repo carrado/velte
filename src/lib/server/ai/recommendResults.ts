@@ -87,12 +87,12 @@ export function sanitizeReason(
 function recommendResultsTool() {
   return tool({
     description:
-      "Call this exactly once with your comparison verdict over the candidate products/services provided.",
+      "Call this exactly once with your pick over the candidate products/services provided. This is an ordinary search that happened to return more than one result — the buyer never asked you to compare anything, so never call it a comparison.",
     inputSchema: z.object({
       leadIn: z
         .string()
         .describe(
-          "ONE short, natural sentence in your own conversational voice introducing the comparison to the buyer (e.g. 'Between these, here's where I'd lean:' or 'A quick take before you scroll:'). Vary the phrasing naturally turn to turn — never a generic heading like 'Recommendations' or 'Velte's Picks', and never contact details.",
+          "ONE short, natural sentence in your own conversational voice introducing your pick(s) to the buyer (e.g. 'Here's where I'd lean:' or 'A quick take before you scroll:'). The buyer asked to find something, not to compare options — never say or imply 'comparison', 'compare', or anything that reads as answering a comparison question they never asked. Vary the phrasing naturally turn to turn — never a generic heading like 'Recommendations' or 'Velte's Picks', and never contact details.",
         ),
       bestOverallId: z
         .string()
@@ -102,7 +102,7 @@ function recommendResultsTool() {
       bestOverallReason: z
         .string()
         .describe(
-          "ONE sentence (under 28 words) that would actually persuade this buyer, not just label the choice. It MUST cite at least one concrete fact from THIS candidate's own data — its price, distance, condition, edition/model, an attribute, or how much the seller has documented it — and where the comparison makes it obvious, say how that beats the others ('₦8,000 less than the next closest, and it's the 256GB one you asked for'). Never generic filler like 'great option' or 'best overall choice', never a fact the candidate data doesn't show, and never contact details of any kind.",
+          "ONE sentence (under 28 words) that would actually persuade this buyer, not just label the choice. It MUST cite at least one concrete fact from THIS candidate's own data — its price, distance, condition, edition/model, an attribute, or how much the seller has documented it — and where the difference from the others is clear, say how it beats them ('₦8,000 less than the next closest, and it's the 256GB one you asked for'). Never generic filler like 'great option' or 'best overall choice', never a fact the candidate data doesn't show, and never contact details of any kind.",
         ),
       bestValueId: z
         .string()
@@ -244,7 +244,7 @@ export async function pickRecommendation(params: {
       callLLM(
         {
           system:
-            "You compare shopping search results for a buyer on Velte, a Nigerian vendor-discovery service. You will get the buyer's request and a JSON list of candidate products/services that already matched it. Judge which candidate best fits what the buyer actually asked for, which (if any) is the smartest value for money, and whether one of them carries a real catch worth flagging. Judge ONLY from the data given — never invent capability, stock, or quality a candidate's own fields don't show.\n\nEach candidate carries a `sellerInfo` block describing how much the seller has actually filled in: `completeness` (detailed/moderate/sparse), how many photos, how many detail fields, whether there's a description, whether the vendor is reachable (`hasContact`), and whether they have a storefront. This is real data and you SHOULD use it — a listing that is cheaper but sparse and unreachable is a genuinely worse bet than a slightly pricier detailed one, and saying so plainly is exactly what helps. But describe only what these fields actually say: never call a seller verified, trusted, rated, reviewed, official or established — none of that is measured here, and `hasContact: true` means a contact exists, nothing more about who they are.\n\nCall the recommendResults tool exactly once with your verdict.",
+            "You pick the standout option(s) among shopping search results already matched to a buyer's request on Velte, a Nigerian vendor-discovery service. This is an ORDINARY search that returned more than one real result — the buyer asked to find something, not to compare options, so never write as if you're answering a comparison question, and never use the word 'comparison' or 'compare' anywhere in your reply. You will get the buyer's request and a JSON list of candidate products/services that already matched it. Judge which candidate best fits what the buyer actually asked for, which (if any) is the smartest value for money, and whether one of them carries a real catch worth flagging. Judge ONLY from the data given — never invent capability, stock, or quality a candidate's own fields don't show.\n\nEach candidate carries a `sellerInfo` block describing how much the seller has actually filled in: `completeness` (detailed/moderate/sparse), how many photos, how many detail fields, whether there's a description, whether the vendor is reachable (`hasContact`), and whether they have a storefront. This is real data and you SHOULD use it — a listing that is cheaper but sparse and unreachable is a genuinely worse bet than a slightly pricier detailed one, and saying so plainly is exactly what helps. But describe only what these fields actually say: never call a seller verified, trusted, rated, reviewed, official or established — none of that is measured here, and `hasContact: true` means a contact exists, nothing more about who they are.\n\nCall the recommendResults tool exactly once with your pick.",
           messages: [
             {
               role: "user",
@@ -400,9 +400,9 @@ export function offerSummary(offer: ExternalOffer, photoCount: number) {
     description: offer.description ?? null,
     // Real spec pairs the listing's own page published — Condition, RAM,
     // Storage, Camera and the like (see ExternalOffer.attributes). Always
-    // empty today — Jiji's own extractor was removed 2026-09-12 and not
-    // rebuilt when Jiji itself came back the same day — which the model is
-    // told is normal, not a gap to guess at.
+    // empty today — no merchant in the connector's Shopify/WooCommerce-only
+    // list (2026-09-13) has a verified attribute extractor yet — which the
+    // model is told is normal, not a gap to guess at.
     attributes: offer.attributes.length
       ? Object.fromEntries(offer.attributes.map((a) => [a.name, a.value]))
       : null,
@@ -495,16 +495,16 @@ function cheapestOnly(cheapestId: string | null): SearchRecommendation | null {
 }
 
 const EXTERNAL_SYSTEM_PROMPT = [
-  "You compare online shopping listings for a buyer on Velte, a Nigerian vendor-discovery service.",
+  "You pick the standout option(s) among online shopping listings for a buyer on Velte, a Nigerian vendor-discovery service. This is an ORDINARY search that turned up more than one real listing — the buyer asked to find something, not to compare options, so never write as if you're answering a comparison question, and never use the word 'comparison' or 'compare' anywhere in your reply.",
   "Velte itself had no vendor for this request, so these are OFF-PLATFORM listings from ordinary online shops — the buyer would be buying from those shops directly, not through Velte.",
   "You get the buyer's request and a JSON list of listings, each with a title, the price as the shop displayed it, the shop's name, the listing's own description where it published one, an `attributes` object of real spec pairs the page itself published (Condition, RAM, Storage, Camera, and the like — null when none were found, which is normal, not a gap to fill in), and how many of its photos you were given.",
   "The photos follow the list, each labelled with the listing number it belongs to. A listing often has several — they are the SAME item shown from different angles, not different items.",
   "",
   "Judge which listing best fits what the buyer actually asked for, and whether one of them carries a real catch worth flagging.",
   "",
-  "USE `attributes` WHEN YOU HAVE IT. This is the one place a real spec comparison is possible instead of a guess from the title — if the buyer asked for something needing real memory or storage and one listing's attributes show it and another's don't (or show less), say so specifically, by name and figure ('6GB RAM' beats a listing with no RAM stated, not just a vaguer 'seems better specced'). Never invent a value for a listing whose attributes are null — say only what its title, description or photos actually show instead.",
+  "USE `attributes` WHEN YOU HAVE IT. This is the one place a real spec check is possible instead of a guess from the title — if the buyer asked for something needing real memory or storage and one listing's attributes show it and another's don't (or show less), say so specifically, by name and figure ('6GB RAM' beats a listing with no RAM stated, not just a vaguer 'seems better specced'). Never invent a value for a listing whose attributes are null — say only what its title, description or photos actually show instead.",
   "",
-  "LOOK AT EVERY PHOTO BEFORE YOU PICK. Sellers lead with their most flattering shot, so damage shows up in the later ones: a cracked or shattered screen, a deep scratch or dent, a missing part, heavy wear, an item clearly opened or used when sold as new. A listing whose later photos show damage must NOT be your top pick when a comparable undamaged one is available, however good its title and price look.",
+  "LOOK AT EVERY PHOTO BEFORE YOU PICK. Sellers lead with their most flattering shot, so damage shows up in the later ones: a cracked or shattered screen, a deep scratch or dent, a missing part, heavy wear, an item clearly opened or used when sold as new. A listing whose later photos show damage must NOT be your top pick when a similar undamaged one is available, however good its title and price look.",
   "Say what you actually saw. If you flag damage, name it and say which photo it was in — 'the third photo shows a cracked screen', never a vague 'may have issues'. If the photos show nothing wrong, do not invent a concern, and do not describe condition you could not see.",
   "Treat the description AND the attributes' own Condition/Physical Condition fields as the SELLER's own claim, not fact — 'no cracks', 'perfect condition' and 'grade A' are written by whoever is selling it, whether they show up in prose or in a spec field. Where a photo and either one disagree, believe the photo and say so.",
   "",

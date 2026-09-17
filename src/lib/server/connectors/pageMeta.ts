@@ -8,11 +8,11 @@
 // offers came from the organic side — and rendered as grey placeholder
 // tiles. A product card with no product on it is barely a card.
 //
-// So the missing half is read from the product page itself. Every Nigerian
-// retailer in the connector's list publishes `og:image` (checked live on
-// Jumia and oraimo), which is exactly the thing that was missing and costs
-// no API credits — just an HTTP GET of a page we are already about to send
-// the buyer to.
+// So the missing half is read from the product page itself. Every Shopify/
+// WooCommerce Nigerian retailer in the connector's list publishes
+// `og:image`, which is exactly the thing that was missing and costs no API
+// credits — just an HTTP GET of a page we are already about to send the
+// buyer to.
 //
 // Three rules, same spirit as the connector contract:
 //   1. NEVER THROW, never reject. A page that is slow, blocked or malformed
@@ -21,8 +21,7 @@
 //      a price is only taken from the explicit, machine-readable
 //      `product:price:amount` + `product:price:currency` PAIR — never
 //      scraped out of visible text or guessed from a JSON blob, where
-//      picking the wrong number is a real risk (Jumia's markup carries
-//      several unrelated "price" keys).
+//      picking the wrong number is a real risk.
 //   3. NEVER BLOCK THE TURN. One short timeout for all pages together, and
 //      whatever has arrived by then is what gets used.
 //
@@ -32,53 +31,66 @@
 // had a clean first photo and damage further down its gallery. The pick
 // call only ever saw photo one.
 //
-//   - Jumia — photo #1 only; the rest of its gallery is loaded by JS and is
-//             simply not in the HTML. Guessing 2.jpg/3.jpg would violate
-//             rule 2, so Jumia stays single-image and honest about it.
+// SHOPIFY + WOOCOMMERCE ONLY (2026-09-13) — the connector's merchant list in
+// serper.ts no longer carries Jumia, Konga, Jiji or oraimo, and the
+// hand-verified per-merchant extractors this file used to carry for them
+// (photo-gallery readers, an attribute-table parser) were removed with them
+// rather than left as dead code pointing at shops no longer in the list —
+// see git history if either is ever worth rebuilding for a real Shopify/
+// WooCommerce listing page (read it BY HAND first, same as every rule in
+// this file). Every merchant now goes through the generic pass below only —
+// og:image/twitter:image/itemprop=image for photos, and no attribute
+// extractor at all until one is verified against a real Shopify or
+// WooCommerce listing page. That's a real regression in richness for
+// whatever those old sources used to surface (their gallery and spec-table
+// reading were the best this file ever did), traded for not carrying
+// scraper code for shops no longer in the list — never fabricate or assume
+// Shopify/WooCommerce share the old markup shape.
 //
-// Konga and Jiji retired 2026-09-12, along with their MERCHANTS entries in
-// serper.ts and the hand-verified extractors this file used to carry for
-// them (a photo-gallery reader for each, plus Jiji's own attribute-table
-// parser — see git history if a Shopify/WooCommerce/Bumpa equivalent is
-// ever worth building the same way: read the real page BY HAND first, same
-// as every rule in this file). Every merchant now goes through the generic
-// pass below only — og:image/twitter:image/itemprop=image for photos, and
-// no attribute extractor at all until one is verified against a real
-// Shopify, WooCommerce or Bumpa listing page. That's a real regression in
-// richness for whatever Jiji listings used to surface (its gallery and its
-// spec table were the best of any source this file read), traded for not
-// carrying scraper code for a shop no longer in the list — never fabricate
-// or assume the new platforms share Jiji's markup shape.
+// A checkout hand-off (a one-tap add-to-cart link, built from each
+// platform's own public URL convention with no merchant opt-in) lived here
+// briefly on 2026-09-14 and was removed the same day — explicit product
+// decision, made after a wider strategy discussion concluded the plain
+// product-page hand-off is the right shape for now rather than building
+// the product around checkout automation. See git history if it's ever
+// worth rebuilding; the underlying tricks (WooCommerce's `?add-to-cart=`,
+// Shopify's `/cart/<variant>:<qty>` permalink) were real and hand-verified
+// against live carts, not a dead end technically — this was a product
+// scope call, not a "it didn't work" one.
 
 // Deliberately tight. This runs after the buyer has already been told Velte
 // had nothing, on top of a search that has already spent its time — a
 // prettier card is not worth another two seconds of waiting.
 const TIMEOUT_MS = 5000;
 
-// These offers cluster on two hosts — five of six results are routinely
-// Jumia — and firing all of them at once got most of a batch dropped
+// Firing every page fetch at once got most of a batch dropped in practice
 // (measured: 1 image out of 6 on a burst, while the same pages fetched
 // individually all returned in under a second). A small pool is both
 // politer and, in practice, faster than being throttled.
-const CONCURRENCY = 3;
-
-// Product pages are large (Jumia's runs past 150kb) and the stream is
-// dropped once nothing we want can still appear, so a heavy page still
-// costs a fraction of its real size.
 //
-// Raised from 60kb when galleries arrived, because measurement said so and
-// a first guess said otherwise — Konga's photos 2-4 sat at bytes 74.9k,
-// 76.6k and 78.2k, and the old 60kb cap returned its primary and NOTHING
-// else, which looked exactly like a site that publishes one photo. Konga
-// itself is retired from the connector's list (2026-09-12), but the cap it
-// justified stays: 100kb still clears Jumia's own tail with room to spare
-// and stops well short of these pages' real size, and is a reasonable
-// starting point for whatever a Shopify/WooCommerce/Bumpa page's gallery
-// markup turns out to need once someone reads one BY HAND to check. The
-// batch timeout, not this number, is what ultimately bounds the work.
+// Raised from 3 to 4 (2026-09-15, explicit request) — a modest bump, not a
+// re-run of the failed "fire everything at once" experiment above. If a
+// throttling regression ever shows up (the same "most of a batch dropped"
+// symptom), this is the first number to check and roll back — re-verify
+// against a real burst the same way the original 3 was measured, don't
+// just guess a smaller number back in.
+const CONCURRENCY = 4;
+
+// Product pages can run large and the stream is dropped once nothing we
+// want can still appear, so a heavy page still costs a fraction of its real
+// size.
+//
+// Raised from 60kb when galleries arrived, because measurement on real
+// pages (since retired from the connector's list, see the header comment
+// above) said the old cap returned only a primary photo and nothing else —
+// a later gallery photo sat well past 60kb, which looked exactly like a
+// site that publishes one photo. 100kb is a reasonable starting point for
+// whatever a Shopify/WooCommerce page's gallery markup turns out to need;
+// revisit by reading a real listing page BY HAND if it proves too tight.
+// The batch timeout, not this number, is what ultimately bounds the work.
 //
 // The other half of the same fix was deleting the </head> early-exit below:
-// </head> lands at bytes 3.8k-13k, i.e. BEFORE every gallery here, so
+// </head> lands well before where a gallery typically sits in the HTML, so
 // stopping there found nothing at all.
 const MAX_BYTES = 100_000;
 
@@ -90,9 +102,8 @@ const MAX_BYTES = 100_000;
 const MAX_GALLERY = 6;
 
 // The listing's own words, clipped — long enough to carry "UK used, Grade
-// A, minor scratches", short enough that marketing boilerplate (Konga's
-// ran past 5,000 characters, before it was retired 2026-09-12) can't crowd
-// out the comparison prompt.
+// A, minor scratches", short enough that marketing boilerplate on a shop's
+// own description tag can't crowd out the comparison prompt.
 const MAX_DESCRIPTION = 400;
 
 // A browser-ish UA: several of these storefronts sit behind bot protection
@@ -117,7 +128,7 @@ function metaContent(html: string, keys: string[]): string | null {
   for (const key of keys) {
     // Both attribute orders and both spellings — `property=` is the Open
     // Graph convention, `name=` is what several of these sites actually
-    // emit (Konga's price tags among them).
+    // emit for the same tag.
     const patterns = [
       new RegExp(
         `<meta[^>]+(?:property|name)=["']${key}["'][^>]*content=["']([^"']+)["']`,
@@ -138,11 +149,11 @@ function metaContent(html: string, keys: string[]): string | null {
 }
 
 // Some storefronts fall back to a site-wide social image when a product
-// page has none of its own — Konga serves
-// `website_assets/icons/favicon/og-image.jpg` this way. That is a logo, not
-// the product, and putting it on a card is worse than the honest empty
-// state: it looks like a real photo of the wrong thing. Recognised by the
-// shapes those fallbacks actually take rather than by host.
+// page has none of its own (a favicon or a generic og-image path is the
+// usual shape). That is a logo, not the product, and putting it on a card
+// is worse than the honest empty state: it looks like a real photo of the
+// wrong thing. Recognised by the shapes those fallbacks actually take
+// rather than by host.
 const GENERIC_IMAGE =
   /(website_assets|placeholder|no[-_]?image|default[-_]?(image|product)|(^|\/)og[-_]image\.|logo\.(png|jpe?g|svg|webp))/i;
 
@@ -179,8 +190,8 @@ function allMetaContent(html: string, keys: string[]): string[] {
   return out;
 }
 
-// Named entities these three storefronts actually emit. `&amp;` is decoded
-// LAST so an "&amp;lt;" in the source can't be turned into a real tag.
+// Named entities these storefronts actually emit. `&amp;` is decoded LAST
+// so an "&amp;lt;" in the source can't be turned into a real tag.
 function decodeEntities(value: string): string {
   return value
     .replace(/&lt;/gi, "<")
@@ -193,13 +204,13 @@ function decodeEntities(value: string): string {
     .replace(/&amp;/gi, "&");
 }
 
-/** A meta value as readable prose. Konga publishes its og:description as
- *  ESCAPED HTML ("&lt;p&gt;Original Apple iPhone…"), so entities are decoded
- *  first and only then are tags stripped — the other order leaves the markup
- *  sitting in the text handed to the model.
+/** A meta value as readable prose. Some storefronts publish their
+ *  og:description as ESCAPED HTML ("&lt;p&gt;Original Apple iPhone…"), so
+ *  entities are decoded first and only then are tags stripped — the other
+ *  order leaves the markup sitting in the text handed to the model.
  *
- *  Decoded TWICE because Konga is doubly escaped: its markup arrives as
- *  "&amp;ndash;", which one pass turns into "&ndash;" and leaves there. Two
+ *  Decoded TWICE because some of these pages are doubly escaped: markup
+ *  arriving as "&amp;ndash;" only turns into "&ndash;" after one pass. Two
  *  passes is deliberate rather than a loop — it's what these pages actually
  *  need, and an unbounded "decode until stable" would keep chewing through
  *  text that legitimately contains "&amp;". Tags are stripped after both
@@ -213,36 +224,31 @@ function plainText(value: string): string {
 
 // ---- Per-merchant gallery/attribute extraction ----------------------
 //
-// Historically held a hand-verified extractor per merchant here (Jiji's
-// photo-gallery + size-variant picker, Konga's Cloudinary photo reader,
-// Jiji's own server-rendered spec-table parser) — each shape read off a
-// real product page, never inferred from the platform. Both merchants were
-// retired 2026-09-12 (see serper.ts) and their extractors removed with
-// them rather than left as dead code pointing at a shop no longer in the
-// list.
+// Historically held a hand-verified extractor per merchant here, each shape
+// read off a real product page, never inferred from the platform — see git
+// history if one is ever worth rebuilding. Those merchants were removed
+// from the connector's list 2026-09-13 (see serper.ts's own header: only
+// Shopify/WooCommerce Nigerian stores remain) and their extractors removed
+// with them rather than left as dead code pointing at a shop no longer in
+// the list.
 //
 // What's left is ONLY the generic pass every merchant already fell back to
 // when it had no dedicated entry here: whatever og:image/twitter:image/
-// itemprop=image tags the page itself publishes. That's still the ONLY
-// pass Jumia ever got — its gallery is rendered client-side and simply
-// isn't in the HTML, and inventing /2.jpg, /3.jpg from the /1.jpg it does
-// publish would violate this file's second rule (NEVER FABRICATE).
+// itemprop=image tags the page itself publishes.
 //
-// A Shopify/WooCommerce/Bumpa-specific extractor (multi-photo gallery,
-// real spec attributes) is a real gap this leaves — deliberately not
-// guessed at here. If it's worth building, do it the same way Jiji's was:
-// read a real listing page from each platform BY HAND first, and never
-// assume one platform's markup shape from another's.
+// A Shopify/WooCommerce-specific extractor (multi-photo gallery, real spec
+// attributes) is a real gap this leaves — deliberately not guessed at here.
+// If it's worth building, read a real listing page from each platform BY
+// HAND first, and never assume one platform's markup shape from another's.
 
 /** Real spec pairs (Condition, RAM, Storage, …) the listing's own page
  *  published — see ExternalOffer.attributes. Always empty today: no
- *  merchant currently in the connector's list has a verified extractor
- *  (Jiji's was retired with it 2026-09-12). Kept as its own function,
- *  rather than deleted outright, so a future Shopify/WooCommerce/Bumpa
- *  extractor has an obvious place to land — cap whatever it returns at
- *  around a dozen pairs, the way Jiji's did: plenty for a comparison call,
- *  small enough that a long table can't crowd out everything else in the
- *  prompt. */
+ *  merchant currently in the connector's list has a verified extractor.
+ *  Kept as its own function, rather than deleted outright, so a future
+ *  Shopify/WooCommerce extractor has an obvious place to land — cap
+ *  whatever it returns at around a dozen pairs: plenty for a comparison
+ *  call, small enough that a long table can't crowd out everything else in
+ *  the prompt. */
 function extractAttributes(): { name: string; value: string }[] {
   return [];
 }
@@ -372,9 +378,9 @@ export async function fetchPageMeta(
               : (photos[0] ?? null);
 
           // Everything that isn't the primary. extractGallery already dedupes
-          // by URL (minus its query string); without Jiji's own size-variant
-          // picker there's no per-merchant notion of "same photo, different
-          // size" left to collapse here, so a plain URL comparison is enough.
+          // by URL (minus its query string), and there's no per-merchant
+          // notion of "same photo, different size" left to collapse here, so
+          // a plain URL comparison is enough.
           const primaryKey = primary
             ? primary.split("?")[0].toLowerCase()
             : null;

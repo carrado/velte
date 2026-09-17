@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { VelteLogo } from "@/components/VelteLogo";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUserStore } from "@/store/userStore";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
-import { useBuyerSession } from "@/hooks/useBuyerSession";
 import {
   LogOutIcon,
   MenuIcon,
@@ -35,8 +34,15 @@ import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
 // the sidebar's signed-out state is itself the sign-in prompt, which puts
 // the ask exactly where the reason for it is, rather than in a banner over
 // the thread. Vendor and buyer sessions are independent cookies, so a vendor
-// browsing /chat can have a buyer history of their own and still see their
-// dashboard link.
+// browsing /chat CAN have a buyer history of their own and still see their
+// dashboard link — but only when the two are the SAME person
+// (Buyer.linkedVendorId, a verified-email match). As of 2026-09-16 that's
+// enforced at LOGIN (velte-backend's loginAsVendor/firebaseSignIn now pair
+// or clear the other cookie the moment either account signs in — see
+// identityLink.service.js there), so the two cookies in this browser are
+// guaranteed to already agree by the time IdentitySessionSync hydrates
+// them. The effect just below is what's left of the original client-side
+// fix for this — kept as a defensive backstop, not the primary guard.
 //
 // It briefly took `showSidebarToggle` / `showUpgrade` props (2026-08-29) so
 // the /plans route could reuse it with neither control. That route is gone —
@@ -48,13 +54,46 @@ export function ChatHeader() {
   const setSidebarOpen = useChatHistoryStore((s) => s.setOpen);
   const isSidebarCollapsed = useChatHistoryStore((s) => s.isCollapsed);
   const setSidebarCollapsed = useChatHistoryStore((s) => s.setCollapsed);
-  // Hydrates the buyer from the session cookie on load, so the sidebar
-  // renders its signed-in state on first paint rather than flashing the
-  // sign-in prompt at a buyer who already has an account. Called here rather
-  // than in the sidebar because the sidebar's own list query is gated on a
-  // buyer already being known.
-  useBuyerSession();
+  // Both vendor and buyer identity are hydrated once, together, by
+  // IdentitySessionSync (mounted in chat/layout.tsx) — this just reads
+  // whichever the store ends up with.
   const buyer = useBuyerStore((s) => s.buyer);
+
+  // A buyer session belongs on /chat only when it's genuinely THIS vendor's
+  // own — proven by Buyer.linkedVendorId, the verified-email match
+  // vendorDashboardId's own comment below explains. Without this, ANY
+  // buyer_auth_token cookie left sitting in the browser — a different
+  // person's Google sign-in on a shared machine, or just an old test
+  // account from an earlier session — got shown wholesale the moment a
+  // vendor with a completely unrelated email signed into THIS browser and
+  // opened /chat: their own name in the header chip, a stranger's full
+  // conversation history underneath it in the sidebar. Found live
+  // (2026-09-16): signed into the vendor dashboard with one email, opened
+  // "Ask Velte", and landed on another account's chats in full.
+  //
+  // Clears the STORE only — the httpOnly buyer_auth_token cookie itself is
+  // never touched here (this component has no access to it, and the
+  // buyer's own session elsewhere, e.g. a tab actually signed in as them,
+  // must keep working). Every buyer-scoped read on this page (the sidebar's
+  // conversation list, the credits balance, this header's own chip) reads
+  // from this same store rather than the cookie directly, so correcting it
+  // here is enough to stop the leak everywhere at once.
+  //
+  // ALSO fires requestNewChat() — clearing the store alone stops the
+  // SIDEBAR and this chip, but SearchHome's own mount rehydrate reads the
+  // active thread off localStorage (a browser-scoped id, set before this
+  // effect ever runs, with no notion of which account it belongs to), not
+  // off this store — so the mismatched buyer's actual message bubbles would
+  // otherwise stay on screen even after their identity is cleared
+  // everywhere else. requestNewChat() is the same reset "New chat" in the
+  // history drawer already triggers (clearStoredConversationId + an empty
+  // turns list), reused here rather than hand-rolling a second reset path.
+  useEffect(() => {
+    if (userDetails && buyer && buyer.linkedVendorId !== userDetails.id) {
+      useBuyerStore.getState().clearBuyer();
+      useChatHistoryStore.getState().requestNewChat();
+    }
+  }, [userDetails, buyer]);
 
   // The credit METER (the balance/used figures) still isn't in this header
   // (2026-09-01, per explicit request) — that stays the floating ring from

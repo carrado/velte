@@ -18,7 +18,7 @@ import {
   ArrowRightIcon,
   RefreshIcon,
   ShieldCheckIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 const verifySchema = z.object({
   code: z

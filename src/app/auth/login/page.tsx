@@ -24,7 +24,7 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
   UserRoundIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 /* Vendor-only login. Used to be unified with a Buyer branch (2026-08-15);
    that's gone again (2026-08-18) — buyers never log in at all, see

@@ -35,7 +35,6 @@ export function CreditsPanel({
   walletBalanceKobo,
   onTopUp,
   busyPack,
-  topUpError,
 }: {
   /** What this viewer has. For a guest this is their browser-side balance. */
   balance: number | null;
@@ -53,9 +52,6 @@ export function CreditsPanel({
   onTopUp: (packId: string, source?: "card" | "wallet") => void;
   /** The pack currently opening a checkout, if any. */
   busyPack: string | null;
-  /** A failed WALLET purchase, usually an empty wallet. A card top-up
-   *  navigates away, so it never has an error to report here. */
-  topUpError: string | null;
 }) {
   // A vendor, and only a vendor, sees a funding choice. The wallet is money
   // they already keep with Velte for lead charges; making them re-enter a
@@ -164,9 +160,6 @@ export function CreditsPanel({
               </p>
             )}
           </div>
-          {topUpError && (
-            <p className="mt-2 text-sm text-red-600">{topUpError}</p>
-          )}
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {CREDIT_PACKS.map((pack) => {
               // Affordability is decided here only to LABEL the wallet

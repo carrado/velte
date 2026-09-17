@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { requireBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalVendorAuth, jsonError } from "@/lib/server/guards";
 import { backendData, BackendError } from "@/lib/server/backend";
 import { appendSearchTurn } from "@/lib/server/searchConversations";
 import { CREDIT_COST } from "@/lib/credits";
@@ -21,10 +22,15 @@ import type {
 // route instead) — because this happens synchronously, in the same live
 // session, onto the conversation the buyer is looking at right now.
 //
-// Buyer-owned, deliberately requireBuyerAuth (not the optional guard most
+// Account-owned, deliberately a required guard (not the optional one most
 // of /api/search uses): a guest has no row a background job could be
 // billed against or a notification delivered to, so this simply isn't
-// offered to one.
+// offered to one. Widened 2026-09-17 from buyer-only to buyer-OR-vendor —
+// explicit product direction: "what buyer can do, vendor can do" (a vendor
+// may want to buy things too, and has their own credit balance to spend —
+// see velte-backend's Credits model, already keyed on `(ownerId, ownerType)`
+// generically). Buyer wins when both cookies exist, same precedence
+// /api/search's own actorType uses.
 
 interface StartBody {
   goalText?: string;
@@ -54,8 +60,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const auth = await requireBuyerAuth();
-  if ("response" in auth) return auth.response;
+  const buyerAuth = await getOptionalBuyerAuth();
+  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  if (!buyerAuth && !vendorAuth) {
+    return jsonError(401, "Sign in to use Shopping Lists.");
+  }
+  const cookie = buyerAuth?.cookie ?? vendorAuth?.cookie ?? "";
 
   // Checked against the FULL ceiling — every item this job could ever bill
   // for — rather than one item's cost, so refusing here means nothing is
@@ -70,12 +80,17 @@ export async function POST(req: Request) {
   const ceiling = CREDIT_COST.shopping_list_item * body.items.length;
   try {
     const { balance } = await backendData<{ balance: number }>("/credits", {
-      cookie: auth.cookie,
+      cookie,
     });
     if (balance < ceiling) {
+      // Never names the ceiling — what searching this whole list could cost
+      // is arithmetic a buyer could reverse into a per-item price, which is
+      // exactly the number credit refusals must never reveal (see
+      // creditLedger.ts's own creditMessage, the buyer-facing precedent this
+      // follows). Their own balance is fine to state; the cost isn't.
       return NextResponse.json(
         {
-          error: `This list needs up to ${ceiling} credits to search — you have ${balance}. Top up to continue.`,
+          error: `You don't have enough credits to search this whole list yet — you have ${balance}. Top up to continue.`,
         },
         { status: 402 },
       );
@@ -93,7 +108,7 @@ export async function POST(req: Request) {
       "/shopping-list-jobs",
       {
         method: "POST",
-        cookie: auth.cookie,
+        cookie,
         body: {
           goalText: body.goalText,
           items: body.items,
@@ -143,6 +158,7 @@ export async function POST(req: Request) {
         productsMatchQuality: undefined,
         storesMatchQuality: undefined,
         externalStoreSuggestions: [],
+        instagramLeads: [],
         vendorProducts: [],
         vendorProductsStore: null,
         buyerRequestOffer: null,
@@ -150,18 +166,22 @@ export async function POST(req: Request) {
         interimReplies: [],
         awaitingBuyerRequestReply: false,
         buyerRequestMatchQuery: null,
+        awaitingVendorSearchOffer: false,
+        vendorSearchMatchQuery: null,
         contextNote: null,
         recommendation: null,
         externalOffers: [],
         awaitingComparisonPurchaseReply: false,
         comparisonPickItem: null,
+        isGuidanceReply: false,
         shoppingList: null,
         knownBudgetNaira: null,
       };
       await appendSearchTurn({
         conversationId: body.conversationId,
         deviceId: body.deviceId,
-        buyerId: auth.buyerId,
+        buyerId: buyerAuth?.buyerId ?? null,
+        vendorId: vendorAuth?.userId ?? null,
         turn,
       });
     } catch (err) {

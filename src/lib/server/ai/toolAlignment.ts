@@ -128,5 +128,5 @@ export function toolMismatchReply(activeTool: ComposerTool): string {
   const label = TOOL_LABEL[activeTool];
   const example =
     'name two or more things to weigh against each other — e.g. "iPhone 15 vs Samsung S24"';
-  return `That doesn't look like a ${label} request — for this tool, ${example}. You can also tap the ${label} icon again to turn it off and just search normally.`;
+  return `That doesn't look like a ${label} request — for this tool, ${example}. Or just send it again with the ✕ on the ${label} tag tapped off, and I'll go ahead and search for it normally.`;
 }

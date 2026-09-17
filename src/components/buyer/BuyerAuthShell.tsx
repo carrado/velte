@@ -6,7 +6,7 @@ import {
   MapPinIcon,
   MessageSquarePlusIcon,
   ShieldCheckIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // Shared two-column shell — originally the buyer-only auth screens' look,
 // now (2026-08-15 login/signup unification) the shell for the ONE login

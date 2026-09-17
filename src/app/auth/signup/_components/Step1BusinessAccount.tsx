@@ -31,7 +31,7 @@ import {
   MapPinIcon,
   PhoneIcon,
   UserIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 function PasswordStrengthMeter({ password }: { password: string }) {
   const strength = passwordStrength(password);

@@ -101,15 +101,8 @@ function CreditsOverlay({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const {
-    balance,
-    used,
-    isGuest,
-    walletBalanceKobo,
-    topUp,
-    busyPack,
-    topUpError,
-  } = useCredits(isOpen);
+  const { balance, used, isGuest, walletBalanceKobo, topUp, busyPack } =
+    useCredits(isOpen);
   // Read here rather than threaded through useCredits: the referral link is
   // an attribute of the buyer, not of their balance, and the store already
   // holds it (the backend returns the whole Buyer document).
@@ -183,7 +176,6 @@ function CreditsOverlay({
             walletBalanceKobo={walletBalanceKobo}
             onTopUp={topUp}
             busyPack={busyPack}
-            topUpError={topUpError}
           />
         </motion.div>
       )}

@@ -47,10 +47,15 @@ function gateTool() {
     description:
       "Call this exactly once to write the single natural-language message asking the buyer what you need before searching.",
     inputSchema: z.object({
+      asksBudget: z
+        .boolean()
+        .describe(
+          "Whether this message actually asks about budget — see the system prompt's rule on which requests genuinely need one. Must match the message you actually wrote: true only if the message really does ask about budget/price range somewhere in it, false if it doesn't.",
+        ),
       question: z
         .string()
         .describe(
-          'One short, friendly, natural message asking the buyer what\'s needed before searching for their item/service — written entirely in your own words, no fixed template. It MUST ask about their budget somewhere in it (any natural phrasing — "what\'s your budget", "how much are you hoping to spend", "any price range in mind", etc.) — never skip it. It MAY also ask up to 2 more short things about USE or PREFERENCE if the category genuinely benefits from it (e.g. what kind of development, new or used, which room it\'s for) — never a raw spec the buyer would have to go look up, and never something their own words already answered. Keep it ONE cohesive message a buyer would actually enjoy reading — conversational prose or a short natural numbered list, your choice — never a rigid form, never more than 3 things total.',
+          "One short, friendly, natural message asking the buyer what's needed before searching for their item/service — written entirely in your own words, no fixed template. Ask about budget ONLY when the system prompt's rule says this request genuinely needs one (set asksBudget to match). It MAY also ask up to 2 short things about USE, PREFERENCE, or (for a bounded job) the actual PROBLEM/SPECIFICS — never a raw spec the buyer would have to go look up, and never something their own words already answered. Keep it ONE cohesive message a buyer would actually enjoy reading — conversational prose or a short natural numbered list, your choice — never a rigid form, never more than 3 things total.",
         ),
     }),
     execute: async (v) => v,
@@ -62,14 +67,33 @@ function systemPromptFor(itemTerm: string, isService: boolean): string {
     `A buyer on Velte, a Nigerian shopping assistant, just asked for "${itemTerm}" with no distinguishing detail yet — before searching, write the one message asking what matters.`,
     "",
     isService
-      ? "This is a SERVICE request. Anything beyond budget you ask about should be about who's doing the job — experience, turnaround, materials/process — never a business name."
+      ? "This is a SERVICE request. Anything beyond budget you ask about should be about the actual job — the specific problem, who's doing it, experience, turnaround, materials/process — never a business name."
       : "This is a purchase. Anything beyond budget you ask about should be a real, general use/preference question for this kind of item.",
     "",
     "Hard rules, no exceptions:",
     "- Read the buyer's own words for a stated USE CASE (e.g. 'for my work as a developer', 'for content creation') and let it shape the question — never ask about something the buyer's own words already answered.",
-    "- Budget MUST be part of the message, phrased however feels natural — this is the one thing that's always asked.",
-    "- Anything else you ask about is USE, PREFERENCE, or CATEGORY (e.g. what kind of development, new or used, which room it's for) — never a raw spec the buyer would have to go look up, never a specific product/brand/model name, never a price estimate of your own.",
-    "- If the category is too generic to ask anything beyond budget, that's fine — a plain, warm budget question alone is a complete, correct answer.",
+    isService
+      ? // Explicit product direction (2026-09-17, found live on "I need a good
+        // mechanic nearby" getting asked for a budget, which reads as odd
+        // for a bounded repair job priced by diagnosis, not by how much the
+        // buyer chooses to spend): budget genuinely only varies with SCALE
+        // for a narrow class of services — the buyer choosing more/bigger/
+        // longer directly and substantially changes what it costs (an event
+        // planner, a DJ, a caterer, a decorator, event photography, a large
+        // print run, a construction/renovation job). For an ordinary bounded
+        // job — a mechanic, a plumber, an electrician, a phone repair, a
+        // single tailoring job, a haircut — the price is set by DIAGNOSING
+        // the actual problem, not by a budget the buyer names upfront, and
+        // asking one reads as a non-sequitur. Judge this per request, not
+        // from a fixed list: is the eventual cost mostly a function of scale/
+        // scope the buyer controls (ask budget), or mostly a function of
+        // what's actually wrong/needed (skip budget, ask about THAT instead —
+        // e.g. for a mechanic: what's wrong with the vehicle, or its make/
+        // model, never a business name or a price of your own).
+        "- Decide first whether this request's cost genuinely scales with the buyer's own choices (an event's size, a job's duration/scope) — if so, ask budget. If the cost is really set by diagnosing a specific problem rather than by how much the buyer wants to spend, do NOT ask budget at all — ask about the actual problem/need instead (what's wrong, what kind, which model/make — whatever a vendor would actually need to help). Set `asksBudget` to match whichever you actually did."
+      : "- Budget MUST be part of the message, phrased however feels natural — this is the one thing that's always asked for a purchase. Set `asksBudget` to true.",
+    "- Anything else you ask about is USE, PREFERENCE, PROBLEM/NEED, or CATEGORY (e.g. what kind of development, new or used, which room it's for, what's wrong with the vehicle) — never a raw spec the buyer would have to go look up, never a specific product/brand/model name, never a price estimate of your own.",
+    "- If the category is too generic to ask anything beyond the one thing that matters most (budget, or the problem/need), that's fine — a plain, warm question alone is a complete, correct answer.",
     "- One short, natural message. Never a form, never a wall of bullet points, never filler advice about what to look for — just the question(s).",
   ].join("\n");
 }
@@ -80,12 +104,24 @@ function isUsableQuestion(s: string | undefined): s is string {
   return t.length > 0 && t.length <= MAX_QUESTION_LENGTH;
 }
 
+export interface BareQueryGateResult {
+  question: string;
+  /** Whether `question` actually asks about budget — false for a bounded
+   *  service (a mechanic, a repair) whose cost is set by diagnosing the
+   *  problem, not by what the buyer chooses to spend. See
+   *  systemPromptFor's own rule. route.ts stamps this onto the turn's
+   *  clarification (`budgetAsked`) so a later request in the SAME
+   *  conversation that genuinely does need a budget ask still gets one —
+   *  see alreadyAskedBudgetThisConversation's own comment. */
+  asksBudget: boolean;
+}
+
 /**
- * The dynamic bare-query question text, written entirely by the model (see
- * this file's own top comment for why nothing here is code-templated
- * anymore). Returns null on ANY failure — the caller already has a working
- * static budget-only fallback, so this can only ever ADD to that, never be
- * the reason a buyer sees nothing. Never throws.
+ * The dynamic bare-query question, written entirely by the model (see this
+ * file's own top comment for why nothing here is code-templated anymore).
+ * Returns null on ANY failure — the caller already has a working static
+ * fallback, so this can only ever ADD to that, never be the reason a buyer
+ * sees nothing. Never throws.
  */
 export async function buildBareQueryGate(params: {
   itemTerm: string;
@@ -94,7 +130,7 @@ export async function buildBareQueryGate(params: {
    *  stated ("for my work as a developer"), which the model reads so it
    *  doesn't re-ask what's already been said. */
   message: string;
-}): Promise<string | null> {
+}): Promise<BareQueryGateResult | null> {
   const itemTerm = params.itemTerm.trim();
   if (!itemTerm) return null;
 
@@ -123,9 +159,13 @@ export async function buildBareQueryGate(params: {
 
     const output = result.toolResults.find(
       (r) => r.toolName === "bareQueryGate",
-    )?.output as { question?: string } | undefined;
+    )?.output as { question?: string; asksBudget?: boolean } | undefined;
 
-    return isUsableQuestion(output?.question) ? output.question.trim() : null;
+    if (!isUsableQuestion(output?.question)) return null;
+    return {
+      question: output.question.trim(),
+      asksBudget: output?.asksBudget === true,
+    };
   } catch (err) {
     console.error(
       "[search] bare-query gate generation failed, falling back to budget-only:",
@@ -136,10 +176,12 @@ export async function buildBareQueryGate(params: {
 }
 
 /**
- * The reply text a buyer actually reads. `question` is null on a
+ * The reply text a buyer actually reads. `result` is null on a
  * failed/timed-out/unusable call, which collapses to a plain, static
- * budget-only question — the safest possible degrade, and a strict
- * superset of what buildBareQueryGate can return, never a regression.
+ * fallback question that INVITES a budget without demanding one — the
+ * safest possible degrade when there's no model call left to judge whether
+ * this particular request actually needs one (see buildBareQueryGate's own
+ * top comment).
  *
  * Detecting "budget already asked" no longer scans this text for a fixed
  * phrase (route.ts used to grep for the literal substring "what's your
@@ -150,10 +192,10 @@ export async function buildBareQueryGate(params: {
  */
 export function composeBareQueryReply(
   itemTerm: string,
-  question: string | null,
+  result: BareQueryGateResult | null,
 ): string {
   return (
-    question ??
-    `Before I search for "${itemTerm}" — what's your budget? Even a rough figure (like "around ₦400k" or "under ₦200k") helps me match you with the right option instead of just the highest specs.`
+    result?.question ??
+    `Before I search for "${itemTerm}" — tell me a bit more about what you need (and your budget, if you have one in mind). That'll help me match you with the right option.`
   );
 }

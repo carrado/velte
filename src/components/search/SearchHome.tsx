@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,7 @@ import { ComparisonTemplate } from "@/components/search/ComparisonTemplate";
 import { ShoppingListCard } from "@/components/search/ShoppingListCard";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
+import { InstagramLeadCard } from "@/components/search/InstagramLeadCard";
 import { ExternalOfferCard } from "@/components/search/ExternalOfferCard";
 import { StoreProductCard } from "@/components/search/StoreProductCard";
 import { CardCarousel } from "@/components/search/CardCarousel";
@@ -80,6 +81,7 @@ import type {
   Clarification,
   ComposerTool,
   IdentityCapture,
+  InstagramLead,
   MatchQuality,
   MatchTier,
   NearbyBusiness,
@@ -95,7 +97,6 @@ import type {
 } from "@/types/search";
 import { isComparisonTemplate } from "@/types/search";
 import {
-  CompassIcon,
   MapPinIcon,
   PhoneIcon,
   ShieldCheckIcon,
@@ -145,6 +146,20 @@ const RECENT_STATUS_MEMORY = 8;
 // `max-w-md` stays, but purely as a reading-width cap for the longer
 // dead-end and offer messages — it's a measure, not a box.
 const AI_MESSAGE_CLASS = "max-w-md";
+
+// The three buckets the off-Velte offers list is grouped into (2026-09-14,
+// see connectors/serper.ts's Merchant.platform for the full reasoning).
+// Order matters here — it's display order, Jumia first as the one most
+// buyers already recognise. A bucket with no offers this turn simply isn't
+// rendered; see the map site below.
+const EXTERNAL_OFFER_PLATFORMS: {
+  key: ExternalOffer["platform"];
+  label: string;
+}[] = [
+  { key: "jumia", label: "On Jumia" },
+  { key: "shopify", label: "On Shopify stores" },
+  { key: "woocommerce", label: "On WooCommerce stores" },
+];
 
 // Found live: the gate used to fire even when the buyer's OWN message
 // already named a place ("...in Lekki") — it only ever checked device
@@ -378,6 +393,7 @@ function createLoadingTurn(
     productsMatchQuality: undefined,
     storesMatchQuality: undefined,
     externalStoreSuggestions: [],
+    instagramLeads: [],
     vendorProducts: [],
     vendorProductsStore: null,
     buyerRequestOffer: null,
@@ -385,10 +401,14 @@ function createLoadingTurn(
     interimReplies: [],
     awaitingBuyerRequestReply: false,
     buyerRequestMatchQuery: null,
+    awaitingVendorSearchOffer: false,
+    vendorSearchMatchQuery: null,
     contextNote: null,
     recommendation: null,
     awaitingComparisonPurchaseReply: false,
     comparisonPickItem: null,
+    comparisonOptions: null,
+    isGuidanceReply: false,
     shoppingList: null,
     externalOffers: [],
     error: null,
@@ -413,6 +433,21 @@ function storedTurnToConversationTurn(
     error: null,
     quota: null,
     persisted: true,
+    // Defensive, not redundant with the type (2026-09-15, found live:
+    // "Cannot read properties of undefined (reading 'length')" on
+    // `turn.instagramLeads.length` in ConversationTurnView) — `stored` is
+    // PERSISTED data (browser localStorage, or the backend's own
+    // conversation history), and a turn saved before this field existed
+    // has no `instagramLeads` at runtime no matter what StoredSearchTurn's
+    // TYPE now claims. TypeScript only checks what this file writes, never
+    // what old data actually contains once it round-trips through storage.
+    instagramLeads: stored.instagramLeads ?? [],
+    // Same defensive reasoning, for the equally-new vendor-search-offer
+    // pair — a boolean `undefined` wouldn't crash the `&&` check that
+    // gates its own render block, but defaulting it here keeps this turn
+    // honestly typed rather than silently `undefined` at runtime.
+    awaitingVendorSearchOffer: stored.awaitingVendorSearchOffer ?? false,
+    vendorSearchMatchQuery: stored.vendorSearchMatchQuery ?? null,
   };
 }
 
@@ -440,6 +475,7 @@ function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
     productsMatchQuality: turn.productsMatchQuality,
     storesMatchQuality: turn.storesMatchQuality,
     externalStoreSuggestions: turn.externalStoreSuggestions,
+    instagramLeads: turn.instagramLeads,
     vendorProducts: turn.vendorProducts,
     vendorProductsStore: turn.vendorProductsStore,
     buyerRequestOffer: turn.buyerRequestOffer,
@@ -447,11 +483,15 @@ function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
     interimReplies: turn.interimReplies,
     awaitingBuyerRequestReply: turn.awaitingBuyerRequestReply,
     buyerRequestMatchQuery: turn.buyerRequestMatchQuery,
+    awaitingVendorSearchOffer: turn.awaitingVendorSearchOffer,
+    vendorSearchMatchQuery: turn.vendorSearchMatchQuery,
     contextNote: turn.contextNote,
     recommendation: turn.recommendation,
     externalOffers: turn.externalOffers,
     awaitingComparisonPurchaseReply: turn.awaitingComparisonPurchaseReply,
     comparisonPickItem: turn.comparisonPickItem,
+    comparisonOptions: turn.comparisonOptions ?? null,
+    isGuidanceReply: turn.isGuidanceReply,
     // Client-resolved background items never carry a goal-sheet budget of
     // their own — this concept only exists for a real /api/search turn.
     knownBudgetNaira: null,
@@ -656,6 +696,24 @@ type ReplyBlock =
 
 function FormattedReply({ text }: { text: string }) {
   const blocks: ReplyBlock[] = [];
+  // Set on a blank source line, cleared the next time real content is
+  // processed. A blank line is a deliberate paragraph break (every
+  // deterministic reply-builder in this codebase — suggestBuyingGuidance,
+  // the comparison answer, etc. — joins its closing sentence onto the rest
+  // with "\n\n" for exactly this reason) and has to force the NEXT line
+  // into a fresh block, never merged into whatever came before it.
+  //
+  // Found live: a guidance reply's closing "Tell me if any of these
+  // interest you..." rendered glued onto the LAST bullet, with no
+  // separation at all. The blank line between the list and that sentence
+  // used to be silently discarded (`if (!line) continue`) without leaving
+  // any trace, so by the time the closing sentence was processed, `last`
+  // still looked exactly like "we're still inside the list" — hitting the
+  // continuation-line branch below, which was built for a genuinely
+  // different case (a sub-detail wrapped onto its own source line WITHOUT
+  // a blank line, e.g. a long bullet the model wrapped) and had no way to
+  // tell that case apart from this one.
+  let sawBlankLine = false;
   for (const rawLine of text.split("\n")) {
     // Strips a leading markdown heading marker ("#" through "######") if
     // the model writes one anyway despite the system prompt saying never
@@ -664,29 +722,41 @@ function FormattedReply({ text }: { text: string }) {
     // characters visible, same defensive spirit as renderInlineBold below
     // handling "**bold**" instead of trusting the model never to send it.
     const line = rawLine.trim().replace(/^#{1,6}\s+/, "");
-    if (!line) continue;
+    if (!line) {
+      sawBlankLine = true;
+      continue;
+    }
+    const blankSeparated = sawBlankLine;
+    sawBlankLine = false;
 
     const bulletMatch = /^[-*•]\s+(.*)$/.exec(line);
     const numberedMatch = /^\d+[.)]\s+(.*)$/.exec(line);
     const last = blocks[blocks.length - 1];
 
     if (bulletMatch) {
-      if (last?.type === "ul") last.items.push(bulletMatch[1]);
+      if (last?.type === "ul" && !blankSeparated)
+        last.items.push(bulletMatch[1]);
       else blocks.push({ type: "ul", items: [bulletMatch[1]] });
     } else if (numberedMatch) {
-      if (last?.type === "ol") last.items.push(numberedMatch[1]);
+      if (last?.type === "ol" && !blankSeparated)
+        last.items.push(numberedMatch[1]);
       else blocks.push({ type: "ol", items: [numberedMatch[1]] });
-    } else if (last?.type === "p") {
+    } else if (last?.type === "p" && !blankSeparated) {
       last.lines.push(line);
-    } else if (last?.type === "ul" || last?.type === "ol") {
-      // A plain line right after a list item is that item's OWN
-      // continuation (a sub-detail on its own line), not a new paragraph —
-      // append it to the last item instead of starting a stray "p" block.
-      // Ending the list here would split a single numbered/bulleted list
-      // into two separate <ol>/<ul> elements, and since each one numbers
-      // itself independently (list-decimal), the second list would render
-      // starting back at "1." instead of continuing the count — exactly the
-      // "every item shows 1" bug this avoids.
+    } else if (
+      (last?.type === "ul" || last?.type === "ol") &&
+      !blankSeparated
+    ) {
+      // A plain line right after a list item, with NO blank line between
+      // them, is that item's OWN continuation (a sub-detail on its own
+      // line) — append it to the last item instead of starting a stray "p"
+      // block. Ending the list here would split a single numbered/bulleted
+      // list into two separate <ol>/<ul> elements, and since each one
+      // numbers itself independently (list-decimal), the second list would
+      // render starting back at "1." instead of continuing the count —
+      // exactly the "every item shows 1" bug this avoids. A blank line
+      // first means the model meant a real break, not a wrapped detail —
+      // see blankSeparated's own comment above.
       last.items[last.items.length - 1] += `\n${line}`;
     } else {
       blocks.push({ type: "p", lines: [line] });
@@ -789,6 +859,9 @@ interface ConversationTurn {
   productsMatchQuality: MatchQuality;
   storesMatchQuality: MatchQuality;
   externalStoreSuggestions: NearbyBusiness[];
+  // Public Instagram business pages found on a genuine STORE dead end
+  // (2026-09-15) — see InstagramLead's own comment in types/search.ts.
+  instagramLeads: InstagramLead[];
   vendorProducts: StoreProductItem[];
   vendorProductsStore: {
     name: string;
@@ -823,6 +896,12 @@ interface ConversationTurn {
   awaitingBuyerRequestReply: boolean;
   // Short query that justified a reach-out offer — see SearchHistoryTurn.
   buyerRequestMatchQuery: string | null;
+  // The opposite-shaped sibling pair (2026-09-15) — see SearchHistoryTurn's
+  // own matching field. True when this turn's reply asked whether the
+  // buyer would rather have a vendor make/provide a just-shown product
+  // directly.
+  awaitingVendorSearchOffer: boolean;
+  vendorSearchMatchQuery: string | null;
   // A machine-only breadcrumb (e.g. store handles just found) appended to
   // this turn's text in `history` so a LATER turn's model call can resolve
   // "what do they sell" back to a specific store — never rendered to the
@@ -842,6 +921,16 @@ interface ConversationTurn {
   // awaitingBuyerRequestReply above.
   awaitingComparisonPurchaseReply: boolean;
   comparisonPickItem: string | null;
+  // See types/search.ts's SearchHistoryTurn for the full comment — the
+  // remembered comparison's full alternative list, not just the pick.
+  // Optional, unlike its required sibling above.
+  comparisonOptions?: string[] | null;
+  // True when `reply` came from suggestBuyingGuidance (2026-09-15) — real-
+  // world brand/model suggestions on a genuine Velte dead end, general
+  // knowledge rather than a confirmed result. Drives a distinguishing
+  // caption so this doesn't render identically to an ordinary reply, or to
+  // a genuine empty dead end with no suggestions at all.
+  isGuidanceReply: boolean;
   // Non-null only on a turn where the AI determined the buyer's request is
   // a whole-project need and built a market-researched item list — see
   // ShoppingListSnapshot's own comment in types/search.ts. Renders the
@@ -933,6 +1022,35 @@ function QuotaCard({
   );
 }
 
+// The reach-out question shown alongside the Buyer-Request Yes/No pair
+// (2026-09-15, explicit request) — picked client-side, once per turn, kept
+// deliberately separate from the backend-composed reply text above it: this
+// carries no per-turn fact (unlike the reply, which names the actual search
+// term), so there's no reason to round-trip it through route.ts just for
+// wording variety. Same meaning throughout — only the phrasing rotates.
+const LOCAL_VENDOR_OFFER_QUESTIONS = [
+  "Should I reach out to vendors?",
+  "Want me to also check with a local vendor?",
+  "Should I ask a nearby vendor too?",
+  "Want me to reach out to a local business for you?",
+];
+
+// The vendor-search offer's own question, shown alongside its Yes/No pair
+// (2026-09-15, explicit request) — same reasoning as
+// LOCAL_VENDOR_OFFER_QUESTIONS just above: picked client-side, kept
+// separate from the backend-composed reply, no per-turn fact worth
+// round-tripping for wording variety alone. A DIFFERENT question pool from
+// that one on purpose — this asks about running a real searchStores call
+// and showing vendor cards, not about a Buyer Request reach-out, and the
+// two must read as genuinely different offers even though they share the
+// same Yes/No mechanism (renderOfferActions).
+const LOCAL_VENDOR_SEARCH_OFFER_QUESTIONS = [
+  "Prefer to have this made or provided by a vendor instead? Want me to look for one?",
+  "Would you rather a real vendor handle this directly? I can look for one.",
+  "Not sold on any of these as they are? I can check for a vendor who can help instead.",
+  "Want me to also see if a vendor nearby can make/provide this for you?",
+];
+
 function ConversationTurnView({
   turn,
   isLatest,
@@ -1011,6 +1129,82 @@ function ConversationTurnView({
   // Same grow-to-fit behavior as the main composer's own textarea, reused
   // here for the edit-in-place one.
   const editAutoResize = useAutoResizeTextarea(editDraft);
+
+  // Picked once per turn (keyed on turn.id, not re-rolled on every render)
+  // — see LOCAL_VENDOR_OFFER_QUESTIONS' own comment. Computed unconditionally
+  // (hooks can't be called from inside the branches below) even on a turn
+  // that never ends up showing it; the cost is one array index.
+  const offerQuestion = useMemo(
+    () =>
+      LOCAL_VENDOR_OFFER_QUESTIONS[
+        Math.floor(Math.random() * LOCAL_VENDOR_OFFER_QUESTIONS.length)
+      ],
+    [turn.id],
+  );
+
+  // Same rotation idea as offerQuestion above, for the vendor-search
+  // offer's own question — deterministic on turn.id (a UUID, so its first
+  // character is effectively arbitrary) rather than Math.random(), so this
+  // new pick doesn't add a second impure-render violation alongside the
+  // pre-existing one just above.
+  const vendorSearchOfferQuestion = useMemo(
+    () =>
+      LOCAL_VENDOR_SEARCH_OFFER_QUESTIONS[
+        turn.id.charCodeAt(0) % LOCAL_VENDOR_SEARCH_OFFER_QUESTIONS.length
+      ],
+    [turn.id],
+  );
+
+  // The Buyer-Request Yes/No pair — shared between the two branches below
+  // that can both show it (the plain offer-only case, and the "similar
+  // store match" case that shows real result cards first). One definition
+  // so the two can't drift in styling or submitted text. Plain underlined
+  // text rather than a filled pill (2026-09-15, explicit request) — "No
+  // thanks" keeps its own plainer, non-underlined treatment, staying the
+  // visually quieter of the two.
+  //
+  // `kind` (2026-09-15, found live) — the vendor-search offer used to
+  // submit this SAME "Yes, find someone" text, distinguished from the
+  // Buyer-Request offer purely by which flag was set on the turn. That was
+  // fragile in exactly the way this codebase keeps finding the hard way:
+  // when THIS offer's reply got misclassified as "new" (its own question
+  // text lives only in the client, never in `content` — see route.ts's
+  // pendingVendorSearchOfferReply comment for the full story) and both
+  // structural short-circuits failed to fire, the message fell through to
+  // the ordinary pipeline — where the model, reading an orphaned "yes,
+  // find someone" with no context, reached for its OWN extensively
+  // documented Buyer-Request agreement handling (that literal phrase) and
+  // ran THAT instead: asked for a name, then a WhatsApp number, for an
+  // offer that was never made. Distinct submitted text is a second,
+  // independent layer of defense against that same failure recurring —
+  // even if a future classification bug slips through again, "yes, look
+  // for a vendor" doesn't carry the same magnetic pull toward the
+  // Buyer-Request flow that "yes, find someone" does.
+  function renderOfferActions(
+    kind: "buyerRequest" | "vendorSearch" = "buyerRequest",
+  ) {
+    if (!isLatest) return null;
+    const agreeText =
+      kind === "vendorSearch" ? "Yes, look for a vendor" : "Yes, find someone";
+    return (
+      <div className="flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          onClick={() => onAnswerClarification(agreeText)}
+          className="text-sm font-medium text-orange-700 underline underline-offset-2 decoration-orange-300 hover:text-orange-800 hover:decoration-orange-500 transition-colors cursor-pointer"
+        >
+          {agreeText}
+        </button>
+        <button
+          type="button"
+          onClick={() => onAnswerClarification("No thanks, that's okay")}
+          className="text-sm text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+        >
+          No thanks
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -1465,22 +1659,33 @@ function ConversationTurnView({
                         </div>
                       )}
                     </>
-                  ) : (turn.externalStoreSuggestions.length > 0 ||
-                      turn.externalOffers.length > 0) &&
-                    !turn.buyerRequestOffered ? (
+                  ) : (turn.externalStoreSuggestions.length > 0 &&
+                      !turn.buyerRequestOffered) ||
+                    turn.externalOffers.length > 0 ? (
                     // No Velte vendor matched — real nearby businesses via Google
                     // Places (searchStores Tier 5), visibly distinct from an actual
-                    // Velte listing (see ExternalBusinessCard). `!buyerRequestOffered`
-                    // is the "Buyer Requests come first" gate (2026-08-16, see
+                    // Velte listing (see ExternalBusinessCard). The Places half of
+                    // this condition keeps its own `!buyerRequestOffered` gate — the
+                    // "Buyer Requests come first" rule (2026-08-16, see
                     // offerBuyerRequestTool's own comment): Tier 5 can come back in
                     // the SAME tool result as an otherwise-empty search, but on the
                     // turn where the model is making the reach-out offer instead,
-                    // these stay hidden and this falls through to the dead-end
-                    // Compass card below — visually identical whether or not Places
-                    // secretly found something, so the offer is always what the
-                    // buyer sees first. They only render once a later turn
-                    // re-searches with the offer declined (buyerRequestOffered
-                    // false again that time).
+                    // Places stays hidden until a later turn re-searches with the
+                    // offer declined.
+                    //
+                    // `externalOffers` (off-Velte product listings) is NOT gated on
+                    // `!buyerRequestOffered` (2026-09-15, explicit request) — route.ts's
+                    // own "similar store match" branch is the one case that
+                    // deliberately populates both on the SAME turn (external offers
+                    // shown immediately, the local-vendor route offered alongside
+                    // rather than gated behind a decline — see that branch's own
+                    // comment on why this one case reverses "Velte first"). Every
+                    // OTHER path that sets buyerRequestOffered never populates
+                    // externalOffers on the same turn (nothingOnVelte requires
+                    // `!buyerRequestOffered`), so this can't reveal anything early
+                    // for the genuine-dead-end case — found live: the reply text was
+                    // already saying "here's what's available online" while this
+                    // exact gate silently dropped the cards it was talking about.
                     //
                     // 2026-08-19: `reply` wrapped in the same AI_MESSAGE_CLASS
                     // every other pure-text reply gets, rather than being the
@@ -1492,15 +1697,37 @@ function ConversationTurnView({
                       <div className={AI_MESSAGE_CLASS}>
                         <FormattedReply text={turn.reply} />
                       </div>
-                      {turn.externalStoreSuggestions.length > 0 && (
-                        <CardCarousel
-                          items={turn.externalStoreSuggestions}
-                          getKey={(match) => match.name + match.address}
-                          renderItem={(match) => (
-                            <ExternalBusinessCard match={match} />
-                          )}
-                        />
-                      )}
+                      {turn.externalStoreSuggestions.length > 0 &&
+                        !turn.buyerRequestOffered && (
+                          <CardCarousel
+                            items={turn.externalStoreSuggestions}
+                            getKey={(match) => match.name + match.address}
+                            renderItem={(match) => (
+                              <ExternalBusinessCard match={match} />
+                            )}
+                          />
+                        )}
+                      {/* Instagram leads — a THIRD, distinctly-sourced
+                        fallback tier (2026-09-15), rendered below Places
+                        rather than merged into the same carousel: these
+                        carry no verified address/distance at all, so
+                        mixing them into one list would silently claim a
+                        confidence Instagram search results don't have. */}
+                      {/* `?? []` — belt-and-suspenders alongside the
+                        rehydration fix (storedTurnToConversationTurn's own
+                        comment): this field is new enough that some path
+                        loading a turn from outside this session's own
+                        state could still hand back one without it. */}
+                      {(turn.instagramLeads ?? []).length > 0 &&
+                        !turn.buyerRequestOffered && (
+                          <CardCarousel
+                            items={turn.instagramLeads}
+                            getKey={(lead) => lead.url}
+                            renderItem={(lead) => (
+                              <InstagramLeadCard lead={lead} />
+                            )}
+                          />
+                        )}
                       {/* Phase 4 — off-Velte offers, headed explicitly so
                         there's no chance of reading them as Velte
                         listings. Rendered BELOW nearby businesses when
@@ -1532,20 +1759,56 @@ function ConversationTurnView({
                                 valueLabel="Best price"
                               />
                             ))}
-                          <CardCarousel
-                            items={turn.externalOffers}
-                            getKey={(offer) => offer.id}
-                            renderItem={(offer) => (
-                              <ExternalOfferCard
-                                offer={offer}
-                                pickBadges={pickBadgesFor(
-                                  offer.id,
-                                  turn.recommendation,
-                                  "Best price",
-                                )}
-                              />
-                            )}
-                          />
+                          {/* Grouped into the three buckets the connector
+                            now confines itself to (2026-09-14) — Jumia,
+                            Shopify, WooCommerce — each its own small
+                            carousel, and a bucket that came back empty
+                            renders nothing rather than an empty heading.
+                            The `platform` field is what makes this safe:
+                            connectors/serper.ts only ever produces an
+                            offer once it has a confirmed platform AND a
+                            confirmed direct product-page link, so there is
+                            nothing here for this UI to accidentally
+                            mis-bucket or point at a shop's search page. */}
+                          {EXTERNAL_OFFER_PLATFORMS.map(({ key, label }) => {
+                            const offers = turn.externalOffers.filter(
+                              (offer) => offer.platform === key,
+                            );
+                            if (!offers.length) return null;
+                            return (
+                              <div key={key} className="space-y-2">
+                                <h3 className="text-[11px] font-medium text-gray-400">
+                                  {label}
+                                </h3>
+                                <CardCarousel
+                                  items={offers}
+                                  getKey={(offer) => offer.id}
+                                  renderItem={(offer) => (
+                                    <ExternalOfferCard
+                                      offer={offer}
+                                      pickBadges={pickBadgesFor(
+                                        offer.id,
+                                        turn.recommendation,
+                                        "Best price",
+                                      )}
+                                    />
+                                  )}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {/* The reach-out question + Yes/No pair, AFTER the
+                        result cards rather than stacked above them
+                        (2026-09-15, explicit request) — the buyer sees what
+                        Velte actually found first, and the follow-up
+                        question reads as a response to that, not a
+                        preamble to it. */}
+                      {turn.buyerRequestOffered && (
+                        <div className={cn(AI_MESSAGE_CLASS, "space-y-2.5")}>
+                          <p className="text-sm text-ink">{offerQuestion}</p>
+                          {renderOfferActions()}
                         </div>
                       )}
                     </>
@@ -1572,38 +1835,29 @@ function ConversationTurnView({
                     // gate every other still-actionable widget in this thread
                     // uses — an answered offer shouldn't still show buttons on
                     // scrollback.
-                    <div className={cn(AI_MESSAGE_CLASS, "space-y-3")}>
+                    <div className={cn(AI_MESSAGE_CLASS, "space-y-2.5")}>
                       <FormattedReply text={turn.reply} />
-                      {isLatest && (
-                        <div className="flex flex-wrap items-center gap-2.5">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onAnswerClarification("Yes, find someone")
-                            }
-                            className="px-4 py-2 rounded-full border border-orange-200 bg-orange-50/50 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
-                          >
-                            Yes, find someone
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onAnswerClarification("No thanks, that's okay")
-                            }
-                            className="text-sm text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-                          >
-                            No thanks
-                          </button>
-                        </div>
-                      )}
+                      {renderOfferActions()}
                     </div>
                   ) : !turn.toolCalled ? (
                     // The model asked a clarifying question instead of searching
                     // (see systemPrompt.ts) — same plain-message treatment as
                     // the text above a result grid, never the "nothing found
                     // anywhere" case below: the conversation is still open, not
-                    // a dead end.
+                    // a dead end. This branch ALSO catches a fresh comparison's
+                    // own answer (buildComparisonAnswerSystemPrompt) — no
+                    // search tool ran that turn either — so it gets its own
+                    // caption when awaitingComparisonPurchaseReply is set,
+                    // same reasoning as isGuidanceReply below: this is the
+                    // model's own general knowledge, not a confirmed Velte
+                    // result, and a buyer should be able to tell the two apart
+                    // at a glance rather than read every reply the same way.
                     <div className={AI_MESSAGE_CLASS}>
+                      {turn.awaitingComparisonPurchaseReply && (
+                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          General comparison — not yet checked on Velte
+                        </p>
+                      )}
                       <FormattedReply text={turn.reply} />
                     </div>
                   ) : (
@@ -1612,19 +1866,22 @@ function ConversationTurnView({
                     // clarification) — genuinely nothing to show. Still just a
                     // message, not product/vendor cards, so it gets the same
                     // plain-message treatment as every other pure-text reply
-                    // (see AI_MESSAGE_CLASS). The Compass icon is what marks
-                    // this branch as the dead end — it's the only signal now
-                    // that no fill distinguishes it.
-                    <div
-                      className={cn(
-                        AI_MESSAGE_CLASS,
-                        "flex items-start gap-2.5",
+                    // (see AI_MESSAGE_CLASS). A suggestBuyingGuidance reply
+                    // (turn.isGuidanceReply) also lands here — it REPLACES the
+                    // plain "nothing found" line, so without its own caption a
+                    // buyer couldn't tell a real dead end apart from one with
+                    // genuine (if unverified) suggestions attached. Same
+                    // reasoning as the comparison caption above, and the
+                    // "Available online — not on Velte" heading further up
+                    // this file — small muted label, not a filled card, so it
+                    // reads as a footnote rather than re-boxing the
+                    // assistant's voice (see AI_MESSAGE_CLASS's own note).
+                    <div className={AI_MESSAGE_CLASS}>
+                      {turn.isGuidanceReply && (
+                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          Worth looking for — not yet on Velte
+                        </p>
                       )}
-                    >
-                      <CompassIcon
-                        size={18}
-                        className="text-orange-400 shrink-0 mt-0.5"
-                      />
                       <FormattedReply text={turn.reply} />
                     </div>
                   )}
@@ -1668,6 +1925,27 @@ function ConversationTurnView({
                     isLatest && (
                       <BuyerRequestOfferWidget offer={turn.buyerRequestOffer} />
                     )}
+                  {/* The vendor-search offer (2026-09-15, explicit
+                    request; narrowed to external-offers-only the same
+                    day — route.ts's own scope guard never sets this flag
+                    when Velte itself matched something, since that card
+                    already carries a real vendor relationship). Same
+                    "sits after, not inside, the chain above" placement as
+                    the widgets above it, so it shows up regardless of
+                    which branch actually rendered this turn's off-Velte
+                    offer cards. Reuses renderOfferActions() outright —
+                    same Yes/No mechanism as the Buyer-Request offer,
+                    submitting the same canned text, since route.ts tells
+                    the two apart by which flag is set on the turn, not by
+                    the submitted string. */}
+                  {turn.awaitingVendorSearchOffer && (
+                    <div className={cn(AI_MESSAGE_CLASS, "space-y-2.5")}>
+                      <p className="text-sm text-ink">
+                        {vendorSearchOfferQuestion}
+                      </p>
+                      {renderOfferActions("vendorSearch")}
+                    </div>
+                  )}
                 </div>
               )}
           </div>
@@ -3289,16 +3567,25 @@ export function SearchHome() {
           // exchange).
           awaitingBuyerRequestReply: t.awaitingBuyerRequestReply,
           buyerRequestMatchQuery: t.buyerRequestMatchQuery,
+          awaitingVendorSearchOffer: t.awaitingVendorSearchOffer,
+          vendorSearchMatchQuery: t.vendorSearchMatchQuery,
           awaitingComparisonPurchaseReply: t.awaitingComparisonPurchaseReply,
           comparisonPickItem: t.comparisonPickItem,
+          comparisonOptions: t.comparisonOptions,
+          isGuidanceReply: t.isGuidanceReply,
           // Structural, not guessed from `content` — see SearchHistoryTurn's
           // own comment on the freeform-phrasing bug this fixes.
           // `skippable: true` is the bare-query budget gate's own unique
-          // signature (nothing else in route.ts sets it).
+          // signature (nothing else in route.ts sets it). `budgetAsked`
+          // (2026-09-17) narrows it further — the gate now skips budget on
+          // purpose for a bounded service (a mechanic, a repair), so both
+          // must be true, mirroring staffly-ai-backend's own appendTurn
+          // derivation (see that file's comment for the full reasoning).
           askedLocation: t.clarification?.kind === "location",
           askedBudget:
             t.clarification?.kind === "text" &&
-            t.clarification.skippable === true,
+            t.clarification.skippable === true &&
+            t.clarification.budgetAsked === true,
           askedShoppingListDetails:
             t.clarification?.kind === "text" &&
             t.clarification.listDetails === true,
@@ -3430,6 +3717,17 @@ export function SearchHome() {
               });
             }
           }
+          // Re-sync the composer's badge from what the SESSION's tool now
+          // is (2026-09-14) — trySubmit already cleared the local badge the
+          // instant this turn was sent (see activeTool's own comment), so
+          // without this the badge stayed off from the second message of a
+          // flow onward no matter what route.ts's own session-tool rule was
+          // still doing underneath (see SearchStreamEvent's own comment on
+          // this field). A first-message decline (tool mismatch) still
+          // shows the tool right here too — route.ts carries it forward
+          // rather than dropping it on a decline, exactly so a buyer who
+          // rephrases doesn't have to re-pick it.
+          setActiveTool(event.activeTool ?? null);
           // The credit meter, everywhere it's shown (CreditsSidebarMeter on
           // mobile, CreditsFab's ring + CreditsDonut on desktop — all three
           // read the same store), reflecting a turn the instant it lands
@@ -3488,18 +3786,23 @@ export function SearchHome() {
             productsMatchQuality: event.productsMatchQuality,
             storesMatchQuality: event.storesMatchQuality,
             externalStoreSuggestions: event.externalStoreSuggestions,
+            instagramLeads: event.instagramLeads,
             vendorProducts: event.vendorProducts,
             vendorProductsStore: event.vendorProductsStore,
             buyerRequestOffer: event.buyerRequestOffer,
             buyerRequestOffered: event.buyerRequestOffered,
             awaitingBuyerRequestReply: event.awaitingBuyerRequestReply,
             buyerRequestMatchQuery: event.buyerRequestMatchQuery,
+            awaitingVendorSearchOffer: event.awaitingVendorSearchOffer,
+            vendorSearchMatchQuery: event.vendorSearchMatchQuery,
             contextNote,
             recommendation: event.recommendation,
             externalOffers: event.externalOffers,
             awaitingComparisonPurchaseReply:
               event.awaitingComparisonPurchaseReply,
             comparisonPickItem: event.comparisonPickItem,
+            comparisonOptions: event.comparisonOptions ?? null,
+            isGuidanceReply: event.isGuidanceReply ?? false,
             shoppingList: event.shoppingList,
           });
           // A buyer who already has a verified session (a prior visit's
@@ -4269,6 +4572,17 @@ export function SearchHome() {
   // component remounted and refusedSearchRef empty. The arrival IS the
   // signal; localStorage carried the search across.
   //
+  // NOT solely `topup=done` any more (2026-09-14, found live: it can go
+  // missing entirely, landing on a bare `/chat?trxref=...&reference=...`
+  // with no `topup` key at all — traced to `callback_url` coming back
+  // `undefined` from the backend, in which case Paystack silently falls
+  // back to its own dashboard-configured default rather than failing loud).
+  // `reference`/`trxref` are appended by PAYSTACK ITSELF on every redirect
+  // back from checkout, so they're the one signal that survives even when
+  // our own query param doesn't — checked against the "vcred_" prefix
+  // credits.controller.js's initTopUp mints so this can't fire for some
+  // unrelated reference landing on this route by coincidence.
+  //
   // Waits for `rehydrateSettled` rather than running on mount: rehydrate
   // only rebuilds the stored thread into an EMPTY turns list, so appending
   // the resumed turn first would silently cost the buyer the conversation
@@ -4279,8 +4593,22 @@ export function SearchHome() {
     topUpResumeStartedRef.current = true;
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("topup") !== "done") return;
+      // The one param that can VERIFY a top-up rather than just signal that
+      // one happened — Paystack mints it as `vcred_...` at checkout (see
+      // credits.controller.js's initTopUp) and appends it itself on every
+      // redirect back, so it survives even the `callback_url`-missing case
+      // `topup=done` doesn't (see the comment below). Passed on to
+      // verifyCardTopUp, which confirms it directly with Paystack instead of
+      // waiting on the `charge.success` webhook — the thing that never
+      // reaches local dev at all, and can be slow/dropped even in production.
+      const creditReference = [params.get("reference"), params.get("trxref")]
+        .filter((v): v is string => v?.startsWith("vcred_") ?? false)
+        .at(0);
+      const isTopUpReturn = params.get("topup") === "done" || !!creditReference;
+      if (!isTopUpReturn) return;
       params.delete("topup");
+      params.delete("reference");
+      params.delete("trxref");
       const qs = params.toString();
       window.history.replaceState(
         null,
@@ -4295,30 +4623,45 @@ export function SearchHome() {
       // until a second, manual refresh — see pollCreditsAfterTopUp's own
       // comment for why one `load()` on mount isn't enough here).
       if (!pending) {
-        void pollCreditsAfterTopUp();
+        void pollCreditsAfterTopUp(creditReference ?? null);
         return;
       }
-      void resumeAfterCardTopUp(pending);
+      void resumeAfterCardTopUp(pending, creditReference ?? null);
     } catch {
       /* no URL access (or malformed) — nothing held, nothing to resume */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rehydrateSettled]);
 
-  /** How long to wait for a card top-up's credits before searching anyway.
+  /** How long to wait for a card top-up's credits before searching anyway,
+   *  once verifyCardTopUp (below) has had its one shot and either found
+   *  nothing to verify (no reference on the URL — an old/bookmarked
+   *  `?topup=done` link) or Paystack itself hasn't marked the charge
+   *  successful yet (e.g. a bank-transfer method still settling).
    *
-   *  They are granted by a Paystack WEBHOOK, not by the redirect that brings
-   *  the buyer back, so the two race and the buyer usually wins — hence a wait
-   *  rather than an immediate retry that would refuse them a second time for
-   *  a payment they had already made. Bounded, and the search runs regardless
+   *  From here it's the same race as before this existed: credits can still
+   *  land by the Paystack WEBHOOK on its own schedule, so a wait rather than
+   *  an immediate retry that would refuse the buyer a second time for a
+   *  payment they had already made. Bounded, and the search runs regardless
    *  once it expires: the server is the authority on the balance either way,
    *  and a spinner that never ends is worse than a refusal that at least says
    *  something. */
   const CREDIT_GRANT_WAIT_MS = 20_000;
   const CREDIT_GRANT_POLL_MS = 1_500;
 
-  async function waitForCreditGrant(cost: number): Promise<void> {
-    const { load } = useCreditsStore.getState();
+  async function waitForCreditGrant(
+    cost: number,
+    reference: string | null,
+  ): Promise<void> {
+    const { load, verifyCardTopUp } = useCreditsStore.getState();
+    // Ask Paystack directly first (2026-09-16) — see verifyCardTopUp's own
+    // comment. Idempotent against the webhook either way, so trying this
+    // costs nothing even when the webhook was going to win the race anyway.
+    if (reference) {
+      await verifyCardTopUp(reference);
+      const verified = useCreditsStore.getState().balance;
+      if (verified != null && verified >= cost) return;
+    }
     const deadline = Date.now() + CREDIT_GRANT_WAIT_MS;
     for (;;) {
       await load();
@@ -4329,20 +4672,25 @@ export function SearchHome() {
     }
   }
 
-  /** Same race as waitForCreditGrant above (credits land by webhook, not by
-   *  the redirect that brings the buyer back), for the plain "topped up from
-   *  the panel, nothing was waiting on it" case — found live: the header and
-   *  the donut both call `load()` once on mount, which can easily win the
-   *  race against the webhook and read the OLD balance, with nothing after
-   *  it to try again. There's no specific cost to wait for here (unlike
+  /** Same race as waitForCreditGrant above, for the plain "topped up from the
+   *  panel, nothing was waiting on it" case — found live (2026-09-09): the
+   *  header and the donut both call `load()` once on mount, which can easily
+   *  win the race against the webhook and read the OLD balance, with nothing
+   *  after it to try again. There's no specific cost to wait for here (unlike
    *  waitForCreditGrant, which knows exactly what balance would let the held
    *  search through), so this polls until the balance visibly rises from
    *  whatever it read on ITS OWN first call, or the same grace period as
    *  waitForCreditGrant runs out — the store is reactive either way, so
    *  every `load()` along the way already repaints the meter live; this
    *  loop only decides when to stop asking. */
-  async function pollCreditsAfterTopUp(): Promise<void> {
-    const { load } = useCreditsStore.getState();
+  async function pollCreditsAfterTopUp(
+    reference: string | null,
+  ): Promise<void> {
+    const { load, verifyCardTopUp } = useCreditsStore.getState();
+    // Same direct check as waitForCreditGrant — resolves instantly rather
+    // than waiting on a webhook that may never reach this environment at all
+    // (see verifyCardTopUp's own comment).
+    if (reference && (await verifyCardTopUp(reference))) return;
     await load();
     const baseline = useCreditsStore.getState().balance;
     const deadline = Date.now() + CREDIT_GRANT_WAIT_MS;
@@ -4367,6 +4715,7 @@ export function SearchHome() {
    *  turn's does: the original blob URL died with the old tab. */
   async function resumeAfterCardTopUp(
     pending: NonNullable<ReturnType<typeof takeRefusedSearch>>,
+    reference: string | null,
   ): Promise<void> {
     const turnId = generateUUID();
     setTurns((prev) => [
@@ -4379,7 +4728,7 @@ export function SearchHome() {
         pickAvoiding(waitingForCreditsPhrase(), shownStatusesRef.current),
       ),
     ]);
-    await waitForCreditGrant(pending.cost);
+    await waitForCreditGrant(pending.cost, reference);
     await runSearchIntoTurn(
       turnId,
       pending.message,
@@ -5030,13 +5379,25 @@ export function SearchHome() {
               message actually SENT never carries its label. */}
           <div className="flex items-center gap-2 px-5 pt-4">
             {activeTool && (
-              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-600">
+              // A button, not a static span — clicking it removes the tool
+              // the same way Backspace does (see handleComposerKeyDown's own
+              // comment on why Backspace exists at all). Without this the
+              // badge was the one thing on the page the tool-mismatch
+              // reply's own "tap the icon to turn it off" told buyers to
+              // click that actually did nothing (found live).
+              <button
+                type="button"
+                onClick={() => setActiveTool(null)}
+                title={`Remove ${COMPOSER_TOOL_META[activeTool].label}`}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-600 hover:bg-orange-100 transition-colors cursor-pointer"
+              >
                 {(() => {
                   const ToolIcon = COMPOSER_TOOL_META[activeTool].icon;
                   return <ToolIcon size={13} className="shrink-0" />;
                 })()}
                 {COMPOSER_TOOL_META[activeTool].label}
-              </span>
+                <X size={12} className="shrink-0" />
+              </button>
             )}
             <textarea
               {...autoResize}
@@ -5080,7 +5441,20 @@ export function SearchHome() {
               ref={toolMenuBtnRef}
               type="button"
               onClick={() => setToolMenuOpen((v) => !v)}
-              disabled={uploadingImage || hasPendingClarification || isSending}
+              // Same exemption the textarea itself already gets (see its own
+              // disabled prop just above) — a "text"-kind clarification
+              // answers through the composer inline rather than blocking it,
+              // and the tool-mismatch decline is modeled as exactly that
+              // (see toolAlignment.ts's own comment on why). Without this,
+              // that one unconditionally froze the "+" button until the
+              // buyer typed something, with no way to even reopen the menu
+              // to remove the tool the reply had just invited them to
+              // (found live).
+              disabled={
+                uploadingImage ||
+                isSending ||
+                (hasPendingClarification && !pendingTextClarification)
+              }
               title="Shopping tools"
               aria-haspopup="menu"
               aria-expanded={toolMenuOpen}
@@ -5137,6 +5511,17 @@ export function SearchHome() {
                       type="button"
                       onClick={() => {
                         setToolMenuOpen(false);
+                        // Picking the tool that's already active TURNS IT
+                        // OFF instead of re-setting the same value (which
+                        // was a silent no-op a buyer could click forever —
+                        // found live) — this is the second of the two ways
+                        // the tool-mismatch reply invites turning it off,
+                        // the badge's own ✕ (see activeTool badge above)
+                        // being the first.
+                        if (activeTool === toolId) {
+                          setActiveTool(null);
+                          return;
+                        }
                         // Checked at SELECTION time, not send time — see
                         // CreditGateModal's own comment.
                         if (creditGateBlocks(meta.label, composerToolCost())) {

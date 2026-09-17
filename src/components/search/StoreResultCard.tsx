@@ -7,6 +7,7 @@ import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { VendorDetailModal } from "@/components/VendorDetailModal";
 import { useUserStore } from "@/store/userStore";
 import { buildChatLink } from "@/lib/chatLink";
+import { fmt } from "@/lib/product-price";
 import type { StoreMatch } from "@/types/search";
 import { MapPinIcon, StoreIcon, WrenchIcon } from "@/components/icons/hero";
 
@@ -16,6 +17,24 @@ import { MapPinIcon, StoreIcon, WrenchIcon } from "@/components/icons/hero";
 // actually contains (see systemPrompt.ts's searchStores examples).
 function withArticle(phrase: string): string {
   return /^[aeiou]/i.test(phrase) ? `an ${phrase}` : `a ${phrase}`;
+}
+
+// Folds whatever the buyer already told Velte about this job — over this
+// message or an earlier turn of the same request — into the WhatsApp
+// handoff (2026-09-17), so a vendor decides whether to reply with real
+// context instead of "I'm interested in what you offer" and nothing else.
+// A vendor with a product LISTING already gets this for free from the
+// listing itself; a pure store/service match had nothing until now. Empty
+// string (not appended at all) when the buyer gave nothing specific — never
+// pad the message with an invented "no particular budget" line just to have
+// something to show.
+function serviceDetailsLine(
+  attributes: string[],
+  budgetNaira: number | null,
+): string {
+  const parts = [...attributes];
+  if (budgetNaira != null) parts.push(`budget ${fmt(budgetNaira, "₦")}`);
+  return parts.length ? ` Details: ${parts.join("; ")}.` : "";
 }
 
 // A business/vendor match — distinct from VendorResultCard (a specific
@@ -56,12 +75,16 @@ export function StoreResultCard({
   // calls merged into the same turn (e.g. "fix my laptop, and a caterer for
   // my wedding" both landing in `stores` — see StoreMatch's own comment).
   const query = match.matchedQuery ?? searchQuery;
+  const detailsLine = serviceDetailsLine(
+    match.matchedAttributes,
+    match.matchedBudgetNaira,
+  );
   const chatHref = buildChatLink({
     vendorId: match.vendorId,
     source: "search",
     message: query
-      ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(query)}, are you able to help?`
-      : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.`,
+      ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(query)}, are you able to help?${detailsLine}`
+      : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.${detailsLine}`,
   });
   // A logged-in vendor can match their own storefront — no WhatsApp CTA to
   // themselves (which would also bill them a lead), just say so.

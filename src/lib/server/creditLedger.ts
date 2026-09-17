@@ -1,6 +1,5 @@
 import { backendData } from "@/lib/server/backend";
 import {
-  ACTION_LABEL,
   CREDIT_COST,
   GUEST_CREDITS,
   guestExhaustedMessage,
@@ -188,16 +187,23 @@ export async function refundCredits(params: {
 /**
  * What a buyer sees when they can't afford something.
  *
- * Three different endings because they are three different people, and the
+ * Two different endings because they are two different people, and the
  * difference is the whole conversion moment: a GUEST should be offered an
- * account (free, and twice what they had), someone signed in with an empty
- * balance should be offered a top-up, and someone who simply can't afford
- * THIS action but has credits should be told the shortfall rather than
- * "you're out" — because they aren't.
+ * account (free, and twice what they had), someone signed in should be
+ * offered a top-up.
+ *
+ * NEVER NAMES A COST (2026-09-15, explicit product decision) — what any
+ * single action deducts is deliberately not something a buyer is told, on
+ * or off a refusal. `ACTION_LABEL`/`cost` still travel on `CreditDecision`
+ * for the caller's own bookkeeping (e.g. the `used`/`limit` fields on the
+ * turn's `quota` event), but this function is the one place buyer-facing
+ * copy gets assembled from it, so it's the one place that matters — no
+ * other call site should interpolate `decision.cost` into a string a buyer
+ * reads. Their own balance is fine to show (the credit meter already does),
+ * just never what a tool costs.
  */
 export function creditMessage(decision: CreditDecision): string {
-  const { balance, cost, action, isGuest } = decision;
-  const label = ACTION_LABEL[action];
+  const { balance, isGuest } = decision;
 
   if (isGuest) {
     // Shared with the client-side guest gate — see guestExhaustedMessage.
@@ -205,7 +211,7 @@ export function creditMessage(decision: CreditDecision): string {
   }
   const minTopUp = formatNaira(MIN_TOPUP_NGN * 100);
   if (balance <= 0) {
-    return `You're out of credits. Top up from ${minTopUp} to keep going — a ${label} costs ${cost}.`;
+    return `You're out of credits. Top up from ${minTopUp} to keep going.`;
   }
-  return `A ${label} costs ${cost} credits and you have ${balance}. Top up from ${minTopUp} to continue.`;
+  return `You don't have enough credits for that — you have ${balance}. Top up from ${minTopUp} to continue.`;
 }

@@ -124,7 +124,10 @@ function verifyMatchesTool() {
 // because the model's caution should be calibrated to the real stakes, and
 // they genuinely differ (a Velte vendor loses a real sale; an online offer
 // is a consolation link on a turn Velte already failed).
-function buildSystemPrompt(source: "velte" | "external"): string {
+function buildSystemPrompt(
+  source: "velte" | "external",
+  hasReferencePhoto: boolean,
+): string {
   const context =
     source === "velte"
       ? [
@@ -150,11 +153,32 @@ function buildSystemPrompt(source: "velte" | "external"): string {
       ? "A wrong 'mismatch' deletes a real vendor's real listing from the buyer's results, so only call one when you are confident."
       : "A wrong 'mismatch' removes one of the only options left on a turn where Velte already found nothing, so only call one when you are confident.";
 
+  const referencePhotoLines = hasReferencePhoto
+    ? [
+        "",
+        "You were also given the BUYER'S OWN REFERENCE PHOTO — the actual thing they want, shown first, before the candidate list. This is the strongest evidence you have, stronger than any candidate's own photo or title. Compare each candidate's photo AGAINST that reference photo directly: same silhouette/structure, same distinguishing design details (strap pattern, closure type, trim, stripes/colourway that are part of the design rather than incidental) — not just 'same general category of item'.",
+        "",
+        // Found live (2026-09-17): a buyer photographed a cross-strap slide
+        // sandal (backless, no ankle strap, striped webbing). The offers
+        // that came back included a buckled toe-loop mule and an
+        // ankle-strap dress sandal — structurally different sandals — and
+        // both were judged only against a TEXT paraphrase of the photo
+        // ("cross-strap sandal"), never against the photo itself, so
+        // neither got caught as the wrong TYPE. With the reference photo
+        // actually in front of you, judge structural differences like
+        // these as the 'different TYPE/STYLE' mismatch rule below already
+        // describes — a toe-loop mule or an ankle-strap sandal is not a
+        // backless slide just because both are broadly 'sandals'.
+        "This does NOT lower the bar for 'mismatch' below what the rules below already say — a genuinely different colourway or missing decorative detail on the SAME structural design is still 'close', not 'mismatch'. It means you have real visual evidence for the structural/type judgment the rules already ask for, instead of having to guess it from a text description alone.",
+      ]
+    : [];
+
   return [
     "You are a quality gate on Velte, a Nigerian vendor-discovery service.",
     ...context,
     "",
     "Judge from the PHOTO first whenever one is provided. The photo is what the buyer will actually see and what the shop actually has; a listing's title and description are seller-written, often keyword-stuffed, and are the weaker evidence when the two disagree. With no photo, judge from the words alone.",
+    ...referencePhotoLines,
     "",
     "Rules for the verdict:",
     "- 'mismatch' ONLY when it is a different KIND of item — something the buyer would look at and say 'that isn't what I asked for at all'.",
@@ -186,12 +210,40 @@ async function judgeCandidates(
   requestLine: string,
   candidates: JudgeCandidate[],
   source: "velte" | "external",
+  // The buyer's OWN photo for a photo turn (2026-09-17) — previously this
+  // function only ever compared a candidate's photo against a TEXT
+  // paraphrase of the buyer's photo (`requestLine`, the model's own reading
+  // of it, e.g. "a cross-strap slide sandal"), never against the photo
+  // itself. That's a much weaker check: a text paraphrase can't carry
+  // structural detail the way the actual photo does, and it's exactly why
+  // a toe-loop mule and an ankle-strap sandal both passed a "cross-strap
+  // slide" query — see buildSystemPrompt's own referencePhotoLines comment
+  // for the live report this fixes. Optional and inert for a text turn.
+  referenceImageUrl?: string | null,
 ): Promise<Map<number, string> | null> {
-  // One user message: the request, then the candidate list, then each
-  // candidate's photo announced by the same number it carries in that list
-  // (a bare run of images is unattributable — the label before each one is
-  // what makes a per-candidate verdict possible at all).
+  // One user message: the reference photo (if any) first, then the request,
+  // then the candidate list, then each candidate's photo announced by the
+  // same number it carries in that list (a bare run of images is
+  // unattributable — the label before each one is what makes a
+  // per-candidate verdict possible at all).
   const content: UserContent = [];
+
+  let referencePhotoIncluded = false;
+  if (referenceImageUrl) {
+    try {
+      const url = new URL(thumbnailFor(referenceImageUrl));
+      content.push({
+        type: "text",
+        text: "The buyer's own reference photo — exactly what they want:",
+      });
+      content.push({ type: "file", mediaType: "image", data: url });
+      referencePhotoIncluded = true;
+    } catch {
+      // An unparseable URL just means no reference photo — never worth
+      // failing the whole verification over.
+    }
+  }
+
   content.push({
     type: "text",
     text: [
@@ -211,7 +263,7 @@ async function judgeCandidates(
     ].join("\n"),
   });
 
-  let imageCount = 0;
+  let imageCount = referencePhotoIncluded ? 1 : 0;
   for (const [i, candidate] of candidates.entries()) {
     if (!candidate.imageUrl) continue;
     let url: URL;
@@ -233,7 +285,7 @@ async function judgeCandidates(
     const result = await Promise.race([
       callLLM(
         {
-          system: buildSystemPrompt(source),
+          system: buildSystemPrompt(source, referencePhotoIncluded),
           messages,
           tools: { verifyMatches: verifyMatchesTool() },
           toolChoice: "required",
@@ -327,8 +379,20 @@ export async function verifyItemMatches(params: {
    *  since `product` is then the model's own reading of that photo rather
    *  than the buyer's own words. */
   isImageQuery?: boolean;
+  /** The buyer's own uploaded photo for an image turn (2026-09-17) — passed
+   *  through so the verifier compares each candidate against the ACTUAL
+   *  photo, not just `product`'s text paraphrase of it. See judgeCandidates'
+   *  own comment on the bug this closes. Only meaningful when isImageQuery
+   *  is true; harmless (ignored) otherwise. */
+  imageUrl?: string | null;
 }): Promise<MatchVerification> {
-  const { product, attributes, candidates, isImageQuery = false } = params;
+  const {
+    product,
+    attributes,
+    candidates,
+    isImageQuery = false,
+    imageUrl,
+  } = params;
   const unchanged: MatchVerification = { kept: candidates, rejected: [] };
   if (!candidates.length || !product.trim()) return unchanged;
 
@@ -361,6 +425,7 @@ export async function verifyItemMatches(params: {
       ],
     })),
     "velte",
+    isImageQuery ? imageUrl : null,
   );
   if (!rejectedIndices?.size) return unchanged;
 
@@ -434,8 +499,17 @@ export async function verifyOfferMatches(params: {
   /** What the dead-end search actually ran on. */
   query: string;
   offers: ExternalOffer[];
+  /** The buyer's own uploaded photo, when this dead end started from an
+   *  image turn (2026-09-17) — `query` at this point is already a text
+   *  reading of that photo (buildProductTerm's output), and comparing an
+   *  offer's own photo only against that text lost exactly the structural
+   *  detail a photo carries. See judgeCandidates' own comment for the live
+   *  report this fixes (a toe-loop mule and an ankle-strap sandal both
+   *  passing a "cross-strap slide" search). Optional — most dead ends are
+   *  text turns and have none. */
+  referenceImageUrl?: string | null;
 }): Promise<OfferVerification> {
-  const { query, offers } = params;
+  const { query, offers, referenceImageUrl } = params;
   const unchanged: OfferVerification = { kept: offers, rejected: [] };
   if (!offers.length || !query.trim()) return unchanged;
 
@@ -458,6 +532,7 @@ export async function verifyOfferMatches(params: {
       ],
     })),
     "external",
+    referenceImageUrl,
   );
   if (!rejectedIndices?.size) return unchanged;
 

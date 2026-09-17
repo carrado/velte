@@ -1,7 +1,7 @@
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { ReferralCapture } from "@/components/chat/ReferralCapture";
-import { VendorSessionSync } from "@/components/chat/VendorSessionSync";
+import { IdentitySessionSync } from "@/components/chat/IdentitySessionSync";
 import { NavigationProgressProvider } from "@/components/chat/ChatNavigationProgressContext";
 import { CreditsFab } from "@/components/credits/CreditsFab";
 import { CreditsModalProvider } from "@/components/credits/CreditsModal";
@@ -56,7 +56,7 @@ export default function ChatLayout({
             dangerouslySetInnerHTML={{ __html: PRE_PAINT_RESUME_CHECK }}
           />
           <ReferralCapture />
-          <VendorSessionSync />
+          <IdentitySessionSync />
           <ConversationSidebar />
           {/* `min-w-0` matters: without it this flex child refuses to shrink
             below its content's intrinsic width, and a long result card would

@@ -1,21 +1,27 @@
 import { NextResponse } from "next/server";
 
-import { requireBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalVendorAuth, jsonError } from "@/lib/server/guards";
 import { backendData, BackendError } from "@/lib/server/backend";
 import type { ShoppingListJobSummary } from "@/types/shoppingList";
 
 // GET /api/shopping-list — "My Shopping Lists" (spec §20). Every job this
-// buyer has started, newest first, in the lighter summary shape (see
-// velte-backend's toSummaryShape) — the detail page (/api/shopping-list/:jobId)
-// is what loads one job's full items/results.
+// buyer OR vendor has started, newest first, in the lighter summary shape
+// (see velte-backend's toSummaryShape) — the detail page
+// (/api/shopping-list/:jobId) is what loads one job's full items/results.
+// Widened 2026-09-17 from buyer-only — see shopping-list/start's own header
+// comment for the product direction. Buyer wins when both cookies exist.
 export async function GET() {
-  const auth = await requireBuyerAuth();
-  if ("response" in auth) return auth.response;
+  const buyerAuth = await getOptionalBuyerAuth();
+  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  if (!buyerAuth && !vendorAuth) {
+    return jsonError(401, "Sign in to view your shopping lists.");
+  }
 
   try {
     const { jobs } = await backendData<{ jobs: ShoppingListJobSummary[] }>(
       "/shopping-list-jobs",
-      { cookie: auth.cookie },
+      { cookie: buyerAuth?.cookie ?? vendorAuth?.cookie ?? "" },
     );
     return NextResponse.json({ jobs });
   } catch (err) {

@@ -16,7 +16,7 @@ import {
   FileTextIcon,
   LoaderIcon,
   SparklesIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 const MAX_DESCRIPTION = 600;
 

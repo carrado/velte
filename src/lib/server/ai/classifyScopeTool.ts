@@ -146,6 +146,15 @@ export function classifyScopeTool() {
         .describe(
           "true ONLY when the buyer describes a whole PROJECT or SETUP that plainly needs many different things at once — furnishing an apartment, setting up an office/studio/gaming room, stocking a shop, preparing for an event, back-to-school supplies for multiple children — the kind of request where a real shopping trip would mean visiting several different kinds of shop. false for a request that is really about ONE item or ONE narrow category, no matter how it's phrased or hedged ('find me an iPhone 16', 'where can I buy a fridge', 'Nike shoes under 200k') — a single product with variants (colors, sizes, models) is still one thing, not a list. When genuinely unsure, prefer false: a missed project just gets treated as an ordinary search, while a false positive interrupts a simple search with an unwanted list-building flow.",
         ),
+      // Found live (2026-09-17): "Where can I get a good fashion designer"
+      // → asked what kind/occasion → "Please explain" got a second,
+      // near-identical clarifying question instead of an actual
+      // explanation. This is what lets route.ts tell the two apart.
+      wantsExplanation: z
+        .boolean()
+        .describe(
+          "true ONLY when the last assistant turn asked the buyer something AND this message is asking YOU to explain, clarify, or elaborate on that question itself, rather than answering it — 'please explain', 'what do you mean', 'can you clarify that', 'I don't understand', 'come again', 'explain further'. false for an ordinary answer even a vague or hesitant one ('I'm not sure, maybe casual wear' is answering, not asking for explanation), false for a decline, and false whenever nothing was actually asked on the last turn. When genuinely unsure, prefer false — a missed request for clarity just gets treated as an ordinary (if thin) answer, while a false positive replaces a real answer with an unwanted re-explanation.",
+        ),
     }),
     execute: async ({
       inScope,
@@ -158,6 +167,7 @@ export function classifyScopeTool() {
       isComparison,
       comparisonOptions,
       wantsShoppingList,
+      wantsExplanation,
     }) => ({
       inScope,
       namesPlace,
@@ -169,6 +179,7 @@ export function classifyScopeTool() {
       isComparison,
       comparisonOptions,
       wantsShoppingList,
+      wantsExplanation,
     }),
   });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { requireBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalVendorAuth, jsonError } from "@/lib/server/guards";
 import { backendData, BackendError } from "@/lib/server/backend";
 import {
   pickRecommendation,
@@ -19,8 +20,12 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
-  const auth = await requireBuyerAuth();
-  if ("response" in auth) return auth.response;
+  const buyerAuth = await getOptionalBuyerAuth();
+  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  if (!buyerAuth && !vendorAuth) {
+    return jsonError(401, "Sign in to use Shopping Lists.");
+  }
+  const cookie = buyerAuth?.cookie ?? vendorAuth?.cookie ?? "";
 
   const { jobId } = await params;
 
@@ -28,7 +33,7 @@ export async function POST(
   try {
     ({ job } = await backendData<{ job: ShoppingListJob }>(
       `/shopping-list-jobs/${encodeURIComponent(jobId)}`,
-      { cookie: auth.cookie },
+      { cookie },
     ));
   } catch (err) {
     if (err instanceof BackendError && err.status < 500) {
@@ -77,7 +82,7 @@ export async function POST(
         `/shopping-list-jobs/${encodeURIComponent(jobId)}/items/${encodeURIComponent(item.id)}/recommendation`,
         {
           method: "PATCH",
-          cookie: auth.cookie,
+          cookie,
           body: { recommendation },
         },
       );
@@ -96,7 +101,7 @@ export async function POST(
   try {
     const { job: updated } = await backendData<{ job: ShoppingListJob }>(
       `/shopping-list-jobs/${encodeURIComponent(jobId)}`,
-      { cookie: auth.cookie },
+      { cookie },
     );
     return NextResponse.json({ job: updated });
   } catch (err) {

@@ -38,6 +38,23 @@ import {
   CheckBadgeIcon,
   LockClosedIcon,
   ClipboardDocumentIcon,
+  ArrowRightIcon as HeroArrowRightIcon,
+  ArrowLeftIcon as HeroArrowLeftIcon,
+  EyeIcon as HeroEyeIcon,
+  EyeSlashIcon,
+  SparklesIcon as HeroSparklesIcon,
+  UserCircleIcon,
+  ExclamationCircleIcon,
+  KeyIcon as HeroKeyIcon,
+  AtSymbolIcon,
+  BuildingOfficeIcon,
+  InformationCircleIcon,
+  MapIcon,
+  EnvelopeIcon,
+  BriefcaseIcon as HeroBriefcaseIcon,
+  DocumentTextIcon,
+  ArrowPathRoundedSquareIcon,
+  ArrowTrendingUpIcon,
 } from "@heroicons/react/24/outline";
 import { XMarkIcon as XMarkIconSolid } from "@heroicons/react/24/solid";
 
@@ -118,3 +135,34 @@ export const DownloadIcon = wrap(ArrowDownTrayIcon);
 export const BadgeCheckIcon = wrap(CheckBadgeIcon);
 export const LockIcon = wrap(LockClosedIcon);
 export const CopyIcon = wrap(ClipboardDocumentIcon);
+
+// Auth pages (2026-09-16, per explicit request) — same wholesale-swap
+// treatment the /chat tree got on 2026-09-11: every icon those pages used
+// from the duotone set, name-for-name, so only each file's import line
+// changes. A few have no literal Heroicons equivalent — noted inline.
+export const ArrowRightIcon = wrap(HeroArrowRightIcon);
+export const ArrowLeftIcon = wrap(HeroArrowLeftIcon);
+export const EyeIcon = wrap(HeroEyeIcon);
+export const EyeOffIcon = wrap(EyeSlashIcon);
+export const SparklesIcon = wrap(HeroSparklesIcon);
+// A rounded/filled person glyph — Heroicons has no separate "round" user
+// variant the way the duotone set did, UserCircleIcon is the closest match.
+export const UserRoundIcon = wrap(UserCircleIcon);
+export const AlertCircleIcon = wrap(ExclamationCircleIcon);
+export const KeyIcon = wrap(HeroKeyIcon);
+export const AtSignIcon = wrap(AtSymbolIcon);
+export const BuildingIcon = wrap(BuildingOfficeIcon);
+export const InfoIcon = wrap(InformationCircleIcon);
+// "Use my current location" button — Heroicons has no GPS-crosshair glyph;
+// a folded map reads as "locate on a map" without reusing MapPinIcon's own
+// single-pin glyph for a visually distinct action on the same form.
+export const LocateFixedIcon = wrap(MapIcon);
+export const MailIcon = wrap(EnvelopeIcon);
+export const BriefcaseIcon = wrap(HeroBriefcaseIcon);
+export const FileTextIcon = wrap(DocumentTextIcon);
+// Deliberately NOT the same glyph as LoaderIcon (ArrowPathIcon) even though
+// both are "refresh"-shaped — this is a static "resend code" button, not a
+// spinner, and sharing the exact loader glyph read as though the page were
+// already mid-refresh.
+export const RefreshIcon = wrap(ArrowPathRoundedSquareIcon);
+export const TrendingUpIcon = wrap(ArrowTrendingUpIcon);

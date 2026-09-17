@@ -18,7 +18,11 @@ import type { SignupForm } from "../schema";
 import WizardProgress from "./WizardProgress";
 import Step1BusinessAccount from "./Step1BusinessAccount";
 import Step2SectorDescription from "./Step2SectorDescription";
-import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "@/components/icons";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckIcon,
+} from "@/components/icons/hero";
 
 /* /auth/signup's only form again (2026-08-16 — the Buyer/Vendor toggle it
    briefly shared the page with is gone, see that page's own comment). Was

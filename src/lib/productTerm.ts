@@ -87,13 +87,30 @@ function tokenize(text: string): string[] {
  * itself, and trusting prose compliance alone for text that gets rendered
  * VERBATIM to a buyer (or sent as the actual search query) isn't this
  * codebase's pattern anywhere else.
+ *
+ * CONDITION ATTRIBUTES ARE PREPENDED, NOT APPENDED (found live: a buyer who
+ * answered the bare-query gate's own "new or used?" question with "new" got
+ * back a dead-end quoting their search as `"phone new"` — grammatically
+ * backwards, and it reads like a mangled quote of something they never
+ * actually said). English (and Nigerian English/pidgin the same way) puts a
+ * condition adjective before the noun — "new phone", "fairly used laptop" —
+ * where every other attribute kind here (color, brand, spec) reads fine
+ * trailing after it ("phone black" is odd; "phone new" is actively wrong).
+ * Matched on the WHOLE attribute, same granularity searchProductsTool's own
+ * schema asks the model for ("condition" as one short, standalone entry),
+ * not a substring — this must never misfire on an attribute that merely
+ * contains one of these words as part of something else.
  */
+const CONDITION_ATTRIBUTE =
+  /^(brand[- ]new|new|fairly used|foreign used|uk[- ]used|tokunbo|second[- ]?hand|pre[- ]?owned|refurbished|used)$/i;
+
 export function buildProductTerm(
   product: string,
   attributes?: string[],
 ): string {
   const usedStems = new Set(tokenize(product));
-  const parts = [product];
+  const lead: string[] = [];
+  const trail: string[] = [];
   for (const attr of attributes ?? []) {
     const words = attr.split(/\s+/).filter(Boolean);
     const newWords = words.filter((word) => {
@@ -105,12 +122,13 @@ export function buildProductTerm(
       return !stems.every((s) => usedStems.has(s));
     });
     if (!newWords.length) continue;
-    parts.push(newWords.join(" "));
+    const phrase = newWords.join(" ");
+    (CONDITION_ATTRIBUTE.test(attr.trim()) ? lead : trail).push(phrase);
     for (const word of newWords) {
       tokenize(word).forEach((s) => usedStems.add(s));
     }
   }
-  return parts.join(" ");
+  return [...lead, product, ...trail].join(" ");
 }
 
 // Words that point AT something without naming it — on top of STOPWORDS,

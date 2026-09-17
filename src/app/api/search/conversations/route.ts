@@ -2,21 +2,29 @@ import { NextResponse } from "next/server";
 
 import { AiSearchBackendError } from "@/lib/server/aiSearchBackend";
 import { listSearchConversations } from "@/lib/server/searchConversations";
-import { requireBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalVendorAuth, jsonError } from "@/lib/server/guards";
 
-// GET /api/search/conversations — the signed-in buyer's chat history, newest
-// first, for the sidebar they pick a thread from (2026-08-26). Opening one
+// GET /api/search/conversations — the signed-in buyer's OR vendor's chat
+// history, newest first, for the sidebar they pick a thread from
+// (2026-08-26, widened 2026-09-17 for a vendor with no linked buyer
+// account — see ConversationSidebar's own `identity` note). Opening one
 // still goes through /api/search/conversation?id=, which returns the real
 // turn snapshots; this only produces the rows.
 //
 // Guarded, unlike every other route under /api/search: those stay public
 // because search itself is anonymous and a conversation is owned by an
 // unguessable deviceId. A HISTORY has no such token — it's "everything
-// belonging to this person" — so the buyerId can only ever come from a
-// verified session here, never from a query parameter a caller supplies.
+// belonging to this person" — so the buyerId/vendorId can only ever come
+// from a verified session here, never from a query parameter a caller
+// supplies. Buyer wins when both cookies exist, same precedence
+// /api/search's own actorType uses.
 export async function GET(req: Request) {
-  const auth = await requireBuyerAuth();
-  if ("response" in auth) return auth.response;
+  const buyerAuth = await getOptionalBuyerAuth();
+  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  if (!buyerAuth && !vendorAuth) {
+    return jsonError(401, "Sign in to view your conversations.");
+  }
 
   const { searchParams } = new URL(req.url);
   const rawLimit = Number.parseInt(searchParams.get("limit") ?? "", 10);
@@ -29,7 +37,8 @@ export async function GET(req: Request) {
     // what you asked. Everyone keeps everything, which is also the only
     // version of this a buyer would ever have to think about.
     const list = await listSearchConversations({
-      buyerId: auth.buyerId,
+      buyerId: buyerAuth?.buyerId ?? null,
+      vendorId: vendorAuth?.userId ?? null,
       limit: Number.isInteger(rawLimit) && rawLimit > 0 ? rawLimit : undefined,
       before,
     });

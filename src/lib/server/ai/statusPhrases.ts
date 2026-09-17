@@ -37,6 +37,39 @@ function snippet(text: string, maxLen = 48): string {
   return `${trimmed.slice(0, maxLen - 1).trimEnd()}…`;
 }
 
+// Same job as snippet() above, but safe for a MULTI-ITEM term — route.ts
+// builds scanTerm by joining every product this turn actually searched for
+// with " and " (things the buyer wants all of) or " or " (real
+// alternatives on a compare turn — see that file's own comment on the
+// difference), and that joined string can easily run past a snippet sized
+// for one short term.
+//
+// Found live: "Optima Yellow Top Battery Toyota Camry 2012 and DieHard
+// Gold Battery Toyota Camry 2012 and Interstate Mega-Tron Plus Battery..."
+// — a genuine dead end after a buyer confirmed all three of a guidance
+// reply's suggestions — got flat-truncated by every phrase function below
+// still calling plain snippet(what, 60), cutting "DieHard Gol…" off
+// mid-word and dropping the third item entirely from the buyer-facing
+// reply.
+//
+// Splits on the two joiners route.ts ever builds a multi-item scanTerm
+// with, snippets EACH term on its own budget, and leaves the joiner text
+// untouched — every name stays a clean, complete (or cleanly truncated)
+// phrase no matter how many are joined together. Falls back to a plain
+// snippet() when there's no joiner (the ordinary single-item case, by far
+// the most common), so nothing changes for it.
+//
+// Imperfect on one edge: a product name that itself genuinely contains the
+// word "and"/"or" ("salt and pepper shaker") would split there too — an
+// acceptable trade against a definite, everyday truncation bug this fixes.
+function snippetTerms(what: string, maxLen = 60): string {
+  if (!/\s+(?:and|or)\s+/.test(what)) return snippet(what, maxLen);
+  return what
+    .split(/(\s+(?:and|or)\s+)/)
+    .map((part, i) => (i % 2 === 0 ? snippet(part, maxLen) : part))
+    .join("");
+}
+
 // A bare confirmation/acknowledgement reply — "yes", "sure", "ok" — reads as
 // nonsense once dropped into one of the query-quoting templates below
 // ("Digging into 'yes'…", found live on a buyer's follow-up turn). This is
@@ -91,6 +124,17 @@ const ACKNOWLEDGEMENT_REPLIES = new Set([
   // from a fresh request.
   "yes, find someone",
   "no thanks, that's okay",
+  // The vendor-search offer's own agree text (2026-09-15) — deliberately a
+  // DIFFERENT literal string from "yes, find someone" just above, even
+  // though the two buttons look and behave almost identically (see
+  // renderOfferActions' own `kind` comment for why: the two offers used to
+  // share one string, and a classification bug on this offer's replies
+  // once fell through to the model reading the shared "yes, find someone"
+  // and running the WRONG offer's flow — a name-and-WhatsApp collection
+  // for an offer that was never made). Same reasoning as the entry above
+  // applies here on its own terms — recognized as an acknowledgement so
+  // the dual-intent guard doesn't read it as naming a new need.
+  "yes, look for a vendor",
 ]);
 
 export function isAcknowledgementReply(text: string): boolean {
@@ -427,18 +471,29 @@ export function similarMatchPhrase(count: number): string[] {
 
 // Shown while the kind-of-item gate (verifyMatches.ts) is in flight — for
 // Velte's own results and, on a dead-end turn, for the external offers
-// too. Either way it lands after the listings are back but before any are
-// shown, so it narrates the one thing genuinely still happening: looking at
-// the photos to confirm these are actually the right kind of item. Never
-// says "removing" or "rejecting" — nothing has been judged yet at this
-// point, and most turns end with every candidate kept.
+// too. Either way it narrates the one thing genuinely still happening:
+// looking at the photos to confirm these are actually the right kind of
+// item. Never says "removing" or "rejecting" — nothing has been judged yet
+// at this point.
+//
+// NEVER PROMISES A DISPLAY (2026-09-15, found live) — used to include
+// "Having a proper look at these before showing you…", which reads as a
+// guarantee that cards/photos are about to appear. On the EXTERNAL-offer
+// call site especially (route.ts, checking Serper listings on a turn that
+// may still end in a genuine dead end) that's a promise this step can't
+// keep: verification can reject every candidate, in which case the turn
+// falls through to a plain "nothing on Velte" line or a guidance
+// suggestion — neither shows a single photo, so "before showing you" would
+// have been a broken promise the buyer just watched happen. Every variant
+// below still says plainly what's being checked; none commits to what
+// happens after.
 export function checkingPhotosPhrase(what: string): string[] {
   return [
     `Checking the photos to be sure these are really ${snippet(what)}…`,
     "Looking at each listing's photo to confirm the match…",
     `Making sure these are actually ${snippet(what)}…`,
     "Double-checking the photos against what you asked for…",
-    "Having a proper look at these before showing you…",
+    "Having a proper look at these first…",
     `Confirming each one is really ${snippet(what)}…`,
   ];
 }
@@ -635,7 +690,7 @@ export function creatingRequestPhrase(): string[] {
 // snippet() truncation as understandingRequestPhrase/searchingPhrase above,
 // so a long buyer message doesn't blow out the bubble.
 export function notFoundDirectlyPhrase(what: string): string[] {
-  const w = snippet(what, 60);
+  const w = snippetTerms(what, 60);
   return [
     `Couldn't find "${w}" listed directly on Velte.`,
     `No direct listing for "${w}" on Velte just yet.`,
@@ -647,7 +702,7 @@ export function notFoundDirectlyPhrase(what: string): string[] {
 }
 
 export function scanningVendorsPhrase(what: string): string[] {
-  const w = snippet(what, 60);
+  const w = snippetTerms(what, 60);
   return [
     `Widening the search — checking vendors whose sector fits "${w}"…`,
     `Scanning businesses that might be able to help with "${w}"…`,
@@ -659,19 +714,99 @@ export function scanningVendorsPhrase(what: string): string[] {
   ];
 }
 
-export function foundPossibleVendorPhrase(
+// Real external (off-Velte) listings ARE being shown this turn, alongside
+// an offer to also try a local vendor (2026-09-15, explicit request) — the
+// one case where external offers are shown WITHOUT waiting for the buyer to
+// decline a reach-out offer first (see route.ts's own comment on why: a
+// weak/near-miss store match doesn't deserve the same "Velte first" wait a
+// genuine dead end gets, since there's nothing confirmed to wait for).
+//
+// INTRO ONLY, deliberately — the reach-out QUESTION itself no longer lives
+// in this text (2026-09-15, explicit request: the question + its Yes/No
+// CTAs render after the result cards, not stacked above them alongside this
+// intro). It's picked client-side instead (SearchHome.tsx), since it's pure
+// framing with no per-turn fact in it (unlike this intro, which names the
+// actual search term) — no reason to round-trip it through the backend.
+export function externalOffersWithLocalOfferPhrase(
   what: string,
   isService: boolean,
 ): string[] {
-  const w = snippet(what, 60);
+  const w = snippetTerms(what, 60);
   return [
-    `No direct listing, but I found a business whose sector fits "${w}" — want me to reach out to them on your behalf?`,
-    `Nothing listed exactly, but a vendor nearby looks like a fit for "${w}" — want me to check with them?`,
-    `Found a business that might handle "${w}", even without a direct listing — should I reach out for you?`,
-    `Not listed directly, but there's a vendor whose store fits "${w}" — want me to get in touch with them?`,
+    `Nothing exact on Velte for "${w}" — here's where you can find it online.`,
+    `No direct Velte listing for "${w}", but here's what's available online.`,
     isService
-      ? `A real business turned up that might be able to help with "${w}" — want me to reach out and ask?`
-      : `A real business turned up that might carry "${w}" — want me to reach out and ask?`,
+      ? `Not listed on Velte, but here's where you might find help with "${w}" online.`
+      : `Not listed on Velte, but here's where you can get "${w}" online.`,
+  ];
+}
+
+// `vendorSectors` — the pre-check's own matched store's REAL sector tags
+// (2026-09-16, per explicit request, generalised from the "similar store
+// match" search-reply fix earlier the same day). Before this, the offer
+// text only ever said a vendor's store "fits" the request — true only in
+// the loosest sense (a sector-similarity hit, the same bar
+// hasContactableVendorsForQuery uses), and a buyer had no way to judge that
+// before agreeing to hand over their name. "Master of Ceremony" matching a
+// store tagged "Ushering Services" is a real example this was found live
+// on: the offer read as a confident fit right up until the buyer actually
+// asked what vendor it was.
+//
+// Deliberately built from the store's own STRUCTURED sectors array, never
+// a free-text summary of its description — this is a plain deterministic
+// phrase-picker with no model call behind it, so anything beyond "here is
+// a real, already-true fact about this listing" would risk fabricating a
+// claim. Optional and additive: every call site that can't cheaply supply
+// it yet still gets the plain phrase, exactly as before.
+function vendorFitNote(vendorSectors?: string[]): string {
+  return vendorSectors && vendorSectors.length
+    ? ` (their store lists: ${vendorSectors.slice(0, 3).join(", ")})`
+    : "";
+}
+
+export function foundPossibleVendorPhrase(
+  what: string,
+  isService: boolean,
+  vendorSectors?: string[],
+): string[] {
+  const w = snippetTerms(what, 60);
+  const note = vendorFitNote(vendorSectors);
+  return [
+    `No direct listing, but I found a business whose sector fits "${w}"${note} — want me to reach out to them on your behalf?`,
+    `Nothing listed exactly, but a vendor nearby looks like a fit for "${w}"${note} — want me to check with them?`,
+    `Found a business that might handle "${w}"${note}, even without a direct listing — should I reach out for you?`,
+    `Not listed directly, but there's a vendor whose store fits "${w}"${note} — want me to get in touch with them?`,
+    isService
+      ? `A real business turned up that might be able to help with "${w}"${note} — want me to reach out and ask?`
+      : `A real business turned up that might carry "${w}"${note} — want me to reach out and ask?`,
+  ];
+}
+
+// A REAL match was already found this turn — just not an exact one
+// (matchQuality "similar") — and a real Velte STORE also exists for the
+// category (checked deterministically, see route.ts's own store-only
+// check right before this fires; never the model's judgment). Genuinely
+// different moment from foundPossibleVendorPhrase above: that one covers
+// finding NOTHING product-wise but a possible vendor; this one covers
+// finding SOMETHING already, offered as a second option alongside it, not
+// instead of it — the buyer still sees the similar-match cards too.
+// Removed 2026-09-15 when the product flow was tightened to a strict
+// "found on Velte, stop" waterfall, then RESTORED the same day, scoped
+// explicitly to the similar-match case only (route.ts's own comment on
+// its restored call site explains why this one case stays a genuine
+// exception to that waterfall rather than folding into it).
+export function similarMatchReachOutPhrase(
+  what: string,
+  isService: boolean,
+): string[] {
+  const w = snippetTerms(what, 60);
+  return [
+    `Nothing exact on Velte for "${w}" — closest match is below. Want me to also check with a local vendor directly?`,
+    `That's the closest thing on Velte to "${w}" — should I reach out to a nearby vendor too, in case they can do better?`,
+    `Not an exact match for "${w}", but here's the closest option — want me to also ask a local business directly?`,
+    isService
+      ? `Nothing that matches "${w}" exactly — want me to reach out to a business that might handle this directly, alongside what's below?`
+      : `Nothing that matches "${w}" exactly — want me to reach out to a business that might carry it directly, alongside what's below?`,
   ];
 }
 
@@ -694,7 +829,7 @@ export function noVendorEvenBySectorPhrase(
   hasNearby: boolean,
   isService: boolean,
 ): string[] {
-  const w = snippet(what, 60);
+  const w = snippetTerms(what, 60);
   // hasNearby=true means real nearby-business cards render right under
   // this text (2026-09-05, per explicit request) — a "Nothing on Velte
   // matches X" line used to be one of the four variants in BOTH pools
@@ -785,7 +920,7 @@ export function noVendorButOnlineOffersPhrase(
   // screen above them, describing a turn that didn't happen.
   isComparison = false,
 ): string[] {
-  const w = snippet(what, 60);
+  const w = snippetTerms(what, 60);
   if (isComparison && unconfirmedBudgetNaira == null) {
     return [
       `Neither is on Velte, so I've compared what's listed online instead — here's how they stack up.`,

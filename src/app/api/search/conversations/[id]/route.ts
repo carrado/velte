@@ -2,19 +2,24 @@ import { NextResponse } from "next/server";
 
 import { AiSearchBackendError } from "@/lib/server/aiSearchBackend";
 import { deleteSearchConversation } from "@/lib/server/searchConversations";
-import { requireBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalVendorAuth, jsonError } from "@/lib/server/guards";
 
 // DELETE /api/search/conversations/:id — removes one row from the signed-in
-// buyer's chat history sidebar, for good (2026-09-09). Guarded exactly like
-// the list this is deleting a row out of (GET /api/search/conversations) —
-// a real session's buyerId, never a query parameter a caller supplies, same
-// reasoning as that route's own top comment.
+// buyer's OR vendor's chat history sidebar, for good (2026-09-09, widened
+// 2026-09-17). Guarded exactly like the list this is deleting a row out of
+// (GET /api/search/conversations) — a real session's buyerId/vendorId,
+// never a query parameter a caller supplies, same reasoning as that route's
+// own top comment. Buyer wins when both cookies exist.
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireBuyerAuth();
-  if ("response" in auth) return auth.response;
+  const buyerAuth = await getOptionalBuyerAuth();
+  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  if (!buyerAuth && !vendorAuth) {
+    return jsonError(401, "Sign in to manage your conversations.");
+  }
 
   const { id } = await params;
   if (!id) {
@@ -27,7 +32,8 @@ export async function DELETE(
   try {
     await deleteSearchConversation({
       conversationId: id,
-      buyerId: auth.buyerId,
+      buyerId: buyerAuth?.buyerId ?? null,
+      vendorId: vendorAuth?.userId ?? null,
     });
     return NextResponse.json({ ok: true });
   } catch (err) {

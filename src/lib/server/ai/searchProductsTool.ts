@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { buildProductTerm, isVagueReference } from "@/lib/productTerm";
+import { isVagueReference } from "@/lib/productTerm";
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
 import {
@@ -31,7 +31,9 @@ import type {
 const inputSchema = z.object({
   product: z
     .string()
-    .describe("The specific product or service the buyer is looking for."),
+    .describe(
+      "The specific product or service the buyer is looking for — the bare item/service name ONLY ('phone', 'ankara dress', 'haircut'), never a full descriptive phrase with qualities stitched on. A quality, spec, or feature the buyer mentioned (a good camera, high storage, a certain color) belongs in `attributes` as its own short entry, never appended here with a connector word — 'phone' + attributes ['good camera', 'high storage'] is correct, 'phone with good camera and high storage' as this field's whole value is not: joined with attributes, it becomes the actual search term shown to the buyer verbatim, and a clause-shaped term reads like it was lifted straight from their sentence instead of a real search.",
+    ),
   // Found live: for a vague repair request naming no symptom at all ("fix
   // my Infinix Hot 50i phone"), the model started ENUMERATING plausible
   // things that might be wrong — "screen replacement", "battery",
@@ -49,7 +51,7 @@ const inputSchema = z.object({
     .array(z.string())
     .optional()
     .describe(
-      "Specific attributes — color, size, brand, material, style, condition, etc. — but ONLY ones the buyer's own words actually named, or that you can genuinely see in an attached photo (for a photo, describe everything visually identifiable, not just the bare category, so matching can tell an exact match from a loosely related one). Never invent, guess, or list out plausible-sounding attributes the buyer never mentioned and no photo shows — e.g. for a bare repair request naming no symptom ('fix my phone', 'my laptop isn't working'), do NOT enumerate possible causes or parts ('screen', 'battery', 'software issue') as if the buyer had named them; leave this empty instead. An empty/omitted attributes list is the correct, honest output far more often than a guessed one.",
+      "Specific attributes — color, size, brand, material, style, condition, camera/storage/spec, etc. — but ONLY ones the buyer's own words actually named, or that you can genuinely see in an attached photo (for a photo, describe everything visually identifiable, not just the bare category, so matching can tell an exact match from a loosely related one). Never invent, guess, or list out plausible-sounding attributes the buyer never mentioned and no photo shows — e.g. for a bare repair request naming no symptom ('fix my phone', 'my laptop isn't working'), do NOT enumerate possible causes or parts ('screen', 'battery', 'software issue') as if the buyer had named them; leave this empty instead. An empty/omitted attributes list is the correct, honest output far more often than a guessed one. EACH ENTRY IS ONE SHORT, STANDALONE TRAIT (found live: 'with good camera and high storage' as a single entry got joined onto `product` verbatim, connector words and all, producing 'smartphone with good camera and high storage' as the actual search term — a real search term must never read like a clause lifted from the buyer's own sentence) — split a request naming several things into separate short entries ('good camera', 'high storage'), never one long phrase strung together with 'with'/'and'/'for'. And never include a bare intensifier with no real trait attached ('nice', 'good', 'great', 'quality') — 'nice camera' has a real trait (camera) worth keeping; 'nice' alone, or trailing on its own after the real traits are already listed, names nothing a search can filter on and must be dropped.",
     ),
   // Optional on purpose: set this ONLY when the buyer's own message names or
   // clearly implies a specific place. Omit it entirely otherwise — the
@@ -96,11 +98,30 @@ const inputSchema = z.object({
 const NON_ATTRIBUTE =
   /\b(did ?n[o']?t specify|not specified|unspecified|no preference|any (brand|colour|color|size|type)|n\/a|none specified|buyer did)\b/i;
 
+// The SAME defect as NON_ATTRIBUTE above, a different shape of it (found
+// live: "standing fan" → attributes ["living room", "oscillation?",
+// "remote?"] — the buyer never asked a question, the MODEL did, silently
+// wondering to itself whether oscillation/remote control mattered, and
+// that self-questioning leaked straight through as if it were a real
+// attribute. Landed verbatim in the buyer-facing dead-end line: `Couldn't
+// find "standing fan living room oscillation? remote?" on Velte at all` —
+// a real attribute a buyer actually stated never ends in a question mark;
+// only the model's own uncertainty does. Checked separately from
+// NON_ATTRIBUTE's phrase list because this is a PUNCTUATION tell, not a
+// wording one — no fixed phrase to match, just "does this end with '?'".
+const SELF_QUESTIONING = /\?\s*$/;
+
 export function usableAttributes(attributes?: string[]): string[] | undefined {
   if (!attributes?.length) return attributes;
   const kept = attributes
     .map((a) => a.trim())
-    .filter((a) => a.length > 0 && a.length <= 60 && !NON_ATTRIBUTE.test(a));
+    .filter(
+      (a) =>
+        a.length > 0 &&
+        a.length <= 60 &&
+        !NON_ATTRIBUTE.test(a) &&
+        !SELF_QUESTIONING.test(a),
+    );
   return kept.length ? kept : undefined;
 }
 
@@ -228,13 +249,32 @@ export async function searchProductsCore(
   const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
   const cleanAttributes = usableAttributes(attributes);
-  const queryText = buildProductTerm(product, cleanAttributes);
+  // SEARCHED with `product` ALONE now (2026-09-15, explicit request) —
+  // every buyer-facing sentence built from `buildProductTerm(product,
+  // attributes)` elsewhere (route.ts's dead-end phrasing, background-item
+  // labels, the goal sheet's own itemTerm) is untouched, since none of them
+  // read from this function's own local variables. What changed is what
+  // gets SEARCHED with: this used to be that same merged term, so "phone"
+  // plus an attribute like "good camera" became ONE string fed straight
+  // into both the vector search AND the rerank step — and rerank in
+  // particular (a cross-encoder, far more sensitive to exact phrasing than
+  // raw embedding similarity) could mark down a perfectly good phone whose
+  // own listing text just didn't happen to echo those specific words. See
+  // `attributesText` below for where the attributes went instead: a soft
+  // ranking boost on the retrieval backend (retrieval.service.js's
+  // rankCandidates), applied AFTER a listing already qualifies as a real
+  // match on the bare item, never a reason to drop one that qualifies but
+  // says nothing about camera or storage.
+  const queryText = product.trim();
+  const attributesText = cleanAttributes?.join(", ") || undefined;
   // See isVagueReference's own comment — "all of them", "the best" carry no
   // real product to search for. Returned as a clean, honest zero-result
   // search (matchTier null, same shape genuine "nothing found" already
   // takes) rather than spending a real vector-search call — and the
   // network round trip that would follow it — on a term with nothing in it
-  // to match against.
+  // to match against. Checked against the bare product term now, same
+  // reasoning as above — a vague PRODUCT is still vague regardless of what
+  // attributes ride alongside it.
   if (isVagueReference(queryText)) {
     return {
       results: [],
@@ -264,6 +304,7 @@ export async function searchProductsCore(
         method: "POST",
         body: {
           queryText,
+          attributesText,
           lat: coords?.lat,
           lng: coords?.lng,
           radiusKm: radiusKm ?? 10,
@@ -307,29 +348,31 @@ export async function searchProductsCore(
   // ("A couple more options — not an exact match"), and a wrong KIND of item
   // is wrong there as well — "not an exact match" is a claim about degree,
   // not a license to show a different product entirely.
-  // Gated to "similar" only (2026-08-26, same day it was added). Running it
-  // on every search put a fourth blocking LLM round trip — one that also
-  // fetches vendor images before it can answer — between retrieval and the
-  // reply, and the added latency was immediately noticeable on searches
-  // that were never at risk in the first place.
-  //
+  // Used to gate this to "similar" only (2026-08-26 through 2026-09-15).
   // "direct" is the backend's own statement that it found a close/exact
-  // hit, and it DISCARDS the merely-similar candidates whenever one exists
-  // (see MatchQuality). "similar" is the opposite statement: nothing
-  // cleared that bar, so here are the closest things that cleared the base
-  // relevance floor — which is exactly the state the reported sneaker was
-  // returned in, and exactly where a near-neighbour of the wrong kind can
-  // survive. Spending the round trip only there keeps the fix pointed at
-  // the failure and off the ordinary path.
+  // hit, and running verification on every search would have added a
+  // fourth blocking LLM round trip — one that also fetches vendor images —
+  // to searches that were assumed never at risk.
   //
-  // The trade-off, stated plainly: a wrong-kind item that retrieval rated
-  // "direct" now gets through unchecked, and so do the weak matches on a
-  // "direct" turn (they ride along with whichever quality the main set
-  // got). That is a deliberate latency-for-coverage trade, not an
-  // oversight — revisit it if a "direct" mismatch is ever actually seen.
+  // That assumption is now falsified by a real "direct" mismatch (found
+  // live: "agbada" returned an "agbada beads set" — a decorative accessory
+  // whose LISTING NAME literally contains the buyer's search term, which is
+  // exactly the shape that scores highest on a text/embedding hybrid and
+  // gets tagged "direct" — as the TOP recommendation pick, unverified,
+  // because "direct" skipped this gate entirely). A listing's own name
+  // containing the buyer's words is not evidence it's the right KIND of
+  // item; it can be the strongest signal for a wrong one, the same way a
+  // phone CASE outranks a phone on a title match. Verifying only "similar"
+  // protected exactly the turns where retrieval was already honest about
+  // being unsure, and left the confident-but-wrong case — the one that
+  // becomes a buyer's TOP CHOICE — completely unchecked.
+  //
+  // Runs on both tiers now. Cost is still bounded (MAX_CANDIDATES in
+  // verifyMatches.ts), and correctness beats latency here: a buyer shown
+  // the wrong item with full confidence is a worse failure than a slightly
+  // slower reply.
   let filteredNote: string | undefined;
-  const verifiable =
-    matchQuality === "similar" ? [...results, ...weakResults] : [];
+  const verifiable = [...results, ...weakResults];
   if (verifiable.length) {
     push?.(checkingPhotosPhrase(product));
     const { rejected } = await verifyItemMatches({
@@ -337,6 +380,7 @@ export async function searchProductsCore(
       attributes: cleanAttributes,
       candidates: verifiable,
       isImageQuery,
+      imageUrl,
     });
     if (rejected.length) {
       const droppedIds = new Set(rejected.map((r) => r.match.productId));

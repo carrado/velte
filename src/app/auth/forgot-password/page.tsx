@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { VelteLogo } from "@/components/VelteLogo";
 import { passwordApi } from "@/services/password";
-import { ArrowRightIcon, MailIcon } from "@/components/icons";
+import { ArrowRightIcon, MailIcon } from "@/components/icons/hero";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),

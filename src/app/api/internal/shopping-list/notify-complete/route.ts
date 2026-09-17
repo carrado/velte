@@ -27,6 +27,7 @@ interface NotifyCompleteBody {
   conversationId?: string | null;
   deviceId?: string | null;
   buyerId?: string | null;
+  vendorId?: string | null;
   goalText?: string;
   totalItems?: number;
   foundCount?: number;
@@ -82,6 +83,7 @@ export async function POST(req: Request) {
       productsMatchQuality: undefined,
       storesMatchQuality: undefined,
       externalStoreSuggestions: [],
+      instagramLeads: [],
       vendorProducts: [],
       vendorProductsStore: null,
       buyerRequestOffer: null,
@@ -89,11 +91,14 @@ export async function POST(req: Request) {
       interimReplies: [],
       awaitingBuyerRequestReply: false,
       buyerRequestMatchQuery: null,
+      awaitingVendorSearchOffer: false,
+      vendorSearchMatchQuery: null,
       contextNote: null,
       recommendation: null,
       externalOffers: [],
       awaitingComparisonPurchaseReply: false,
       comparisonPickItem: null,
+      isGuidanceReply: false,
       shoppingList: null,
       knownBudgetNaira: null,
     };
@@ -101,6 +106,7 @@ export async function POST(req: Request) {
       conversationId: body.conversationId,
       deviceId: body.deviceId,
       buyerId: body.buyerId ?? null,
+      vendorId: body.vendorId ?? null,
       turn,
     });
     return NextResponse.json({ appended: true });

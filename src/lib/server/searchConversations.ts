@@ -25,6 +25,15 @@ export interface BuyerLocationUpdate {
 // /api/search/route.ts wraps each call in its own try/catch so a
 // persistence outage degrades the turn to the old stateless behavior
 // instead of failing the search.
+//
+// `vendorId` (2026-09-17) is the vendor-identity twin of `buyerId` — a
+// vendor with no linked buyer account browsing /chat is a real authenticated
+// person too (see ConversationSidebar's own `identity` note), and their
+// searches deserve the same saved-and-listed treatment a buyer's get. The
+// two are never sent together with real values by any caller here (buyer
+// wins whenever both sessions exist — the same precedence /api/search's own
+// actorType uses), so functions below just carry both as independent
+// optional owner stamps rather than a discriminated union.
 
 export interface EnsuredSearchConversation {
   conversationId: string;
@@ -67,6 +76,13 @@ export async function ensureSearchConversation(params: {
   deviceId: string;
   conversationId: string | null;
   buyerId: string | null;
+  // A vendor with no linked buyer account (2026-09-17) — see this file's
+  // top comment on why every function here now also accepts this. Never
+  // both meaningfully at once: the caller resolves buyer-over-vendor
+  // whenever both sessions exist (same precedence /api/search's own
+  // actorType uses), so this is just the other identity's slot, not a
+  // second concurrent owner.
+  vendorId?: string | null;
   buyerLocation?: BuyerLocationUpdate;
 }): Promise<EnsuredSearchConversation> {
   return aiSearchData<EnsuredSearchConversation>(
@@ -77,6 +93,7 @@ export async function ensureSearchConversation(params: {
         deviceId: params.deviceId,
         conversationId: params.conversationId ?? undefined,
         buyerId: params.buyerId ?? undefined,
+        vendorId: params.vendorId ?? undefined,
         buyerLocation: params.buyerLocation,
       },
     },
@@ -90,6 +107,7 @@ export async function appendSearchTurn(params: {
   conversationId: string;
   deviceId: string;
   buyerId: string | null;
+  vendorId?: string | null;
   turn: StoredSearchTurn;
   recentStatuses?: string[];
   buyerLocation?: BuyerLocationUpdate;
@@ -107,6 +125,7 @@ export async function appendSearchTurn(params: {
       body: {
         deviceId: params.deviceId,
         buyerId: params.buyerId ?? undefined,
+        vendorId: params.vendorId ?? undefined,
         turn: params.turn,
         recentStatuses: params.recentStatuses,
         buyerLocation: params.buyerLocation,
@@ -122,12 +141,18 @@ export async function appendSearchTurn(params: {
 export async function markSearchConversationHandoff(params: {
   conversationId: string;
   deviceId: string;
+  buyerId?: string | null;
+  vendorId?: string | null;
 }): Promise<void> {
   await aiSearchData(
     `/search/conversations/${encodeURIComponent(params.conversationId)}/handoff`,
     {
       method: "POST",
-      body: { deviceId: params.deviceId },
+      body: {
+        deviceId: params.deviceId,
+        buyerId: params.buyerId ?? undefined,
+        vendorId: params.vendorId ?? undefined,
+      },
     },
   );
 }
@@ -142,40 +167,52 @@ export async function getSearchConversation(params: {
   conversationId: string;
   deviceId: string;
   buyerId?: string | null;
+  vendorId?: string | null;
   includeStale?: boolean;
 }): Promise<StoredConversation> {
   const query = new URLSearchParams({ deviceId: params.deviceId });
   if (params.buyerId) query.set("buyerId", params.buyerId);
+  if (params.vendorId) query.set("vendorId", params.vendorId);
   if (params.includeStale) query.set("includeStale", "true");
   return aiSearchData<StoredConversation>(
     `/search/conversations/${encodeURIComponent(params.conversationId)}?${query.toString()}`,
   );
 }
 
-/** Deletes one conversation from the signed-in buyer's history for good
- *  (2026-09-09) — the sidebar's own delete action. buyerId-only ownership,
- *  same as the list this is deleting a row out of; see the backend
- *  controller's own comment for why deviceId ownership doesn't apply here. */
+/** Deletes one conversation from the signed-in buyer's (or vendor's) history
+ *  for good (2026-09-09, widened 2026-09-17) — the sidebar's own delete
+ *  action. buyerId/vendorId-only ownership, same as the list this is
+ *  deleting a row out of; see the backend controller's own comment for why
+ *  deviceId ownership doesn't apply here. Exactly one of the two — never
+ *  both — same precedence every other dual-identity caller here follows. */
 export async function deleteSearchConversation(params: {
   conversationId: string;
-  buyerId: string;
+  buyerId?: string | null;
+  vendorId?: string | null;
 }): Promise<void> {
-  const query = new URLSearchParams({ buyerId: params.buyerId });
+  const query = new URLSearchParams();
+  if (params.buyerId) query.set("buyerId", params.buyerId);
+  else if (params.vendorId) query.set("vendorId", params.vendorId);
   await aiSearchData(
     `/search/conversations/${encodeURIComponent(params.conversationId)}?${query.toString()}`,
     { method: "DELETE" },
   );
 }
 
-/** The chat-history list for a signed-in buyer, newest first. Titles and
- *  counts only — never turns, which carry whole result sets (see the
- *  backend's own listConversations comment). */
+/** The chat-history list for a signed-in buyer OR vendor, newest first.
+ *  Titles and counts only — never turns, which carry whole result sets (see
+ *  the backend's own listConversations comment). Exactly one of buyerId/
+ *  vendorId — never both — same precedence every other dual-identity caller
+ *  here follows. */
 export async function listSearchConversations(params: {
-  buyerId: string;
+  buyerId?: string | null;
+  vendorId?: string | null;
   limit?: number;
   before?: string | null;
 }): Promise<SearchConversationList> {
-  const query = new URLSearchParams({ buyerId: params.buyerId });
+  const query = new URLSearchParams();
+  if (params.buyerId) query.set("buyerId", params.buyerId);
+  else if (params.vendorId) query.set("vendorId", params.vendorId);
   if (params.limit) query.set("limit", String(params.limit));
   if (params.before) query.set("before", params.before);
   return aiSearchData<SearchConversationList>(

@@ -22,7 +22,7 @@ import {
   EyeOffIcon,
   KeyIcon,
   LockIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // Shared FieldError component (can be moved to a shared file later)
 function FieldError({ message }: { message: string | undefined }) {

@@ -70,6 +70,25 @@ export interface SearchHistoryTurn {
   // use this, not only the long vendor-facing description, or Yes can
   // no_match after an offer that already found sector vendors.
   buyerRequestMatchQuery?: string | null;
+  // The OPPOSITE-shaped sibling of awaitingBuyerRequestReply (2026-09-15) —
+  // that one fires on a DEAD END ("want me to reach out to a business on
+  // your behalf?", nothing shown, a later Buyer Request is what notifies
+  // someone). This fires when real PRODUCT results WERE just shown (a
+  // Velte match, or real online listings on a dead-end turn) and this
+  // turn's reply asks whether the buyer would rather have a vendor
+  // make/provide the item directly instead of buying one of the products
+  // shown as-is — common for anything as often custom-made as bought
+  // ready-made (Ankara wear, agbada, aso-ebi, cakes, furniture). True only
+  // on the turn making that offer; false on every other turn, including
+  // the turn that actually runs the agreed-to searchStores call. Same
+  // "structural fact, never guessed from prose" reasoning as
+  // awaitingBuyerRequestReply.
+  awaitingVendorSearchOffer?: boolean;
+  // The businessType/product term this offer was about — what the
+  // agreement turn actually calls searchStores with, since the buyer's own
+  // "yes" names nothing itself. Set alongside awaitingVendorSearchOffer;
+  // null/omitted otherwise.
+  vendorSearchMatchQuery?: string | null;
   // Same pattern as awaitingBuyerRequestReply above, for the OTHER
   // two-step exchange (2026-09-09): a fresh comparison between DIFFERENT
   // items (e.g. "iPhone vs Samsung") is answered conversationally, from the
@@ -85,6 +104,20 @@ export interface SearchHistoryTurn {
   // searches Velte for, since the buyer's own "yes" names nothing itself.
   // Null/omitted otherwise.
   comparisonPickItem?: string | null;
+  // EVERY alternative named in the fresh comparison this turn answered
+  // (route.ts's own comparisonOptions, the full list, not just the
+  // recommended pick) — set alongside comparisonPickItem/
+  // awaitingComparisonPurchaseReply on the SAME turn (2026-09-15, found
+  // live). What lets a LATER message, even after an intervening dead-end
+  // turn, resolve "the other one"/"try the other option" back to whichever
+  // named alternative wasn't just searched — see route.ts's own
+  // rememberedComparisonOptions for the request-scoped scan that reads
+  // this back out. Null/omitted on every other turn.
+  comparisonOptions?: string[] | null;
+  // True when this turn's `content` came from suggestBuyingGuidance — see
+  // the matching field's own comment on the "final" event type above.
+  // Omitted for every other turn.
+  isGuidanceReply?: boolean;
   // Structural markers for "was location/budget already asked this
   // conversation" (2026-09-09) — route.ts's own alreadyAskedLocation-/
   // BudgetThisConversation used to scan `content` for fixed keyword
@@ -292,12 +325,26 @@ export interface StoreMatch {
   // WhatsApp message reflects what THAT vendor actually matched on, not
   // whichever call happened to run last/be passed down at the turn level.
   matchedQuery: string | null;
+  // Same per-call tagging as matchedQuery, for the service-specific details
+  // the buyer already gave (2026-09-17) — timeframe, event date, a
+  // distinguishing spec, budget, and the like, gathered from searchStores'
+  // own attributes/maxBudgetNaira input. NEVER used for matching (this
+  // search runs on businessType alone) — purely so StoreResultCard's
+  // WhatsApp handoff can hand the vendor real context instead of a bare
+  // "I'm interested in what you offer", the same way a vendor who already
+  // has a product LISTING gets the buyer's specifics for free from the
+  // listing itself. Empty/null respectively when nothing was actually
+  // stated — never guessed or filled in.
+  matchedAttributes: string[];
+  matchedBudgetNaira: number | null;
 }
 
 // A real nearby business from Google Places — Tier 3 of searchStores, only
 // populated when no Velte vendor matched at all. Deliberately thin (no
-// handle, no whatsapp, no trust) since it's not a Velte entity: no
-// relationship to hand a "chat with vendor" CTA off to.
+// handle, no Velte "trust") since it's not a Velte entity: no relationship
+// to hand a "Chat on WhatsApp" CTA off to (`phone` below is a plain `tel:`
+// link, never a WhatsApp deep link — Velte has no idea whether Google's
+// number is even a WhatsApp number, unlike a vendor's own `whatsapp` field).
 export interface NearbyBusiness {
   placeId: string;
   name: string;
@@ -310,6 +357,56 @@ export interface NearbyBusiness {
   // than a fabricated/misleading number (see googlePlacesFallback in
   // staffly-ai-backend's retrieval.service.js).
   distanceKm: number | null;
+  // Both optional on a real Google listing (2026-09-17) — null, never a
+  // guess, when Google has neither on file. See googlePlaces.service.js's
+  // own header for the pricing tier these add (Enterprise SKU, one tier up
+  // from the Pro-tier fields above — both together cost the same as either
+  // alone, since billing is by the highest tier any requested field
+  // touches).
+  phone: string | null;
+  website: string | null;
+}
+
+// A real, PUBLIC Instagram business page turned up by a scoped Google
+// search (site:instagram.com "<businessType>" "<location>") on a genuine
+// store dead end — nothing on Velte, no real Google Places result either
+// (2026-09-15, explicit request). Many small Nigerian vendors (caterers,
+// tailors, event stylists) run entirely off an Instagram page with no
+// website and no Google Places listing at all, so this is a third tier of
+// "somewhere to point the buyer", not a replacement for either of the
+// other two.
+//
+// Deliberately thin, same reasoning as NearbyBusiness: no handle Velte
+// trusts, no WhatsApp CTA, no verified address or coordinates — a plain
+// Google search result naming a page that MENTIONS the business type and
+// location, nothing more. This is a PUBLIC search result only — no login,
+// no session, no scraping of anything Instagram gates behind
+// authentication (see connectors/instagramBusinessSearch.ts's own header
+// for why that boundary matters here).
+export interface InstagramLead {
+  /** The profile page itself (instagram.com/<handle>), never a post/reel/
+   *  hashtag page — see the connector's own filter for why only a profile
+   *  qualifies as a real business page. */
+  url: string;
+  /** The bare handle out of `url` (2026-09-16) — what the "Message on
+   *  Instagram" action needs: Instagram's DM deep link is ig.me/m/<handle>,
+   *  and it takes no prefilled text, so the card copies a Velte intro
+   *  message to the clipboard and opens the thread. Optional only because
+   *  leads persisted before this shipped have none — the card falls back
+   *  to a plain profile link for those. */
+  handle?: string;
+  /** Google's own result title — usually "Business Name (@handle) •
+   *  Instagram photos and videos", kept whole rather than parsed apart. */
+  title: string;
+  /** Google's own snippet, when it has one (often a bio excerpt). */
+  snippet: string | null;
+  /** What was searched to find this lead (the businessType), and the place
+   *  the buyer named, if any — carried ON the lead so the card can write
+   *  the intro message ("I'm looking for a caterer in Enugu") without
+   *  reaching back into the turn. Both optional for the same pre-shipping
+   *  reason as `handle`. */
+  need?: string;
+  location?: string | null;
 }
 
 // A product offer from OUTSIDE Velte (Phase 4,
@@ -324,6 +421,16 @@ export interface NearbyBusiness {
 // "From ₦89,500") rather than a parsed number, because a mis-parsed price
 // shown next to a real vendor's real price is exactly the kind of confident
 // wrongness the rest of this system is built to prevent.
+//
+// `priceText` and `imageUrl` specifically can come from either of two
+// places — the search API's own snapshot (Google Shopping, cached at
+// crawl time) or the product PAGE `url` actually points to (read fresh,
+// same turn) — and the PAGE wins whenever it has an answer (2026-09-14,
+// corrected after the reverse produced a card whose photo didn't match
+// its own gallery or the page it linked to; see connectors/serper.ts's
+// own comment on the live case that caught it). The snapshot is only ever
+// the fallback, for a page that's slow, blocked, or genuinely has
+// neither.
 export interface ExternalOffer {
   /** Stable within a turn; used for React keys and dedup only. */
   id: string;
@@ -354,31 +461,38 @@ export interface ExternalOffer {
    *  Storage, RAM, Camera, and so on. Same shape as VendorMatch.attributes,
    *  for the same reason: it's genuinely structured data the seller filled
    *  in, not marketing copy. Empty is normal, not an error — currently
-   *  always empty: Jiji's own extractor was removed 2026-09-12 and not
-   *  rebuilt when Jiji itself came back the same day; a merchant with no
-   *  extractor written for it simply publishes none. See
+   *  always empty: no merchant in the connector's current Shopify/
+   *  WooCommerce-only list (2026-09-13, see connectors/serper.ts) has a
+   *  verified attribute extractor written for it yet. See
    *  connectors/pageMeta.ts's own comment on why this exists at all — a
    *  400-character og:description blurb was never going to say "6GB RAM,
    *  128GB storage, Used, no cracks", and this is where that actually
    *  lives on the page. */
   attributes: { name: string; value: string }[];
-  /** The shop selling it ("Jumia", "Slot", …) as the source reported it. */
+  /** The shop selling it ("Slot", "Electromart", "Jumia", …) as the source
+   *  reported it — a NAMED merchant from connectors/serper.ts's list, which
+   *  today means Jumia or a Shopify/WooCommerce Nigerian store (2026-09-13,
+   *  Jumia re-added 2026-09-14 — see that file's own header). */
   merchant: string | null;
+  /** Which of the three buckets this belongs to in the "off Velte" results
+   *  UI (2026-09-14) — see connectors/serper.ts's Merchant.platform for the
+   *  full reasoning. A merchant whose platform can't be told apart (the
+   *  generic URL-shape-only match) never produces an offer at all any
+   *  more, rather than guessing which of the three it belongs in — so
+   *  every offer that exists here has one. */
+  platform: "jumia" | "shopify" | "woocommerce";
   /** Which connector produced this (see ExternalConnector.name). */
   source: string;
   url: string;
-  /** True when `url` is this exact listing's own product page — a Google
-   *  Shopping result the connector matched against a real organic link, or
-   *  an organic direct link on its own (see connectors/serper.ts's two
-   *  passes). False when no confident match was found and `url` falls back
-   *  to the merchant's own SEARCH page for the item's name instead — still
-   *  a real, useful destination (the right shop, a pre-filled query), but
-   *  not the specific product, and the card must say so rather than let a
-   *  "View on Jumia" label imply the exact page underneath every link.
-   *  ALWAYS true for Jiji and Konga specifically (2026-09-12) — see their
-   *  entries in connectors/serper.ts's MERCHANTS list: neither has a
-   *  `search` fallback, so an offer from either of them only ever exists
-   *  here because it resolved to a real product page. */
+  /** Whether `url` is this exact listing's own product page. ALWAYS true
+   *  today (2026-09-14, explicit product decision): an offer the connector
+   *  can't confidently match to a real product page is now dropped
+   *  entirely rather than falling back to the merchant's own search page —
+   *  no more "View on Slot" that actually lands on a results page for the
+   *  item's name. Kept as a field (rather than deleted) for the connector
+   *  contract's own sake: a future source that CAN'T always produce a
+   *  direct link should say so honestly here, not report `true` by
+   *  default. */
   isDirectLink: boolean;
 }
 
@@ -523,11 +637,22 @@ export type Clarification =
   // alreadyAskedShoppingListDetailsThisConversation can tell this ask apart
   // from an ordinary text clarification just by its shape, never by
   // scanning the (freely-worded) question text.
+  // `budgetAsked` — the bare-query gate's own report of whether THIS
+  // specific question actually asked about budget (2026-09-17). Budget
+  // stopped being unconditional the same day: a bounded service (a
+  // mechanic, a repair) is priced by diagnosing the problem, not by what
+  // the buyer chooses to spend, so bareQueryGate.ts may skip it and ask
+  // about the actual problem/need instead. Only meaningful alongside
+  // `skippable: true` (this gate's own signature) — staffly-ai-backend's
+  // askedBudget is derived from BOTH together, so a non-budget bare-query
+  // ask no longer blocks a later, genuinely budget-relevant ask within the
+  // same request (see alreadyAskedBudgetThisConversation's own comment).
   | {
       kind: "text";
       question: string;
       skippable?: boolean;
       listDetails?: boolean;
+      budgetAsked?: boolean;
     }
   | { kind: "choice"; question: string; options: string[] }
   // No options — the frontend renders a one-tap "share my location" action
@@ -878,6 +1003,12 @@ export type SearchStreamEvent =
       // bios often don't spell out every sector they're tagged with.
       storesMatchQuality: MatchQuality;
       externalStoreSuggestions: NearbyBusiness[];
+      // Public Instagram business pages found on a genuine STORE dead end
+      // (2026-09-15) — see InstagramLead's own comment and
+      // connectors/instagramBusinessSearch.ts. Always empty on a product-
+      // only dead end; only ever populated alongside externalStoreSuggestions
+      // by the same cross-check block in route.ts.
+      instagramLeads: InstagramLead[];
       // Populated only when getVendorProductsTool was called this turn —
       // one specific store's own catalog, requested after that store was
       // already found (see route.ts's system prompt).
@@ -955,6 +1086,13 @@ export type SearchStreamEvent =
       // exchange with a name-ask) — the short term create matching should
       // reuse. Null/omitted otherwise.
       buyerRequestMatchQuery: string | null;
+      // See SearchHistoryTurn's own matching field — the opposite-shaped
+      // sibling of the pair above (2026-09-15): true when THIS turn's
+      // reply asked whether the buyer would rather have a vendor
+      // make/provide a just-shown product directly, instead of buying one
+      // of the shown items as-is.
+      awaitingVendorSearchOffer: boolean;
+      vendorSearchMatchQuery: string | null;
       // Same shape as the pair above, for the fresh-comparison short-circuit
       // (2026-09-09) — see SearchHistoryTurn's own comment on both fields.
       // True only on the turn that just answered a genuine "X vs Y"
@@ -965,6 +1103,19 @@ export type SearchStreamEvent =
       // The recommended item's name, set alongside
       // awaitingComparisonPurchaseReply — null/omitted otherwise.
       comparisonPickItem: string | null;
+      // See SearchHistoryTurn's own matching field. Optional (unlike its
+      // required sibling above) for the same reason isGuidanceReply just
+      // below is — a new field added after most call sites already existed.
+      comparisonOptions?: string[] | null;
+      // True when `reply` came from suggestBuyingGuidance — real-world
+      // brand/model suggestions on a genuine Velte dead end, general
+      // knowledge rather than a confirmed Velte result (2026-09-15). Lets
+      // SearchHome.tsx tell this apart from an ordinary reply, and from a
+      // genuine empty dead end with no suggestions at all — both of which
+      // used to render identically. See SearchHistoryTurn's own matching
+      // field, which SearchHome.tsx copies this into for the next call's
+      // `history`.
+      isGuidanceReply?: boolean;
       // Non-null only on a turn with ≥2 product results where the
       // comparison call succeeded — see SearchRecommendation's own
       // comment. Renders as badge chips on the matching cards plus a
@@ -1000,6 +1151,21 @@ export type SearchStreamEvent =
       // unavailable — the turn still completed normally, it just wasn't
       // saved.
       conversationId: string | null;
+      // The composer's "+" tool badge, as the SESSION now stands after this
+      // turn (2026-09-14) — route.ts's own "session's active tool" rule
+      // (see its comment there) already carries the tool across turns and
+      // drops it the moment an unrelated request starts, but only ever
+      // server-side: the composer clears its local badge the instant a
+      // message is sent (see activeTool's own comment in SearchHome.tsx)
+      // and had nothing to re-set it from, so the badge stayed off from the
+      // buyer's second message onward regardless of what the server was
+      // still doing underneath. The client re-syncs its badge from this
+      // field on every final event, so a still-in-play tool visibly stays
+      // attached and a dropped one visibly disappears, instead of the
+      // badge and the server's own session state silently disagreeing. Null
+      // whenever no tool is in play — never omitted, matching
+      // sessionToolAtTurnEnd's own always-explicit contract server-side.
+      activeTool: ComposerTool | null;
     }
   | { type: "error"; message: string };
 
@@ -1125,6 +1291,7 @@ export interface StoredSearchTurn {
   productsMatchQuality: MatchQuality;
   storesMatchQuality: MatchQuality;
   externalStoreSuggestions: NearbyBusiness[];
+  instagramLeads: InstagramLead[];
   vendorProducts: StoreProductItem[];
   vendorProductsStore: {
     name: string;
@@ -1138,12 +1305,18 @@ export interface StoredSearchTurn {
   interimReplies: string[];
   awaitingBuyerRequestReply: boolean;
   buyerRequestMatchQuery: string | null;
+  awaitingVendorSearchOffer: boolean;
+  vendorSearchMatchQuery: string | null;
   contextNote: string | null;
   recommendation: AnyRecommendation | null;
   externalOffers: ExternalOffer[];
   awaitingComparisonPurchaseReply: boolean;
   comparisonPickItem: string | null;
+  // See SearchHistoryTurn's own comment. Optional, unlike its required
+  // siblings above — added after most call sites already existed.
+  comparisonOptions?: string[] | null;
   // See SearchStreamEvent's own comment on the "final" variant.
+  isGuidanceReply: boolean;
   shoppingList: ShoppingListSnapshot | null;
   // See SearchStreamEvent's own comment — carried through so a REHYDRATED
   // offer turn can still skip the identity-capture budget step correctly,

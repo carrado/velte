@@ -14,6 +14,13 @@ const alwaysPublicRoutes = [
   "/llms.txt",
   "/payment/callback",
   "/s", // branded short-link redirector (see src/app/s/[code]/route.ts)
+  // The "Chat on WhatsApp" redirect (src/app/api/chat/route.ts) — same
+  // shape as /s above (a real link meant for direct navigation, not a JS
+  // fetch call), but under /api, so without this it also falls through to
+  // the protected-dashboard-route branch at the bottom of this file and
+  // sends every anonymous buyer to /auth/login instead of WhatsApp. Must
+  // work for a buyer with NO session at all, same as search itself.
+  "/api/chat",
 ];
 
 // Genuinely public PAGES that stay viewable even by a logged-in user — each
@@ -97,7 +104,16 @@ export async function proxy(request: NextRequest) {
   // Real app calls go through fetch() (Sec-Fetch-Dest: empty / Sec-Fetch-Mode: cors|same-origin).
   // Pasting an /api URL into the address bar is a top-level navigation
   // (Sec-Fetch-Dest: document) — forbid those so the endpoint can't be loaded directly.
-  if (pathname.startsWith("/api")) {
+  //
+  // /api/chat is the ONE deliberate exception (found live: every "Chat on
+  // WhatsApp" CTA 403'd here). It's not called from JS at all — buildChatLink
+  // (src/lib/chatLink.ts) renders it as a real `<a href="/api/chat?...">`,
+  // target="_blank", specifically so it survives as an ordinary link with no
+  // JS required (see that route's own header comment) — which makes it a
+  // genuine top-level navigation by design, not the thing this block exists
+  // to stop. Blocking it here meant every WhatsApp handoff in the app 403'd
+  // as soon as this rule shipped.
+  if (pathname.startsWith("/api") && pathname !== "/api/chat") {
     const dest = request.headers.get("sec-fetch-dest");
     const mode = request.headers.get("sec-fetch-mode");
     if (dest === "document" || mode === "navigate") {

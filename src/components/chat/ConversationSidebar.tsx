@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { buyerApi } from "@/lib/buyer-api-client";
 import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import { useBuyerStore } from "@/store/buyerStore";
+import { useUserStore } from "@/store/userStore";
 import { useAccountSignOut } from "@/hooks/useAccountSignOut";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
@@ -36,8 +37,8 @@ import {
 // this one.
 import { MessageSquareIllustration } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { getInitial } from "@/lib/initials";
 import type { SearchConversationList } from "@/types/search";
-import type { Buyer } from "@/types/buyer";
 
 // The buyer's conversation sidebar (2026-08-26) — the ChatGPT arrangement:
 // a persistent left column on a wide screen, a slide-over on a phone.
@@ -183,22 +184,41 @@ export function ConversationSidebar() {
     goToChat();
   };
   const buyer = useBuyerStore((s) => s.buyer);
+  // A vendor browsing /chat is already an authenticated person on this
+  // platform, even on a browser with no linked buyer cookie (see
+  // IdentitySessionSync / the "Linked identities" note in CLAUDE.md — most
+  // vendors never link one at all). Read here so the sign-in prompt below
+  // only ever targets a genuine guest, never someone who's already logged
+  // in as a vendor and simply hasn't started a chat yet.
+  const vendor = useUserStore((s) => s.user);
+  // Either identity counts as "signed in" for the parts of this sidebar
+  // that aren't buyer-specific (the Menu heading, the Notifications row —
+  // notificationSession() on the backend already resolves either cookie —
+  // and the account footer). Buyer-owned surfaces (conversations, Your
+  // requests, Shopping Lists) still gate on `buyer` alone below, since
+  // those collections are keyed to a Buyer document a vendor-only session
+  // has no claim on.
+  const identity = buyer ?? vendor ?? null;
   const pathname = usePathname();
 
   // Mobile only in effect: on desktop the slide-over flag is already false
   // and setting it again changes nothing, so one handler covers both.
   const closeOnMobile = () => setOpen(false);
 
-  // Fetched whenever a buyer exists — unlike the drawer this replaced, the
-  // sidebar is VISIBLE by default on desktop, so gating the query on "open"
-  // would leave a permanently empty column. Still gated on a buyer: the
-  // endpoint 401s for an anonymous caller by design, and most traffic here
-  // is still anonymous.
+  // Fetched whenever either identity exists — unlike the drawer this
+  // replaced, the sidebar is VISIBLE by default on desktop, so gating the
+  // query on "open" would leave a permanently empty column. Widened from
+  // buyer-only to `identity` (2026-09-17): /api/search/conversations now
+  // resolves a vendor session too (see that route's own comment), so a
+  // vendor with no linked buyer account gets their own history instead of
+  // this query staying permanently disabled for them. Still gated on
+  // SOME identity: the endpoint 401s for an anonymous caller by design, and
+  // most traffic here is still anonymous.
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["buyer", "conversations"],
     queryFn: () =>
       buyerApi.get<SearchConversationList>("/api/search/conversations"),
-    enabled: Boolean(buyer),
+    enabled: Boolean(identity),
     staleTime: 30_000,
   });
 
@@ -219,7 +239,10 @@ export function ConversationSidebar() {
   const { data: notificationData } = useQuery({
     queryKey: ["notifications"],
     queryFn: fetchNotifications,
-    enabled: Boolean(buyer),
+    // Either identity, not just `buyer` — /api/notifications resolves
+    // whichever cookie is present (notificationSession() on the backend),
+    // so a vendor with no linked buyer still has real notifications to show.
+    enabled: Boolean(identity),
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
@@ -351,7 +374,7 @@ export function ConversationSidebar() {
         <div className="flex flex-col h-full" style={{ width: SIDEBAR_WIDTH }}>
           <header className="flex items-center justify-between gap-2 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-2 shrink-0">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">
-              {buyer ? "Menu" : "Your chats"}
+              {identity ? "Menu" : "Your chats"}
             </h2>
             {/* Two controls, one per breakpoint — see the store's own note
                 on why the two states are separate. */}
@@ -382,8 +405,15 @@ export function ConversationSidebar() {
           <CreditsSidebarMeter />
 
           {/* Section one — the app's surfaces that aren't a conversation.
-              Signed-in only, per the note at the top of this file. */}
-          {buyer && (
+              Signed-in only (either identity), per the note at the top of
+              this file. Requests and Shopping Lists stay buyer-only inside
+              it — Buyer Requests are keyed to a Buyer document with a
+              phone-verified number, which a vendor-only session has no claim
+              on — but Notifications and Shopping Lists both work for either
+              identity (2026-09-17: Shopping Lists' ownership was widened the
+              same way, per explicit product direction — "what buyer can do,
+              vendor can do"), so neither is gated a second time here. */}
+          {identity && (
             <>
               <nav className="px-3 pb-3 shrink-0 space-y-0.5">
                 <MenuLink
@@ -394,13 +424,15 @@ export function ConversationSidebar() {
                   onNavigate={closeOnMobile}
                   badge={unreadCount}
                 />
-                <MenuLink
-                  href="/chat/requests"
-                  icon={<ClipboardListIcon size={19} className="shrink-0" />}
-                  label="Your requests"
-                  active={pathname === "/chat/requests"}
-                  onNavigate={closeOnMobile}
-                />
+                {buyer && (
+                  <MenuLink
+                    href="/chat/requests"
+                    icon={<ClipboardListIcon size={19} className="shrink-0" />}
+                    label="Your requests"
+                    active={pathname === "/chat/requests"}
+                    onNavigate={closeOnMobile}
+                  />
+                )}
                 <MenuLink
                   href="/chat/shopping-list"
                   icon={<ShoppingCartIcon size={19} className="shrink-0" />}
@@ -439,11 +471,16 @@ export function ConversationSidebar() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto">
-            {!buyer ? (
+            {!identity ? (
               // The signed-out state IS the sign-in prompt — a history is
               // the one thing an account actually buys the buyer, so this
               // is the honest place to ask for one rather than a banner
-              // over the thread.
+              // over the thread. Gated on vendor too: a logged-in vendor
+              // with no linked buyer account is not a guest, and offering
+              // them "Continue with Google" reads as though they were never
+              // signed in at all. They fall through to the query below,
+              // which is disabled without a buyer cookie and so lands
+              // harmlessly on the ordinary "Nothing here yet" empty state.
               <div className="flex flex-col items-center text-center gap-4 px-5 py-10">
                 <MessageSquareIllustration size={64} />
                 <div className="space-y-1.5">
@@ -514,11 +551,6 @@ export function ConversationSidebar() {
                                 {c.turnCount === 1 ? "message" : "messages"}
                               </>
                             )}
-                            {c.status === "handed_off" && (
-                              <span className="text-orange-500">
-                                {" · "}Contacted a vendor
-                              </span>
-                            )}
                           </span>
                         </span>
                       </span>
@@ -565,7 +597,16 @@ export function ConversationSidebar() {
             <ThemeToggle compact className="w-full justify-between" />
           </div>
 
-          {buyer && <BuyerAccountFooter buyer={buyer} />}
+          {identity && (
+            <AccountFooter
+              name={
+                buyer
+                  ? (buyer.name ?? buyer.email ?? "Account")
+                  : (vendor?.company?.name ?? vendor?.name ?? "Account")
+              }
+              avatar={(buyer ? buyer.avatar : vendor?.avatar) ?? undefined}
+            />
+          )}
         </div>
       </aside>
 
@@ -583,7 +624,13 @@ export function ConversationSidebar() {
   );
 }
 
-function BuyerAccountFooter({ buyer }: { buyer: Buyer }) {
+// Generalised from BuyerAccountFooter (2026-09-17) to cover either identity —
+// a vendor with no linked buyer account reaches this footer just as much as
+// a signed-in buyer does (see ConversationSidebar's own `identity` note), and
+// both display the same way: an avatar, a name, and one "Log out" that signs
+// out whichever sessions actually exist (useAccountSignOut already handles
+// both at once).
+function AccountFooter({ name, avatar }: { name: string; avatar?: string }) {
   // Moved into a shared hook (2026-09-05) so the account menu in ChatHeader
   // runs the SAME sign-out rather than a second copy of it. The cleanup this
   // does — clearing the query cache and the stored conversation id — is a
@@ -601,17 +648,8 @@ function BuyerAccountFooter({ buyer }: { buyer: Buyer }) {
   return (
     <div className="shrink-0 border-t border-gray-200/70 px-3 py-3">
       <div className="flex items-center gap-2.5 px-1">
-        <Avatar
-          src={buyer.avatar}
-          label={(buyer.name ?? buyer.email ?? "?")
-            .trim()
-            .charAt(0)
-            .toUpperCase()}
-          className="h-7 w-7"
-        />
-        <span className="min-w-0 flex-1 truncate text-sm text-ink">
-          {buyer.name ?? buyer.email}
-        </span>
+        <Avatar src={avatar} label={getInitial(name)} className="h-7 w-7" />
+        <span className="min-w-0 flex-1 truncate text-sm text-ink">{name}</span>
       </div>
       <button
         type="button"

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useBuyerStore } from "@/store/buyerStore";
+import { useUserStore } from "@/store/userStore";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import { fetchShoppingListJobs } from "@/services/shoppingList";
@@ -194,12 +195,18 @@ function matchesFilter(job: ShoppingListJobSummary, filter: FilterId): boolean {
 
 export function ShoppingListsIndexPage() {
   const buyer = useBuyerStore((s) => s.buyer);
+  // A vendor with no linked buyer account is a real, signed-in owner of
+  // their own shopping lists too (2026-09-17 — velte-backend's
+  // ShoppingListJob widened the same way; see its own model comment).
+  // Explicit product direction: "what buyer can do, vendor can do".
+  const vendor = useUserStore((s) => s.user);
+  const identity = buyer ?? vendor ?? null;
   const { navigate } = useNavigation();
   const [filter, setFilter] = useState<FilterId>("all");
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["shopping-list", "mine"],
     queryFn: fetchShoppingListJobs,
-    enabled: Boolean(buyer),
+    enabled: Boolean(identity),
     staleTime: 30_000,
   });
 
@@ -215,7 +222,7 @@ export function ShoppingListsIndexPage() {
 
   // Same shell rule every /chat sub-page follows — chat/layout.tsx is
   // overflow-hidden, so a page with no scroller of its own gets clipped.
-  if (!buyer) {
+  if (!identity) {
     return (
       <div className="h-full overflow-y-auto">
         <div className="mx-auto max-w-lg px-4 py-16 text-center">

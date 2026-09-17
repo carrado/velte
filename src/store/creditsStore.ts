@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { toast } from "sonner";
 
 import { GUEST_CREDITS } from "@/lib/credits";
 import { guestCredits } from "@/lib/guestCredits";
@@ -34,9 +35,6 @@ interface CreditsStore {
   walletBalanceKobo: number | null;
   /** The pack currently being paid for, if any. */
   busyPack: string | null;
-  /** A failed WALLET purchase, usually an empty wallet. A card top-up
-   *  navigates away, so it never has an error to report. */
-  topUpError: string | null;
 
   /** Reads this browser's guest ledger. Synchronous — no network involved. */
   loadGuest: () => void;
@@ -62,6 +60,15 @@ interface CreditsStore {
    *  not meant to be read by a component. */
   lastSpendAt: number | null;
   topUp: (packId: string, source?: TopUpSource) => void;
+  /** Confirms a CARD top-up directly with Paystack by reference, instead of
+   *  waiting on the `charge.success` webhook to land — see
+   *  /api/credits/verify-topup's own comment for why the webhook alone
+   *  isn't enough (it never reaches local dev, and can be slow/dropped even
+   *  in production). Idempotent server-side against the webhook, so this is
+   *  safe to call unconditionally the moment a buyer lands back from
+   *  checkout. Returns whether it resolved a real balance — `false` means
+   *  the caller should fall back to polling (`load()`) instead. */
+  verifyCardTopUp: (reference: string) => Promise<boolean>;
 }
 
 /** The in-flight read, module-level rather than in the store, so it is not
@@ -94,7 +101,6 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
   used: 0,
   walletBalanceKobo: null,
   busyPack: null,
-  topUpError: null,
   lastSpendAt: null,
 
   loadGuest: () => {
@@ -180,9 +186,40 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
     });
   },
 
+  verifyCardTopUp: async (reference) => {
+    try {
+      const res = await fetch("/api/credits/verify-topup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        balance?: number;
+        spentSinceTopUp?: number;
+        walletBalanceKobo?: number | null;
+      } | null;
+      if (!res.ok || typeof data?.balance !== "number") return false;
+      // Same shape as the wallet branch of `topUp` below — both figures move
+      // together from the one response, and `used` resets to the fresh
+      // spentSinceTopUp rather than being left at whatever it was before
+      // this top-up (see that branch's own comment on why).
+      set({
+        balance: data.balance,
+        used:
+          typeof data.spentSinceTopUp === "number" ? data.spentSinceTopUp : 0,
+        ...(typeof data.walletBalanceKobo === "number"
+          ? { walletBalanceKobo: data.walletBalanceKobo }
+          : {}),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   topUp: (packId, source = "card") => {
     if (get().busyPack) return;
-    set({ busyPack: packId, topUpError: null });
+    set({ busyPack: packId });
     void (async () => {
       try {
         if (source === "wallet") {
@@ -202,10 +239,13 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
             error?: string;
           } | null;
           if (!res.ok || typeof data?.balance !== "number") {
-            set({
-              topUpError: data?.error ?? "Couldn't pay from your wallet.",
-              busyPack: null,
-            });
+            // Toasted rather than shown inline (2026-09-17, per explicit
+            // request) — the backend's own message names the exact
+            // shortfall ("doesn't have the ₦6,000 for this pack"), which is
+            // the one thing the vendor needs to read, same reasoning as the
+            // BFF route's own comment on passing it through untouched.
+            toast.error(data?.error ?? "Couldn't pay from your wallet.");
+            set({ busyPack: null });
             return;
           }
           // Both figures move together, from the one response — a refetch
@@ -245,15 +285,11 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
           window.location.href = data.authorizationUrl;
           return;
         }
-        set({
-          topUpError: data?.error ?? "Couldn't start the payment.",
-          busyPack: null,
-        });
+        toast.error(data?.error ?? "Couldn't start the payment.");
+        set({ busyPack: null });
       } catch {
-        set({
-          topUpError: "Couldn't start the payment. Please try again.",
-          busyPack: null,
-        });
+        toast.error("Couldn't start the payment. Please try again.");
+        set({ busyPack: null });
       }
     })();
   },

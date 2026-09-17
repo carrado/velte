@@ -6,6 +6,7 @@ import {
   getSearchConversation,
 } from "@/lib/server/searchConversations";
 import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getOptionalVendorAuth } from "@/lib/server/guards";
 import type { StoredSearchTurn } from "@/types/search";
 
 // Public (no vendor/buyer session required), same reasoning as /api/search's
@@ -41,16 +42,20 @@ export async function GET(req: Request) {
   // the point. The mount-time rehydrate leaves it off and keeps relying on
   // the 404 to drop a finished thread's id (see getSearchConversation).
   const includeStale = searchParams.get("includeStale") === "true";
-  // Widens ownership to the account, so a buyer opens their own thread on a
-  // browser that never created it. Optional by design: an anonymous buyer
-  // still reaches their own conversations by deviceId exactly as before.
+  // Widens ownership to the account, so a buyer (or vendor) opens their own
+  // thread on a browser that never created it. Optional by design: an
+  // anonymous buyer still reaches their own conversations by deviceId
+  // exactly as before. Buyer wins when both cookies exist, same precedence
+  // /api/search's own actorType uses.
   const buyerAuth = await getOptionalBuyerAuth();
+  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
 
   try {
     const conversation = await getSearchConversation({
       conversationId,
       deviceId,
       buyerId: buyerAuth?.buyerId ?? null,
+      vendorId: vendorAuth?.userId ?? null,
       includeStale,
     });
     return NextResponse.json({ conversation });
@@ -81,11 +86,13 @@ export async function POST(req: Request) {
   }
 
   const buyerAuth = await getOptionalBuyerAuth();
+  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
   try {
     await appendSearchTurn({
       conversationId: body.conversationId,
       deviceId: body.deviceId,
       buyerId: buyerAuth?.buyerId ?? null,
+      vendorId: vendorAuth?.userId ?? null,
       turn: body.turn,
     });
     return NextResponse.json({ ok: true });
