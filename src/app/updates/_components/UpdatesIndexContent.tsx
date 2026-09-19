@@ -2,7 +2,7 @@ import Link from "next/link";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { updates } from "@/lib/updates";
-import { ArrowRightIcon } from "@/components/icons";
+import { ArrowRightIcon } from "@/components/icons/hero";
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", {

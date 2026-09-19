@@ -8,6 +8,7 @@ import Link from "next/link";
 import { VelteLogo } from "@/components/VelteLogo";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
+import { ThemeToggleButton } from "@/components/landing/ThemeToggleButton";
 import {
   ArrowRightIcon,
   BriefcaseIcon,
@@ -20,7 +21,7 @@ import {
   RouteIcon,
   ShieldIcon,
   UserIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // Rebuilt 2026-08-16 as a right-side drawer with expandable grouped
 // sections, replacing the 2026-08-14 three-item full-width dropdown
@@ -53,6 +54,21 @@ import {
 // surface first; and the current route highlights in the list via
 // usePathname, so "Ask Velte" reads as active while actually on /chat.
 //
+// 2026-09-17 (dark mode + palette refresh, explicit request: "the sidebar
+// background colour... needs to be changed to something better") — the
+// solid orange-50 panel from 2026-08-17 is gone. Two problems with it: it
+// was a literal Tailwind class the .dark overrides never touched via the
+// app's usual `bg-surface`/`bg-gray-*` re-pointing trick (it happened to
+// still work once orange-50 itself got a dark wash in [[custom_icon_system]]'s
+// dark-mode pass, but only by accident), and — the bigger issue — a full
+// coloured slab as the surface itself contradicts the app's own rule that
+// surfaces stay neutral and orange stays an ACCENT (see
+// [[feedback_app_palette]]). The panel is now `bg-surface` like every other
+// card/panel in the app (white in light, the app's dark slate in dark,
+// both already wired), and the orange moved to where it reads as an
+// accent instead of a backdrop: the icon badges (`bg-orange-50` circle,
+// orange-500 glyph) and the vertical "thread" line. Borders/dividers moved
+// from `orange-100` to the neutral `gray-100` token for the same reason.
 // "Marketplace" dropped entirely (2026-08-16, not just de-emphasized) —
 // the product doesn't have a separate "browse the stacked-up catalog"
 // experience anymore, AI search is what surfaces everything now, so there
@@ -143,7 +159,7 @@ function AccordionSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border-b border-orange-100">
+    <div className="border-b border-gray-100">
       <button
         type="button"
         onClick={onToggle}
@@ -207,7 +223,7 @@ function NavRow({
         onClick={onNavigate}
         className={cn(
           "flex items-center gap-3 py-2.5 -mx-1 px-2 rounded-xl transition-colors",
-          active ? "bg-surface" : "hover:bg-white/60",
+          active ? "bg-orange-50" : "hover:bg-gray-50",
         )}
       >
         {children}
@@ -262,19 +278,22 @@ export function MobileMenu({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 380, damping: 38 }}
-            className="fixed inset-y-0 right-0 z-[100] w-[86%] max-w-sm sm:hidden bg-orange-50 shadow-2xl flex flex-col"
+            className="fixed inset-y-0 right-0 z-[100] w-[86%] max-w-sm sm:hidden bg-surface shadow-2xl flex flex-col border-l border-gray-100"
           >
-            <div className="flex items-center justify-between px-5 h-16 border-b border-orange-100 shrink-0">
+            <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100 shrink-0">
               <VelteLogo width={64} height={31} />
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                type="button"
-                onClick={onClose}
-                aria-label="Close menu"
-                className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-orange-100/60 hover:text-gray-700 transition-colors cursor-pointer"
-              >
-                <CloseIcon size={18} />
-              </motion.button>
+              <div className="flex items-center gap-1">
+                <ThemeToggleButton />
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close menu"
+                  className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors cursor-pointer"
+                >
+                  <CloseIcon size={18} />
+                </motion.button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5">
@@ -297,7 +316,7 @@ export function MobileMenu({
                         onNavigate={onClose}
                         active={pathname === href}
                       >
-                        <div className="relative z-10 w-10 h-10 rounded-2xl bg-surface flex items-center justify-center shrink-0 overflow-hidden">
+                        <div className="relative z-10 w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center shrink-0 overflow-hidden">
                           {image ? (
                             <Image
                               src={image}
@@ -344,7 +363,7 @@ export function MobileMenu({
                       onNavigate={onClose}
                       active={pathname === href}
                     >
-                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-surface flex items-center justify-center shrink-0">
+                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center shrink-0">
                         <Icon size={18} className="text-orange-500" />
                       </div>
                       <span className="text-sm font-semibold text-ink">
@@ -373,7 +392,7 @@ export function MobileMenu({
                       onNavigate={onClose}
                       active={pathname === href}
                     >
-                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-surface flex items-center justify-center shrink-0">
+                      <div className="relative z-10 w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center shrink-0">
                         <Icon size={18} className="text-orange-500" />
                       </div>
                       <span className="text-sm font-semibold text-ink">
@@ -390,7 +409,7 @@ export function MobileMenu({
                 2026-08-19 (before the hamburger button, always visible now
                 instead of drawer-only) per explicit request — dropped from
                 here so there's exactly one place to tap it, not two. */}
-            <div className="p-5 border-t border-orange-100 shrink-0">
+            <div className="p-5 border-t border-gray-100 shrink-0">
               <motion.div whileTap={{ scale: 0.97 }}>
                 <Link
                   href="/auth/signup"

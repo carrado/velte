@@ -126,7 +126,7 @@ function LoginForm() {
         <VelteLogo alt="Velte logo" width={72} height={35} priority />
       </Link>
 
-      <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-xl shadow-gray-200/60">
+      <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-md shadow-black/5">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-ink mb-2 tracking-tight">
             Welcome back

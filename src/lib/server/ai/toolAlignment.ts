@@ -30,10 +30,33 @@ const PROVIDER_ORDER = ["openai", "groq"] as const;
 
 const TOOL_LABEL: Record<ComposerTool, string> = {
   compare: "Compare",
+  shopping_plan: "Shopping Plan",
 };
+
+// Deliberately looser than COMPARE_TOOL_RULE's decision procedure — picking
+// this tool from the menu IS the signal that background tracking is wanted
+// (see ComposerTool's own comment in types/search.ts), so this only has to
+// rule out messages with no real shopping goal in them at all, not judge
+// whether a deadline was stated the way classifyScopeTool's own hasDeadline
+// field does for the auto-detected path.
+const SHOPPING_PLAN_TOOL_RULE = [
+  "A SHOPPING PLAN request names a real shopping goal the buyer wants Velte to keep searching and tracking over time, rather than answer once right now — one or more items, or a broader need to buy things for a purpose (an event, a move, a trip, a project).",
+  "",
+  "A deadline stated in the same message ('by December', 'in 3 weeks', 'before the wedding') strengthens the fit but is NOT required — the buyer picking this tool from the menu is itself the signal that ongoing monitoring is wanted, not a one-off search.",
+  "",
+  "It is NOT a fit for a message with no shopping goal in it at all — a bare greeting ('hi', 'help me'), a question about how Velte itself works, or something unrelated to shopping entirely.",
+].join("\n");
 
 const TOOL_RULE: Record<ComposerTool, string> = {
   compare: COMPARE_TOOL_RULE,
+  shopping_plan: SHOPPING_PLAN_TOOL_RULE,
+};
+
+const TOOL_EXAMPLE: Record<ComposerTool, string> = {
+  compare:
+    'name two or more things to weigh against each other — e.g. "iPhone 15 vs Samsung S24"',
+  shopping_plan:
+    'describe what you need to buy — e.g. "office chairs and a printer for my new shop, ready before the 20th"',
 };
 
 function alignmentTool() {
@@ -126,7 +149,6 @@ export async function checkToolAlignment(params: {
  */
 export function toolMismatchReply(activeTool: ComposerTool): string {
   const label = TOOL_LABEL[activeTool];
-  const example =
-    'name two or more things to weigh against each other — e.g. "iPhone 15 vs Samsung S24"';
+  const example = TOOL_EXAMPLE[activeTool];
   return `That doesn't look like a ${label} request — for this tool, ${example}. Or just send it again with the ✕ on the ${label} tag tapped off, and I'll go ahead and search for it normally.`;
 }

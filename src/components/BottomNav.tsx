@@ -9,7 +9,7 @@ import {
   SettingsIcon,
   StoreIcon,
   WalletIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 export default function BottomNav() {
   const pathname = usePathname();
   const { navigate } = useNavigation();

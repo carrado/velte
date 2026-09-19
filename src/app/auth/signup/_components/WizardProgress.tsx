@@ -18,7 +18,7 @@ export default function WizardProgress({ step }: WizardProgressProps) {
             key={s}
             className={cn(
               "h-1.5 flex-1 rounded-full transition-colors duration-300",
-              s <= step ? "bg-orange-500" : "bg-black/10",
+              s <= step ? "bg-orange-500" : "bg-gray-200",
             )}
           />
         ))}

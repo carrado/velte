@@ -5,7 +5,7 @@ import {
   ArrowRightIcon,
   LinkIcon,
   MessageCircleIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 const stagger = {
   hidden: {},
   show: { transition: { staggerChildren: 0.1 } },

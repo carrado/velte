@@ -24,7 +24,7 @@ import {
   AlertTriangleIcon,
   ChevronRightIcon,
   GiftIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // Matches WalletPage's own constant / the backend's LOW_BALANCE_KOBO.
 const LOW_BALANCE_KOBO = 100_000; // ₦1,000

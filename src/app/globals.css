@@ -275,13 +275,18 @@
   --color-blue-50: #111d2e;
   --color-blue-100: #16263c;
   --color-blue-200: #1d3352;
-  /* Added 2026-09-12 (Shopping Lists' "selected" status pill, and the
-     wallet/referral notification types, ViewProductPage, sectorHeroThemes —
-     all missed when this ramp was first built). Same wash logic as its
-     neighbours above. */
+  /* Added 2026-09-12 (the wallet/referral notification types,
+     ViewProductPage, sectorHeroThemes — all missed when this ramp was
+     first built). Same wash logic as its neighbours above. */
   --color-violet-50: #1e1a32;
   --color-violet-100: #262140;
   --color-violet-200: #332c54;
+  /* Added 2026-09-18 (vendor dashboard pass) — the "Service"/"Available"
+     product badges and the wallet stat cards' icon tile, another hue
+     missed when this ramp was first built. Same wash logic. */
+  --color-teal-50: #10241f;
+  --color-teal-100: #143029;
+  --color-teal-200: #1a4036;
 
   /* ── Text on those panels ────────────────────────────────────────────
    * The mid/dark shades (600–800) are what the light theme puts ON those
@@ -312,6 +317,9 @@
   --color-violet-600: #a78bfa;
   --color-violet-700: #c4b5fd;
   --color-violet-800: #ddd6fe;
+  --color-teal-600: #2dd4bf;
+  --color-teal-700: #5eead4;
+  --color-teal-800: #99f6e4;
 }
 
 /* The shimmering "Velte is working on this" status text (see its own

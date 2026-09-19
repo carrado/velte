@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { AttributePickerModalProps } from "@/types/product";
-import { CheckIcon, CloseIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import {
+  CheckIcon,
+  CloseIcon,
+  PlusIcon,
+  SearchIcon,
+} from "@/components/icons/hero";
 
 /* Scrollable "fill what applies" picker: every preset renders as a row with a
    value input seeded by a realistic example. No selection step — anything the

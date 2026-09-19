@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { VelteLogo } from "@/components/VelteLogo";
 import { Button } from "@/components/ui/button";
-import { ArrowRightIcon, StoreIcon } from "@/components/icons";
+import { ArrowRightIcon, StoreIcon } from "@/components/icons/hero";
 // Landing screen for the installed PWA — shown after logout instead of the
 // marketing homepage ("/"), since a home-screen app reopening into a full
 // sales pitch reads as broken. Kept deliberately minimal: logo, one line,

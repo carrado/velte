@@ -137,14 +137,51 @@ export function classifyScopeTool() {
         .describe(
           "When isComparison is true, the things being weighed against each other, as short searchable noun phrases — ['Toyota 2026 model', 'Lexus SUV 2026'], ['iPhone', 'Samsung'], ['2026 Toyota Camry', '2025 Lexus RX']. Include the shared need in each one where it matters ('iPhone for content creation', 'Samsung for content creation'), since each is searched separately. Resolve options named on an EARLIER turn when this message only asks which to pick ('so which one?'). Empty array when isComparison is false, or when the buyer asked which is better WITHOUT naming any options ('what phone should I get for gaming') — there is nothing to enumerate there, and inventing options would search for things they never mentioned. NORMALIZE common Nigerian vehicle shorthand rather than repeating it verbatim: 'jeep' after a brand almost always means an SUV in everyday speech, not the Jeep brand itself, and most brands people say it about (Lexus, Toyota, Honda, Mercedes/'Benz') make no vehicle actually called that — 'Lexus Jeep 2026' becomes 'Lexus SUV 2026', 'Benz Jeep' becomes 'Mercedes SUV', never searched as typed. The one exception is the Jeep brand itself ('a Jeep Wrangler', 'I want a Jeep') — leave that alone.",
         ),
-      // Shopping Lists (2026-09-12), judged the same way isComparison is —
-      // a whole-project need, not a single-item search. Read the buyer's
-      // OWN words, never a keyword prefilter (the exact class of bug that
-      // moved isComparison onto this call in the first place).
-      wantsShoppingList: z
+      // Shopping Plan (2026-09-18) — judged the same way isComparison is:
+      // read the buyer's own words, no keyword prefilter (the exact class
+      // of bug a keyword approach already caused elsewhere in this file).
+      // A deadline alone no longer decides whether a request becomes a plan
+      // (2026-09-19 correction — see isBulkPurchase below, route.ts's own
+      // real trigger now) — once a plan is otherwise qualified, this just
+      // says whether to ask what date to track it against.
+      //
+      // Deliberately NO deadlineDate field here any more (2026-09-19,
+      // removed after two separate live failures) — asking the model to
+      // resolve "in 3 weeks"/"by Monday" into a real ISO date, even WITH
+      // today's real date spelled out in the prompt, twice produced a date
+      // in 2023, ~3 years in the past, on both an explicit relative phrase
+      // and a weekday name. Whatever training-data prior a model carries
+      // about "the current date" evidently doesn't reliably yield to an
+      // in-context correction for actual date ARITHMETIC, even when it can
+      // clearly judge that a timeframe was stated at all. route.ts now
+      // resolves the real date itself, deterministically, with chrono-node
+      // against its own server clock — never trusts a model for this.
+      hasDeadline: z
         .boolean()
         .describe(
-          "true ONLY when the buyer describes a whole PROJECT or SETUP that plainly needs many different things at once — furnishing an apartment, setting up an office/studio/gaming room, stocking a shop, preparing for an event, back-to-school supplies for multiple children — the kind of request where a real shopping trip would mean visiting several different kinds of shop. false for a request that is really about ONE item or ONE narrow category, no matter how it's phrased or hedged ('find me an iPhone 16', 'where can I buy a fridge', 'Nike shoes under 200k') — a single product with variants (colors, sizes, models) is still one thing, not a list. When genuinely unsure, prefer false: a missed project just gets treated as an ordinary search, while a false positive interrupts a simple search with an unwanted list-building flow.",
+          "true when the buyer states or clearly implies WHEN they need this by — a date, a day of week, 'tomorrow', 'next month', 'before my trip on the 20th', 'in two weeks'. false when no timing was given at all. A budget or urgency word alone ('urgently', 'ASAP') without an actual date/timeframe is NOT a deadline — that's still false.",
+        ),
+      // Shopping Plan's real trigger (2026-09-19, replacing the old
+      // "any request with no stated deadline" gate — that asked "when do
+      // you need this by?" before literally every fresh search, including
+      // the first message of a brand new conversation, since a first
+      // message is always requestRelation "new"). route.ts creates a
+      // Shopping Plan only when the buyer explicitly picked the tool from
+      // the composer, OR this is true.
+      isBulkPurchase: z
+        .boolean()
+        .describe(
+          [
+            "Decide with ONE test: would genuinely satisfying this need plausibly require buying several DIFFERENT KINDS of things, not just one item (however specific) and not two? If yes, true — even when the buyer named none of them yet.",
+            "",
+            "A GOAL or PURPOSE that implies acquiring a whole set of different things counts on its own, with no item list required — 'furnish/furnishing my apartment', 'kit out/equip my new office', 'stock my shop', 'set up a small restaurant', 'plan my wedding/traditional engagement'. Every one of those plausibly means a sofa AND a bed AND a wardrobe AND more — or a desk AND chairs AND a printer — never just one thing. Treat these as bulk immediately; do not wait for the buyer to enumerate items first.",
+            "",
+            "This holds even when a single SERVICE could also nominally satisfy the same goal — hiring an interior decorator to furnish a home, a contractor to kit out an office, an event planner for a wedding. Read what the buyer is trying to ACHIEVE, not the first noun that could answer it: 'I want to furnish my 2 bedroom apartment' is a furniture-buying project (true), not a request to hire a decorator, unless the buyer explicitly names the professional/service they want ('I need an interior decorator', 'looking for a wedding planner') — that alone is a single service, false.",
+            "",
+            "Also true for three or more items actually named ('a sofa, a dining set, curtains and a rug'). False for exactly two named needs — that is a dual-intent request, judged separately by hasMultipleIntents above, handled as an immediate two-part search rather than a tracked plan. False for a single item however elaborated ('a red leather sofa for my living room' is one item, however specific).",
+            "",
+            "When genuinely unsure, prefer true here specifically — unlike most fields in this schema, the safer failure direction is reversed: a missed single-service read just means one extra deadline question the buyer can skip with 'no rush'; missing a real furnishing/setup project sends it down an ordinary single-service search that can never actually satisfy a multi-item need.",
+          ].join("\n"),
         ),
       // Found live (2026-09-17): "Where can I get a good fashion designer"
       // → asked what kind/occasion → "Please explain" got a second,
@@ -166,7 +203,8 @@ export function classifyScopeTool() {
       hasSpecificDetails,
       isComparison,
       comparisonOptions,
-      wantsShoppingList,
+      hasDeadline,
+      isBulkPurchase,
       wantsExplanation,
     }) => ({
       inScope,
@@ -178,7 +216,8 @@ export function classifyScopeTool() {
       hasSpecificDetails,
       isComparison,
       comparisonOptions,
-      wantsShoppingList,
+      hasDeadline,
+      isBulkPurchase,
       wantsExplanation,
     }),
   });

@@ -1,9 +1,5 @@
 import { fetchMyRequests } from "@/services/buyerRequests";
 import { fetchNotifications } from "@/services/notifications";
-import {
-  fetchShoppingListJob,
-  fetchShoppingListJobs,
-} from "@/services/shoppingList";
 import { useBuyerStore } from "@/store/buyerStore";
 import type { PrefetchTask } from "@/lib/prefetch-routes";
 
@@ -33,19 +29,6 @@ export function getChatPrefetchTasks(routeKey: string): PrefetchTask[] {
   const buyer = useBuyerStore.getState().buyer;
   if (!buyer) return [];
 
-  // Dynamic route first, same rule prefetch-routes.ts follows for its own
-  // listing detail match — the static switch below can't match a jobId.
-  const jobMatch = routeKey.match(/^shopping-list\/([^/]+)$/);
-  if (jobMatch) {
-    const jobId = jobMatch[1];
-    return [
-      {
-        queryKey: ["shopping-list", jobId],
-        queryFn: () => fetchShoppingListJob(jobId),
-      },
-    ];
-  }
-
   switch (routeKey) {
     case "requests":
       return [
@@ -59,13 +42,6 @@ export function getChatPrefetchTasks(routeKey: string): PrefetchTask[] {
         {
           queryKey: ["notifications"],
           queryFn: fetchNotifications,
-        },
-      ];
-    case "shopping-list":
-      return [
-        {
-          queryKey: ["shopping-list", "mine"],
-          queryFn: fetchShoppingListJobs,
         },
       ];
     // "" (bare /chat) and anything else this tree doesn't recognise — no

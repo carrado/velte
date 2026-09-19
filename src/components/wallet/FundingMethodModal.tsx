@@ -8,7 +8,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import type { Wallet } from "@/types/wallet";
-import { CloseIcon, LoaderIcon, ShieldCheckIcon } from "@/components/icons";
+import {
+  CloseIcon,
+  LoaderIcon,
+  ShieldCheckIcon,
+} from "@/components/icons/hero";
 
 // Bank transfer (DVA) funding is part of the plan (spec's card + DVA fallback
 // model) but not surfaced right now — Paystack's Dedicated NUBAN requires the

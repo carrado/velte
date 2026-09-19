@@ -7,7 +7,7 @@ import {
   DESCRIPTION_QUALITY_COPY,
   type DescriptionQuality,
 } from "@/lib/description-quality";
-import { LoaderIcon } from "@/components/icons";
+import { LoaderIcon } from "@/components/icons/hero";
 
 // How long to wait after the vendor stops typing before spending an LLM
 // call on it — a quality check on every keystroke would be both wasteful

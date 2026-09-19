@@ -69,7 +69,7 @@ import {
   TrashIcon,
   UploadIcon,
   VideoIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 /** Best-effort read of a video file's duration via a throwaway <video>
  * element — never blocks the upload on it. Some real devices/codecs (the

@@ -5,8 +5,9 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { Button } from "../ui/button";
 import { MobileMenu } from "@/components/landing/MobileMenu";
+import { ThemeToggleButton } from "@/components/landing/ThemeToggleButton";
 import { VelteLogo } from "@/components/VelteLogo";
-import { CloseIcon, ListIcon } from "@/components/icons";
+import { CloseIcon, ListIcon } from "@/components/icons/hero";
 
 // Simplified 2026-08-15 (full homepage redesign) to Logo … How it works |
 // Businesses | Sign in — down from Logo | Ask Velux | Sign In | Join Velte.
@@ -66,7 +67,7 @@ export default function Navbar({
       transition={{ duration: 0.5 }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         opaque
-          ? "bg-white/90 backdrop-blur-xl border-b border-gray-200"
+          ? "bg-surface/90 backdrop-blur-xl border-b border-gray-200"
           : "bg-transparent"
       }`}
     >
@@ -97,6 +98,12 @@ export default function Navbar({
             >
               How it works
             </Link>
+            {/* Light/dark switch (2026-09-17, explicit request) — visible at
+                every width, not `hidden sm:block` like "How it works": a
+                40px icon button costs the tight mobile row far less than a
+                text link would, and the ability to switch shouldn't be
+                desktop-only. */}
+            <ThemeToggleButton className="-mr-0.5" />
             <Link href="/auth/login">
               <Button
                 variant="ghost"

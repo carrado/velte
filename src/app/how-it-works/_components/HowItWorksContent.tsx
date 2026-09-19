@@ -17,7 +17,7 @@ import {
   UserRoundIcon,
   UsersIcon,
   WalletIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 const stagger = {
   hidden: {},
@@ -87,7 +87,7 @@ const journeys = {
     label: "I'm selling",
     icon: StoreIcon,
     steps: vendorSteps,
-    cta: { label: "List your business", href: "/auth/signup" },
+    cta: { label: "Join as a Vendor", href: "/auth/signup" },
   },
 } as const;
 

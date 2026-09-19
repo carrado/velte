@@ -3,7 +3,7 @@ import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { formatNaira } from "@/lib/utils";
 import { useCountUp } from "@/hooks/useCountUp";
 import type { WalletStats } from "@/types/wallet";
-import { GaugeIcon, TargetIcon, ZapIcon } from "@/components/icons";
+import { GaugeIcon, TargetIcon, ZapIcon } from "@/components/icons/hero";
 
 function MiniSparkline({
   data,

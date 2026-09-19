@@ -7,18 +7,17 @@ import type { ProductsTableProps } from "@/types/product";
 import type { CategoryProduct } from "@/types/product";
 import ProductActionsPopover from "./ProductActionsPopover";
 import { useNavigation } from "../NavigationProgressContext";
+import { PackageIllustration, SearchXIllustration } from "@/components/icons";
 import {
   BanIcon,
   DollarSignIcon,
   EditIcon,
   MessageCircleIcon,
   PackageIcon,
-  PackageIllustration,
   PlusIcon,
-  SearchXIllustration,
   StarIcon,
   TrashIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 // Small, local, and deliberately coarse — a card caption, not a precise
 // audit timestamp, so a handful of thresholds is enough (same spirit as
 // product-price.ts's fmt()). Returns null on anything unparseable so the

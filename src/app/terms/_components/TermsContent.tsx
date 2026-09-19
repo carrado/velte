@@ -22,7 +22,7 @@ import {
   SearchIcon,
   ShieldAlertIcon,
   UserCheckIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 import type { IconComponent } from "@/types/common";
 
 const ORANGE = "rgb(247,107,16)";
@@ -515,7 +515,7 @@ export default function TermsContent() {
                   sizes="(max-width: 1024px) 100vw, 520px"
                   className="object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-[#F1F5F9] via-[#F1F5F9]/30 to-transparent lg:bg-gradient-to-l" />
+                <div className="absolute inset-0 bg-gradient-to-r from-canvas via-canvas/30 to-transparent lg:bg-gradient-to-l" />
               </div>
             </div>
           </motion.div>

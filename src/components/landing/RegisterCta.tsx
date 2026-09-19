@@ -7,7 +7,7 @@ import {
   MessageCircleIcon,
   StoreIcon,
   WalletIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 const stagger = {
   hidden: {},
@@ -100,7 +100,7 @@ export function RegisterCta() {
               href="/auth/signup"
               className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-[15px] font-semibold shadow-lg shadow-orange-500/20 transition-colors"
             >
-              List your business
+              Join as a Vendor
               <ArrowRightIcon className="w-4 h-4" />
             </Link>
           </motion.div>

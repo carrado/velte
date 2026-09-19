@@ -15,7 +15,7 @@ import {
   ArrowDownLeftIcon,
   ArrowUpRightIcon,
   CalendarIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 type SpendFilters = { startDate: string; endDate: string };
 

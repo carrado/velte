@@ -5,7 +5,11 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { toast } from "sonner";
 import { walletApi, leadCost, leadsRemaining } from "@/services/wallet";
-import { CloseIcon, LoaderIcon, ShieldCheckIcon } from "@/components/icons";
+import {
+  CloseIcon,
+  LoaderIcon,
+  ShieldCheckIcon,
+} from "@/components/icons/hero";
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000];
 const MIN_TOPUP_NAIRA = 1000;

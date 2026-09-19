@@ -43,7 +43,7 @@ import {
   ShieldIcon,
   UserCogIcon,
   UserIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -724,7 +724,7 @@ function AccountSettingsPanel() {
                       : strengthLevel <= 2
                         ? "text-orange-500"
                         : strengthLevel === 3
-                          ? "text-yellow-600"
+                          ? "text-amber-600"
                           : "text-green-600",
                   )}
                 >
@@ -989,13 +989,23 @@ export default function SettingsPage() {
         <InstallRow />
       </div>
 
-      <SectionCard
-        icon={MonitorIcon}
-        title="Appearance"
-        description="System follows your device — pick Light or Dark to override it."
-      >
-        <ThemeToggle />
-      </SectionCard>
+      {/* Desktop-only removed (2026-09-18): the sidebar and header account
+          menu both carry this control now, so a desktop vendor already has
+          it without opening Settings — mobile has neither, so it stays here
+          for exactly the viewport that needs it. Wrapped rather than adding
+          a `className` prop to `SectionCard` itself, which every other
+          section here also uses. `autoWidth`, centred: a phone-width
+          Settings page still reads better with the compact pill than a
+          full-bleed bar in its own card. */}
+      <div className="lg:hidden">
+        <SectionCard
+          icon={MonitorIcon}
+          title="Appearance"
+          description="System follows your device — pick Light or Dark to override it."
+        >
+          <ThemeToggle autoWidth />
+        </SectionCard>
+      </div>
 
       <SectionCard
         icon={BellIcon}

@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
-import { CheckCircleIcon, XCircleIcon } from "@/components/icons";
+import { CheckCircleIcon, XCircleIcon } from "@/components/icons/hero";
 
 // Same photo as the homepage's own About page (AboutContent's storyPhoto) —
 // already vetted for this site, and directly on-theme: a real vendor

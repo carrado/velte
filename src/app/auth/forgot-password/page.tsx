@@ -80,13 +80,13 @@ export default function ForgotPassword() {
           </Link>
 
           {/* Card */}
-          <div className="bg-surface border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
+          <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-md shadow-black/5">
             {/* Header */}
             <div className="mb-8 text-center">
-              <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">
+              <h1 className="text-2xl font-bold text-ink mb-2 tracking-tight">
                 Forgot your password?
               </h1>
-              <p className="text-black/45 text-sm">
+              <p className="text-gray-500 text-sm">
                 Enter your email and we&apos;ll send you a one-time password
                 (OTP) to reset your password.
               </p>
@@ -114,7 +114,7 @@ export default function ForgotPassword() {
               >
                 {(field) => (
                   <div>
-                    <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+                    <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
                       <MailIcon className="w-3.5 h-3.5 text-orange-400" />
                       Email
                     </Label>
@@ -124,7 +124,7 @@ export default function ForgotPassword() {
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}
                       placeholder="you@example.com"
-                      className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
+                      className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
                     />
                     <FieldError message={field.state.meta.errors[0]} />
                   </div>
@@ -155,7 +155,7 @@ export default function ForgotPassword() {
             </form>
 
             {/* Back to login link */}
-            <p className="text-center text-black/40 text-sm mt-6">
+            <p className="text-center text-gray-400 text-sm mt-6">
               Remember your password?{" "}
               <Link
                 href="/auth/login"

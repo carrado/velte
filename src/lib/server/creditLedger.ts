@@ -213,5 +213,5 @@ export function creditMessage(decision: CreditDecision): string {
   if (balance <= 0) {
     return `You're out of credits. Top up from ${minTopUp} to keep going.`;
   }
-  return `You don't have enough credits for that — you have ${balance}. Top up from ${minTopUp} to continue.`;
+  return `You don't have enough credits for that — you have ${balance} credit${balance === 1 ? "" : "s"}. Top up from ${minTopUp} to continue.`;
 }

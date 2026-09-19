@@ -44,7 +44,11 @@
 // ---------------------------------------------------------------------
 
 /** Everything a buyer can spend credits on. */
-export type CreditAction = "text" | "photo" | "shopping_list_item";
+export type CreditAction =
+  | "text"
+  | "photo"
+  | "shopping_plan"
+  | "shopping_plan_check";
 
 /**
  * What every action costs — a SIGNED-IN account (buyer or vendor) and a
@@ -68,17 +72,23 @@ export const CREDIT_COST: Record<CreditAction, number> = {
    *  thing, and the comparison call. */
   photo: 8,
 
-  /** Shopping Lists (2026-09-12) — one background search for ONE item on a
-   *  buyer's shopping list (Velte catalog first, then external if nothing
-   *  matched), charged the moment that item's own attempt actually
-   *  completes — never at list-generation time, and never for an item the
-   *  background job doesn't reach. Priced the same as an ordinary `text`
-   *  turn: it's the same underlying search, just run for one list item
-   *  instead of the buyer's own typed message. The generation step itself
-   *  (the market-researched draft, before any real search runs) is billed
-   *  as an ordinary `text` turn by route.ts's existing per-turn charge —
-   *  it needs no separate action here. */
-  shopping_list_item: 3,
+  /** Creating a Shopping Plan (2026-09-18, raised from an ordinary `text`
+   *  turn per explicit pricing decision — the "+" composer menu's own
+   *  Shopping Plan tool, and the auto-detected-deadline path route.ts
+   *  reassigns to this action once it actually builds one). A flat price
+   *  regardless of item count: the draft itself is one LLM call either
+   *  way, and per-item cost is what shopping_plan_check below already
+   *  meters, separately, every monitoring cycle after this one. */
+  shopping_plan: 20,
+
+  /** Shopping Plan — one background re-check for ONE item on an active
+   *  plan, charged the moment that item's own check for the current
+   *  monitoring cycle completes (velte-backend's shoppingPlan.job.js, via
+   *  consumeCreditsAtomic — never over HTTP, this backend runs in-process
+   *  with no request/cookie to authenticate). Priced the same as an
+   *  ordinary `text` turn: it's the same underlying search, just run once
+   *  per item per day instead of from the buyer's own typed message. */
+  shopping_plan_check: 3,
 };
 
 /**
@@ -159,7 +169,8 @@ export function canAfford(balance: number, action: CreditAction): boolean {
 export const ACTION_LABEL: Record<CreditAction, string> = {
   text: "search",
   photo: "photo search",
-  shopping_list_item: "shopping list item",
+  shopping_plan: "shopping plan",
+  shopping_plan_check: "shopping plan check",
 };
 
 /**

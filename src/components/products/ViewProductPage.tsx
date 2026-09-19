@@ -48,7 +48,7 @@ import {
   TagIcon,
   WrenchIcon,
   XCircleIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // ── Carousel placeholder images (swap for real product images when available) ─
 

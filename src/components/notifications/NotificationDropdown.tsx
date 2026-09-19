@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/popover";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { NotificationList } from "./NotificationList";
-import { BellIcon } from "@/components/icons";
+import { BellIcon } from "@/components/icons/hero";
 
 export function NotificationDropdown() {
   const [open, setOpen] = useState(false);

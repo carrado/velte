@@ -12,7 +12,7 @@ import {
   MessageCircleIcon,
   MoreHorizontalIcon,
   TrashIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 export default function ProductActionsPopover({
   product,

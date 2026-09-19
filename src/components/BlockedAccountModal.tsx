@@ -3,7 +3,7 @@
 import { createPortal } from "react-dom";
 import { useBlockedStore } from "@/store/blockedStore";
 import { useUserStore } from "@/store/userStore";
-import { ShieldAlertIcon } from "@/components/icons";
+import { ShieldAlertIcon } from "@/components/icons/hero";
 
 // Mounted once at the root layout — reads its own state, so no page needs to
 // wire this up. Fires whenever api-client.ts's request() sees a 423 from

@@ -29,7 +29,7 @@ import {
   SparklesIcon,
   StoreIcon,
   TagsIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 const MAX_DESCRIPTION = 600;
 const MAX_GALLERY = 6;

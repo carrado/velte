@@ -9,7 +9,11 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { buildChatLink } from "@/lib/chatLink";
 import type { VendorPreviewItem } from "@/types/store";
-import { ArrowRightIcon, BadgeCheckIcon, StoreIcon } from "@/components/icons";
+import {
+  ArrowRightIcon,
+  BadgeCheckIcon,
+  StoreIcon,
+} from "@/components/icons/hero";
 
 const stagger = {
   hidden: {},

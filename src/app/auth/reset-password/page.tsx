@@ -76,12 +76,12 @@ function ResetPasswordForm() {
         transition={{ duration: 0.5 }}
         className="relative w-full max-w-[440px]"
       >
-        <div className="bg-surface border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl text-center">
+        <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-md shadow-black/5 text-center">
           <AlertCircleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">
+          <h1 className="text-2xl font-bold text-ink mb-2 tracking-tight">
             Invalid Request
           </h1>
-          <p className="text-black/45 text-sm mb-6">
+          <p className="text-gray-500 text-sm mb-6">
             The password reset link is invalid. Please request a new password
             reset link.
           </p>
@@ -107,12 +107,12 @@ function ResetPasswordForm() {
         <VelteLogo width={72} height={35} />
       </Link>
 
-      <div className="bg-surface border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
+      <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-md shadow-black/5">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">
+          <h1 className="text-2xl font-bold text-ink mb-2 tracking-tight">
             Reset your password
           </h1>
-          <p className="text-black/45 text-sm">
+          <p className="text-gray-500 text-sm">
             Enter the OTP sent to <strong>{email}</strong> and choose a new
             password.
           </p>
@@ -140,7 +140,7 @@ function ResetPasswordForm() {
           >
             {(field) => (
               <div>
-                <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+                <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
                   <KeyIcon className="w-3.5 h-3.5 text-orange-400" />
                   One-Time Password (OTP)
                 </Label>
@@ -150,7 +150,7 @@ function ResetPasswordForm() {
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
                   placeholder="6‑digit code"
-                  className="bg-transparent border-black/[0.3] text-black focus:border-orange-500/50 h-11"
+                  className="focus:border-orange-500/50 h-11"
                 />
                 <FieldError message={field.state.meta.errors[0]} />
               </div>
@@ -171,7 +171,7 @@ function ResetPasswordForm() {
           >
             {(field) => (
               <div>
-                <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+                <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
                   <LockIcon className="w-3.5 h-3.5 text-orange-400" />
                   New Password
                 </Label>
@@ -182,12 +182,12 @@ function ResetPasswordForm() {
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
                     placeholder="••••••••"
-                    className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
+                    className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
                   >
                     {showPassword ? (
                       <EyeOffIcon className="h-4 w-4" />
@@ -220,7 +220,7 @@ function ResetPasswordForm() {
           >
             {(field) => (
               <div>
-                <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+                <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
                   <LockIcon className="w-3.5 h-3.5 text-orange-400" />
                   Confirm Password
                 </Label>
@@ -231,12 +231,12 @@ function ResetPasswordForm() {
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
                     placeholder="••••••••"
-                    className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
+                    className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
                   >
                     {showConfirmPassword ? (
                       <EyeOffIcon className="h-4 w-4" />

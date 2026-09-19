@@ -10,7 +10,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CloseIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 export const MAX_SECTORS = 5;
 

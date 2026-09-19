@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { blogPosts } from "@/lib/blog";
-import { ArrowRightIcon, ArrowUpRightIcon } from "@/components/icons";
+import { ArrowRightIcon, ArrowUpRightIcon } from "@/components/icons/hero";
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", {

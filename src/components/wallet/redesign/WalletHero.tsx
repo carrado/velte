@@ -7,7 +7,7 @@ import {
   PlusIcon,
   Settings2Icon,
   WalletIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 export default function WalletHero({
   wallet,
