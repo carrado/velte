@@ -18,7 +18,7 @@ import {
   UserPlusIcon,
   UsersIcon,
   WalletIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 const REFERRAL_BONUS_NAIRA = "₦1,000";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -16,10 +16,7 @@ import { CreditsSidebarMeter } from "@/components/credits/CreditsSidebarMeter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
 import { DeleteConversationModal } from "@/components/chat/DeleteConversationModal";
-import {
-  fetchNotifications,
-  markNotificationRead,
-} from "@/services/notifications";
+import { fetchNotifications } from "@/services/notifications";
 import { Avatar } from "@/components/Avatar";
 import {
   BellIcon,
@@ -155,7 +152,6 @@ export function ConversationSidebar() {
   const requestConversation = useChatHistoryStore((s) => s.requestConversation);
   const requestNewChat = useChatHistoryStore((s) => s.requestNewChat);
   const router = useRouter();
-  const { navigate } = useNavigation();
 
   // Opening a chat has to GET YOU TO THE CHAT (2026-09-05).
   //
@@ -195,9 +191,8 @@ export function ConversationSidebar() {
   // that aren't buyer-specific (the Menu heading, the Notifications row —
   // notificationSession() on the backend already resolves either cookie —
   // and the account footer). Buyer-owned surfaces (conversations, Your
-  // requests, Shopping Lists) still gate on `buyer` alone below, since
-  // those collections are keyed to a Buyer document a vendor-only session
-  // has no claim on.
+  // requests) still gate on `buyer` alone below, since those collections
+  // are keyed to a Buyer document a vendor-only session has no claim on.
   const identity = buyer ?? vendor ?? null;
   const pathname = usePathname();
 
@@ -248,50 +243,6 @@ export function ConversationSidebar() {
   });
   const unreadCount = notificationData?.unreadCount ?? 0;
   const queryClient = useQueryClient();
-
-  // Shopping Lists (2026-09-12) — a toast on completion, in ADDITION to the
-  // bell above (which already updates from this same 60s poll, no extra
-  // request needed). Reuses that poll rather than starting a second one —
-  // see this file's own comment on why one poll already covers "the buyer
-  // is in a different conversation than the one that started the search".
-  //
-  // `toastedRef` guards against re-firing the same toast on every refetch —
-  // this effect re-runs whenever notificationData changes, which happens
-  // every 60s regardless of whether anything new arrived.
-  //
-  // `duration: Infinity` (2026-09-12, explicit request) — a search this
-  // buyer waited on shouldn't vanish off-screen if they're away from the
-  // tab when it lands; it stays up until they act on it. The action
-  // (`View`) is the only dismissal, and it does double duty: navigate AND
-  // mark read, same as clicking the row in the bell's own list, so the
-  // unread badge doesn't keep counting a toast the buyer already acted on.
-  const toastedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    for (const n of notificationData?.notifications ?? []) {
-      if (n.type !== "shopping-list" || n.read) continue;
-      if (toastedRef.current.has(n.id)) continue;
-      toastedRef.current.add(n.id);
-      const toastId = toast.success(n.title, {
-        description: n.body,
-        duration: Infinity,
-        action: n.href
-          ? {
-              label: "View",
-              onClick: () => {
-                markNotificationRead(n.id).catch(() => {});
-                queryClient.invalidateQueries({ queryKey: ["notifications"] });
-                toast.dismiss(toastId);
-                // navigate(), not router.push — the same prefetch-then-push
-                // convention the sidebar's own menu rows use (see MenuRow's
-                // header comment), so the destination lands already
-                // rendered instead of showing its own loading state.
-                navigate(n.href!);
-              },
-            }
-          : undefined,
-      });
-    }
-  }, [notificationData, navigate, queryClient]);
 
   // Delete-from-sidebar (2026-09-09). A confirm step first — same reasoning
   // as DeleteConversationModal's own comment: unlike logout, this is
@@ -406,13 +357,11 @@ export function ConversationSidebar() {
 
           {/* Section one — the app's surfaces that aren't a conversation.
               Signed-in only (either identity), per the note at the top of
-              this file. Requests and Shopping Lists stay buyer-only inside
-              it — Buyer Requests are keyed to a Buyer document with a
-              phone-verified number, which a vendor-only session has no claim
-              on — but Notifications and Shopping Lists both work for either
-              identity (2026-09-17: Shopping Lists' ownership was widened the
-              same way, per explicit product direction — "what buyer can do,
-              vendor can do"), so neither is gated a second time here. */}
+              this file. Requests stays buyer-only inside it — Buyer
+              Requests are keyed to a Buyer document with a phone-verified
+              number, which a vendor-only session has no claim on — but
+              Notifications works for either identity, so it isn't gated a
+              second time here. */}
           {identity && (
             <>
               <nav className="px-3 pb-3 shrink-0 space-y-0.5">
@@ -424,6 +373,13 @@ export function ConversationSidebar() {
                   onNavigate={closeOnMobile}
                   badge={unreadCount}
                 />
+                <MenuLink
+                  href="/chat/shopping-plan"
+                  icon={<ShoppingCartIcon size={19} className="shrink-0" />}
+                  label="Shopping Plans"
+                  active={pathname === "/chat/shopping-plan"}
+                  onNavigate={closeOnMobile}
+                />
                 {buyer && (
                   <MenuLink
                     href="/chat/requests"
@@ -433,13 +389,6 @@ export function ConversationSidebar() {
                     onNavigate={closeOnMobile}
                   />
                 )}
-                <MenuLink
-                  href="/chat/shopping-list"
-                  icon={<ShoppingCartIcon size={19} className="shrink-0" />}
-                  label="Shopping Lists"
-                  active={pathname === "/chat/shopping-list"}
-                  onNavigate={closeOnMobile}
-                />
                 {/* The credit meter briefly sat here as a third row
                     (2026-09-01), then moved to the header, then to the
                     composer — see CreditsSidebarMeter's own header comment
@@ -594,7 +543,7 @@ export function ConversationSidebar() {
               reach. `compact` drops the labels on the narrowest phones, where
               this shares a cramped column. */}
           <div className="mt-auto border-t border-gray-200/70 px-3 py-3 shrink-0">
-            <ThemeToggle compact className="w-full justify-between" />
+            <ThemeToggle compact fullWidth className="justify-between" />
           </div>
 
           {identity && (

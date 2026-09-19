@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
-import { CheckCircleIcon, XCircleIcon } from "@/components/icons";
+import { CheckCircleIcon, XCircleIcon } from "@/components/icons/hero";
 
 // Same photo as the homepage's own Hero.tsx (heroPhoto) — same subject, and
 // already vetted for this site. Photo credit: Ali Mkumbwa / Unsplash

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import AnchoredPopover from "./AnchoredPopover";
 import type { FilterField } from "@/types/common";
-import { FilterIcon } from "@/components/icons";
+import { FilterIcon } from "@/components/icons/hero";
 
 interface FilterPopoverProps {
   values: Record<string, string>;

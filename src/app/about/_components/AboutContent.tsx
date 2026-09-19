@@ -16,7 +16,7 @@ import {
   SearchIcon,
   ShieldCheckIcon,
   StoreIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // Redesigned 2026-08-17 (second pass — see the 2026-08-16 history below for
 // the content fixes, still all in place) — this page's visual identity
@@ -424,7 +424,7 @@ export default function AboutContent() {
                     variant="outline"
                     className="text-gray-700 cursor-pointer hover:bg-gray-100 border-gray-300 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98] gap-2"
                   >
-                    List your business
+                    Join as a Vendor
                     <ArrowUpRightIcon className="w-4 h-4" />
                   </Button>
                 </Link>

@@ -17,7 +17,7 @@ import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira, cn } from "@/lib/utils";
 import type { WalletMonthlySpendPoint } from "@/types/wallet";
-import { TrendingUpIcon } from "@/components/icons";
+import { TrendingUpIcon } from "@/components/icons/hero";
 
 const SPEND_COLOR = "#f97316";
 const LEADS_COLOR = "#0d9488";

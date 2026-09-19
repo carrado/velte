@@ -2,14 +2,11 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import { VelteLogo } from "@/components/VelteLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
 import { getInitial } from "@/lib/initials";
-import { walletApi } from "@/services/wallet";
-import { queryKeys } from "@/lib/query-keys";
-import { formatNaira } from "@/lib/utils";
 import type { NavItem, NavSection } from "@/types/common";
 import {
   GiftIcon,
@@ -19,13 +16,7 @@ import {
   SettingsIcon,
   StoreIcon,
   WalletIcon,
-} from "@/components/icons";
-
-// Matches the backend's hourly wallet-low notification cron
-// (walletLowBalance.job.js's own LOW_BALANCE_KOBO) and the wallet page's own
-// nudge — ₦1,000 exactly does NOT count as low, only ₦999 down to ₦0 does,
-// hence the strict `<` everywhere this is compared, never `<=`.
-const LOW_BALANCE_KOBO = 100_000; // ₦1,000
+} from "@/components/icons/hero";
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const { navigate } = useNavigation();
@@ -50,16 +41,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 // navigation surface — there is no drawer.
 export default function Sidebar() {
   const pathname = usePathname();
-  const { navigate } = useNavigation();
   const userDetails = useUserStore((state) => state.user);
-
-  // Shares the wallet page's query key, so this is served from cache whenever
-  // the wallet has been loaded recently.
-  const { data: wallet } = useQuery({
-    queryKey: queryKeys.wallet.detail,
-    queryFn: walletApi.getWallet,
-    staleTime: 30_000,
-  });
 
   const sections: NavSection[] = [
     {
@@ -176,45 +158,13 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Wallet summary — real state, not filler; the rail's second job */}
-      <div className="px-3 pb-3">
-        <div className="rounded-xl bg-gradient-to-br from-orange-50 to-white border border-orange-100 p-3.5">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-dash-caption text-gray-500">
-              Wallet balance
-            </span>
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                wallet?.autoRecharge.enabled &&
-                wallet.autoRecharge.hasCardOnFile
-                  ? "bg-green-500"
-                  : "bg-gray-300"
-              }`}
-              title={
-                wallet?.autoRecharge.enabled &&
-                wallet.autoRecharge.hasCardOnFile
-                  ? "Auto-recharge on"
-                  : "Auto-recharge off"
-              }
-            />
-          </div>
-          <p className="text-lg font-bold text-ink">
-            {wallet ? formatNaira(wallet.balanceKobo) : "—"}
-          </p>
-          {wallet && wallet.balanceKobo < LOW_BALANCE_KOBO && (
-            <p className="text-dash-caption text-amber-600 mt-0.5">
-              Balance is running low
-            </p>
-          )}
-          <button
-            onClick={() => navigate(getFullPath("wallet"))}
-            className="mt-2.5 w-full py-1.5 text-dash-caption font-semibold text-orange-600 bg-surface border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors cursor-pointer"
-          >
-            {wallet && wallet.balanceKobo < LOW_BALANCE_KOBO
-              ? "Top Up"
-              : "Manage Wallet"}
-          </button>
-        </div>
+      {/* Same control, same placement logic as /chat's own sidebar (2026-09-18).
+          `size="sm"` (not `iconOnly`) — the labels stay, just tightened
+          enough to fit this fixed 260px rail; `fullWidth` because this
+          sidebar renders only at `lg:` and up, well past the `sm` breakpoint
+          the component's own default auto-width behaviour keys off. */}
+      <div className="px-3 py-3 border-t border-gray-200">
+        <ThemeToggle size="sm" fullWidth className="justify-between" />
       </div>
 
       <div className="px-3 py-4 border-t border-gray-200">

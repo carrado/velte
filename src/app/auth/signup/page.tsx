@@ -45,7 +45,7 @@ export default function SignupPage() {
           <VelteLogo alt="Velte logo" width={72} height={35} priority />
         </Link>
 
-        <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-xl shadow-gray-200/60">
+        <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-md shadow-black/5">
           <VendorSignupForm />
 
           <p className="text-center text-gray-400 text-sm mt-6">

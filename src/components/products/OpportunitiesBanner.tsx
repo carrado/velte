@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import type { BuyerRequest } from "@/types/buyerRequest";
-import { ArrowRightIcon, SparklesIcon } from "@/components/icons";
+import { ArrowRightIcon, SparklesIcon } from "@/components/icons/hero";
 
 /* The scoped version of "Velte Demand" (2026-08-15) — per the earlier
    critique of building a full demand-analytics feature at 25-vendor scale,

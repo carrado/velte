@@ -85,16 +85,16 @@ function VerifyForm() {
       </Link>
 
       {/* Card */}
-      <div className="bg-surface border border-white/[0.08] sm:rounded-2xl p-8 shadow-2xl">
+      <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-md shadow-black/5">
         {/* Header */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
             Verify your email
           </div>
-          <h1 className="text-2xl font-bold text-black mb-2 tracking-tight">
+          <h1 className="text-2xl font-bold text-ink mb-2 tracking-tight">
             Check your inbox
           </h1>
-          <p className="text-black/45 text-sm">
+          <p className="text-gray-500 text-sm">
             We sent a 6-digit code to{" "}
             <span className="text-orange-500 font-medium">
               {email || "your email"}
@@ -125,7 +125,7 @@ function VerifyForm() {
           >
             {(field) => (
               <div>
-                <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+                <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
                   <ShieldCheckIcon className="w-3.5 h-3.5 text-orange-400" />
                   Verification Code
                 </Label>
@@ -138,7 +138,7 @@ function VerifyForm() {
                   }
                   onBlur={field.handleBlur}
                   placeholder="123456"
-                  className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 text-center text-lg tracking-widest"
+                  className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11 text-center text-lg tracking-widest"
                   maxLength={6}
                 />
                 <FieldError message={field.state.meta.errors[0]} />
@@ -174,7 +174,7 @@ function VerifyForm() {
 
         {/* Resend code */}
         <div className="text-center mt-6">
-          <p className="text-black/40 text-sm">
+          <p className="text-gray-400 text-sm">
             Didn&apos;t receive the code?{" "}
             <button
               onClick={() => resendMutation.mutate()}

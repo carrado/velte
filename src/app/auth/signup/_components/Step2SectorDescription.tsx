@@ -45,7 +45,7 @@ function DescriptionField({
   const autoResize = useAutoResizeTextarea(field.state.value);
   return (
     <div>
-      <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+      <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
         <FileTextIcon className="w-3.5 h-3.5 text-orange-400" />
         Describe your business
       </Label>
@@ -58,7 +58,7 @@ function DescriptionField({
         onBlur={field.handleBlur}
         rows={5}
         placeholder="e.g. We sell original phone accessories — chargers, earphones, screen guards — in Computer Village, Ikeja. We also do same-day phone repairs."
-        className="w-full px-3.5 py-2.5 min-h-[160px] sm:min-h-[130px] bg-transparent border border-black/[0.3] rounded-md text-black text-sm placeholder:text-black/25 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 resize-none overflow-hidden"
+        className="w-full px-3.5 py-2.5 min-h-[160px] sm:min-h-[130px] bg-transparent border border-gray-200 rounded-md text-ink text-sm placeholder:text-gray-400 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 resize-none overflow-hidden"
       />
       <DescriptionQualityMeter
         description={field.state.value}
@@ -83,7 +83,7 @@ function DescriptionField({
         <FieldError
           message={field.state.meta.errors[0] as string | undefined}
         />
-        <p className="text-black/40 text-xs ml-auto">
+        <p className="text-gray-400 text-xs ml-auto">
           {field.state.value.length}/{MAX_DESCRIPTION}
         </p>
       </div>
@@ -152,7 +152,7 @@ export default function Step2SectorDescription({
       >
         {(field) => (
           <div>
-            <Label className="text-black/70 text-sm mb-3 flex items-center gap-2">
+            <Label className="text-gray-600 text-sm mb-3 flex items-center gap-2">
               <BriefcaseIcon className="w-3.5 h-3.5 text-orange-400" />
               Business Sectors
             </Label>
@@ -161,7 +161,7 @@ export default function Step2SectorDescription({
               onChange={field.handleChange}
               error={field.state.meta.errors[0]}
             />
-            <p className="text-black/40 text-xs mt-1">
+            <p className="text-gray-400 text-xs mt-1">
               Pick up to 5 — this helps buyers find you, and shapes what you can
               list. Editable anytime from your store settings.
             </p>
@@ -204,18 +204,18 @@ export default function Step2SectorDescription({
       >
         {(field) => (
           <div>
-            <div className="flex items-start gap-2.5 bg-black/[0.02] border border-black/[0.06] rounded-lg px-3.5 py-3">
+            <div className="flex items-start gap-2.5 bg-gray-50 border border-gray-100 rounded-lg px-3.5 py-3">
               <Checkbox
                 id="agreedToTerms"
                 checked={field.state.value}
                 onCheckedChange={(checked) =>
                   field.handleChange(checked === true)
                 }
-                className="mt-0.5 border-black/30 data-[checked]:!bg-orange-500 data-[checked]:!border-orange-500 data-[checked]:text-white"
+                className="mt-0.5 border-gray-300 data-[checked]:!bg-orange-500 data-[checked]:!border-orange-500 data-[checked]:text-white"
               />
               <Label
                 htmlFor="agreedToTerms"
-                className="block min-w-0 flex-1 text-sm text-black/60 leading-relaxed cursor-pointer font-normal"
+                className="block min-w-0 flex-1 text-sm text-gray-500 leading-relaxed cursor-pointer font-normal"
               >
                 I agree to Velte&apos;s{" "}
                 <Link

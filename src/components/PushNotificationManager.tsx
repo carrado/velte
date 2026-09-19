@@ -16,7 +16,7 @@ import {
   CheckCircleIcon,
   CloseIcon,
   DownloadIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 function useInstallPrompt() {
   // The captured beforeinstallprompt lives in installPromptStore (filled by

@@ -30,7 +30,7 @@ import {
   DollarSignIcon,
   PlusIcon,
   SearchIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

@@ -53,12 +53,6 @@ const TYPE_STYLE: Record<
     ring: "bg-sky-50 text-sky-600",
     tint: "group-hover:border-sky-200",
   },
-  "shopping-list": {
-    label: "Shopping List",
-    icon: <ClipboardListIcon size={15} />,
-    ring: "bg-orange-50 text-orange-600",
-    tint: "group-hover:border-orange-200",
-  },
   lead: {
     label: "Lead",
     icon: <ClipboardListIcon size={15} />,

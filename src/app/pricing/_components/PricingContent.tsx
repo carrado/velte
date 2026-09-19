@@ -6,7 +6,7 @@ import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import PricingCards from "@/components/landing/PricingCards";
 import type { PricingFaqItem } from "@/types/common";
-import { SparklesIcon } from "@/components/icons";
+import { SparklesIcon } from "@/components/icons/hero";
 
 export default function PricingContent({ faqs }: { faqs: PricingFaqItem[] }) {
   return (

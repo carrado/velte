@@ -1,6 +1,10 @@
 import { createPortal } from "react-dom";
 import type { DeleteProductModalProps } from "@/types/product";
-import { AlertTriangleIcon, CloseIcon, LoaderIcon } from "@/components/icons";
+import {
+  AlertTriangleIcon,
+  CloseIcon,
+  LoaderIcon,
+} from "@/components/icons/hero";
 export default function DeleteProductModal({
   open,
   product,

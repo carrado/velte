@@ -15,7 +15,7 @@ import {
   RocketIcon,
   ShareIcon,
   ZapIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 const BENEFITS = [
   {

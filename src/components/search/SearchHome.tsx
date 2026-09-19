@@ -22,6 +22,7 @@ import {
   getStoredConversationId,
   storeConversationId,
   clearStoredConversationId,
+  SEARCH_CONVERSATION_ID_STORAGE_KEY,
 } from "@/lib/searchConversation";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { lookupCopiedImage, hashBlob } from "@/lib/copiedImageRegistry";
@@ -34,7 +35,6 @@ import {
   pickBadgesFor,
 } from "@/components/search/RecommendationPicks";
 import { ComparisonTemplate } from "@/components/search/ComparisonTemplate";
-import { ShoppingListCard } from "@/components/search/ShoppingListCard";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { InstagramLeadCard } from "@/components/search/InstagramLeadCard";
@@ -52,7 +52,6 @@ import { usersApi } from "@/services/users";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { buyerApi } from "@/lib/buyer-api-client";
-import { ApiError } from "@/lib/api-client";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useCreditsStore } from "@/store/creditsStore";
 import { isBillableTurn } from "@/lib/turnBillable";
@@ -85,7 +84,6 @@ import type {
   MatchQuality,
   MatchTier,
   NearbyBusiness,
-  ShoppingListSnapshot,
   SearchHistoryTurn,
   ExternalOffer,
   SearchItemOutcome,
@@ -103,6 +101,7 @@ import {
   UserIcon,
   WalletIcon,
   ScaleIcon,
+  ShoppingCartIcon,
 } from "@/components/icons/hero";
 // Composer icons only (upload spinner, remove-photo, camera, send) are
 // lucide-react, not the custom set — reverted 2026-08-17 per explicit
@@ -409,7 +408,6 @@ function createLoadingTurn(
     comparisonPickItem: null,
     comparisonOptions: null,
     isGuidanceReply: false,
-    shoppingList: null,
     externalOffers: [],
     error: null,
     quota: null,
@@ -495,8 +493,6 @@ function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
     // Client-resolved background items never carry a goal-sheet budget of
     // their own — this concept only exists for a real /api/search turn.
     knownBudgetNaira: null,
-    // Same reasoning — a background item is never a Shopping List turn.
-    shoppingList: null,
   };
 }
 
@@ -931,12 +927,6 @@ interface ConversationTurn {
   // caption so this doesn't render identically to an ordinary reply, or to
   // a genuine empty dead end with no suggestions at all.
   isGuidanceReply: boolean;
-  // Non-null only on a turn where the AI determined the buyer's request is
-  // a whole-project need and built a market-researched item list — see
-  // ShoppingListSnapshot's own comment in types/search.ts. Renders the
-  // summary+table card (ShoppingListCard) in place of the ordinary
-  // products/stores section.
-  shoppingList: ShoppingListSnapshot | null;
   // Off-Velte offers, only ever present on a genuine dead end (Phase 4).
   // Rendered in their own clearly-labelled section with an outbound link
   // and NO chat CTA — there's no vendor relationship behind these.
@@ -1057,8 +1047,6 @@ function ConversationTurnView({
   onAnswerClarification,
   onLocationShared,
   onPickItem,
-  onGetShoppingListItems,
-  onShoppingListChange,
   expandedServicesVendorId,
   onToggleServices,
   isEditing,
@@ -1078,17 +1066,6 @@ function ConversationTurnView({
   onPickItem: (
     chosen: { item: BackgroundSearchItem; label: string },
     deferred: { item: BackgroundSearchItem; label: string },
-  ) => void;
-  // "Get these items" on a Shopping List card (2026-09-12) — lifted up to
-  // SearchHome the same way every other side-effecting action here is,
-  // since this component has no access to updateTurn/buyerApi of its own.
-  onGetShoppingListItems: (turn: ConversationTurn) => void;
-  // A draft-list edit (add/remove/quantity, spec's own "let buyers change
-  // it" requirement) — writes straight onto the turn via updateTurn, same
-  // reasoning as onGetShoppingListItems above.
-  onShoppingListChange: (
-    turn: ConversationTurn,
-    list: ShoppingListSnapshot,
   ) => void;
   // Which store's "matching services" panel is open, if any, across the
   // WHOLE conversation, not just this turn — lifted up to SearchHome (see
@@ -1411,24 +1388,9 @@ function ConversationTurnView({
               !turn.stopped &&
               !turn.quota && (
                 <div className="space-y-6">
-                  {turn.shoppingList ? (
-                    // The Shopping List's own turn shape (2026-09-12) —
-                    // takes priority over the ordinary results/dead-end
-                    // split below, same precedence any other distinct turn
-                    // content gets.
-                    <>
-                      <FormattedReply text={turn.reply} />
-                      <ShoppingListCard
-                        list={turn.shoppingList}
-                        onGetItems={() => onGetShoppingListItems(turn)}
-                        onListChange={(list) =>
-                          onShoppingListChange(turn, list)
-                        }
-                      />
-                    </>
-                  ) : turn.products.length > 0 ||
-                    turn.stores.length > 0 ||
-                    turn.vendorProducts.length > 0 ? (
+                  {turn.products.length > 0 ||
+                  turn.stores.length > 0 ||
+                  turn.vendorProducts.length > 0 ? (
                     <>
                       <FormattedReply text={turn.reply} />
                       {turn.vendorProducts.length > 0 &&
@@ -1977,6 +1939,11 @@ const COMPOSER_TOOL_META: Record<
     icon: ScaleIcon,
     placeholder: "e.g. 'iPhone 15 vs Samsung S24'",
   },
+  shopping_plan: {
+    label: "Shopping Plan",
+    icon: ShoppingCartIcon,
+    placeholder: "e.g. 'office chairs and a printer, ready before the 20th'",
+  },
 };
 
 /** What picking a tool is about to cost, for the credit-gate check at
@@ -1984,9 +1951,13 @@ const COMPOSER_TOOL_META: Record<
  *  it rides on whatever the underlying turn already is — so this checks
  *  against the cheapest possible outcome (a plain text turn) rather than
  *  guessing high or low. A buyer who can't even afford that can't afford
- *  the tool regardless of what follows. */
-function composerToolCost(): number {
-  return CREDIT_COST.text;
+ *  the tool regardless of what follows. Shopping Plan DOES have a fixed
+ *  price (2026-09-18, credits.ts's own `shopping_plan` entry) — checked
+ *  directly, since unlike Compare it isn't riding on anything else. */
+function composerToolCost(tool: ComposerTool): number {
+  return tool === "shopping_plan"
+    ? CREDIT_COST.shopping_plan
+    : CREDIT_COST.text;
 }
 
 // Velte's buyer-facing search (build-order step d/e), at /chat —
@@ -2802,6 +2773,31 @@ export function SearchHome() {
     clearNewChatRequest();
   }, [newChatNonce, clearNewChatRequest, setConversationId]);
 
+  // Cross-tab logout: `storage` fires in the OTHER tabs/windows of this
+  // origin, never the one that made the change (see ThemeProvider's own use
+  // of the same event). useAccountSignOut removes the stored conversation id
+  // as its privacy step, but that alone only protects a tab that hasn't
+  // loaded yet — a SECOND tab already sitting on this same conversation
+  // keeps the old buyer's turns in plain React state, which nothing about a
+  // sign-out elsewhere ever touches. The sidebar in that tab still gets it
+  // right (its "am I signed in" query refetches on focus and reads the
+  // now-cleared cookie), which is exactly the split the bug report showed:
+  // a signed-out sidebar next to a signed-in-looking conversation. Routing
+  // through requestNewChat reuses the exact reset this file already trusts
+  // for the ordinary "New chat" click, rather than a second copy of it.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (
+        event.key === SEARCH_CONVERSATION_ID_STORAGE_KEY &&
+        event.newValue == null
+      ) {
+        useChatHistoryStore.getState().requestNewChat();
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // A queue of every not-yet-resolved item deferred off a dual-intent turn
   // (see route.ts's own comment on where this branches off the normal
   // single-item flow) — each entry's exact spec plus a plain display label
@@ -3469,48 +3465,6 @@ export function SearchHome() {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
-  // Shopping Lists (2026-09-12) — "Get these items". Starts the durable
-  // background job (velte-backend) and flips this turn's card to its
-  // "already started" state, idempotent on the TURN'S OWN id as clientRef:
-  // a double-click on the same card always resumes the same job rather than
-  // creating a duplicate (spec §34) — see /api/shopping-list/start's own
-  // comment. NO status-phrase treatment for the follow-up message (spec
-  // §8) — it's a plain, already-persisted turn appended straight in "done".
-  async function startShoppingListSearch(turn: ConversationTurn) {
-    if (!turn.shoppingList || turn.shoppingList.jobId) return;
-    try {
-      const { jobId, message } = await buyerApi.post<{
-        jobId: string;
-        message: string;
-      }>("/api/shopping-list/start", {
-        goalText: turn.shoppingList.goalText,
-        items: turn.shoppingList.items,
-        budgetNaira: turn.shoppingList.budgetNaira,
-        conversationId: conversationIdRef.current,
-        deviceId: deviceIdRef.current ?? getSearchDeviceId(),
-        clientRef: turn.id,
-      });
-      updateTurn(turn.id, {
-        shoppingList: { ...turn.shoppingList, jobId },
-      });
-      setTurns((prev) => [
-        ...prev,
-        {
-          ...createLoadingTurn(generateUUID(), "", null, null, ""),
-          phase: "done",
-          reply: message,
-          persisted: true,
-        },
-      ]);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError
-          ? err.message
-          : "Couldn't start that search — try again.",
-      );
-    }
-  }
-
   // Appends rather than replaces (unlike updateTurn's plain patch) — a
   // functional setTurns update so it's correct even if two "reply" events
   // land close together, without needing the caller to read current state
@@ -3586,9 +3540,26 @@ export function SearchHome() {
             t.clarification?.kind === "text" &&
             t.clarification.skippable === true &&
             t.clarification.budgetAsked === true,
-          askedShoppingListDetails:
+          askedDeadline:
             t.clarification?.kind === "text" &&
-            t.clarification.listDetails === true,
+            t.clarification.deadlineAsked === true,
+          // Shopping Plan's own budget ask (2026-09-19) — same structural
+          // rule as askedDeadline just above, plus the goal/deadline it
+          // carries forward so route.ts can resolve THIS reply (often just
+          // a bare figure, "₦300k") back to the right plan without
+          // re-walking history a second time. See SearchHistoryTurn's own
+          // comment.
+          askedShoppingPlanBudget:
+            t.clarification?.kind === "text" &&
+            t.clarification.shoppingPlanBudgetAsked === true,
+          shoppingPlanPendingGoalText:
+            t.clarification?.kind === "text"
+              ? (t.clarification.shoppingPlanPendingGoalText ?? null)
+              : null,
+          shoppingPlanPendingDeadlineDate:
+            t.clarification?.kind === "text"
+              ? (t.clarification.shoppingPlanPendingDeadlineDate ?? null)
+              : null,
         },
       ]);
 
@@ -3803,7 +3774,6 @@ export function SearchHome() {
             comparisonPickItem: event.comparisonPickItem,
             comparisonOptions: event.comparisonOptions ?? null,
             isGuidanceReply: event.isGuidanceReply ?? false,
-            shoppingList: event.shoppingList,
           });
           // A buyer who already has a verified session (a prior visit's
           // identity cookie still valid) skips the composer's own
@@ -5524,7 +5494,9 @@ export function SearchHome() {
                         }
                         // Checked at SELECTION time, not send time — see
                         // CreditGateModal's own comment.
-                        if (creditGateBlocks(meta.label, composerToolCost())) {
+                        if (
+                          creditGateBlocks(meta.label, composerToolCost(toolId))
+                        ) {
                           return;
                         }
                         setActiveTool(toolId);
@@ -5665,12 +5637,6 @@ export function SearchHome() {
                     onAnswerClarification={handleClarificationAnswer}
                     onLocationShared={handleLocationShared}
                     onPickItem={handleItemPick}
-                    onGetShoppingListItems={(t) =>
-                      void startShoppingListSearch(t)
-                    }
-                    onShoppingListChange={(t, list) =>
-                      updateTurn(t.id, { shoppingList: list })
-                    }
                     expandedServicesVendorId={expandedServicesVendorId}
                     onToggleServices={toggleServices}
                     isEditing={editingTurnId === turn.id}

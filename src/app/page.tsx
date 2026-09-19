@@ -3,54 +3,40 @@ import Navbar from "@/components/landing/Navbar";
 import { FloatingAskBar } from "@/components/landing/FloatingAskBar";
 import Hero from "@/components/landing/Hero";
 import { HowItWorksSteps } from "@/components/landing/HowItWorksSteps";
-import { VeluxShowcase } from "@/components/landing/VeluxShowcase";
-import { NoMatchShowcase } from "@/components/landing/NoMatchShowcase";
-import { AskAnythingScope } from "@/components/landing/AskAnythingScope";
-import { MarketplaceComparison } from "@/components/landing/MarketplaceComparison";
-import { WhatsAppHighlight } from "@/components/landing/WhatsAppHighlight";
-import { BuiltForNigeria } from "@/components/landing/BuiltForNigeria";
-import { FinalAskCta } from "@/components/landing/FinalAskCta";
 import { RegisterCta } from "@/components/landing/RegisterCta";
-import FAQ from "@/components/landing/FAQ";
 import Footer from "@/components/landing/Footer";
 
 // Velte's homepage — redesigned for the pivot (replaces the old
 // pre-pivot "WhatsApp AI Sales Rep" marketing site that used to live at
 // /vendors). The buyer search experience itself lives at /chat.
 //
-// Full redesign 2026-08-15 (second pass, same day) — the whole page now
-// tells one story end to end, in this order: Hero (the ask) →
-// HowItWorksSteps (the mental model, three words) → VeluxShowcase (seeing
-// it actually work) → NoMatchShowcase (what happens when nothing matches
-// yet — corrected, see that file's own comment, to show Velte OFFERING to
-// help rather than a "Post a Request" button) → AskAnythingScope (breadth:
-// products/services/businesses/anything else) → MarketplaceComparison (the
-// explicit old-way-vs-new-way pitch) → WhatsAppHighlight + BuiltForNigeria
-// (two short trust strips) → FinalAskCta (a second, unmissable chance to
-// act) → RegisterCta (the account pitch, kept but pushed below everything
-// else — see that file's own comment) → FAQ → Footer. FloatingAskBar sits
-// outside this flow entirely (fixed positioning, appears once scrolled past
-// Hero) so a visitor can start a conversation from anywhere on the page,
-// not just the first screen. Navbar simplified alongside this pass — see
-// its own comment.
+// SHORT REDESIGN (2026-09-17, explicit request: "no much content, very
+// short and well convincing for the users and vendors") — cuts the
+// 2026-08-15 full redesign's 9-section middle (VeluxShowcase,
+// NoMatchShowcase, AskAnythingScope, MarketplaceComparison,
+// WhatsAppHighlight, BuiltForNigeria, FAQ) down to the two pitches that
+// actually earn distinct real estate on a first visit, in this order:
+// Hero (the buyer ask — the product's own composer, wired live to /chat) →
+// HowItWorksSteps (the three-word mental model) → RegisterCta (the vendor
+// pitch — the only section that makes a case for LISTING, not just
+// searching). FloatingAskBar sits outside this flow entirely (fixed
+// positioning, appears once scrolled past Hero) and is what gives a buyer a
+// second way to act without a dedicated closing section for it.
 //
-// VendorsPreview ("Find businesses you can actually talk to") was briefly
-// back in this composition the same day, then pulled again — it was
-// re-introduced as a "real supply, not vaporware" proof section, but with
-// NoMatchShowcase already showing a real business example inline (ABC
-// Catering) and BuiltForNigeria already covering trust, a third proof
-// section that's ALSO a browse-a-grid affordance stopped earning its place;
-// it just re-introduced the exact pattern the rest of this redesign moves
-// away from. The component file/export and its VendorCard/SlidingCover
-// pieces stay untouched (still used by /marketplace and SimilarVendors) —
-// only this page stopped rendering the section again.
+// FinalAskCta ("Just ask Velte.") removed the same day, per explicit
+// follow-up request — Hero's own composer plus FloatingAskBar already cover
+// "give the buyer a way to search," and a second, near-identical composer
+// right before the vendor pitch was pure repetition rather than a distinct
+// pitch of its own. Not deleted, same precedent as the sections above.
 //
-// Kept from the earlier trims: Hero's own composer stays the visually
-// dominant element on the first screen (now with a "Your AI shopping
-// agent" eyebrow above it — see Hero.tsx), and the supply numbers (42
-// products, 25 vendors) still never appear anywhere on this page as a
-// headline — BuiltForNigeria sells real-and-growing, not a number that
-// reads small today and would need rewriting constantly as it changes.
+// Every section kept was already short and already convincing on its own
+// terms — this is a subtraction pass, not a rewrite: the removed sections
+// were elaborating on a pitch Hero/HowItWorksSteps/RegisterCta already make
+// in fewer words, not saying anything those three don't. None of the
+// removed files were deleted (same precedent as VendorsPreview's own
+// 2026-08-15 removal, still used elsewhere) — only this page stopped
+// rendering them.
+//
 // Title/description tightened 2026-08-2x for SEO — "Find anything nearby"
 // alone told Google nothing about WHAT kind of site this is (map app? food
 // delivery? e-commerce?), and gave search algorithms nothing to anchor on
@@ -117,15 +103,7 @@ export default function HomePage() {
       <FloatingAskBar />
       <Hero />
       <HowItWorksSteps />
-      <VeluxShowcase />
-      <NoMatchShowcase />
-      <AskAnythingScope />
-      <MarketplaceComparison />
-      <WhatsAppHighlight />
-      <BuiltForNigeria />
-      <FinalAskCta />
       <RegisterCta />
-      <FAQ />
       <Footer />
     </div>
   );

@@ -136,13 +136,27 @@ export interface SearchHistoryTurn {
   // every other turn.
   askedLocation?: boolean;
   askedBudget?: boolean;
-  // Same idea, for the Shopping List clarify gate (2026-09-13) — set from
-  // `clarification`'s own `listDetails: true`, the gate's unique signature
-  // (mirrors `skippable` for the budget gate). Lets route.ts tell "this
-  // reply answers the shopping-list clarifying question" apart from "this
-  // is a brand new project", so the buyer's answer gets appended onto the
-  // original goal rather than replacing it, and the gate doesn't ask twice.
-  askedShoppingListDetails?: boolean;
+  // Shopping Plan (2026-09-18) — set from the turn's own `clarification`
+  // (`deadlineAsked: true`, that gate's unique signature), same "known
+  // fact, not guessed from prose" rule as askedLocation/askedBudget above.
+  // Lets route.ts tell "this reply answers the deadline question" apart
+  // from a brand-new request, so the buyer's answer gets combined onto
+  // the original request rather than treated as one on its own.
+  askedDeadline?: boolean;
+  // Shopping Plan (2026-09-19) — the budget ask's own pair, mirroring
+  // askedDeadline exactly. `shoppingPlanPendingGoalText`/
+  // `shoppingPlanPendingDeadlineDate` are stamped on the SAME assistant turn
+  // that asks for budget, carrying forward what this flow had already
+  // resolved (the goal text possibly itself recovered from an earlier
+  // deadline-answering hop, and the deadline just resolved this turn) — so
+  // that when the buyer's reply names only a budget figure, route.ts reads
+  // these back structurally instead of re-deriving them from
+  // lastSubstantiveUserMessage a second time, which only ever walks back one
+  // clarification hop and would land on the deadline reply ("by Friday"),
+  // not the original request, once budget becomes a SECOND chained ask.
+  askedShoppingPlanBudget?: boolean;
+  shoppingPlanPendingGoalText?: string | null;
+  shoppingPlanPendingDeadlineDate?: string | null;
 }
 
 // The scope check's read of WHAT the buyer is trying to do (classifyScope's
@@ -244,7 +258,13 @@ export interface SearchRequestBody {
 // is its own composer affordance (triggers the file picker directly, no
 // badge, no "mode") and isn't a ComposerTool for that reason — see
 // SearchHome.tsx's own tool-menu comment.
-export type ComposerTool = "compare";
+//
+// "shopping_plan" (2026-09-18) rejoined this list as an explicit pick, not
+// just an auto-detected deadline — a buyer who already knows they want a
+// tracked, background-monitored plan shouldn't have to phrase a message
+// that happens to trip the deadline detector. Priced discretely (see
+// credits.ts's own `shopping_plan` entry), unlike "compare" below.
+export type ComposerTool = "compare" | "shopping_plan";
 
 // Mirrors the shape searchProducts() returns in velte-backend's
 // retrieval.service.js.
@@ -631,12 +651,6 @@ export type Clarification =
   // answer through the composer as usual, OR tap the rendered skip pill to
   // search immediately with what they already said — details help matching
   // but must never be a wall (same flexibility the location ask has).
-  // `listDetails` — the Shopping List clarify gate's own unique signature
-  // (2026-09-13, shoppingListClarifyGate.ts), mirroring `skippable` above:
-  // nothing else in this codebase sets it, so route.ts's own
-  // alreadyAskedShoppingListDetailsThisConversation can tell this ask apart
-  // from an ordinary text clarification just by its shape, never by
-  // scanning the (freely-worded) question text.
   // `budgetAsked` — the bare-query gate's own report of whether THIS
   // specific question actually asked about budget (2026-09-17). Budget
   // stopped being unconditional the same day: a bounded service (a
@@ -647,12 +661,30 @@ export type Clarification =
   // askedBudget is derived from BOTH together, so a non-budget bare-query
   // ask no longer blocks a later, genuinely budget-relevant ask within the
   // same request (see alreadyAskedBudgetThisConversation's own comment).
+  // `deadlineAsked` — Shopping Plan's own dedicated deadline gate
+  // (2026-09-18, route.ts, distinct from bareQueryGate): its own unique
+  // signature, mirroring `budgetAsked` — nothing else sets it, so route.ts
+  // can tell "this reply answers the deadline question" apart from an
+  // ordinary text clarification's answer just by shape, never by scanning
+  // the (freely-worded) question text.
   | {
       kind: "text";
       question: string;
       skippable?: boolean;
-      listDetails?: boolean;
       budgetAsked?: boolean;
+      deadlineAsked?: boolean;
+      // Shopping Plan's own dedicated (and, unlike the two above, NOT
+      // skippable) budget ask — its own unique signature, same reasoning as
+      // deadlineAsked's own comment. `shoppingPlanPending*` ride along on
+      // the SAME object, carrying what this flow had already resolved (the
+      // goal text, possibly itself recovered from an earlier deadline
+      // hop, and the deadline) forward to the reply that answers this
+      // question — see SearchHistoryTurn's own matching pair for why a
+      // second chained ask can't just re-derive these from prose the way
+      // the single-hop deadline ask gets away with.
+      shoppingPlanBudgetAsked?: boolean;
+      shoppingPlanPendingGoalText?: string | null;
+      shoppingPlanPendingDeadlineDate?: string | null;
     }
   | { kind: "choice"; question: string; options: string[] }
   // No options — the frontend renders a one-tap "share my location" action
@@ -827,56 +859,27 @@ export function isComparisonTemplate(
   return "criteria" in r;
 }
 
-// Shopping Lists (2026-09-12) — a whole-PROJECT need ("furnish my
-// 2-bedroom apartment with ₦2m"), distinct from an ordinary single-item
-// search, which classifyScopeTool's own `wantsShoppingList` field detects.
-// This is the LLM-estimated draft shown before the buyer has agreed to
-// spend anything finding real listings — see buildShoppingListSnapshot.ts's
-// own comment on why generation is estimate-only (never grounded by a live
-// search yet) and why every price here is captioned as an estimate, not a
-// quote.
-export interface ShoppingListItemEstimate {
-  label: string;
-  /** A short grouping label the model assigns ("Living Room", "Kitchen",
-   *  "School Supplies") — never inferred after the fact, so it can be
-   *  wrong for the same reason any model output can be, but it's never a
-   *  second guess layered on top of the first. */
-  category: string;
-  quantity: number;
-  /** A single representative figure — NOT a midpoint arithmetic average of
-   *  fairPriceMinNaira/fairPriceMaxNaira, though it usually falls inside
-   *  that range. Code sums this field (never the range) for the list's
-   *  own total, so the total means one concrete thing. */
-  estimatedPriceNaira: number;
-  /** What the model considers a reasonable price band for this exact spec
-   *  — grounded in real product quality/spec reasoning per its own system
-   *  prompt, never a fixed percentage spread around estimatedPriceNaira. */
-  fairPriceMinNaira: number;
-  fairPriceMaxNaira: number;
-  /** A short spec/quality pointer ("4K recommended", "6x6", "double-door")
-   *  — null when the item needs none. */
-  notes: string | null;
-}
-
-export interface ShoppingListSnapshot {
-  /** The buyer's own project description, verbatim-ish — doubles as this
-   *  list's display title and as the query handed to each item's later
-   *  product search. */
+// Shopping Plan (2026-09-18, widened 2026-09-19 per explicit product
+// direction) — a persistent, deadline-driven mission (deadline 2+ days away
+// — SHOPPING_PLAN_MIN_DAYS in route.ts), distinct from an ordinary
+// single-turn search. Originally a deliberately LIGHT confirmation shape
+// carrying only a count; now carries the actual item labels too, so the
+// chat turn itself reads as a real shopping list the buyer can act on
+// (asking to add/remove an item right there), not just a receipt pointing
+// elsewhere. The detailed candidate/price-history data still lives entirely
+// server-side on the backend's ShoppingPlan document and is fetched by the
+// Shopping Plans page directly, never carried through this turn — this is
+// still not that.
+export interface ShoppingPlanSnapshot {
+  planId: string;
   goalText: string;
-  items: ShoppingListItemEstimate[];
-  /** What the buyer stated, in naira — null when no figure was given.
-   *  Never inferred or defaulted; a missing budget stays missing, the same
-   *  discipline BuyerRequest.budgetKobo already follows. */
-  budgetNaira: number | null;
-  /** Sum of every item's estimatedPriceNaira × quantity — CODE arithmetic,
-   *  never the model's own addition (see buildShoppingListSnapshot.ts). */
-  totalEstimateNaira: number;
-  /** Distinct `category` values across items — also code-computed. */
-  categoryCount: number;
-  /** Set once "Get these items" creates the durable backend job (see
-   *  ShoppingListJob, velte-backend) — null on every turn where the list
-   *  was only just generated and no search has started yet. */
-  jobId: string | null;
+  /** ISO date (YYYY-MM-DD). */
+  deadlineDate: string;
+  /** Always a real, buyer-stated figure by the time a plan exists — see
+   *  route.ts's own budget-ask gate. Never a model estimate. */
+  budgetNaira: number;
+  itemCount: number;
+  items: { label: string; quantity: number }[];
 }
 
 // Build-order step d — /api/search streams a sequence of these as
@@ -1131,12 +1134,14 @@ export type SearchStreamEvent =
       // budget" asked again for a budget during the WhatsApp-verification
       // step. Null whenever nothing's been established yet.
       knownBudgetNaira: number | null;
-      // Non-null only on a turn where classifyScopeTool's own
-      // `wantsShoppingList` fired and buildShoppingListSnapshot succeeded —
-      // see ShoppingListSnapshot's own comment. Renders the summary+table
-      // card instead of the ordinary products/stores rendering; null on
-      // every other turn.
-      shoppingList: ShoppingListSnapshot | null;
+      // Non-null only on the turn that just created a Shopping Plan (see
+      // ShoppingPlanSnapshot's own comment) — renders a confirmation card
+      // in place of the ordinary products/stores rendering; null/omitted
+      // on every other turn, including every turn of that plan's own later
+      // background monitoring, which never appends back into this chat.
+      // Optional, same reasoning as comparisonOptions above — added after
+      // most call sites already existed.
+      shoppingPlan?: ShoppingPlanSnapshot | null;
       // Off-Velte product offers (Phase 4) — populated ONLY on a genuine
       // dead end, and only when a connector is configured. Always rendered
       // as clearly not-Velte, with no chat handoff: there's no vendor
@@ -1317,7 +1322,6 @@ export interface StoredSearchTurn {
   comparisonOptions?: string[] | null;
   // See SearchStreamEvent's own comment on the "final" variant.
   isGuidanceReply: boolean;
-  shoppingList: ShoppingListSnapshot | null;
   // See SearchStreamEvent's own comment — carried through so a REHYDRATED
   // offer turn can still skip the identity-capture budget step correctly,
   // not just a live one. Rides along inside the backend's Mixed `snapshot`
@@ -1326,6 +1330,8 @@ export interface StoredSearchTurn {
   // typed duplicate fields — this is client-UI-only, the model never sees
   // it).
   knownBudgetNaira: number | null;
+  // See SearchStreamEvent's own comment on the "final" variant.
+  shoppingPlan?: ShoppingPlanSnapshot | null;
 }
 
 // The active shopping task's lifecycle — derived server-side (staffly-ai-

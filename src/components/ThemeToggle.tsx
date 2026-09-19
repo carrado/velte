@@ -1,6 +1,6 @@
 "use client";
 
-import { MonitorIcon, MoonIcon, SunIcon } from "@/components/icons";
+import { MonitorIcon, MoonIcon, SunIcon } from "@/components/icons/hero";
 import { useTheme } from "@/components/ThemeProvider";
 import { cn } from "@/lib/utils";
 import { THEME_PREFERENCES, type ThemePreference } from "@/lib/theme";
@@ -32,20 +32,61 @@ export function ThemeToggle({
   className,
   /** Labels hidden on the narrowest screens where the control shares a row
    *  with other things (the chat header); the icons still carry it, and the
-   *  accessible name is on the button either way. */
+   *  accessible name is on the button either way. Meaningless in a container
+   *  that never renders below the `sm` breakpoint in the first place (the
+   *  vendor dashboard's `lg:flex` sidebar, or a `md:block` popover) — `sm:`
+   *  is already satisfied the moment either exists, so use `iconOnly` there
+   *  instead. */
   compact = false,
+  /** Labels hidden ALWAYS, regardless of viewport (2026-09-18) — for a
+   *  container too narrow for even the tightened `size="sm"` labels (the
+   *  account popover's 192px). */
+  iconOnly = false,
+  /** Icon/padding/gap/text sizing. `sm` is what fits three full labels
+   *  inside the vendor dashboard's fixed 260px sidebar rail (2026-09-18) —
+   *  `compact`/`iconOnly` drop the labels entirely; this keeps them and
+   *  shrinks everything else instead, per explicit request not to lose the
+   *  text there. */
+  size = "md",
+  /** Force `w-full` at every viewport (2026-09-18) — the default below is
+   *  `w-full` only up to `sm` (a phone-width Settings page should still get
+   *  a full-bleed control), auto-width above it (a pill, not a full-bleed
+   *  bar, is the normal look once there's room). The vendor/chat sidebars
+   *  and the header's account popover render ONLY at desktop widths, where
+   *  that default would shrink them back to auto-width — this keeps them
+   *  full-bleed regardless. Deliberately a prop, not a `w-full` passed
+   *  through `className`: both would target the same `width` property at
+   *  equal specificity, and which one wins is decided by Tailwind's
+   *  generated CSS order, not by the order classes happen to appear in the
+   *  string — not something to depend on. */
+  fullWidth = false,
+  /** Force auto-width (a pill, never a full-bleed bar) at every viewport,
+   *  centred in its own container (2026-09-18) — the opposite override from
+   *  `fullWidth`, for a spot that wants the compact look even on the phone
+   *  widths where the default below would otherwise stretch it full-bleed
+   *  (Settings' own "Appearance" card, now mobile-only). */
+  autoWidth = false,
 }: {
   className?: string;
   compact?: boolean;
+  iconOnly?: boolean;
+  size?: "sm" | "md";
+  fullWidth?: boolean;
+  autoWidth?: boolean;
 }) {
   const { preference, setPreference } = useTheme();
+  const sm = size === "sm";
 
   return (
     <div
       role="radiogroup"
       aria-label="Appearance"
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-xl border border-gray-200 bg-gray-50 p-0.5",
+        "flex items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 p-0.5",
+        fullWidth && "w-full",
+        autoWidth && "mx-auto w-auto inline-flex",
+        !fullWidth && !autoWidth && "w-full sm:w-auto sm:inline-flex",
+        "sm:rounded-xl",
         className,
       )}
     >
@@ -65,14 +106,22 @@ export function ThemeToggle({
             title={hint}
             onClick={() => setPreference(option)}
             className={cn(
-              "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors",
+              "flex items-center justify-center rounded-md font-semibold transition-colors",
+              sm
+                ? "gap-1 px-1.5 py-1 text-[11px]"
+                : "gap-1.5 px-2.5 py-1.5 text-xs",
+              "sm:rounded-lg",
               selected
                 ? "bg-surface text-ink shadow-sm"
                 : "text-gray-500 hover:text-gray-700",
             )}
           >
-            <Icon size={15} className="shrink-0" />
-            <span className={cn(compact && "sr-only sm:not-sr-only")}>
+            <Icon size={sm ? 13 : 15} className="shrink-0" />
+            <span
+              className={cn(
+                iconOnly ? "sr-only" : compact && "sr-only sm:not-sr-only",
+              )}
+            >
               {label}
             </span>
           </button>

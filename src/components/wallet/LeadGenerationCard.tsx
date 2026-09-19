@@ -16,7 +16,7 @@ import { walletApi } from "@/services/wallet";
 import { queryKeys } from "@/lib/query-keys";
 import { formatNaira, cn } from "@/lib/utils";
 import type { WalletMonthlySpendPoint } from "@/types/wallet";
-import { ZapIcon } from "@/components/icons";
+import { ZapIcon } from "@/components/icons/hero";
 
 // orange-600 rather than the orange-500 UI accent — the bars need ≥3:1
 // contrast against the white card (validated), the buttons don't.

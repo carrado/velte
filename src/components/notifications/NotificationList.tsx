@@ -14,7 +14,6 @@ import type { AppNotification, NotificationType } from "@/types/notification";
 import {
   BellIcon,
   CheckIcon,
-  ClipboardListIcon,
   CreditCardIcon,
   GiftIcon,
   MessageCircleIcon,
@@ -67,15 +66,6 @@ const TYPE_CONFIG: Record<
     icon: MessageCircleIcon,
     bg: "bg-sky-100",
     color: "text-sky-600",
-  },
-  // 2026-09-12 — a Shopping List's background search job finished. A
-  // distinct icon from "order"'s ShoppingCartIcon on purpose: this is a
-  // buyer being told their OWN search is ready, not a vendor being told
-  // about a sale.
-  "shopping-list": {
-    icon: ClipboardListIcon,
-    bg: "bg-violet-100",
-    color: "text-violet-600",
   },
   system: { icon: BellIcon, bg: "bg-gray-100", color: "text-gray-500" },
 };

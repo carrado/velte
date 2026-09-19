@@ -21,7 +21,7 @@ import {
   UserRoundIcon,
   WalletIcon,
   XCircleIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 /* Full detail + Accept/Decline for a single matched Buyer Request
    (2026-08-18 redesign). Accepting is the entire monetization moment: it

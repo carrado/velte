@@ -2,7 +2,7 @@
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import type { PaginationProps } from "@/types/common";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons/hero";
 
 export function Pagination({
   currentPage,

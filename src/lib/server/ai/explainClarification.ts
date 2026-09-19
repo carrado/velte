@@ -8,12 +8,11 @@ import { callLLM } from "@/lib/server/ai/router";
 // looking for? Are you planning this for a specific event or project?" →
 // "Please explain" got a SECOND, near-identical clarifying question
 // instead of an actual explanation. Nothing in the pipeline was wrong on
-// its own terms — bareQueryGate.ts (and askClarifyingQuestion, and the
-// Shopping List clarify gate) all just see the buyer's next message and
-// react to it fresh; none of them know they're being asked to elaborate on
-// what THEY just said, so a detail-free "please explain" reads exactly
-// like a detail-free "I need a fashion designer" and produces the same
-// kind of question again.
+// its own terms — bareQueryGate.ts (and askClarifyingQuestion) both just
+// see the buyer's next message and react to it fresh; neither knows it's
+// being asked to elaborate on what it just said, so a detail-free "please
+// explain" reads exactly like a detail-free "I need a fashion designer"
+// and produces the same kind of question again.
 //
 // This is the dedicated repair for that: given the ORIGINAL question the
 // buyer didn't understand, rewrite it with concrete examples so it can

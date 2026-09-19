@@ -93,6 +93,6 @@ export function buildTurnSnapshot(
     comparisonOptions: event.comparisonOptions ?? null,
     isGuidanceReply: event.isGuidanceReply ?? false,
     knownBudgetNaira: event.knownBudgetNaira,
-    shoppingList: event.shoppingList,
+    shoppingPlan: event.shoppingPlan ?? null,
   };
 }

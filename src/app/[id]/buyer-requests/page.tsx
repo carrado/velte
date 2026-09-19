@@ -11,7 +11,7 @@ import {
   ClockIcon,
   MapPinIcon,
   XCircleIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 /* Vendor's own view of requests THEY were matched to (server already
    filtered — see vendorBuyerRequests.controller.js's listMatchedRequests —

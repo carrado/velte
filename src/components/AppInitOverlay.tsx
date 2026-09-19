@@ -1,7 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { RefreshIcon, ServerCrashIcon, WifiOffIcon } from "@/components/icons";
+import {
+  RefreshIcon,
+  ServerCrashIcon,
+  WifiOffIcon,
+} from "@/components/icons/hero";
 interface AppInitOverlayProps {
   status: "loading" | "error-network" | "error-server";
 }

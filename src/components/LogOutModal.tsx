@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom";
 import type { LogoutModalProps } from "@/types/common";
-import { CloseIcon } from "@/components/icons";
+import { CloseIcon } from "@/components/icons/hero";
 
 export default function LogoutModal({
   isOpen,
@@ -18,8 +18,8 @@ export default function LogoutModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-surface rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-[#E5E7EB]">
-          <h3 className="text-dash-heading font-semibold text-[#111827]">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+          <h3 className="text-dash-heading font-semibold text-ink">
             Confirm Logout
           </h3>
           <button
@@ -37,7 +37,7 @@ export default function LogoutModal({
           </p>
         </div>
 
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] bg-gray-50">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
           <button
             onClick={onClose}
             className="px-4 py-2 text-dash-body cursor-pointer font-medium text-gray-700 bg-surface border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"

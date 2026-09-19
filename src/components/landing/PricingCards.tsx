@@ -3,7 +3,7 @@
 import { motion } from "motion/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { SparklesIcon } from "@/components/icons";
+import { SparklesIcon } from "@/components/icons/hero";
 
 /**
  * Velte drops subscription tiers for pay-per-lead — there's no fixed

@@ -23,7 +23,7 @@ import {
   TargetIcon,
   WalletIcon,
   ZapIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // Below this, a lead charge could fail outright — nudge the vendor to top up
 // before that happens rather than after. Purely a UI hint; the actual

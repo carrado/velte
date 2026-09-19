@@ -1124,48 +1124,14 @@ export function resumingAfterTopUpPhrase(): string[] {
   ];
 }
 
-// Shopping Lists (2026-09-12) — the "what do you actually need" pass, before
-// any pricing. `goalText` is the buyer's own project description, snippeted
-// the same way every other query-quoting phrase in this file already is.
-export function researchingShoppingListPhrase(goalText: string): string[] {
-  const g = snippet(goalText, 60);
+// Shopping Plan (2026-09-18) — shown once, while the initial item draft +
+// persistent record are being put together, before the turn ends on a
+// short confirmation (the real per-item search happens later, in the
+// background monitoring job, never during this turn).
+export function buildingShoppingPlanPhrase(): string[] {
   return [
-    `Working out what you'll need for "${g}"…`,
-    `Thinking through everything "${g}" actually calls for…`,
-    `Mapping out the essentials for "${g}"…`,
-    `Breaking "${g}" down into what to shop for…`,
-    `Figuring out the full list for "${g}"…`,
-  ];
-}
-
-// The pricing/market-research pass, once the item list itself is settled.
-// `itemCount` is only known once the model has actually named the items, so
-// this pool is shown second, never first.
-export function buildingShoppingListPhrase(itemCount: number): string[] {
-  return [
-    `Checking what these ${itemCount} items typically cost in Nigeria…`,
-    `Estimating realistic Nigerian market prices for ${itemCount} items…`,
-    `Working out a fair price range for each of the ${itemCount} items…`,
-    `Cross-checking expected costs across ${itemCount} items…`,
-    `Putting your budget together for ${itemCount} items…`,
-  ];
-}
-
-// The per-item best-pick pass (spec §18) — client-consumable, same carve-out
-// as gettingLocationPhrase's own comment: this runs entirely inside the
-// Shopping List results page's own short-lived fetch, not the SSE stream,
-// so it has no server-side push() to go through.
-export function pickingBestForItemPhrase(
-  label: string,
-  index: number,
-  total: number,
-): string[] {
-  const l = snippet(label, 40);
-  return [
-    `Comparing the options for "${l}" (${index} of ${total})…`,
-    `Weighing price against quality for "${l}"…`,
-    `Checking which "${l}" offers the best value…`,
-    `Narrowing down the strongest match for "${l}"…`,
-    `Balancing budget and quality for "${l}"…`,
+    "Working out what you'll need and setting up your Shopping Plan…",
+    "Putting your plan together…",
+    "Setting up background monitoring for this…",
   ];
 }

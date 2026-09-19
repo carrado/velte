@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { goAskVelte } from "@/lib/askVelte";
-import { ArrowRightIcon } from "@/components/icons";
+import { ArrowRightIcon } from "@/components/icons/hero";
 
 // "Make the AI input persistent" — a compact composer that appears once the
 // visitor scrolls past Hero's own (much bigger) one, so a conversation can

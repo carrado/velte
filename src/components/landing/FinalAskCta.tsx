@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { goAskVelte } from "@/lib/askVelte";
-import { ArrowRightIcon } from "@/components/icons";
+import { ArrowRightIcon } from "@/components/icons/hero";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 18 },

@@ -12,7 +12,7 @@ import {
   MailIcon,
   MapPinIcon,
   PhoneIcon,
-} from "@/components/icons";
+} from "@/components/icons/hero";
 
 // Posts straight to Web3Forms — same third-party form service the vendor
 // waitlist and the dashboard's Settings > Send Feedback both already use.

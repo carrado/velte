@@ -11,7 +11,11 @@ import FaqCard from "@/components/faq/FaqCard";
 import FaqTabs, { type FaqTabKey } from "@/components/faq/FaqTabs";
 import FaqCountUp from "@/components/faq/FaqCountUp";
 import FaqHeroVisual from "@/components/faq/FaqHeroVisual";
-import { ArrowRightIcon, SearchIcon, SearchXIcon } from "@/components/icons";
+import {
+  ArrowRightIcon,
+  SearchIcon,
+  SearchXIcon,
+} from "@/components/icons/hero";
 
 // 2026-08-17: first pass at this session's About/How It Works/Blog/FAQ/
 // Careers redesign left this page's implementation untouched (it was
@@ -230,7 +234,7 @@ export default function FaqContent() {
                   "conic-gradient(from 0deg, transparent 0%, rgba(249,115,22,0.5) 12%, transparent 24%)",
               }}
             />
-            <div className="relative bg-gradient-to-br from-orange-500/[0.08] to-[#F1F5F9] rounded-3xl p-12 text-center">
+            <div className="relative bg-gradient-to-br from-orange-500/[0.08] to-canvas rounded-3xl p-12 text-center">
               <h3 className="text-3xl font-bold text-ink mb-4 text-balance">
                 Still have a question?
               </h3>

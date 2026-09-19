@@ -19,7 +19,8 @@ import { useNavigation } from "@/components/NavigationProgressContext";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
-import { BellIcon, LogOutIcon } from "@/components/icons";
+import { BellIcon, LogOutIcon } from "@/components/icons/hero";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Header({ title }: HeaderProps) {
   const userDetails = useUserStore((state) => state.user);
@@ -61,7 +62,7 @@ export default function Header({ title }: HeaderProps) {
   return (
     <div className="flex items-center px-5 sm:px-0 justify-between gap-4">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <h1 className="font-semibold text-dash-title text-[#111827] truncate">
+        <h1 className="font-semibold text-dash-title text-ink truncate">
           {title}
         </h1>
       </div>
@@ -81,13 +82,13 @@ export default function Header({ title }: HeaderProps) {
 
         {/* Mobile: navigate to notifications page */}
         <button
-          className="relative md:hidden text-[#6B7280] hover:text-[#111827] cursor-pointer"
+          className="relative md:hidden text-gray-500 hover:text-gray-900 cursor-pointer"
           onClick={() => navigate(`/${userId}/notifications`)}
           aria-label="Notifications"
         >
           <BellIcon size={20} />
           {hasUnread && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-canvas" />
           )}
         </button>
 
@@ -134,6 +135,16 @@ export default function Header({ title }: HeaderProps) {
                 <p className="text-dash-caption text-gray-400 truncate">
                   @{userDetails?.username}
                 </p>
+              </div>
+              {/* Same control /chat's own account column carries, and the
+                  same placement logic: an appearance switch belongs beside
+                  the other account-scoped actions here, not three clicks
+                  into Settings only (2026-09-18). `iconOnly`, not `compact`:
+                  see Sidebar's own comment — this popover is only 192px
+                  wide, even tighter than the sidebar rail that overflowed
+                  with full labels showing. */}
+              <div className="px-3 py-2.5 border-b border-gray-100">
+                <ThemeToggle iconOnly fullWidth className="justify-center" />
               </div>
               <button
                 onClick={() => logoutMutation.mutate()}

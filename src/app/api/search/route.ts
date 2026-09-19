@@ -1,4 +1,5 @@
 import { stepCountIs, type ModelMessage, type UserContent } from "ai";
+import * as chrono from "chrono-node";
 
 import { buildProductTerm } from "@/lib/productTerm";
 import { parseOfferPrice } from "@/lib/priceText";
@@ -69,11 +70,22 @@ import {
   isOfferDeclineReply,
   splittingRequestPhrase,
   itemPickQuestionPhrase,
-  researchingShoppingListPhrase,
-  buildingShoppingListPhrase,
+  buildingShoppingPlanPhrase,
 } from "@/lib/server/ai/statusPhrases";
-import { buildShoppingListSnapshot } from "@/lib/server/ai/buildShoppingListSnapshot";
-import { buildShoppingListClarifyGate } from "@/lib/server/ai/shoppingListClarifyGate";
+import { buildShoppingPlanSnapshot } from "@/lib/server/ai/buildShoppingPlanSnapshot";
+import {
+  buildDeadlineAskGate,
+  composeDeadlineAskReply,
+} from "@/lib/server/ai/deadlineAskGate";
+import {
+  buildBudgetAskGate,
+  composeBudgetAskReply,
+} from "@/lib/server/ai/budgetAskGate";
+import {
+  classifyShoppingPlanManagement,
+  type ManageablePlanContext,
+  type ManageShoppingPlanResult,
+} from "@/lib/server/ai/manageShoppingPlanTool";
 import {
   buildSystemPrompt,
   buildAgreementOnlySystemPrompt,
@@ -126,6 +138,7 @@ import type {
   SearchIntentKind,
   SearchRequestBody,
   SearchStreamEvent,
+  ShoppingPlanSnapshot,
   StoreMatch,
   StoreProductItem,
   VendorMatch,
@@ -923,6 +936,261 @@ async function getMatchingServicesForStores(
  *  the first four is a useful answer, and an error is not. */
 const MAX_COMPARISON_OPTIONS = 4;
 
+/** Shopping Plan (2026-09-18, lowered from 7 to 2 on 2026-09-19 per explicit
+ *  product direction) — the deadline threshold that turns a request into a
+ *  persistent, background-monitored plan instead of an immediate search.
+ *  Deliberately just the day count, no item-count qualifier — see the
+ *  scoping plan's own note on why a single item this far out is still a
+ *  valid plan (it's what a separate Price Watch feature used to cover). */
+const SHOPPING_PLAN_MIN_DAYS = 2;
+
+/** Resolves a buyer's own deadline phrasing ("in 3 weeks", "by Monday",
+ *  "September 25") to a concrete local date, deterministically — CODE, via
+ *  chrono-node against this server's own clock, never the model (2026-09-19,
+ *  replacing classifyScopeTool's own deadlineDate field after it twice
+ *  resolved a plainly future phrase to a date in 2023 — see that field's
+ *  removal comment). `forwardDate: true` is what makes a bare weekday name
+ *  resolve to the NEXT one rather than the most recent past one. Read off
+ *  the parsed Date's own LOCAL calendar fields, not `.toISOString()`,
+ *  which normalizes to UTC and can roll the day itself backward or forward
+ *  depending on the server's timezone offset — chrono's reference point was
+ *  local `new Date()`, so the answer has to stay in that same frame. null
+ *  when nothing resolves, which route.ts treats the same as no deadline at
+ *  all. */
+function resolveDeadlineDate(text: string): string | null {
+  const parsed = chrono.parseDate(text, new Date(), { forwardDate: true });
+  if (!parsed) return null;
+  const y = parsed.getFullYear();
+  const m = String(parsed.getMonth() + 1).padStart(2, "0");
+  const d = String(parsed.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Shopping Plan (2026-09-19) — the buyer's own stated budget figure, read
+// deterministically off their own text, CODE never the model: same "the
+// model translates, the data decides" rule resolveDeadlineDate already
+// follows for dates, and the reason buildShoppingPlanSnapshot.ts no longer
+// asks the model to invent a naira figure of any kind (see that file's own
+// header). Deliberately conservative — a bare number with no currency
+// marker or magnitude word ("3", "2026") is never read as money, since
+// that's exactly the kind of confident-but-wrong guess this codebase avoids
+// (parseOfferPrice takes the same stance on a listing's own price string).
+const BUDGET_NUMBER = "[\\d,]+(?:\\.\\d+)?";
+const BUDGET_UNIT_MULTIPLIER: Record<string, number> = {
+  k: 1_000,
+  thousand: 1_000,
+  m: 1_000_000,
+  mil: 1_000_000,
+  million: 1_000_000,
+};
+
+function resolveBudgetNaira(text: string): number | null {
+  const t = text.trim();
+  if (!t) return null;
+
+  // ₦250,000 / N250,000 / ₦2.5m / ₦300k — currency-marked, unit optional.
+  let m = t.match(
+    new RegExp(
+      `(?:₦|\\bN(?=\\d))\\s*(${BUDGET_NUMBER})\\s*(k|m|mil|thousand|million)?`,
+      "i",
+    ),
+  );
+  // "250k naira" / "2.5 million naira" / "500000 naira" — unit optional.
+  if (!m)
+    m = t.match(
+      new RegExp(
+        `(${BUDGET_NUMBER})\\s*(k|m|mil|thousand|million)?\\s*naira`,
+        "i",
+      ),
+    );
+  // Bare "250k" / "2.5m" / "300 thousand" — no currency marker, but a
+  // magnitude word is what makes this read as money rather than a bare
+  // count (a quantity, a date, a phone digit run).
+  if (!m)
+    m = t.match(
+      new RegExp(`\\b(${BUDGET_NUMBER})\\s*(k|m|mil|thousand|million)\\b`, "i"),
+    );
+  if (!m) return null;
+
+  const value = Number(m[1].replace(/,/g, ""));
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const unit = m[2]?.toLowerCase();
+  const multiplier = unit ? (BUDGET_UNIT_MULTIPLIER[unit] ?? 1) : 1;
+  const naira = Math.round(value * multiplier);
+  return naira > 0 ? naira : null;
+}
+
+// The lenient sibling above's strictness is right for reading a budget out
+// of ORDINARY prose (where a bare number is genuinely ambiguous — a
+// quantity, a year, a phone digit run). It's wrong for a reply that's
+// DIRECTLY answering "what's your budget?" (isAnsweringShoppingPlanBudgetAsk
+// below) — there the question itself already disambiguates a bare number
+// ("around 2000000", no ₦/naira/k/m marker at all — found live, this
+// exact reply silently failed to parse and dropped the buyer out of the
+// whole Shopping Plan flow rather than re-asking). Only reached when the
+// strict parse above has already failed. A floor (100) rules out a
+// one/two-digit reply that's clearly not a real naira figure ("just 2").
+const LENIENT_BUDGET_MIN_NAIRA = 100;
+function resolveBudgetNairaLenient(text: string): number | null {
+  const strict = resolveBudgetNaira(text);
+  if (strict != null) return strict;
+  const m = text.match(new RegExp(`\\b(${BUDGET_NUMBER})\\b`));
+  if (!m) return null;
+  const value = Math.round(Number(m[1].replace(/,/g, "")));
+  return Number.isFinite(value) && value >= LENIENT_BUDGET_MIN_NAIRA
+    ? value
+    : null;
+}
+
+function formatNairaForReply(naira: number): string {
+  return `₦${Math.round(naira).toLocaleString("en-NG")}`;
+}
+
+function formatDeadlineForReply(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** Whole days between now and an ISO (YYYY-MM-DD) date, floored — pure
+ *  arithmetic on a date resolveDeadlineDate has already produced; never a
+ *  parser of its own. Returns null for anything that doesn't parse to a
+ *  real date. */
+function daysUntilIsoDate(iso: string): number | null {
+  const target = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(target.getTime())) return null;
+  const now = new Date();
+  const todayUtc = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const diffMs = target.getTime() - todayUtc;
+  return Math.floor(diffMs / (24 * 60 * 60 * 1000));
+}
+
+/**
+ * Writes one conversational management action (Phase 3, spec §23) onto the
+ * real backend record — the model TRANSLATED the buyer's words into this
+ * result; this is the one place that actually MUTATES the plan, never just
+ * a conversational reply (spec §23's own explicit requirement). Returns
+ * false on any failure — the caller falls back to a plain "something went
+ * wrong" reply rather than confirming a change that didn't actually land.
+ */
+async function applyShoppingPlanManagement(
+  managed: ManageShoppingPlanResult,
+  cookie: string | null,
+): Promise<boolean> {
+  if (!managed.planId) return false;
+  const path = `/shopping-plans/${encodeURIComponent(managed.planId)}`;
+  const opts = { cookie: cookie ?? undefined };
+  try {
+    switch (managed.action) {
+      case "update_budget":
+        if (managed.budgetNaira == null || managed.budgetNaira <= 0)
+          return false;
+        await backendData(path, {
+          ...opts,
+          method: "PATCH",
+          body: { budgetNaira: Math.round(managed.budgetNaira) },
+        });
+        return true;
+      case "update_deadline":
+        if (!managed.deadlineDate) return false;
+        await backendData(path, {
+          ...opts,
+          method: "PATCH",
+          body: { deadlineDate: managed.deadlineDate },
+        });
+        return true;
+      case "pause":
+        await backendData(path, {
+          ...opts,
+          method: "PATCH",
+          body: { status: "paused" },
+        });
+        return true;
+      case "resume":
+        await backendData(path, {
+          ...opts,
+          method: "PATCH",
+          body: { status: "monitoring" },
+        });
+        return true;
+      case "cancel":
+        await backendData(path, {
+          ...opts,
+          method: "PATCH",
+          body: { status: "cancelled" },
+        });
+        return true;
+      case "remove_item":
+        if (!managed.itemId) return false;
+        await backendData(
+          `${path}/items/${encodeURIComponent(managed.itemId)}`,
+          {
+            ...opts,
+            method: "PATCH",
+            body: { removed: true },
+          },
+        );
+        return true;
+      case "set_priority":
+        // Boosted well above the generation-order default (items.length -
+        // index, always small) rather than incrementally nudged — "focus
+        // on X first" means first, unambiguously, not "a bit sooner".
+        if (!managed.itemId) return false;
+        await backendData(
+          `${path}/items/${encodeURIComponent(managed.itemId)}`,
+          {
+            ...opts,
+            method: "PATCH",
+            body: { priority: 1000 },
+          },
+        );
+        return true;
+      case "add_item":
+        if (!managed.newItemLabel) return false;
+        await backendData(`${path}/items`, {
+          ...opts,
+          method: "POST",
+          body: { label: managed.newItemLabel },
+        });
+        return true;
+      case "expedite":
+        // No inline search here — see manageShoppingPlanTool.ts's own
+        // header on why this stays a schedule nudge (brings the plan's
+        // next monitoring tick forward, optionally boosting one item's
+        // priority) rather than a synchronous search inside this turn.
+        if (managed.itemId) {
+          await backendData(
+            `${path}/items/${encodeURIComponent(managed.itemId)}`,
+            {
+              ...opts,
+              method: "PATCH",
+              body: { priority: 1000 },
+            },
+          );
+        }
+        await backendData(path, {
+          ...opts,
+          method: "PATCH",
+          body: { expedite: true },
+        });
+        return true;
+      default:
+        return false;
+    }
+  } catch (err) {
+    console.error(
+      `[shopping-plan] management action "${managed.action}" on ${managed.planId} failed:`,
+      err,
+    );
+    return false;
+  }
+}
+
 /** Loose match between a named comparison option and a search that ran.
  *
  *  Deliberately generous. The option comes from the scope classifier
@@ -1308,7 +1576,20 @@ async function handleSearch(req: Request) {
   // costs nothing to have run. The check still happens first, because
   // otherwise an empty balance could trigger a real model call and simply not
   // pay for it.
-  const turnAction: CreditAction = imageUrl ? "photo" : "text";
+  // `let`, not `const`: reassigned below, right before the Shopping Plan
+  // branch's own sendFinal call, for a turn that only turns out to be one
+  // AFTER classification runs (the auto-detected-deadline path) — sendFinal
+  // reads this same binding at charge time, so a later reassignment here is
+  // exactly what makes that turn bill correctly despite being priced before
+  // it was known. Known early only when the buyer explicitly picked the
+  // Shopping Plan tool from the composer, which is checked directly off the
+  // raw request body (no async session lookup needed for that one case).
+  let turnAction: CreditAction =
+    body?.activeTool === "shopping_plan"
+      ? "shopping_plan"
+      : imageUrl
+        ? "photo"
+        : "text";
   const usage = await affordCredits({
     actorType,
     cookie: actorCookie,
@@ -1775,7 +2056,6 @@ async function handleSearch(req: Request) {
           externalOffers: [],
           awaitingComparisonPurchaseReply: false,
           comparisonPickItem: null,
-          shoppingList: null,
         });
         controller.close();
       }
@@ -1942,11 +2222,27 @@ async function handleSearch(req: Request) {
       // this is what lets code VERIFY each option was searched instead of
       // inferring it from whichever tool calls the model happened to make.
       let comparisonOptions: string[] = [];
-      // Shopping Lists (2026-09-12) — a whole-project need, judged the same
-      // way as scopeSaysComparison above. Defaults false, same safe
-      // direction: this only ever ADDS a shopping-list framing on top of an
-      // ordinary search.
-      let wantsShoppingList = false;
+      // Shopping Plan (2026-09-18) — does this request have a deadline, and
+      // if so, what date. Defaults to no deadline. A deadline ALONE no
+      // longer decides whether a request becomes a plan (2026-09-19,
+      // explicit correction — see isBulkPurchase below for why): once a
+      // plan IS otherwise qualified, these two say what date to track.
+      let hasDeadline = false;
+      let deadlineDate: string | null = null;
+      // Shopping Plan's real trigger (2026-09-19, replacing "any request
+      // with no stated deadline" — that fired on literally the first
+      // message of every conversation, per classifyScopeTool's own
+      // requestRelation rule that a first message is always "new", and
+      // interrupted every ordinary single-item search with "when do you
+      // need this by?" before anything was searched). A Shopping Plan is
+      // now created ONLY when the buyer explicitly picks the tool from the
+      // composer (activeTool === "shopping_plan", checked further down) OR
+      // the message itself genuinely describes a multi-item list/project —
+      // this flag. Defaults false, the safe direction: a missed bulk
+      // request is answered as an ordinary search same as always; a false
+      // positive would background-track something that was never meant to
+      // be tracked.
+      let isBulkPurchase = false;
       // Is the buyer asking YOU to explain/clarify your own last question,
       // rather than answering it (2026-09-17)? Found live: "Where can I get
       // a good fashion designer" → bareQueryGate asked what kind/occasion →
@@ -2072,7 +2368,8 @@ async function handleSearch(req: Request) {
                 hasSpecificDetails: boolean;
                 isComparison: boolean;
                 comparisonOptions: string[];
-                wantsShoppingList: boolean;
+                hasDeadline: boolean;
+                isBulkPurchase: boolean;
                 wantsExplanation: boolean;
               }
             | undefined;
@@ -2099,7 +2396,17 @@ async function handleSearch(req: Request) {
                 .filter(Boolean),
             ),
           ).slice(0, MAX_COMPARISON_OPTIONS);
-          wantsShoppingList = scopeOutput?.wantsShoppingList ?? false;
+          // hasDeadline is the model's call (does this message express a
+          // timeframe at all — a judgment it's fine at); the actual DATE is
+          // never the model's (see resolveDeadlineDate's own comment for
+          // why — it used to be, and twice landed in 2023). false here
+          // (message failed to parse despite the model saying it named a
+          // date) is treated the same as no deadline at all — same safe
+          // direction "no rush" already resolves to.
+          hasDeadline = scopeOutput?.hasDeadline ?? false;
+          deadlineDate = hasDeadline ? resolveDeadlineDate(message) : null;
+          hasDeadline = hasDeadline && deadlineDate !== null;
+          isBulkPurchase = scopeOutput?.isBulkPurchase ?? false;
           wantsExplanation = scopeOutput?.wantsExplanation ?? false;
         } catch (err) {
           console.error("[search] scope check failed, failing open:", err);
@@ -2107,13 +2414,12 @@ async function handleSearch(req: Request) {
       }
 
       // "Please explain" answering something Velte just asked — the
-      // bare-query gate, an ordinary askClarifyingQuestion, or the Shopping
-      // List clarify gate all read as plain assistant text by the time it's
-      // in `history` (SearchHistoryTurn carries no raw clarification
-      // object — see its own comment — only the per-gate booleans below),
-      // so this one check covers all three by working off `content`
-      // directly. Checked BEFORE every branch below: none of them know
-      // they're being asked to elaborate on what THEY just said, so left
+      // bare-query gate or an ordinary askClarifyingQuestion both read as
+      // plain assistant text by the time it's in `history` (SearchHistoryTurn
+      // carries no raw clarification object — see its own comment — only the
+      // per-gate booleans below), so this one check covers both by working
+      // off `content` directly. Checked BEFORE every branch below: neither
+      // knows they're being asked to elaborate on what THEY just said, so left
       // unhandled this reads as a fresh, detail-free message and produces
       // another variant of the same question — see explainClarification.ts's
       // own header for the live report this fixes ("Where can I get a good
@@ -2343,103 +2649,206 @@ async function handleSearch(req: Request) {
           // untried alternative instead of getting re-asked which one they
           // mean.
           comparisonOptions: pickItem ? comparisonOptions : null,
-          shoppingList: null,
         });
         controller.close();
         return;
       }
 
-      // Shopping Lists (2026-09-12) — a whole-PROJECT need, never the
-      // ordinary tool loop: searching the buyer's literal project sentence
-      // ("furnish my apartment with ₦2m") as a product term would return
-      // nothing useful, so this ends the turn here, same shape as the
-      // comparison short-circuit right above. Real, verified product search
-      // per item happens later, in the background job "Get these items"
-      // starts (see src/app/api/shopping-list/start/route.ts) — this only
-      // ever produces the market-researched DRAFT.
-      //
-      // Clarify-before-draft (2026-09-13, explicit request) —
-      // shoppingListClarifyGate.ts decides, in one call, whether asking
-      // first would meaningfully change what gets drafted (a bare "help me
-      // shop for school resumption" usually should; "university student in
-      // a hostel, ₦150k budget for resumption" usually shouldn't). When it
-      // does, the turn ends on that QUESTION instead — marked
-      // `listDetails: true` so route.ts can tell the buyer's next message
-      // is answering it.
-      //
-      // STRUCTURAL override, not a fresh classifier read (found live,
-      // 2026-09-13): the first cut of this trusted wantsShoppingList/
-      // requestRelation fresh on the ANSWER turn too, and both proved
-      // unreliable there — a real transcript answered "who's using it, how
-      // many rooms, budget?" with an ordinary sentence ("I'll be the one
-      // using it, 2 bedroom, ₦5m"), and the very next turn's classifier
-      // read came back with the whole project context gone, falling
-      // through into an unrelated generic clarifying flow. Same fix
-      // `isStructuralContinuation` above already applies to
-      // awaitingBuyerRequestReply/awaitingComparisonPurchaseReply: a known
-      // fact (this app itself just asked this exact question) beats a
-      // fresh model judgment of an answer that doesn't repeat the original
-      // project's own words. Checked against `history.at(-1)` only — the
-      // IMMEDIATELY preceding turn, not "ever asked this conversation" —
-      // so a buyer who long since moved on to something else is never
-      // dragged back into an old project.
-      const lastShoppingListClarifyTurn = history.at(-1);
-      const isAnsweringShoppingListClarify =
-        lastShoppingListClarifyTurn?.role === "assistant" &&
-        lastShoppingListClarifyTurn.askedShoppingListDetails === true;
+      // Shopping Plan — conversational management (Phase 3, 2026-09-19,
+      // spec §23): "pause this plan", "increase my budget to ₦250k",
+      // "remove the school bag". Checked BEFORE anything else below
+      // assumes this is a NEW request — a buyer with an open plan might be
+      // talking about IT instead. Only even queries for plans when signed
+      // in (plans require an account) and only spends a model call when at
+      // least one actually exists, so this costs nothing for the vast
+      // majority of turns/buyers that have none.
+      if (!isCompareTurn && actorType !== "guest" && message) {
+        try {
+          const { plans: manageablePlans } = await backendData<{
+            plans: ManageablePlanContext[];
+          }>("/shopping-plans/manageable", {
+            cookie: actorCookie ?? undefined,
+          });
 
+          if (manageablePlans.length) {
+            const managed = await classifyShoppingPlanManagement({
+              message,
+              plans: manageablePlans,
+              requestRelationHint: requestRelation,
+            });
+
+            if (managed?.applies) {
+              if (managed.action !== "none" && managed.planId) {
+                const ok = await applyShoppingPlanManagement(
+                  managed,
+                  actorCookie,
+                );
+                await sendBareFinal(
+                  ok
+                    ? managed.confirmationReply
+                    : "Sorry, something went wrong making that change — mind trying again?",
+                  null,
+                );
+              } else {
+                // Genuinely about a plan, but nothing concrete to act on
+                // yet (ambiguous which plan, or a question rather than a
+                // change) — confirmationReply carries the model's own
+                // clarifying question/answer.
+                await sendBareFinal(managed.confirmationReply, null);
+              }
+              return;
+            }
+          }
+        } catch (err) {
+          // Never blocks the turn — a failed check here just means this
+          // message gets handled as an ordinary search instead, same
+          // "must only ever ADD, never be the reason a buyer sees nothing"
+          // rule every other gate in this file follows.
+          console.error("[shopping-plan] management check failed:", err);
+        }
+      }
+
+      // Shopping Plan (2026-09-18) — was this turn's reply TO the deadline
+      // question below, rather than a fresh request of its own? Structural,
+      // set from the clarification's own shape (never guessed from prose),
+      // same rule askedLocation/askedBudget already follow. When true, the
+      // buyer's own reply ("in 3 weeks", "no rush") names no item at all —
+      // the ORIGINAL request, one substantive user turn back, is what
+      // actually describes what to plan/search for.
+      const isAnsweringDeadlineAsk = Boolean(
+        lastTurn?.role === "assistant" && lastTurn.askedDeadline === true,
+      );
+      const effectiveGoalMessage = isAnsweringDeadlineAsk
+        ? (lastSubstantiveUserMessage(history) ?? message)
+        : message;
+
+      // Shopping Plan (2026-09-19) — the budget ask's own reply-tracking,
+      // mirroring isAnsweringDeadlineAsk exactly. Reads the goal/deadline
+      // back off the ask turn's own carry-forward fields (stamped when that
+      // question was asked, below) rather than walking history a second
+      // time — lastSubstantiveUserMessage only ever skips back ONE
+      // clarification hop, and budget is now a SECOND chained ask behind
+      // deadline, so re-deriving it the same way would land on the deadline
+      // reply ("by Friday") rather than the original request.
+      const isAnsweringShoppingPlanBudgetAsk = Boolean(
+        lastTurn?.role === "assistant" &&
+        lastTurn.askedShoppingPlanBudget === true,
+      );
+      const pinnedGoalText = isAnsweringShoppingPlanBudgetAsk
+        ? (lastTurn?.shoppingPlanPendingGoalText ?? effectiveGoalMessage)
+        : effectiveGoalMessage;
+      const pinnedHasDeadline = isAnsweringShoppingPlanBudgetAsk
+        ? true
+        : hasDeadline;
+      const pinnedDeadlineDate = isAnsweringShoppingPlanBudgetAsk
+        ? (lastTurn?.shoppingPlanPendingDeadlineDate ?? deadlineDate)
+        : deadlineDate;
+      // The buyer's own budget figure, read deterministically off whichever
+      // turn actually states it — CODE, never the model (resolveBudgetNaira
+      // is the same "translate, don't invent" discipline resolveDeadlineDate
+      // already follows for dates). This turn's own text first (covers
+      // answering the budget question directly, or naming a deadline AND a
+      // budget in the same reply); when this turn IS the direct answer to
+      // our own budget question, retry leniently (a bare number needs no
+      // ₦/naira/k/m marker there — the question itself is the marker); the
+      // resolved goal text otherwise (covers stating everything up front:
+      // "furnish my apartment by Friday, budget ₦300k").
+      const resolvedShoppingPlanBudgetNaira =
+        resolveBudgetNaira(message || "") ??
+        (isAnsweringShoppingPlanBudgetAsk
+          ? resolveBudgetNairaLenient(message || "")
+          : null) ??
+        (pinnedGoalText ? resolveBudgetNaira(pinnedGoalText) : null);
+
+      // Ask about a deadline once a request has already qualified for a
+      // Shopping Plan some other way, but doesn't say by when (2026-09-19,
+      // replacing a gate that fired on `requestRelation === "new"` alone —
+      // true of the first message of every conversation, per
+      // classifyScopeTool's own rule — which meant EVERY fresh, single-item
+      // search got interrupted with "when do you need this by?" before
+      // anything was searched. The real qualifier now is the explicit tool
+      // pick or isBulkPurchase below, never a bare deadline-less message.
+      // Never on a refinement (not qualified independently, it rides
+      // whatever the original request already decided), and never when
+      // this turn is itself the answer to this same question
+      // (`!isAnsweringDeadlineAsk`, belt-and-suspenders against a rare
+      // misclassification re-triggering the same ask forever). Skippable —
+      // unlike the budget ask below, the buyer can always search right now
+      // without naming a date. The length floor is a cheap
+      // backstop against asking a bare greeting ("hi") when it does — not
+      // a keyword heuristic, just ruling out messages too short to be a
+      // real request at all.
       if (
         !isCompareTurn &&
-        (wantsShoppingList || isAnsweringShoppingListClarify) &&
-        message
+        !imageUrl &&
+        !hasDeadline &&
+        !isAnsweringDeadlineAsk &&
+        !isAnsweringShoppingPlanBudgetAsk &&
+        (activeTool === "shopping_plan" || isBulkPurchase) &&
+        message &&
+        message.trim().length >= 8
       ) {
-        if (!isAnsweringShoppingListClarify) {
-          const gate = await buildShoppingListClarifyGate({
-            goalText: message,
-          });
-          if (gate?.needsMoreDetails && gate.question) {
-            await sendBareFinal(gate.question, {
-              kind: "text",
-              question: gate.question,
-              listDetails: true,
-            });
-            return;
-          }
-        }
-
-        // On the answer turn, the buyer's reply ("2 bedroom, ₦5m") is not
-        // itself the project — the ORIGINAL message is, sitting one
-        // substantive user turn back (the clarifying question in between
-        // is an assistant turn, so lastSubstantiveUserMessage skips right
-        // over it). Combine rather than replace, and skip the combine on
-        // the rare case both strings already match (a structural
-        // continuation with no real prior text yet).
-        const goalText = isAnsweringShoppingListClarify
-          ? (() => {
-              const original = lastSubstantiveUserMessage(history);
-              return original && original.trim() !== message.trim()
-                ? `${original}. ${message}`
-                : message;
-            })()
-          : message;
-
-        push(researchingShoppingListPhrase(goalText));
-        const snapshot = await buildShoppingListSnapshot({
-          goalText,
+        const dynamicQuestion = await buildDeadlineAskGate(message);
+        const question = composeDeadlineAskReply(dynamicQuestion);
+        await sendBareFinal(question, {
+          kind: "text",
+          question,
+          skippable: true,
+          deadlineAsked: true,
         });
-        if (snapshot) {
-          push(buildingShoppingListPhrase(snapshot.items.length));
-        }
-        const reply = snapshot
-          ? snapshot.budgetNaira
-            ? `Here's a shopping plan based on your ₦${snapshot.budgetNaira.toLocaleString("en-NG")} budget.`
-            : "Here's a shopping plan for what you'll need."
-          : "Sorry, something went wrong putting that list together — mind trying again?";
+        return;
+      }
+
+      // Shopping Plan (2026-09-19, explicit product direction) — budget is
+      // REQUIRED before a plan is created, and deliberately NOT skippable
+      // (unlike the deadline ask just above): Velte never estimates a price
+      // of its own any more (buildShoppingPlanSnapshot.ts no longer asks the
+      // model for one — see that file's own header), so without a real,
+      // buyer-stated figure there is nothing for the real, searched prices
+      // to later be checked against (shoppingPlan.job.js's own
+      // budgetStatusFor — "match price of what we've found against the
+      // budget"). Fires once the deadline is settled (stated up front, or
+      // just resolved by the ask above) but no budget figure has been
+      // resolved from anything said so far — INCLUDING a re-ask when the
+      // buyer's own reply to this exact question didn't contain a parseable
+      // figure (`isAnsweringShoppingPlanBudgetAsk` is deliberately NOT
+      // excluded here, unlike the deadline ask above): found live, "around
+      // 2000000" (no ₦/naira/k/m marker) failed to parse and silently
+      // dropped the buyer out of the whole flow into an unrelated
+      // location-ask instead of asking again — re-prompting is the correct
+      // behavior for an unparseable answer, not a bug to guard against.
+      if (
+        !isCompareTurn &&
+        !imageUrl &&
+        pinnedHasDeadline &&
+        pinnedDeadlineDate &&
+        resolvedShoppingPlanBudgetNaira == null &&
+        (activeTool === "shopping_plan" ||
+          isBulkPurchase ||
+          isAnsweringDeadlineAsk ||
+          isAnsweringShoppingPlanBudgetAsk) &&
+        pinnedGoalText
+      ) {
+        const dynamicQuestion = await buildBudgetAskGate(
+          pinnedGoalText,
+          pinnedDeadlineDate,
+          isAnsweringShoppingPlanBudgetAsk,
+        );
+        const question = composeBudgetAskReply(
+          dynamicQuestion,
+          isAnsweringShoppingPlanBudgetAsk,
+        );
         await sendFinal({
           type: "final",
-          reply,
+          reply: question,
           toolCalled: false,
-          clarification: null,
+          clarification: {
+            kind: "text",
+            question,
+            shoppingPlanBudgetAsked: true,
+            shoppingPlanPendingGoalText: pinnedGoalText,
+            shoppingPlanPendingDeadlineDate: pinnedDeadlineDate,
+          },
           products: [],
           weakProducts: [],
           stores: [],
@@ -2467,10 +2876,192 @@ async function handleSearch(req: Request) {
           externalOffers: [],
           awaitingComparisonPurchaseReply: false,
           comparisonPickItem: null,
-          shoppingList: snapshot,
         });
         controller.close();
         return;
+      }
+
+      // A qualifying request (explicit tool pick, a genuine bulk/project
+      // request, or the answer to this flow's own deadline/budget asks —
+      // `isAnsweringDeadlineAsk`/`isAnsweringShoppingPlanBudgetAsk` are only
+      // ever true here because an earlier turn already qualified it) becomes
+      // a persistent, background-monitored plan instead of an immediate
+      // search, once a deadline SHOPPING_PLAN_MIN_DAYS+ away AND a real
+      // budget are both known: real, verified per-item search happens later,
+      // in velte-backend's own recurring monitoring job, never during this
+      // turn. Ends the turn here with a short confirmation, same shape as
+      // the comparison short-circuit above.
+      if (
+        !isCompareTurn &&
+        (activeTool === "shopping_plan" ||
+          isBulkPurchase ||
+          isAnsweringDeadlineAsk ||
+          isAnsweringShoppingPlanBudgetAsk) &&
+        pinnedHasDeadline &&
+        pinnedDeadlineDate &&
+        resolvedShoppingPlanBudgetNaira != null &&
+        pinnedGoalText
+      ) {
+        const daysUntilDeadline = daysUntilIsoDate(pinnedDeadlineDate);
+        if (
+          daysUntilDeadline !== null &&
+          daysUntilDeadline >= SHOPPING_PLAN_MIN_DAYS
+        ) {
+          // Corrects the auto-detected-deadline path, which had no way to
+          // know this turn would become a Shopping Plan back when
+          // `turnAction` was first priced (before classification ran) — see
+          // that assignment's own comment. A no-op for the explicit-tool
+          // path, which already set this early.
+          turnAction = "shopping_plan";
+          push(buildingShoppingPlanPhrase());
+          const draft = await buildShoppingPlanSnapshot({
+            goalText: pinnedGoalText,
+          });
+          if (!draft) {
+            await sendBareFinal(
+              "Sorry, something went wrong putting that plan together — mind trying again?",
+              null,
+            );
+            return;
+          }
+
+          let planId: string | null = null;
+          try {
+            const created = await backendData<{ plan: { id: string } }>(
+              "/shopping-plans",
+              {
+                method: "POST",
+                cookie: actorCookie ?? undefined,
+                body: {
+                  goalText: pinnedGoalText,
+                  items: draft.items,
+                  deadlineDate: pinnedDeadlineDate,
+                  budgetNaira: resolvedShoppingPlanBudgetNaira,
+                  conversationId: conversation?.conversationId ?? null,
+                  deviceId,
+                  // Deterministic, not a fresh UUID — a genuine retry of
+                  // the SAME message/deadline collides on the backend's
+                  // own (clientRef, owner) unique index and returns the
+                  // already-created plan instead of a duplicate. Coarser
+                  // than a real per-submit id (none is sent to this
+                  // endpoint today), but this endpoint has no double-click
+                  // button the way the deleted Shopping List's "Get these
+                  // items" did — the risk this guards is a rare retried
+                  // request, not routine rapid re-submission.
+                  clientRef:
+                    `${deviceId ?? "guest"}:${pinnedGoalText.trim().toLowerCase()}:${pinnedDeadlineDate}`.slice(
+                      0,
+                      200,
+                    ),
+                  location: body?.buyerLocation
+                    ? {
+                        lat: body.buyerLocation.lat,
+                        lng: body.buyerLocation.lng,
+                      }
+                    : undefined,
+                },
+              },
+            );
+            planId = created.plan.id;
+          } catch (err) {
+            console.error("[shopping-plan] create failed:", err);
+          }
+
+          if (!planId) {
+            await sendBareFinal(
+              "Sorry, something went wrong creating your Shopping Plan — mind trying again?",
+              null,
+            );
+            return;
+          }
+
+          // Released the moment the plan actually exists (found live,
+          // 2026-09-19): `sessionToolAtTurnEnd` otherwise carries
+          // "shopping_plan" into every later turn (same "carried forward by
+          // default" rule its own declaration explains), so an ordinary
+          // closing remark like "I think the list is fine" — no date in it,
+          // requestRelation not "new" since it's clearly replying to what
+          // was just said, so the OTHER reset never fires either — kept
+          // tripping the deadline-ask gate all over again as though a
+          // second plan were being built. This flow's job is done the
+          // instant the plan is created; nothing later in this same
+          // conversation is still "about" building it.
+          sessionToolAtTurnEnd = null;
+
+          const snapshot: ShoppingPlanSnapshot = {
+            planId,
+            goalText: pinnedGoalText,
+            deadlineDate: pinnedDeadlineDate,
+            budgetNaira: resolvedShoppingPlanBudgetNaira,
+            itemCount: draft.items.length,
+            items: draft.items.map((it) => ({
+              label: it.label,
+              quantity: it.quantity,
+            })),
+          };
+
+          // The chat-inline shopping list per explicit product direction
+          // (2026-09-19): the buyer sees the actual items right here, not
+          // just a count pointing elsewhere, and knows both WHAT happens
+          // next (a real search just started, never an estimate) and HOW
+          // they'll hear back (push, the same channel shoppingPlan.job.js's
+          // own digest already uses — SMS too, for whoever has it enabled).
+          // Adding/removing an item is answered in plain language right in
+          // this same chat (manageShoppingPlanTool.ts), named here so it
+          // isn't a hidden feature.
+          const displayItems = draft.items.slice(0, 10);
+          const itemLines = displayItems
+            .map(
+              (it) =>
+                `- ${it.label}${it.quantity > 1 ? ` (×${it.quantity})` : ""}`,
+            )
+            .join("\n");
+          const remaining = draft.items.length - displayItems.length;
+          const reply = [
+            `Your Shopping Plan is set up${draft.items.length > 1 ? ` for ${draft.items.length} items` : ""} — budget ${formatNairaForReply(resolvedShoppingPlanBudgetNaira)}, by ${formatDeadlineForReply(pinnedDeadlineDate)}:`,
+            remaining > 0
+              ? `${itemLines}\n- …and ${remaining} more`
+              : itemLines,
+            `I've started searching for these now, and I'll keep checking real prices and availability against your budget until your deadline — never an estimate of my own. I'll notify you by push (and SMS too, if you've turned that on) the moment I find real options, and you can open Shopping Plans any time to see progress. Just tell me here if you want to add or remove anything.`,
+          ].join("\n\n");
+
+          await sendFinal({
+            type: "final",
+            reply,
+            toolCalled: false,
+            clarification: null,
+            products: [],
+            weakProducts: [],
+            stores: [],
+            furtherStores: [],
+            storesQuery: null,
+            productStores: [],
+            storeServices: [],
+            productsMatchTier: null,
+            storesMatchTier: null,
+            productsMatchQuality: undefined,
+            storesMatchQuality: undefined,
+            externalStoreSuggestions: [],
+            instagramLeads: [],
+            vendorProducts: [],
+            vendorProductsStore: null,
+            buyerRequestOffer: null,
+            buyerRequestOffered: false,
+            backgroundItems: [],
+            dualIntentItemALabel: null,
+            awaitingBuyerRequestReply: false,
+            buyerRequestMatchQuery: null,
+            awaitingVendorSearchOffer: false,
+            vendorSearchMatchQuery: null,
+            recommendation: null,
+            externalOffers: [],
+            awaitingComparisonPurchaseReply: false,
+            comparisonPickItem: null,
+            shoppingPlan: snapshot,
+          });
+          controller.close();
+          return;
+        }
       }
 
       // Google Places is a SERVICE-only fallback (2026-08-26) — see
@@ -2892,12 +3483,16 @@ async function handleSearch(req: Request) {
         // `message` — so a content-free continuation ("Shared my
         // location", a bare "yes") handed it literally nothing to reason
         // about "wedding" from, and it fell back to the vaguest possible
-        // question. Same fix the dual-intent re-derivation above and the
-        // shopping-list goalText combine already use for this exact
-        // shape: resolve back to the last SUBSTANTIVE user turn, which
-        // still has the real request in it.
+        // question. Same fix the dual-intent re-derivation above uses for
+        // this exact shape: resolve back to the last SUBSTANTIVE user turn,
+        // which still has the real request in it. A reply to the Shopping
+        // Plan deadline ask ("in 3 weeks", "no rush") is the same shape
+        // again — content-free relative to the item — so it gets the same
+        // fallback (`isAnsweringDeadlineAsk`, computed above).
         const bareQueryMessage =
-          isSharedLocationMessage(message) || isAcknowledgementReply(message)
+          isSharedLocationMessage(message) ||
+          isAcknowledgementReply(message) ||
+          isAnsweringDeadlineAsk
             ? (lastSubstantiveUserMessage(history) ?? message)
             : message;
         const dynamicQuestion = await buildBareQueryGate({
@@ -3295,7 +3890,6 @@ async function handleSearch(req: Request) {
               externalOffers: preCheckOffers,
               awaitingComparisonPurchaseReply: false,
               comparisonPickItem: null,
-              shoppingList: null,
             });
             return;
           }
@@ -3388,7 +3982,6 @@ async function handleSearch(req: Request) {
             externalOffers: agreementOffers,
             awaitingComparisonPurchaseReply: false,
             comparisonPickItem: null,
-            shoppingList: null,
           });
           return;
         }
@@ -3559,7 +4152,6 @@ async function handleSearch(req: Request) {
             externalOffers: [],
             awaitingComparisonPurchaseReply: false,
             comparisonPickItem: null,
-            shoppingList: null,
           });
           return;
         }
@@ -4036,7 +4628,6 @@ async function handleSearch(req: Request) {
             externalOffers: [],
             awaitingComparisonPurchaseReply: false,
             comparisonPickItem: null,
-            shoppingList: null,
           });
         }
 
@@ -5947,7 +6538,6 @@ async function handleSearch(req: Request) {
           // buyer's next message back into.
           awaitingComparisonPurchaseReply: false,
           comparisonPickItem: null,
-          shoppingList: null,
           isGuidanceReply: usedGuidanceReply,
         });
 

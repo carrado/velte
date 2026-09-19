@@ -82,12 +82,12 @@ function UsernameInput({
 
   return (
     <div>
-      <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+      <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
         <AtSignIcon className="w-3.5 h-3.5 text-orange-400" />
         Username
       </Label>
       <div className="relative">
-        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-black text-sm pointer-events-none">
+        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm pointer-events-none">
           @
         </span>
         <Input
@@ -95,12 +95,12 @@ function UsernameInput({
           onChange={handleChange}
           onBlur={onBlur}
           placeholder="yourstore"
-          className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pl-8"
+          className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pl-8"
         />
       </div>
       <div className="flex items-center gap-1 mt-1">
-        <InfoIcon className="w-3 h-3 text-black/40" />
-        <p className="text-black/40 text-xs">
+        <InfoIcon className="w-3 h-3 text-gray-400" />
+        <p className="text-gray-400 text-xs">
           Must start with a letter; only lowercase letters, numbers, and
           underscores allowed.
         </p>
@@ -208,7 +208,7 @@ export default function Step1BusinessAccount({
         >
           {(field) => (
             <div>
-              <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+              <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
                 <UserIcon className="w-3.5 h-3.5 text-orange-400" />
                 Full Name
               </Label>
@@ -217,7 +217,7 @@ export default function Step1BusinessAccount({
                 onChange={(e) => field.handleChange(e.target.value)}
                 onBlur={field.handleBlur}
                 placeholder="John Smith"
-                className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
+                className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
               />
               <FieldError message={field.state.meta.errors[0]} />
             </div>
@@ -235,7 +235,7 @@ export default function Step1BusinessAccount({
         >
           {(field) => (
             <div>
-              <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+              <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
                 <BuildingIcon className="w-3.5 h-3.5 text-orange-400" />
                 Business Name
               </Label>
@@ -244,7 +244,7 @@ export default function Step1BusinessAccount({
                 onChange={(e) => field.handleChange(e.target.value)}
                 onBlur={field.handleBlur}
                 placeholder="Acme Store Ltd."
-                className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
+                className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
               />
               <FieldError message={field.state.meta.errors[0]} />
             </div>
@@ -264,7 +264,7 @@ export default function Step1BusinessAccount({
       >
         {(field) => (
           <div>
-            <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+            <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
               <PhoneIcon className="w-3.5 h-3.5 text-orange-400" />
               Business Phone Number
             </Label>
@@ -276,11 +276,11 @@ export default function Step1BusinessAccount({
               onBlur={field.handleBlur}
               inputMode="numeric"
               placeholder="e.g. 2348012345678"
-              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
+              className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
             />
             <div className="flex items-center gap-1 mt-1">
-              <InfoIcon className="w-3 h-3 text-black/40 shrink-0" />
-              <p className="text-black/40 text-xs">
+              <InfoIcon className="w-3 h-3 text-gray-400 shrink-0" />
+              <p className="text-gray-400 text-xs">
                 This should be your WhatsApp Business number — buyers will be
                 sent here to chat.
               </p>
@@ -302,7 +302,7 @@ export default function Step1BusinessAccount({
       >
         {(field) => (
           <div>
-            <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+            <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
               <MailIcon className="w-3.5 h-3.5 text-orange-400" />
               Email
             </Label>
@@ -312,7 +312,7 @@ export default function Step1BusinessAccount({
               onChange={(e) => field.handleChange(e.target.value)}
               onBlur={field.handleBlur}
               placeholder="you@example.com"
-              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
+              className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
             />
             <FieldError message={field.state.meta.errors[0]} />
           </div>
@@ -331,7 +331,7 @@ export default function Step1BusinessAccount({
       >
         {(field) => (
           <div>
-            <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+            <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
               <MapPinIcon className="w-3.5 h-3.5 text-orange-400" />
               State
             </Label>
@@ -339,10 +339,10 @@ export default function Step1BusinessAccount({
               value={field.state.value}
               onValueChange={(v) => field.handleChange(v ?? "")}
             >
-              <SelectTrigger className="bg-transparent border-black/[0.3] w-full text-black h-11 focus:border-orange-500/50 focus:ring-orange-500/20">
+              <SelectTrigger className="w-full h-11 focus:border-orange-500/50 focus:ring-orange-500/20">
                 <SelectValue placeholder="Select your state" />
               </SelectTrigger>
-              <SelectContent className="bg-surface border-black/[0.3] z-50 text-black max-h-60">
+              <SelectContent className="z-50 max-h-60">
                 <SelectGroup>
                   {NIGERIA_STATES.map((s) => (
                     <SelectItem key={s} value={s}>
@@ -369,7 +369,7 @@ export default function Step1BusinessAccount({
       >
         {(field) => (
           <div>
-            <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+            <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
               <MapPinIcon className="w-3.5 h-3.5 text-orange-400" />
               Business Address
             </Label>
@@ -378,7 +378,7 @@ export default function Step1BusinessAccount({
               onChange={(e) => field.handleChange(e.target.value)}
               onBlur={field.handleBlur}
               placeholder="123 Main St, Ikeja"
-              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
+              className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11"
             />
             <div className="flex justify-end mt-1.5">
               <button
@@ -432,10 +432,10 @@ export default function Step1BusinessAccount({
       <form.Field name="referralCode">
         {(field) => (
           <div>
-            <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+            <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
               <GiftIcon className="w-3.5 h-3.5 text-orange-400" />
               Referral Code{" "}
-              <span className="text-black/35 font-normal">(optional)</span>
+              <span className="text-gray-400 font-normal">(optional)</span>
             </Label>
             <Input
               value={field.state.value ?? ""}
@@ -443,11 +443,11 @@ export default function Step1BusinessAccount({
               onBlur={field.handleBlur}
               disabled={referralLocked}
               placeholder="e.g. VLT7K2M"
-              className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 uppercase disabled:opacity-60 disabled:cursor-not-allowed"
+              className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11 uppercase disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <div className="flex items-center gap-1 mt-1">
-              <InfoIcon className="w-3 h-3 text-black/40 shrink-0" />
-              <p className="text-black/40 text-xs">
+              <InfoIcon className="w-3 h-3 text-gray-400 shrink-0" />
+              <p className="text-gray-400 text-xs">
                 {referralLocked
                   ? "Applied from your invite link."
                   : "Got invited by another vendor? Enter their code and they’ll earn a referral bonus once you verify your account and list a few products or services."}
@@ -470,7 +470,7 @@ export default function Step1BusinessAccount({
         >
           {(field) => (
             <div>
-              <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+              <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
                 <LockIcon className="w-3.5 h-3.5 text-orange-400" />
                 Password
               </Label>
@@ -482,12 +482,12 @@ export default function Step1BusinessAccount({
                   onBlur={field.handleBlur}
                   autoComplete="new-password"
                   placeholder="••••••••"
-                  className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
+                  className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
                 >
                   {showPassword ? (
                     <EyeOffIcon className="h-4 w-4" />
@@ -515,7 +515,7 @@ export default function Step1BusinessAccount({
         >
           {(field) => (
             <div>
-              <Label className="text-black/70 text-sm mb-1.5 flex items-center gap-2">
+              <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
                 <LockIcon className="w-3.5 h-3.5 text-orange-400" />
                 Confirm Password
               </Label>
@@ -527,12 +527,12 @@ export default function Step1BusinessAccount({
                   onBlur={field.handleBlur}
                   autoComplete="new-password"
                   placeholder="••••••••"
-                  className="bg-transparent border-black/[0.3] text-black placeholder:text-black/25 focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
+                  className="focus:border-orange-500/50 focus:ring-orange-500/20 h-11 pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/60 focus:outline-none cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
                 >
                   {showConfirmPassword ? (
                     <EyeOffIcon className="h-4 w-4" />
