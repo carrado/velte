@@ -973,6 +973,15 @@ function LogoutSection() {
 // ROOT — Settings Page
 // ══════════════════════════════════════════════════════════════════════════════
 
+// Hidden (2026-09-21, explicit product decision — "we will open it up
+// later"). A flag rather than deleting the section: PushNotificationToggle
+// itself, the push subscribe/unsubscribe plumbing behind it, and every
+// backend trigger that still sends a vendor push (new lead, wallet low
+// balance, ...) are all untouched — this only removes the vendor's own
+// affordance to manage the subscription from Settings. Flip back to `true`
+// to restore it; nothing else needs to change.
+const NOTIFICATIONS_SETTING_ENABLED = false;
+
 export default function SettingsPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-5">
@@ -1007,13 +1016,15 @@ export default function SettingsPage() {
         </SectionCard>
       </div>
 
-      <SectionCard
-        icon={BellIcon}
-        title="Notifications"
-        description="Push alerts for new leads, messages, and orders."
-      >
-        <PushNotificationToggle />
-      </SectionCard>
+      {NOTIFICATIONS_SETTING_ENABLED && (
+        <SectionCard
+          icon={BellIcon}
+          title="Notifications"
+          description="Push alerts for new leads, messages, and orders."
+        >
+          <PushNotificationToggle />
+        </SectionCard>
+      )}
 
       <FeedbackSection />
       <LogoutSection />

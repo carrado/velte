@@ -154,7 +154,7 @@ function IntroCard({
         whatsappHref && (
           <StoreWhatsAppButton
             href={whatsappHref}
-            label="Chat on WhatsApp"
+            label={`Chat ${store.name}`}
             className="w-full"
           />
         )
@@ -254,7 +254,7 @@ export default async function PublicStorePage({
         <div className="fixed bottom-0 inset-x-0 sm:hidden z-30 bg-white/95 backdrop-blur border-t border-gray-200 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
           <StoreWhatsAppButton
             href={whatsappHref}
-            label={`Chat with ${store.name}`}
+            label={`Chat ${store.name}`}
             className="w-full"
           />
         </div>

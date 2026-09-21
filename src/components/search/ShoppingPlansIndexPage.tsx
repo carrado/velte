@@ -11,7 +11,6 @@ import { fetchShoppingPlans } from "@/services/shoppingPlan";
 import { fmt } from "@/lib/product-price";
 import { cn } from "@/lib/utils";
 import {
-  BadgeCheckIcon,
   CalendarIcon,
   ChevronRightIcon,
   ClockIcon,
@@ -21,7 +20,6 @@ import {
   WalletIcon,
 } from "@/components/icons/hero";
 import { PackageIllustration } from "@/components/icons";
-import type { IconComponent } from "@/types/common";
 import type {
   ShoppingPlanStatus,
   ShoppingPlanSummary,
@@ -61,13 +59,12 @@ import type {
 // frosted white-glass treatment to stay legible on that fill in both
 // themes, same reasoning.
 //
-// Also grouped the plan grid by status (2026-09-20) — Active/Monitoring
-// plans get their own section ahead of anything paused/completed/cancelled/
-// expired, mirroring the detail page's own category-header treatment
-// (tinted bar, icon, count) rather than a flat grid mixing "still being
-// worked on" with "done" once a buyer has both kinds. Only shows up once
-// there's actually a mix — a buyer with only active plans (the common case)
-// still sees the plain flat grid, unchanged.
+// Briefly grouped the plan grid by status (2026-09-20) — Active/Monitoring
+// plans got their own section ahead of anything paused/completed/cancelled/
+// expired, mirroring the detail page's own category-header treatment. Dropped
+// the same way it arrived (2026-09-21, explicit request) — back to one flat
+// grid, with active plans still sorted first via `[...activePlans,
+// ...otherPlans]` but no labelled divider between them.
 //
 // Still purely presentational — every data source and handler is unchanged.
 //
@@ -277,7 +274,7 @@ function PlanRow({
       }}
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.99 }}
-      className="group relative flex w-full flex-col gap-3.5 overflow-hidden rounded-2xl border border-gray-100 bg-surface p-4 text-left shadow-sm transition-shadow hover:shadow-lg sm:p-5 xl:p-6 cursor-pointer"
+      className="group relative flex w-full flex-col gap-3.5 overflow-hidden rounded-2xl border border-gray-100 bg-surface p-4 text-left shadow-xs transition-shadow hover:shadow-sm sm:p-5 xl:p-6 cursor-pointer"
     >
       {/* A quiet accent wash in the corner — brand orange, never loud. */}
       <div
@@ -289,7 +286,7 @@ function PlanRow({
         <div className="flex min-w-0 items-center gap-3">
           <span
             className={cn(
-              "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm transition-transform group-hover:scale-105 bg-gradient-to-br xl:h-14 xl:w-14",
+              "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-xs transition-transform group-hover:scale-105 bg-gradient-to-br xl:h-14 xl:w-14",
               badgeGradient,
             )}
           >
@@ -374,65 +371,10 @@ function PlanRow({
   );
 }
 
-// One per status group (2026-09-20) — same tinted-bar-with-icon-and-count
-// language as ShoppingPlanDetailPage.tsx's own category headers, so the
-// list and a plan's own page read as one consistent feature rather than
-// two different visual systems. Only two tints exist because there are
-// only ever two groups here (unlike categories, which are freeform and
-// need a wider deterministic palette) — "orange" for the section actively
-// being worked on, "gray" for everything wound down.
-const SECTION_TINTS = {
-  orange: {
-    bar: "from-orange-50 to-transparent",
-    badge: "bg-gradient-to-br from-orange-400 to-orange-600",
-  },
-  gray: {
-    bar: "from-gray-100 to-transparent",
-    badge: "bg-gradient-to-br from-gray-400 to-gray-500",
-  },
-} as const;
-
-function PlanSectionHeader({
-  icon: Icon,
-  title,
-  count,
-  tint,
-  className,
-}: {
-  icon: IconComponent;
-  title: string;
-  count: number;
-  tint: keyof typeof SECTION_TINTS;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-3 rounded-xl bg-gradient-to-r px-3 py-2.5",
-        SECTION_TINTS[tint].bar,
-        className,
-      )}
-    >
-      <span
-        className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white shadow-sm",
-          SECTION_TINTS[tint].badge,
-        )}
-      >
-        <Icon size={15} />
-      </span>
-      <p className="text-sm font-bold text-ink">{title}</p>
-      <span className="ml-auto shrink-0 rounded-full bg-surface px-2.5 py-1 text-[11px] font-semibold text-gray-500 shadow-sm">
-        {count}
-      </span>
-    </div>
-  );
-}
-
 function PlanRowSkeleton({ index }: { index: number }) {
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border border-gray-100 bg-surface p-4 shadow-sm sm:p-5 xl:p-6"
+      className="relative overflow-hidden rounded-2xl border border-gray-100 bg-surface p-4 shadow-xs sm:p-5 xl:p-6"
       style={{ animationDelay: `${index * 80}ms` }}
     >
       <div className="flex items-start gap-3">
@@ -533,7 +475,7 @@ export function ShoppingPlansIndexPage() {
             `rgba(2,51,55,...)` (WalletHero's own choice, not tokenised for
             dark mode there either) — matching the existing pattern exactly
             is the point of this change. */}
-        <div className="relative overflow-hidden rounded-3xl border border-gray-100 bg-surface p-4 shadow-sm sm:p-6 xl:p-8">
+        <div className="relative overflow-hidden rounded-3xl border border-gray-100 bg-surface p-4 shadow-xs sm:p-6 xl:p-8">
           <div
             aria-hidden
             className="pointer-events-none absolute -top-28 -right-24 h-80 w-80 rounded-full bg-orange-100/70 blur-3xl"
@@ -558,7 +500,7 @@ export function ShoppingPlansIndexPage() {
                 whatever space remained beside the icon instead of using the
                 width actually available. */}
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-sm shadow-orange-200 xl:h-12 xl:w-12">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-xs xl:h-12 xl:w-12">
                 <ShoppingCartIcon size={20} />
               </span>
               <h1 className="text-lg font-bold text-ink sm:text-xl xl:text-2xl">
@@ -596,7 +538,7 @@ export function ShoppingPlansIndexPage() {
             // could span the hero's own full width had no reason to stop
             // partway across it on a wide screen.
             <div className="relative mt-5 grid grid-cols-3 gap-2 sm:gap-3 xl:mt-8">
-              <div className="flex flex-col items-center gap-1 rounded-2xl border border-gray-100 bg-surface/70 py-3 text-center shadow-sm backdrop-blur sm:flex-row sm:items-center sm:gap-2.5 sm:px-3 sm:text-left xl:py-4">
+              <div className="flex flex-col items-center gap-1 rounded-2xl border border-gray-100 bg-surface/70 py-3 text-center shadow-xs backdrop-blur sm:flex-row sm:items-center sm:gap-2.5 sm:px-3 sm:text-left xl:py-4">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600">
                   <ShoppingCartIcon size={13} />
                 </span>
@@ -609,7 +551,7 @@ export function ShoppingPlansIndexPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col items-center gap-1 rounded-2xl border border-gray-100 bg-surface/70 py-3 text-center shadow-sm backdrop-blur sm:flex-row sm:items-center sm:gap-2.5 sm:px-3 sm:text-left xl:py-4">
+              <div className="flex flex-col items-center gap-1 rounded-2xl border border-gray-100 bg-surface/70 py-3 text-center shadow-xs backdrop-blur sm:flex-row sm:items-center sm:gap-2.5 sm:px-3 sm:text-left xl:py-4">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600">
                   <TargetIcon size={13} />
                 </span>
@@ -622,7 +564,7 @@ export function ShoppingPlansIndexPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col items-center gap-1 rounded-2xl border border-gray-100 bg-surface/70 py-3 text-center shadow-sm backdrop-blur sm:flex-row sm:items-center sm:gap-2.5 sm:px-3 sm:text-left xl:py-4">
+              <div className="flex flex-col items-center gap-1 rounded-2xl border border-gray-100 bg-surface/70 py-3 text-center shadow-xs backdrop-blur sm:flex-row sm:items-center sm:gap-2.5 sm:px-3 sm:text-left xl:py-4">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600">
                   <WalletIcon size={13} />
                 </span>
@@ -673,39 +615,6 @@ export function ShoppingPlansIndexPage() {
               &ldquo;I need an office set up by Monday&rdquo;
             </p>
           </div>
-        ) : otherPlans.length > 0 ? (
-          // Split into two sections only once there's an actual mix to
-          // split (2026-09-20) — a buyer whose plans are all still active
-          // (the common case) sees the plain flat grid below, unchanged.
-          // Mirrors ShoppingPlanDetailPage.tsx's own category-header
-          // treatment (tinted bar, icon, count) so a plan's own page and
-          // this list use the same visual language for "this is a group,
-          // not just the first row of one".
-          <>
-            <PlanSectionHeader
-              icon={ShoppingCartIcon}
-              title="Active"
-              count={activePlans.length}
-              tint="orange"
-            />
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:gap-4">
-              {activePlans.map((plan, i) => (
-                <PlanRow key={plan.id} plan={plan} index={i} />
-              ))}
-            </div>
-            <PlanSectionHeader
-              icon={BadgeCheckIcon}
-              title="Completed & other"
-              count={otherPlans.length}
-              tint="gray"
-              className="mt-6"
-            />
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:gap-4">
-              {otherPlans.map((plan, i) => (
-                <PlanRow key={plan.id} plan={plan} index={i} />
-              ))}
-            </div>
-          </>
         ) : (
           // A grid, not a stacked list, now that this page runs full width
           // — a single column of cards stretched across a wide desktop
@@ -716,8 +625,14 @@ export function ShoppingPlansIndexPage() {
           // the whole time for the same reason: a card carrying this much
           // per-plan content reads better with more width per card than
           // with a 3rd column squeezed in.
+          //
+          // No more "Active"/"Completed & other" section headers
+          // (2026-09-21, explicit request, reversing the 2026-09-20 split
+          // above) — active plans still sort first via
+          // `[...activePlans, ...otherPlans]`, just without a labelled
+          // divider between them.
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:gap-4">
-            {plans.map((plan, i) => (
+            {[...activePlans, ...otherPlans].map((plan, i) => (
               <PlanRow key={plan.id} plan={plan} index={i} />
             ))}
           </div>

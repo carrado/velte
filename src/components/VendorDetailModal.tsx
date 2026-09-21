@@ -72,7 +72,7 @@ export function VendorDetailModal({
             {chatHref && (
               <WhatsAppButton
                 href={chatHref}
-                label="Chat on WhatsApp"
+                label={`Chat ${item.name}`}
                 className="w-full"
                 onClick={onChatClick}
               />
