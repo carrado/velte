@@ -490,20 +490,24 @@ export interface ExternalOffer {
    *  lives on the page. */
   attributes: { name: string; value: string }[];
   /** The shop selling it ("Slot", "Electromart", "Jumia", "Jiji", …) as the
-   *  source reported it — a NAMED merchant from connectors/serper.ts's list,
-   *  which today means Jumia, a Shopify/WooCommerce Nigerian store
-   *  (2026-09-13, Jumia re-added 2026-09-14), or Jiji's own search page
-   *  (2026-09-20 — see that file's own header on each). */
+   *  source reported it — a NAMED merchant from connectors/serper.ts's list
+   *  (Jumia, or a Shopify/WooCommerce Nigerian store), or "Jiji" from its own
+   *  dedicated connector (connectors/jiji.ts, 2026-09-21). */
   merchant: string | null;
   /** Which of the buckets this belongs to in the "off Velte" results UI
    *  (2026-09-14, Jiji added as a fourth 2026-09-20) — see
    *  connectors/serper.ts's Merchant.platform for the full reasoning on
-   *  jumia/shopify/woocommerce. `"jiji"` is different in kind from the other
-   *  three: it never names a confirmed listing (see `isDirectLink` below),
-   *  it's just a place to keep looking. A merchant whose platform can't be
-   *  told apart (the generic URL-shape-only match) never produces an offer
-   *  at all, rather than guessing which bucket it belongs in — so every
-   *  offer that exists here has one. */
+   *  jumia/shopify/woocommerce. `"jiji"` is still its own bucket, even
+   *  though connectors/jiji.ts (2026-09-21) can now match a real, individual
+   *  listing with real photos rather than only ever producing a plain search
+   *  link: those three are structured retailer product pages, and a Jiji
+   *  match is one person's own classifieds ad (see that file's own header
+   *  on the live incident — a clean first photo, damage in a later one —
+   *  that's why the FULL gallery, not just `imageUrl`, matters so much more
+   *  for this platform than for the other three). A merchant whose platform
+   *  can't be told apart (the generic URL-shape-only match) never produces
+   *  an offer at all, rather than guessing which bucket it belongs in — so
+   *  every offer that exists here has one. */
   platform: "jumia" | "shopify" | "woocommerce" | "jiji";
   /** Which connector produced this (see ExternalConnector.name). */
   source: string;
@@ -513,13 +517,14 @@ export interface ExternalOffer {
    *  product decision: an offer that can't be confidently matched to a real
    *  product page is dropped entirely rather than falling back to the
    *  merchant's own search page — no more "View on Slot" that actually
-   *  lands on a results page for the item's name). FALSE only for the Jiji
-   *  fallback (2026-09-20) — the one deliberate exception, since a
-   *  classifieds listing was never trustworthy enough to match individually
-   *  in the first place (see connectors/serper.ts's header on why Jiji was
-   *  removed from the matching pipeline itself and stays removed there).
-   *  This is exactly the "future source that CAN'T always produce a direct
-   *  link" this field was originally kept around for. */
+   *  lands on a results page for the item's name). Also true for a
+   *  real Jiji listing match (2026-09-21, connectors/jiji.ts) — it links
+   *  straight to that ad's own page, same as any other direct link; FALSE
+   *  only for Jiji's own last-resort fallback (a plain search-results link,
+   *  used when nothing on the page matched or it couldn't be read at all —
+   *  see that file's own buildSearchFallback). This is exactly the "future
+   *  source that CAN'T always produce a direct link" this field was
+   *  originally kept around for. */
   isDirectLink: boolean;
 }
 

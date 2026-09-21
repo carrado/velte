@@ -33,7 +33,16 @@ const SEARCH_URL = "https://google.serper.dev/search";
 // runs the buyer has already been told Velte has nothing; making them wait
 // much longer for a consolation list is a worse experience than not
 // showing one. Both lookups run in parallel and share it.
-const TIMEOUT_MS = 6000;
+//
+// Raised from 6000 (2026-09-21, found live alongside the per-call `.catch`
+// fix a few lines below) — measured directly against Serper: the shopping
+// call alone routinely takes ~4-5s, against the organic call's ~2s, leaving
+// almost no margin at 6000ms before an ordinary bit of jitter tips the
+// shared AbortController into firing. The per-call `.catch` fix means a
+// timeout no longer wipes out the OTHER call's real results either way, but
+// there's no reason to keep a ceiling this tight when the slower of the two
+// calls needs nearly all of it just to succeed on a normal day.
+const TIMEOUT_MS = 9000;
 
 const DEFAULT_LIMIT = 6;
 
@@ -59,20 +68,18 @@ const DEFAULT_LIMIT = 6;
 // the reasoning that first added, then re-added, Konga/Jiji before the
 // 2026-09-13 decision.
 //
-// JIJI IS BACK (2026-09-20, explicit product decision) but NOT here, and
-// that distinction is the whole point. It still never appears as a NAMED
-// merchant and is still explicitly blocked from the generic Layer-2 match
-// below (see NOT_A_SHOP) — a classifieds listing is still not something
-// this file will match to a specific "product page" and show a price/photo
-// for as if confirmed (see the live "broken screen past photo one" case in
-// ExternalOffer.galleryUrls's own comment; that risk hasn't gone anywhere).
-// What changed: `search()` now always appends ONE extra offer — a plain
-// link to Jiji's own search results for the buyer's exact query, no listing
-// matched, `isDirectLink: false` — because Jiji's own category breadth
-// (used goods, services, anything informal) covers most of what this file's
-// narrow curated list of shops structurally cannot, and a dead end with
-// nothing to try at all is worse than one honest "keep looking here" link.
-// See jijiOffer's own comment further down for the implementation.
+// JIJI IS NOT HERE, and never has been, and that distinction is the whole
+// point. It still never appears as a NAMED merchant and is still explicitly
+// blocked from the generic Layer-2 match below (see NOT_A_SHOP) — a
+// classifieds listing surfaced via GOOGLE (Shopping or organic) is a stale,
+// unverified snapshot this file has no way to re-check, which is a
+// meaningfully worse position than reading Jiji's own live search page
+// directly. Jiji gets its own connector instead (connectors/jiji.ts,
+// 2026-09-21) — it scrapes jiji.ng's own current search results (real
+// matching, real photos, real direct links, with its own mitigation for the
+// live "broken screen past photo one" incident recorded there — see that
+// file's own header for the full history, including why it was a plain
+// search-link-only fallback here in between).
 //
 // Two layers remain:
 //   1. NAMED merchants below — real shops worth knowing individually,
@@ -115,10 +122,10 @@ interface Merchant {
   productPath: RegExp;
   /** Which of the three MATCHED-listing buckets this shows up under in the
    *  dead-end UI (2026-09-14) — Jiji is a fourth bucket at the
-   *  ExternalOffer level (2026-09-20, see buildJijiOffer) but is never a
-   *  `Merchant` at all, so it has no place in this union. Jumia gets its
-   *  own, since it's a custom-built marketplace and neither of the other
-   *  two; every NAMED merchant below is pinned to whichever it actually is,
+   *  ExternalOffer level (its own connector, connectors/jiji.ts) but is
+   *  never a `Merchant` at all, so it has no place in this union. Jumia
+   *  gets its own, since it's a custom-built marketplace and neither of the
+   *  other two; every NAMED merchant below is pinned to whichever it actually is,
    *  matching whichever of shopifySearch/wooSearch it's built with.
    *  REQUIRED for every named
    *  entry — deliberately absent (not guessed) on the generic Layer-2
@@ -151,12 +158,6 @@ const shopifySearch = (host: string) => (q: string) =>
   `https://${host}/search?q=${encodeURIComponent(q)}`;
 const wooSearch = (host: string) => (q: string) =>
   `https://${host}/?s=${encodeURIComponent(q)}&post_type=product`;
-/** Verified live 2026-09-20 (`jiji.ng/search?query=...` returns a real
- *  "N results for <query> in Nigeria" page) — see jijiOffer's own comment on
- *  why this is the ONLY thing Jiji ever contributes here, never a matched
- *  listing. */
-const jijiSearch = (q: string) =>
-  `https://jiji.ng/search?query=${encodeURIComponent(q)}`;
 
 // Product-page shape Shopify and WooCommerce both default to: `/product/`
 // or `/products/`. Deliberately just this one shape (see the header comment
@@ -199,14 +200,15 @@ const NG_SHOPS_ON_GENERIC_TLDS = new Set([
 // of removing their MERCHANTS entries below — GENERIC_PRODUCT_PATH never
 // matched either, so this is redundant today, but a future widening of
 // that pattern must not be able to quietly let them back in through the
-// generic layer. jiji STAYS here even after 2026-09-20's search-link
-// re-add (see this file's header) — that re-add is a hardcoded search URL
-// built straight from the query, entirely outside merchantFor/isNigerianShop,
-// so this line still does its original job of keeping an actual jiji.ng
-// result from Google Shopping/organic search from ever being matched as a
-// confirmed listing. jumia is NOT here (removed 2026-09-14, see its
-// MERCHANTS entry above) — it's named explicitly and must resolve there
-// instead.
+// generic layer. jiji STAYS here even now that it has its own dedicated
+// connector (connectors/jiji.ts, 2026-09-21, reading jiji.ng's own live
+// search page directly) — this line's job was never about Jiji having no
+// connector at all, only about keeping a STALE jiji.ng result surfaced via
+// GOOGLE (Shopping or organic — this file's own sources) from ever being
+// matched as a confirmed listing through a pipeline built and verified
+// against Shopify/WooCommerce product pages, not classifieds ads. jumia is
+// NOT here (removed 2026-09-14, see its MERCHANTS entry above) — it's named
+// explicitly and must resolve there instead.
 const NOT_A_SHOP =
   /(^|\.)(facebook|instagram|twitter|youtube|tiktok|pinterest|reddit|linkedin|wikipedia|blogspot|wordpress|medium|quora|nairaland|naijatechguide|legit|punchng|vanguardngr|dailypost|businessday|guardian|amazon|ebay|aliexpress|alibaba|made-in-china|desertcart|ubuy|u-buy|microless|raptorsupplies|temu|wish|konga|jiji)\./i;
 
@@ -830,36 +832,6 @@ async function post<T>(
   return (await res.json()) as T;
 }
 
-/**
- * The one Jiji offer this file ever produces (2026-09-20) — a plain link to
- * Jiji's own search results for the buyer's exact query, never a matched
- * listing. See this file's header ("JIJI IS BACK...") for why a search link
- * and not a matched product page, and NOT_A_SHOP's own comment for why an
- * actual jiji.ng result from Google Shopping/organic search still can't
- * become one of THOSE by a different route.
- *
- * Deliberately needs no network call and can't fail, so it's cheap enough to
- * build unconditionally and safe to hand back even when the real lookup
- * below times out or errors — a dead end should never come back with
- * literally nothing to try next.
- */
-function buildJijiOffer(q: string): ExternalOffer {
-  return {
-    id: "jiji-search",
-    title: q,
-    priceText: null,
-    imageUrl: null,
-    galleryUrls: [],
-    description: null,
-    attributes: [],
-    merchant: "Jiji",
-    platform: "jiji",
-    source: "serper",
-    url: jijiSearch(q),
-    isDirectLink: false,
-  };
-}
-
 export const serperConnector: ExternalConnector = {
   name: "serper",
 
@@ -871,7 +843,6 @@ export const serperConnector: ExternalConnector = {
     const apiKey = process.env.SERPER_API_KEY;
     const q = query.trim();
     if (!apiKey || !q) return [];
-    const jijiOffer = buildJijiOffer(q);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -890,13 +861,39 @@ export const serperConnector: ExternalConnector = {
       const siteFilter = SITE_RESTRICTED_DOMAINS.map((d) => `site:${d}`).join(
         " OR ",
       );
+      // EACH call's own failure is swallowed here individually (2026-09-21,
+      // found live: buyers were getting only the Jiji fallback and nothing
+      // from this connector at all, every time). This used to be a bare
+      // `Promise.all([...])` with no per-call `.catch` — `post()` only
+      // degrades an HTTP-level failure (non-ok status) to `null`; a
+      // NETWORK-level failure, and in particular the shared AbortController's
+      // own timeout firing, throws out of `fetch()` and propagates as a
+      // REJECTED promise. `Promise.all` fails fast on the first rejection, so
+      // the whole `try` block's `catch` below fires instead, discarding BOTH
+      // results, not just the one that failed. Measured live: the shopping
+      // call alone routinely takes ~4-5s against a 6s TIMEOUT_MS shared by
+      // both calls (the organic call is faster, ~2s) — essentially no margin,
+      // so an ordinary bit of network jitter aborts both fetches together via
+      // the one shared `controller.signal`, and this whole connector came
+      // back with nothing. The organic call succeeding is exactly what
+      // Pass 2 needs to produce real offers even with no shopping match at
+      // all — losing it to the OTHER call's timeout was the actual bug. Each
+      // promise now resolves to its own `null` on its own failure, matching
+      // what `post()` already returns for an HTTP failure, so one call's
+      // timeout can no longer erase the other's real results.
       const [shoppingRes, organicRes] = await Promise.all([
         post<{ shopping?: SerperShoppingItem[] }>(
           SHOPPING_URL,
           apiKey,
           { q, gl: country, hl: "en", num: limit * 2 },
           controller.signal,
-        ),
+        ).catch((err) => {
+          console.error(
+            "[connectors/serper] shopping call failed:",
+            err instanceof Error ? err.message : err,
+          );
+          return null;
+        }),
         post<{ organic?: SerperOrganicItem[] }>(
           SEARCH_URL,
           apiKey,
@@ -907,7 +904,13 @@ export const serperConnector: ExternalConnector = {
           // only visible as offers quietly drying up.
           { q: `${q} (${siteFilter})`, gl: country, hl: "en", num: 10 },
           controller.signal,
-        ),
+        ).catch((err) => {
+          console.error(
+            "[connectors/serper] organic call failed:",
+            err instanceof Error ? err.message : err,
+          );
+          return null;
+        }),
       ]);
 
       const directLinks: DirectLink[] = [];
@@ -1071,23 +1074,19 @@ export const serperConnector: ExternalConnector = {
           offer.attributes = found.attributes;
         }
       }
-      // Appended LAST, always — see buildJijiOffer's own comment. Last so
-      // fetchExternalOffers' own per-connector cap (see connectors/index.ts)
-      // fills confirmed matches first and only reaches this when there's
-      // still room; a turn that already found `limit` real listings has no
-      // real need for it, and one that found few or none is exactly the
-      // case it exists for.
-      return [...clean, jijiOffer];
+      return clean;
     } catch (err) {
       // Includes the abort above. Never rethrown — see the connector
-      // contract's "never throw" rule. Still hands back the Jiji link even
-      // on a total lookup failure (see buildJijiOffer) — a dead end
-      // shouldn't come back with nothing just because Serper itself is down.
+      // contract's "never throw" rule. Jiji has its own connector now
+      // (connectors/jiji.ts) with its own fallback, so this one can simply
+      // come back empty — fetchExternalOffers' own orchestrator still has
+      // Jiji's results to fall back on, same as any other connector failing
+      // independently.
       console.error(
         "[connectors/serper] lookup failed:",
         err instanceof Error ? err.message : err,
       );
-      return [jijiOffer];
+      return [];
     } finally {
       clearTimeout(timer);
     }
