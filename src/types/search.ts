@@ -489,30 +489,37 @@ export interface ExternalOffer {
    *  128GB storage, Used, no cracks", and this is where that actually
    *  lives on the page. */
   attributes: { name: string; value: string }[];
-  /** The shop selling it ("Slot", "Electromart", "Jumia", …) as the source
-   *  reported it — a NAMED merchant from connectors/serper.ts's list, which
-   *  today means Jumia or a Shopify/WooCommerce Nigerian store (2026-09-13,
-   *  Jumia re-added 2026-09-14 — see that file's own header). */
+  /** The shop selling it ("Slot", "Electromart", "Jumia", "Jiji", …) as the
+   *  source reported it — a NAMED merchant from connectors/serper.ts's list,
+   *  which today means Jumia, a Shopify/WooCommerce Nigerian store
+   *  (2026-09-13, Jumia re-added 2026-09-14), or Jiji's own search page
+   *  (2026-09-20 — see that file's own header on each). */
   merchant: string | null;
-  /** Which of the three buckets this belongs to in the "off Velte" results
-   *  UI (2026-09-14) — see connectors/serper.ts's Merchant.platform for the
-   *  full reasoning. A merchant whose platform can't be told apart (the
-   *  generic URL-shape-only match) never produces an offer at all any
-   *  more, rather than guessing which of the three it belongs in — so
-   *  every offer that exists here has one. */
-  platform: "jumia" | "shopify" | "woocommerce";
+  /** Which of the buckets this belongs to in the "off Velte" results UI
+   *  (2026-09-14, Jiji added as a fourth 2026-09-20) — see
+   *  connectors/serper.ts's Merchant.platform for the full reasoning on
+   *  jumia/shopify/woocommerce. `"jiji"` is different in kind from the other
+   *  three: it never names a confirmed listing (see `isDirectLink` below),
+   *  it's just a place to keep looking. A merchant whose platform can't be
+   *  told apart (the generic URL-shape-only match) never produces an offer
+   *  at all, rather than guessing which bucket it belongs in — so every
+   *  offer that exists here has one. */
+  platform: "jumia" | "shopify" | "woocommerce" | "jiji";
   /** Which connector produced this (see ExternalConnector.name). */
   source: string;
   url: string;
-  /** Whether `url` is this exact listing's own product page. ALWAYS true
-   *  today (2026-09-14, explicit product decision): an offer the connector
-   *  can't confidently match to a real product page is now dropped
-   *  entirely rather than falling back to the merchant's own search page —
-   *  no more "View on Slot" that actually lands on a results page for the
-   *  item's name. Kept as a field (rather than deleted) for the connector
-   *  contract's own sake: a future source that CAN'T always produce a
-   *  direct link should say so honestly here, not report `true` by
-   *  default. */
+  /** Whether `url` is this exact listing's own product page. True for
+   *  everything the connector actually matches (2026-09-14, explicit
+   *  product decision: an offer that can't be confidently matched to a real
+   *  product page is dropped entirely rather than falling back to the
+   *  merchant's own search page — no more "View on Slot" that actually
+   *  lands on a results page for the item's name). FALSE only for the Jiji
+   *  fallback (2026-09-20) — the one deliberate exception, since a
+   *  classifieds listing was never trustworthy enough to match individually
+   *  in the first place (see connectors/serper.ts's header on why Jiji was
+   *  removed from the matching pipeline itself and stays removed there).
+   *  This is exactly the "future source that CAN'T always produce a direct
+   *  link" this field was originally kept around for. */
   isDirectLink: boolean;
 }
 
@@ -1171,6 +1178,20 @@ export type SearchStreamEvent =
       // whenever no tool is in play — never omitted, matching
       // sessionToolAtTurnEnd's own always-explicit contract server-side.
       activeTool: ComposerTool | null;
+      // Who the SERVER actually charged this turn to, injected once by
+      // sendFinal (2026-09-20) — same pattern as knownBudgetNaira/activeTool
+      // above, never set per call site. Exists so the client can catch its
+      // own identity going stale: `runSearchStream`'s `isGuest` flag comes
+      // from the buyer/vendor store in memory, which nothing re-validates
+      // once a session cookie has actually expired — a signed-in buyer whose
+      // token died mid-tab still looks signed-in client-side, skips the
+      // guest credit gate entirely, and lands here with the server having
+      // resolved neither cookie and quietly served (and never charged) the
+      // turn as a guest. Comparing this field against the caller's own
+      // `isGuest` is what lets searchStream.ts notice that mismatch and
+      // correct it, instead of the buyer silently getting unlimited free
+      // turns for as long as the tab stays open.
+      actorType: "guest" | "buyer" | "vendor";
     }
   | { type: "error"; message: string };
 
@@ -1412,4 +1433,12 @@ export interface StoredConversation {
   // payoff: a resumed conversation never re-asks for location.
   buyerLocation: StoredBuyerLocation | null;
   lastActiveAt: string;
+  // Internal only — the account this conversation is attached to, if any
+  // (exactly one of the two, never both — same either-identity rule the
+  // ai-search backend's own ownershipFilter follows). Present on what the
+  // ai-search backend returns; the BFF route strips both (and refuses the
+  // whole conversation on a mismatch) before this type's value ever
+  // reaches a browser, so treat them as absent on the client side.
+  buyerId?: string | null;
+  vendorId?: string | null;
 }

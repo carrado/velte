@@ -2,7 +2,14 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -146,11 +153,14 @@ const RECENT_STATUS_MEMORY = 8;
 // dead-end and offer messages — it's a measure, not a box.
 const AI_MESSAGE_CLASS = "max-w-md";
 
-// The three buckets the off-Velte offers list is grouped into (2026-09-14,
-// see connectors/serper.ts's Merchant.platform for the full reasoning).
-// Order matters here — it's display order, Jumia first as the one most
-// buyers already recognise. A bucket with no offers this turn simply isn't
-// rendered; see the map site below.
+// The buckets the off-Velte offers list is grouped into (2026-09-14, "jiji"
+// added 2026-09-20 — see connectors/serper.ts's Merchant.platform and its
+// buildJijiOffer for the full reasoning on each). Order matters here — it's
+// display order, confirmed listings first (Jumia, then the two platform
+// buckets), Jiji LAST since it's a search link rather than a matched
+// listing — the other three should read as "here it is", Jiji as "keep
+// looking here". A bucket with no offers this turn simply isn't rendered;
+// see the map site below.
 const EXTERNAL_OFFER_PLATFORMS: {
   key: ExternalOffer["platform"];
   label: string;
@@ -158,6 +168,7 @@ const EXTERNAL_OFFER_PLATFORMS: {
   { key: "jumia", label: "On Jumia" },
   { key: "shopify", label: "On Shopify stores" },
   { key: "woocommerce", label: "On WooCommerce stores" },
+  { key: "jiji", label: "On Jiji" },
 ];
 
 // Found live: the gate used to fire even when the buyer's OWN message
@@ -1721,17 +1732,20 @@ function ConversationTurnView({
                                 valueLabel="Best price"
                               />
                             ))}
-                          {/* Grouped into the three buckets the connector
-                            now confines itself to (2026-09-14) — Jumia,
-                            Shopify, WooCommerce — each its own small
-                            carousel, and a bucket that came back empty
-                            renders nothing rather than an empty heading.
-                            The `platform` field is what makes this safe:
-                            connectors/serper.ts only ever produces an
-                            offer once it has a confirmed platform AND a
-                            confirmed direct product-page link, so there is
-                            nothing here for this UI to accidentally
-                            mis-bucket or point at a shop's search page. */}
+                          {/* Grouped into the buckets the connector
+                            confines itself to (2026-09-14, "jiji" added
+                            2026-09-20) — Jumia, Shopify, WooCommerce, Jiji —
+                            each its own small carousel, and a bucket that
+                            came back empty renders nothing rather than an
+                            empty heading. The `platform` field is what makes
+                            this safe: connectors/serper.ts only ever
+                            produces an offer once it has a confirmed
+                            platform, and for the first three that also means
+                            a confirmed direct product-page link — Jiji is
+                            the one deliberate exception, always a plain
+                            search-page link instead (see ExternalOfferCard's
+                            own `isDirectLink` branch for how that renders
+                            differently). */}
                           {EXTERNAL_OFFER_PLATFORMS.map(({ key, label }) => {
                             const offers = turn.externalOffers.filter(
                               (offer) => offer.platform === key,
@@ -2058,6 +2072,26 @@ export function SearchHome() {
   // unchanged; route.ts's toolAlignment.ts enforces it server-side — this
   // is a promise, not just decoration.
   const [activeTool, setActiveTool] = useState<ComposerTool | null>(null);
+  // The active-tool badge's own measured width (2026-09-20, fixing a found-
+  // live wrap bug) — badge and textarea used to share a flex row, which
+  // squeezed the textarea into a narrower column for EVERY line, not just
+  // the one beside the badge, so a wrapped reply read as a cramped paragraph
+  // rather than normal text. The badge is now absolutely positioned over the
+  // textarea instead, and this width becomes that textarea's `text-indent`
+  // (only ever indents a field's very first line, exactly the one line that
+  // needs to clear the badge — every line after it, wrapped or typed, flows
+  // the full width like normal). Measured via ref rather than hardcoded
+  // because the two tools' labels ("Compare" vs "Shopping Plan") aren't the
+  // same width.
+  const toolBadgeRef = useRef<HTMLButtonElement>(null);
+  const [toolBadgeIndent, setToolBadgeIndent] = useState(0);
+  useLayoutEffect(() => {
+    if (!activeTool) {
+      setToolBadgeIndent(0);
+      return;
+    }
+    setToolBadgeIndent((toolBadgeRef.current?.offsetWidth ?? 0) + 8);
+  }, [activeTool]);
   // Set instead of activeTool (2026-09-06) when a tool pick's own cost is
   // more than the current balance can cover — see CreditGateModal's own
   // comment on why this is checked at SELECTION time rather than waiting
@@ -3646,6 +3680,16 @@ export function SearchHome() {
         isGuest: !(
           useBuyerStore.getState().buyer || useUserStore.getState().user
         ),
+        // See runSearchStream's own comment on this field — this browser's
+        // buyer/vendor session actually died server-side but neither store
+        // noticed on its own, so the guest gate above was wrongly skipped.
+        // Clearing both here is what makes the NEXT turn correctly guest-
+        // gated instead of repeating this same free ride for as long as the
+        // tab stays open; harmless to clear whichever one was never set.
+        onStaleSession: () => {
+          useBuyerStore.getState().clearBuyer();
+          useUserStore.getState().clearUser();
+        },
         onStatus: (text) => {
           updateTurn(turnId, { status: text });
           shownStatusesRef.current = [...shownStatusesRef.current, text].slice(
@@ -5340,14 +5384,20 @@ export function SearchHome() {
         </div>
       ) : (
         <div className="flex flex-col bg-surface rounded-[28px] border border-gray-200 shadow-sm focus-within:border-gray-300 focus-within:shadow-md transition-shadow">
-          {/* Badge + textarea share one row so the badge reads as
-              "attached to" the input, not a separate line above it — the
-              badge is `shrink-0`, the textarea takes the rest. It is
-              never part of `query` itself: nothing typed here can ever
-              touch it, which is what makes a single Backspace enough to
-              remove it (see handleComposerKeyDown) and what guarantees the
-              message actually SENT never carries its label. */}
-          <div className="flex items-center gap-2 px-5 pt-4">
+          {/* The badge sits absolutely over the textarea's own first line
+              (2026-09-20 — was a shared flex row, which squeezed the
+              textarea into a narrower column on EVERY line, not just the
+              one beside the badge, so a wrapped reply read as a cramped
+              column instead of flowing normally; found live). The
+              textarea's `textIndent` (below) reserves just enough room on
+              that first line for the badge to sit in — text-indent only
+              ever affects a field's first line, so every line after it,
+              wrapped or typed, uses the full width. The badge is never
+              part of `query` itself: nothing typed here can ever touch it,
+              which is what makes a single Backspace enough to remove it
+              (see handleComposerKeyDown) and what guarantees the message
+              actually SENT never carries its label. */}
+          <div className="relative px-5 pt-4">
             {activeTool && (
               // A button, not a static span — clicking it removes the tool
               // the same way Backspace does (see handleComposerKeyDown's own
@@ -5356,10 +5406,11 @@ export function SearchHome() {
               // reply's own "tap the icon to turn it off" told buyers to
               // click that actually did nothing (found live).
               <button
+                ref={toolBadgeRef}
                 type="button"
                 onClick={() => setActiveTool(null)}
                 title={`Remove ${COMPOSER_TOOL_META[activeTool].label}`}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-600 hover:bg-orange-100 transition-colors cursor-pointer"
+                className="absolute left-5 top-4 z-10 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-600 hover:bg-orange-100 transition-colors cursor-pointer"
               >
                 {(() => {
                   const ToolIcon = COMPOSER_TOOL_META[activeTool].icon;
@@ -5376,6 +5427,7 @@ export function SearchHome() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleComposerKeyDown}
               onPaste={handleComposerPaste}
+              style={{ textIndent: toolBadgeIndent }}
               // `isSending` — per explicit request, the composer locks while
               // Velte is still generating a response, same as the Send
               // button already effectively required (trySubmit's own

@@ -42,23 +42,37 @@ const DEFAULT_LIMIT = 6;
 //
 // SHOPIFY + WOOCOMMERCE NIGERIAN STORES, PLUS JUMIA BY NAME (2026-09-13,
 // explicit product decision; Jumia re-added 2026-09-14, also explicit —
-// see its MERCHANTS entry below). Konga, Jiji and oraimo's own storefront
-// stay REMOVED — none of the three ran on either platform (Konga is a
-// custom-built marketplace like Jumia, Jiji is a classifieds site with no
-// real merchant behind each listing, oraimo's store answered neither a
-// Shopify nor a WooCommerce search page), and the earlier "no search
-// fallback, direct-link-only" carve-out that let Jiji/Konga through isn't a
-// distinction worth keeping now that neither belongs in the list at all.
-// Bumpa's generic-domain carve-out (`NG_SHOPS_ON_GENERIC_TLDS`'s
-// `bumpa.shop` suffix) is dropped for the same reason: Bumpa is its own
-// SaaS platform, not Shopify or WooCommerce, however close the storefronts
-// it powers may look to one. Jumia is the one deliberate exception to the
-// platform rule — a custom-built marketplace, not Shopify/WooCommerce, but
-// named explicitly rather than left out, unlike Konga: too large a share of
-// Nigerian shopping traffic to drop from the external list on platform
-// grounds alone. See git history for the removed entries and the reasoning
-// that first added, then re-added, Konga/Jiji before the 2026-09-13
-// decision.
+// see its MERCHANTS entry below). Konga and oraimo's own storefront stay
+// REMOVED — neither ran on either platform (Konga is a custom-built
+// marketplace like Jumia; oraimo's store answered neither a Shopify nor a
+// WooCommerce search page), and the earlier "no search fallback,
+// direct-link-only" carve-out that let Konga through isn't a distinction
+// worth keeping now that it doesn't belong in the list at all. Bumpa's
+// generic-domain carve-out (`NG_SHOPS_ON_GENERIC_TLDS`'s `bumpa.shop`
+// suffix) is dropped for the same reason: Bumpa is its own SaaS platform,
+// not Shopify or WooCommerce, however close the storefronts it powers may
+// look to one. Jumia is the one deliberate exception to the platform rule
+// among NAMED merchants — a custom-built marketplace, not Shopify/
+// WooCommerce, but named explicitly rather than left out, unlike Konga: too
+// large a share of Nigerian shopping traffic to drop from the external list
+// on platform grounds alone. See git history for the removed entries and
+// the reasoning that first added, then re-added, Konga/Jiji before the
+// 2026-09-13 decision.
+//
+// JIJI IS BACK (2026-09-20, explicit product decision) but NOT here, and
+// that distinction is the whole point. It still never appears as a NAMED
+// merchant and is still explicitly blocked from the generic Layer-2 match
+// below (see NOT_A_SHOP) — a classifieds listing is still not something
+// this file will match to a specific "product page" and show a price/photo
+// for as if confirmed (see the live "broken screen past photo one" case in
+// ExternalOffer.galleryUrls's own comment; that risk hasn't gone anywhere).
+// What changed: `search()` now always appends ONE extra offer — a plain
+// link to Jiji's own search results for the buyer's exact query, no listing
+// matched, `isDirectLink: false` — because Jiji's own category breadth
+// (used goods, services, anything informal) covers most of what this file's
+// narrow curated list of shops structurally cannot, and a dead end with
+// nothing to try at all is worse than one honest "keep looking here" link.
+// See jijiOffer's own comment further down for the implementation.
 //
 // Two layers remain:
 //   1. NAMED merchants below — real shops worth knowing individually,
@@ -99,11 +113,14 @@ interface Merchant {
   /** What the buyer sees on the card. */
   label: string;
   productPath: RegExp;
-  /** Which of the three buckets this shows up under in the dead-end UI
-   *  (2026-09-14) — Jumia gets its own, since it's a custom-built
-   *  marketplace and neither of the other two; every NAMED merchant below
-   *  is pinned to whichever it actually is, matching whichever of
-   *  shopifySearch/wooSearch it's built with. REQUIRED for every named
+  /** Which of the three MATCHED-listing buckets this shows up under in the
+   *  dead-end UI (2026-09-14) — Jiji is a fourth bucket at the
+   *  ExternalOffer level (2026-09-20, see buildJijiOffer) but is never a
+   *  `Merchant` at all, so it has no place in this union. Jumia gets its
+   *  own, since it's a custom-built marketplace and neither of the other
+   *  two; every NAMED merchant below is pinned to whichever it actually is,
+   *  matching whichever of shopifySearch/wooSearch it's built with.
+   *  REQUIRED for every named
    *  entry — deliberately absent (not guessed) on the generic Layer-2
    *  match built in merchantFor, since a shop caught only by
    *  GENERIC_PRODUCT_PATH's shared shape could be either platform and
@@ -134,6 +151,12 @@ const shopifySearch = (host: string) => (q: string) =>
   `https://${host}/search?q=${encodeURIComponent(q)}`;
 const wooSearch = (host: string) => (q: string) =>
   `https://${host}/?s=${encodeURIComponent(q)}&post_type=product`;
+/** Verified live 2026-09-20 (`jiji.ng/search?query=...` returns a real
+ *  "N results for <query> in Nigeria" page) — see jijiOffer's own comment on
+ *  why this is the ONLY thing Jiji ever contributes here, never a matched
+ *  listing. */
+const jijiSearch = (q: string) =>
+  `https://jiji.ng/search?query=${encodeURIComponent(q)}`;
 
 // Product-page shape Shopify and WooCommerce both default to: `/product/`
 // or `/products/`. Deliberately just this one shape (see the header comment
@@ -176,8 +199,14 @@ const NG_SHOPS_ON_GENERIC_TLDS = new Set([
 // of removing their MERCHANTS entries below — GENERIC_PRODUCT_PATH never
 // matched either, so this is redundant today, but a future widening of
 // that pattern must not be able to quietly let them back in through the
-// generic layer. jumia is NOT here (removed 2026-09-14, see its MERCHANTS
-// entry above) — it's named explicitly and must resolve there instead.
+// generic layer. jiji STAYS here even after 2026-09-20's search-link
+// re-add (see this file's header) — that re-add is a hardcoded search URL
+// built straight from the query, entirely outside merchantFor/isNigerianShop,
+// so this line still does its original job of keeping an actual jiji.ng
+// result from Google Shopping/organic search from ever being matched as a
+// confirmed listing. jumia is NOT here (removed 2026-09-14, see its
+// MERCHANTS entry above) — it's named explicitly and must resolve there
+// instead.
 const NOT_A_SHOP =
   /(^|\.)(facebook|instagram|twitter|youtube|tiktok|pinterest|reddit|linkedin|wikipedia|blogspot|wordpress|medium|quora|nairaland|naijatechguide|legit|punchng|vanguardngr|dailypost|businessday|guardian|amazon|ebay|aliexpress|alibaba|made-in-china|desertcart|ubuy|u-buy|microless|raptorsupplies|temu|wish|konga|jiji)\./i;
 
@@ -801,6 +830,36 @@ async function post<T>(
   return (await res.json()) as T;
 }
 
+/**
+ * The one Jiji offer this file ever produces (2026-09-20) — a plain link to
+ * Jiji's own search results for the buyer's exact query, never a matched
+ * listing. See this file's header ("JIJI IS BACK...") for why a search link
+ * and not a matched product page, and NOT_A_SHOP's own comment for why an
+ * actual jiji.ng result from Google Shopping/organic search still can't
+ * become one of THOSE by a different route.
+ *
+ * Deliberately needs no network call and can't fail, so it's cheap enough to
+ * build unconditionally and safe to hand back even when the real lookup
+ * below times out or errors — a dead end should never come back with
+ * literally nothing to try next.
+ */
+function buildJijiOffer(q: string): ExternalOffer {
+  return {
+    id: "jiji-search",
+    title: q,
+    priceText: null,
+    imageUrl: null,
+    galleryUrls: [],
+    description: null,
+    attributes: [],
+    merchant: "Jiji",
+    platform: "jiji",
+    source: "serper",
+    url: jijiSearch(q),
+    isDirectLink: false,
+  };
+}
+
 export const serperConnector: ExternalConnector = {
   name: "serper",
 
@@ -812,6 +871,7 @@ export const serperConnector: ExternalConnector = {
     const apiKey = process.env.SERPER_API_KEY;
     const q = query.trim();
     if (!apiKey || !q) return [];
+    const jijiOffer = buildJijiOffer(q);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -1011,15 +1071,23 @@ export const serperConnector: ExternalConnector = {
           offer.attributes = found.attributes;
         }
       }
-      return clean;
+      // Appended LAST, always — see buildJijiOffer's own comment. Last so
+      // fetchExternalOffers' own per-connector cap (see connectors/index.ts)
+      // fills confirmed matches first and only reaches this when there's
+      // still room; a turn that already found `limit` real listings has no
+      // real need for it, and one that found few or none is exactly the
+      // case it exists for.
+      return [...clean, jijiOffer];
     } catch (err) {
       // Includes the abort above. Never rethrown — see the connector
-      // contract's "never throw" rule.
+      // contract's "never throw" rule. Still hands back the Jiji link even
+      // on a total lookup failure (see buildJijiOffer) — a dead end
+      // shouldn't come back with nothing just because Serper itself is down.
       console.error(
         "[connectors/serper] lookup failed:",
         err instanceof Error ? err.message : err,
       );
-      return [];
+      return [jijiOffer];
     } finally {
       clearTimeout(timer);
     }

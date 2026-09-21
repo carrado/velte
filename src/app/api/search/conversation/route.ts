@@ -58,7 +58,37 @@ export async function GET(req: Request) {
       vendorId: vendorAuth?.userId ?? null,
       includeStale,
     });
-    return NextResponse.json({ conversation });
+    // The backend's own ownership filter is a widening OR (deviceId OR
+    // buyerId OR vendorId) — a conversation once attached to an account
+    // stays reachable by deviceId alone forever, by design (see its own
+    // comment: signing in only ever widens access, never narrows it).
+    // That's right for guest continuity, but wrong for an account whose
+    // session has since ended some way other than the explicit Log Out
+    // button (which is the only place that clears the browser's own
+    // stored conversation id) — found live: a VENDOR testing the buyer
+    // chat, whose vendor cookie simply expired, kept resuming a Shopping
+    // Plan conversation from before on the same device, with the sidebar
+    // (auth-gated) correctly showing empty alongside it. Refusing it here,
+    // the same way an unknown/stale id already 404s, reuses the client's
+    // existing "clear the stored id and start fresh" handling rather than
+    // adding a second path for the same outcome. Checked against BOTH
+    // fields — a conversation carries at most one of the two, but which
+    // one it is isn't known until the response comes back.
+    const {
+      buyerId: ownerBuyerId,
+      vendorId: ownerVendorId,
+      ...publicConversation
+    } = conversation;
+    const mismatchedOwner =
+      (ownerBuyerId && ownerBuyerId !== (buyerAuth?.buyerId ?? null)) ||
+      (ownerVendorId && ownerVendorId !== (vendorAuth?.userId ?? null));
+    if (mismatchedOwner) {
+      return NextResponse.json(
+        { error: "Conversation not found." },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({ conversation: publicConversation });
   } catch (err) {
     if (err instanceof AiSearchBackendError && err.status < 500) {
       return NextResponse.json({ error: err.message }, { status: err.status });

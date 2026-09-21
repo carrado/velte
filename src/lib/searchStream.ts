@@ -32,6 +32,20 @@ interface SearchStreamHandlers {
   // not SearchHome-specific) isn't forced to handle a case it never
   // triggers by never passing a signal.
   onAbort?: () => void;
+  /** Fires when the server's `actorType` on the `final` event disagrees with
+   *  the `isGuest` this call was made with — i.e. this browser believed it
+   *  was signed in, but the server found neither cookie valid and quietly
+   *  served (and never charged) the turn as a guest. That only happens once
+   *  a session has actually expired without anything client-side noticing,
+   *  and left unhandled it repeats on every later turn in the same tab: the
+   *  stale `buyer`/`user` store never becomes falsy on its own, so `isGuest`
+   *  stays wrongly `false` and this same free path is taken again. The
+   *  caller should clear whichever identity store(s) it's holding — the
+   *  correct billing for THIS turn is handled here (see `dispatch`), this
+   *  callback exists only so the NEXT turn is gated for real. Optional
+   *  because the mismatch can't happen for a caller that never has a signed-
+   *  in identity to go stale in the first place. */
+  onStaleSession?: () => void;
   /** Whether NOBODY is signed in — neither a buyer nor a vendor.
    *
    *  Required, not optional with a safe default, and that is the whole point:
@@ -96,6 +110,7 @@ export async function runSearchStream(
     onError,
     onQuota,
     onAbort,
+    onStaleSession,
     isGuest,
   }: SearchStreamHandlers,
   signal?: AbortSignal,
@@ -202,9 +217,17 @@ export async function runSearchStream(
       // charging guests for being asked a question — the one population that
       // exemption exists for, since five credits does not survive a four-
       // question intake.
-      if (isGuest && isBillableTurn(event)) {
+      // See onStaleSession's own comment: `actorType` is what the SERVER
+      // resolved this turn as, which can disagree with the `isGuest` this
+      // call was made with when a signed-in session died mid-tab without
+      // this browser noticing. That turn was served for free — the server's
+      // own guest branch never charges — so charge it here, at the rate a
+      // guest actually pays, rather than let it slip through uncounted.
+      const staleSession = !isGuest && event.actorType === "guest";
+      if ((isGuest || staleSession) && isBillableTurn(event)) {
         spendGuestCredits(guestCost);
       }
+      if (staleSession) onStaleSession?.();
       onFinal(event);
     } else if (event.type === "error") onError(event.message);
     else if (event.type === "quota") {

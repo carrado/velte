@@ -9,6 +9,7 @@ import {
   CheckCircleIcon,
   ClipboardListIcon,
   CloseIcon,
+  ShoppingCartIcon,
   TagIcon,
   WalletIcon,
 } from "@/components/icons/hero";
@@ -94,6 +95,19 @@ const TYPE_STYLE: Record<
     icon: <BellIcon size={15} />,
     ring: "bg-gray-100 text-gray-600",
     tint: "group-hover:border-gray-300",
+  },
+  // Added 2026-09-20 (found live, alongside the identical gap in
+  // NotificationList.tsx's own TYPE_CONFIG — see that file's comment) —
+  // this `Record<NotificationType, ...>` requires every union member, so
+  // TypeScript itself now catches a future type added to that union and
+  // forgotten here, the same way it should have caught this one missing.
+  // Same ShoppingCartIcon the rest of the app uses everywhere else
+  // "Shopping Plan" is meant.
+  "shopping-plan-digest": {
+    label: "Shopping Plan",
+    icon: <ShoppingCartIcon size={15} />,
+    ring: "bg-orange-50 text-orange-600",
+    tint: "group-hover:border-orange-200",
   },
 };
 

@@ -68,6 +68,20 @@ const TYPE_CONFIG: Record<
     color: "text-sky-600",
   },
   system: { icon: BellIcon, bg: "bg-gray-100", color: "text-gray-500" },
+  // Added 2026-09-20 (found live — this type existed on the backend's own
+  // Notification model and its TYPE_MAP passed it straight through
+  // unchanged, but this map never gained a matching entry, so a real
+  // digest crashed the whole list on `TYPE_CONFIG[notification.type]`
+  // being undefined). Same ShoppingCartIcon the rest of the app uses
+  // everywhere else "Shopping Plan" is meant, per that convention's own
+  // reasoning (see ShoppingPlansIndexPage.tsx's header comment) — not a
+  // generic bell, matching how `buyer-request` above also got its own
+  // real rendering rather than falling through to `system`.
+  "shopping-plan-digest": {
+    icon: ShoppingCartIcon,
+    bg: "bg-orange-100",
+    color: "text-orange-600",
+  },
 };
 
 function NotificationItem({
