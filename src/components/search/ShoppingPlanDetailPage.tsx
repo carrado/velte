@@ -1586,46 +1586,40 @@ export function ShoppingPlanDetailPage({ planId }: { planId: string }) {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Status + next-update block — pulled up from the page's old
-            footer position and merged with the plan's own status
-            (2026-09-20, explicit request): what's happening right now and
-            when it happens next belong next to the plan's identity, not
-            buried below a long scroll of items. One row from `sm` up, a
-            divider between the two halves; stacks full-width on a phone
-            with a horizontal rule instead, so neither half gets squeezed
-            onto a line too narrow for its text. */}
-        <div className="mt-5 flex flex-col divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-surface sm:flex-row sm:divide-x sm:divide-y-0">
-          <div className="flex flex-1 items-center gap-2.5 px-4 py-3 sm:px-5">
-            {plan.status === "monitoring" ? (
-              // Green here now that the hero is a light card again
-              // (2026-09-20) — white would be nearly invisible against it,
-              // same reasoning ShoppingPlansIndexPage.tsx's own copy of
-              // this icon already follows on its own light card.
-              <>
-                <span className="shrink-0 text-green-600">
+            {/* Status badge + next-update, folded back onto the hero itself
+                (2026-09-21, reversing the 2026-09-20 move that pulled them
+                into their own bar below) — top-right, same corner the
+                plan's status pill sat in before that move. "Monitoring"
+                still replaces the plain status pill with the live-signal
+                treatment; every other status (including "expired") keeps
+                its plain PLAN_STATUS_TONE pill. Next update is dropped
+                entirely once a plan is expired — there is no next check to
+                report. */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              {plan.status === "monitoring" ? (
+                <span className="flex items-center gap-1.5 text-green-600">
                   <LiveSignalDot />
+                  <span className="text-sm font-semibold text-ink">
+                    Monitoring
+                  </span>
                 </span>
-                <span className="text-sm font-semibold text-ink">
-                  Monitoring
+              ) : (
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium",
+                    PLAN_STATUS_TONE[plan.status],
+                  )}
+                >
+                  {PLAN_STATUS_LABEL[plan.status]}
                 </span>
-              </>
-            ) : (
-              <span
-                className={cn(
-                  "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium",
-                  PLAN_STATUS_TONE[plan.status],
-                )}
-              >
-                {PLAN_STATUS_LABEL[plan.status]}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-1 items-center gap-2 px-4 py-3 text-sm text-gray-500 sm:px-5">
-            <ClockIcon size={14} className="shrink-0" />
-            Next update {nextUpdateLabel(plan.nextMonitorAt)}
+              )}
+              {plan.status !== "expired" && (
+                <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                  <ClockIcon size={11} className="shrink-0" />
+                  Next update {nextUpdateLabel(plan.nextMonitorAt)}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

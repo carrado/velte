@@ -215,7 +215,7 @@ export function StoreResultCard({
           {chatHref && (
             <WhatsAppButton
               href={chatHref}
-              label="Chat on WhatsApp"
+              label={`Chat ${match.name}`}
               className="w-full"
             />
           )}
