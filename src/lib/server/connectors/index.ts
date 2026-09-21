@@ -1,4 +1,5 @@
 import { serperConnector } from "@/lib/server/connectors/serper";
+import { jijiConnector } from "@/lib/server/connectors/jiji";
 import type { ExternalConnector } from "@/lib/server/connectors/types";
 import type { ExternalOffer } from "@/types/search";
 import { isVagueReference } from "@/lib/productTerm";
@@ -9,8 +10,12 @@ export type { ExternalConnector } from "@/lib/server/connectors/types";
 // Phase 4's orchestrator — the one place that decides WHETHER external
 // sources run and merges what they return. Connectors themselves stay
 // dumb (see types.ts), so adding another Shopify/WooCommerce feed later is
-// a new file plus one line in this array.
-const CONNECTORS: ExternalConnector[] = [serperConnector];
+// a new file plus one line in this array. jijiConnector added 2026-09-21,
+// replacing what used to be a single hardcoded link serperConnector always
+// appended — see that file's own header for why Jiji earned a real,
+// dedicated connector rather than staying a one-line afterthought inside
+// Serper's.
+const CONNECTORS: ExternalConnector[] = [serperConnector, jijiConnector];
 
 // Ceiling on what a dead end shows. This is a consolation list, not a
 // catalogue — a wall of thirty off-Velte links buries the "here's what to

@@ -2566,6 +2566,28 @@ async function handleSearch(req: Request) {
       // doesn't run — pendingComparisonPick is what routes THAT turn,
       // further down.
       if (isFreshComparisonRequest) {
+        // Released the instant Phase 1 has answered (found live, 2026-09-21
+        // — a buyer stuck answering "just give me the best"/"return top
+        // overall matches" three turns in a row and never once got an
+        // actual search). Without this, `sessionToolAtTurnEnd` carried
+        // "compare" forward with NO reset anywhere for the compare tool —
+        // unlike shopping_plan just above, which clears itself the instant
+        // its own job (creating the plan) is done — so `activeTool` stayed
+        // "compare" on every later turn too (`body?.activeTool ?? sessionTool`
+        // at this file's own top), which forces `isFreshComparisonRequest`
+        // true again on literally every reply. That re-entered THIS SAME
+        // Phase-1 branch over and over — the one whose own system prompt
+        // says "do not call any other tool this turn, nothing should be
+        // searched yet" — so the buyer's confirmation never reached
+        // `pendingComparisonPick`/the real search pipeline at all, and the
+        // client's badge (SearchHome.tsx's `setActiveTool(event.activeTool)`
+        // re-sync) never stopped showing "Compare" either. Phase 1's job is
+        // done the moment it delivers its verdict and asks "want me to
+        // check Velte?" — `pendingComparisonPick` resolves that follow-up
+        // from conversation HISTORY (`awaitingComparisonPurchaseReply`), not
+        // from this tool flag, so clearing it here costs that handoff
+        // nothing.
+        sessionToolAtTurnEnd = null;
         push(["Weighing up your options…", "Thinking this through…"]);
         const compareProviderOrder: ("openai-strong" | "openai" | "groq")[] =
           imageUrl
