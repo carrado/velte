@@ -6,8 +6,11 @@ import { backendData, BackendError } from "@/lib/server/backend";
 import type { ShoppingPlan } from "@/types/shoppingPlan";
 
 // PATCH /api/shopping-plan/:id/items/:itemId/purchase — marks (or unmarks)
-// the item's SELECTED candidate as actually bought (spec §28). Body:
-// { purchased: boolean }.
+// a SPECIFIC candidate as actually bought (spec §28). Per-candidate, not
+// per-item, since 2026-09-20 (there's no more standing "selected"
+// candidate to purchase — see types/shoppingPlan.ts's own comment on
+// ShoppingPlanCandidate.purchased). Body: { candidateId: string, purchased:
+// boolean }.
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string; itemId: string }> },
@@ -20,13 +23,19 @@ export async function PATCH(
 
   const { id, itemId } = await params;
   const body = await req.json().catch(() => null);
+  if (!body?.candidateId || typeof body.candidateId !== "string") {
+    return jsonError(400, "candidateId is required.");
+  }
 
   try {
     const { plan } = await backendData<{ plan: ShoppingPlan }>(
       `/shopping-plans/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/purchase`,
       {
         method: "PATCH",
-        body: { purchased: body?.purchased === true },
+        body: {
+          candidateId: body.candidateId,
+          purchased: body?.purchased === true,
+        },
         cookie: buyerAuth?.cookie ?? vendorAuth?.cookie ?? "",
       },
     );

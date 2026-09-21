@@ -318,7 +318,7 @@ export function ChatHeader() {
                   )}
                   className="w-7 h-7"
                 />
-                <span className="max-w-[100px] sm:max-w-[160px] truncate text-xs sm:text-sm font-medium text-gray-800">
+                <span className="hidden sm:block max-w-[160px] truncate text-sm font-medium text-gray-800">
                   {userDetails.company?.name ?? userDetails.name}
                 </span>
               </button>

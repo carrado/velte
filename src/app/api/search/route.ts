@@ -1562,7 +1562,11 @@ async function handleSearch(req: Request) {
   // already signed in. Buyer wins when both cookies exist — on /chat they are
   // acting as a buyer, and only a buyer account carries a plan.
   const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
-  const actorType = buyerAuth ? "buyer" : vendorAuth ? "vendor" : "guest";
+  const actorType: "guest" | "buyer" | "vendor" = buyerAuth
+    ? "buyer"
+    : vendorAuth
+      ? "vendor"
+      : "guest";
   const actorCookie = buyerAuth?.cookie ?? vendorAuth?.cookie ?? null;
   // The turn's action, and therefore its price: a photo turn costs a
   // multiple of a text turn because it genuinely costs that much more to
@@ -1900,7 +1904,7 @@ async function handleSearch(req: Request) {
       async function sendFinal(
         event: Omit<
           Extract<SearchStreamEvent, { type: "final" }>,
-          "conversationId" | "knownBudgetNaira" | "activeTool"
+          "conversationId" | "knownBudgetNaira" | "activeTool" | "actorType"
         >,
       ): Promise<void> {
         // ── Charging, once the turn has actually delivered ─────────────
@@ -1958,6 +1962,10 @@ async function handleSearch(req: Request) {
           // SearchStreamEvent's own comment on this field for what the
           // client does with it.
           activeTool: (sessionToolAtTurnEnd as ComposerTool | null) ?? null,
+          // Who this turn was actually resolved as, at the top of the
+          // handler — see SearchStreamEvent's own comment on this field for
+          // why the client needs it.
+          actorType,
         };
         controller.enqueue(encodeEvent(full));
         if (conversation && deviceId) {

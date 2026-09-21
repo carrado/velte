@@ -1,3 +1,5 @@
+import type { SearchRecommendation } from "@/types/search";
+
 // Shopping Plan (2026-09-18) — the shape of a persistent, deadline-driven
 // plan, as velte-backend's shoppingPlan.controller.js's own toClientShape()
 // returns it. A DIFFERENT shape from ShoppingPlanSnapshot (types/search.ts):
@@ -43,6 +45,21 @@ export interface ShoppingPlanCandidate {
   lastCheckedAt: string;
   priceHistory: ShoppingPlanPricePoint[];
   availabilityHistory: ShoppingPlanAvailabilityPoint[];
+  // Per-candidate, not per-item (2026-09-20, replacing the item-level
+  // `selectedCandidateId` + `purchased` pair this used to have) — explicit
+  // product decision: Velte's own agent never executes a purchase on the
+  // buyer's behalf, so a standing "this is my pick" state ahead of actually
+  // buying it (and the "your pick went unavailable, approve this
+  // replacement" flow that state existed to protect) added a step without
+  // the app doing anything with that intermediate state. What's left is
+  // the one fact worth recording: which listing the buyer actually bought.
+  // At most one candidate per item is ever purchased — enforced by the
+  // backend's own markItemPurchased, not by this type.
+  purchased: boolean;
+  // Snapshotted at the moment of purchase — this candidate's OWN price can
+  // keep moving in later monitoring cycles, so "amount spent" freezes
+  // independently of the live price history.
+  purchasedPriceNaira: number | null;
 }
 
 export interface ShoppingPlanItem {
@@ -58,14 +75,13 @@ export interface ShoppingPlanItem {
   notes: string | null;
   status: ShoppingPlanItemStatus;
   lastCheckedAt: string | null;
-  selectedCandidateId: string | null;
-  // Phase 2 — "alternatives with approval" (spec §20). Set by the
-  // background job the moment the SELECTED candidate goes unavailable;
-  // never auto-applied. The detail page surfaces this as its own approve/
-  // dismiss card, distinct from the ordinary candidate list.
-  suggestedAlternativeCandidateId: string | null;
-  purchased: boolean;
-  purchasedPriceNaira: number | null;
+  // `selectedCandidateId` and `suggestedAlternativeCandidateId` (spec §20's
+  // "alternatives with approval") lived here until 2026-09-20, removed
+  // together in the same explicit product decision — see
+  // ShoppingPlanCandidate's own `purchased` comment above. `purchased`/
+  // `purchasedPriceNaira` moved from here onto the candidate for the same
+  // reason.
+  //
   // Phase 3 — conversational management ("I don't need sportswear
   // anymore"). A soft flag, not a real deletion — the item's own discovery
   // history stays on the record; it just drops out of active totals and
@@ -100,12 +116,14 @@ export interface ShoppingPlan {
   id: string;
   goalText: string;
   deadlineDate: string;
-  // The four values spec §8 asks the UI to distinguish: the buyer's own
-  // target, Velte's live estimate, the value of what's been SELECTED
-  // (bought or not), and what's actually been bought (spec §28).
+  // budgetNaira/estimatedTotalNaira are the "planning" half of spec §8's
+  // four values; spentTotalNaira is what's actually been bought (spec
+  // §28). The third value spec §8 originally asked for,
+  // selectedTotalNaira, was removed 2026-09-20 along with
+  // `selectedCandidateId` itself — see ShoppingPlanCandidate's own
+  // `purchased` comment.
   budgetNaira: number | null;
   estimatedTotalNaira: number;
-  selectedTotalNaira: number;
   spentTotalNaira: number;
   status: ShoppingPlanStatus;
   nextMonitorAt: string;
@@ -132,3 +150,14 @@ export interface ShoppingPlanSummary {
   createdAt: string;
   updatedAt: string;
 }
+
+/** GET /api/shopping-plan/:id/recommendations' own shape (2026-09-21) — one
+ *  entry per plan item, keyed by ShoppingPlanItem.id, reusing the SAME
+ *  "Top pick" verdict regular chat search runs (see recommendResults.ts).
+ *  `null` for an item with fewer than 2 available candidates, or whose call
+ *  failed/timed out — the detail page falls back to its existing
+ *  cheapest-available ordering exactly as if this route didn't exist. */
+export type ShoppingPlanRecommendations = Record<
+  string,
+  SearchRecommendation | null
+>;

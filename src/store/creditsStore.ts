@@ -3,6 +3,8 @@ import { toast } from "sonner";
 
 import { GUEST_CREDITS } from "@/lib/credits";
 import { guestCredits } from "@/lib/guestCredits";
+import { useBuyerStore } from "@/store/buyerStore";
+import { useUserStore } from "@/store/userStore";
 
 // The credit balance, shared (2026-09-01).
 //
@@ -129,7 +131,22 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
           // velte-backend's Credits.model.js for the full reasoning.
           spentSinceTopUp?: number;
           walletBalanceKobo?: number | null;
+          // True only on /api/usage's no-cookie branch. `load()` is only
+          // ever called believing it ISN'T a guest (see useCredits.ts's own
+          // branch) — seeing this true means the session actually expired
+          // without buyerStore/userStore noticing, and `balance` here is
+          // GUEST_CREDITS, the placeholder that route sends for shape
+          // consistency, not a real number (see its own comment). Showing it
+          // as-is would display a fresh 10 forever, every time this polls,
+          // for as long as the stale store keeps this branch running.
+          isGuest?: boolean;
         };
+        if (data.isGuest) {
+          useBuyerStore.getState().clearBuyer();
+          useUserStore.getState().clearUser();
+          get().loadGuest();
+          return;
+        }
         const next: Partial<CreditsStore> = {};
         const { balance: currentBalance, lastSpendAt } = get();
         // SUSPECT: this response would raise the balance back up, and a

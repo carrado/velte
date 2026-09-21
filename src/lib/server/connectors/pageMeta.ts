@@ -108,8 +108,11 @@ const MAX_DESCRIPTION = 400;
 
 // A browser-ish UA: several of these storefronts sit behind bot protection
 // that serves an interstitial to an unrecognised agent, which would leave
-// every offer image-less for a reason invisible in the output.
-const USER_AGENT =
+// every offer image-less for a reason invisible in the output. Exported
+// (2026-09-21) so search-item/route.ts's own verifyGoneExternalUrls hits
+// the same storefronts with the same UA this file already relies on,
+// rather than a second string that could quietly drift from it.
+export const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 export interface PageMeta {
