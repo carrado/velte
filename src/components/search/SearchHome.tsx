@@ -149,9 +149,15 @@ const RECENT_STATUS_MEMORY = 8;
 // renders a bare FormattedReply), so this closes a split where the same
 // assistant voice was boxed on some turns and not on others.
 //
-// `max-w-md` stays, but purely as a reading-width cap for the longer
-// dead-end and offer messages — it's a measure, not a box.
-const AI_MESSAGE_CLASS = "max-w-md";
+// Was capped at `max-w-md` (448px) as a deliberate reading-width measure —
+// dropped 2026-09-21 (explicit request: replies should use the full width
+// of the thread column, not leave dead space beside a formatted, multi-
+// paragraph comparison answer on a wide screen). The thread column itself
+// (`max-w-3xl`/`lg:max-w-4xl`, see the page-level wrapper) is still the real
+// ceiling — this class exists mainly so every plain-text AI message shares
+// one class name to update in one place, not because it constrains width
+// any more.
+const AI_MESSAGE_CLASS = "max-w-none w-full";
 
 // The buckets the off-Velte offers list is grouped into (2026-09-14, "jiji"
 // added 2026-09-20 — see connectors/serper.ts's Merchant.platform and its
@@ -1058,6 +1064,7 @@ function ConversationTurnView({
   onAnswerClarification,
   onLocationShared,
   onPickItem,
+  onIdentitySignedIn,
   expandedServicesVendorId,
   onToggleServices,
   isEditing,
@@ -1072,6 +1079,10 @@ function ConversationTurnView({
   isLatest: boolean;
   onAnswerClarification: (text: string) => void;
   onLocationShared: (location: BuyerLocation) => void;
+  // The Buyer-Request "sign in" step's own advance (2026-09-22) — see this
+  // component's own render of GoogleSignInButton, where the sign-in tap
+  // itself now lives (moved out of the composer, explicit request).
+  onIdentitySignedIn: (buyer: Buyer) => void;
   // See ClarificationPrompt's own onPickItem comment — only actually
   // called for an "item_pick" clarification.
   onPickItem: (
@@ -1118,14 +1129,25 @@ function ConversationTurnView({
   // here for the edit-in-place one.
   const editAutoResize = useAutoResizeTextarea(editDraft);
 
-  // Picked once per turn (keyed on turn.id, not re-rolled on every render)
-  // — see LOCAL_VENDOR_OFFER_QUESTIONS' own comment. Computed unconditionally
-  // (hooks can't be called from inside the branches below) even on a turn
-  // that never ends up showing it; the cost is one array index.
+  // Picked once per turn, deterministically on turn.id (2026-09-22, fixed —
+  // was `Math.random()` inside this same `useMemo`, which is NOT the
+  // stability guarantee it looks like: React documents `useMemo` as a
+  // performance optimization it may "forget" and recompute at any time, not
+  // a correctness contract, and a `Math.random()` call inside it re-rolls to
+  // a genuinely different wording every time that happens. Found live: the
+  // offer question visibly changed while the buyer was still typing their
+  // name into the identity-capture step right below it, and again right
+  // after tapping "Yes, find someone" — both of those re-render this
+  // component repeatedly without `turn.id` ever changing, which is exactly
+  // the case `useMemo` alone doesn't promise to protect against. Switched to
+  // the same deterministic-on-turn.id technique `vendorSearchOfferQuestion`
+  // below already used for this exact reason — see its own comment, written
+  // at the time to avoid ADDING a second copy of this bug, not knowing this
+  // one was already live.
   const offerQuestion = useMemo(
     () =>
       LOCAL_VENDOR_OFFER_QUESTIONS[
-        Math.floor(Math.random() * LOCAL_VENDOR_OFFER_QUESTIONS.length)
+        turn.id.charCodeAt(0) % LOCAL_VENDOR_OFFER_QUESTIONS.length
       ],
     [turn.id],
   );
@@ -1133,8 +1155,7 @@ function ConversationTurnView({
   // Same rotation idea as offerQuestion above, for the vendor-search
   // offer's own question — deterministic on turn.id (a UUID, so its first
   // character is effectively arbitrary) rather than Math.random(), so this
-  // new pick doesn't add a second impure-render violation alongside the
-  // pre-existing one just above.
+  // pick is stable across re-renders the same way offerQuestion now is too.
   const vendorSearchOfferQuestion = useMemo(
     () =>
       LOCAL_VENDOR_SEARCH_OFFER_QUESTIONS[
@@ -1793,8 +1814,23 @@ function ConversationTurnView({
                     // real agent action, not a dead end, so this gets the same
                     // plain-message treatment as every other pure-text reply,
                     // never the "nothing found anywhere" Compass treatment.
-                    <div className={AI_MESSAGE_CLASS}>
+                    <div className={cn(AI_MESSAGE_CLASS, "space-y-2.5")}>
                       <FormattedReply text={turn.reply} />
+                      {/* The Google sign-in tap itself, in the chat body
+                          (2026-09-22, explicit request — was the composer's
+                          own "signin" step, replacing the textarea; see
+                          SearchHome's own identityCapture render for what
+                          this replaced). Only on the latest turn, same gate
+                          every other still-actionable widget in this thread
+                          uses — a signed-in buyer shouldn't still see a
+                          button on scrollback. */}
+                      {turn.buyerRequestOffer.status === "needs_signin" &&
+                        isLatest && (
+                          <GoogleSignInButton
+                            variant="compact"
+                            onSignedIn={onIdentitySignedIn}
+                          />
+                        )}
                     </div>
                   ) : turn.buyerRequestOffered ? (
                     // offerBuyerRequest ran this turn (see offerBuyerRequestTool's
@@ -1822,18 +1858,11 @@ function ConversationTurnView({
                     // anywhere" case below: the conversation is still open, not
                     // a dead end. This branch ALSO catches a fresh comparison's
                     // own answer (buildComparisonAnswerSystemPrompt) — no
-                    // search tool ran that turn either — so it gets its own
-                    // caption when awaitingComparisonPurchaseReply is set,
-                    // same reasoning as isGuidanceReply below: this is the
-                    // model's own general knowledge, not a confirmed Velte
-                    // result, and a buyer should be able to tell the two apart
-                    // at a glance rather than read every reply the same way.
+                    // search tool ran that turn either. Its own "General
+                    // comparison — not yet checked on Velte" caption was
+                    // removed 2026-09-21 (explicit request) — just the plain
+                    // reply now, same as any other clarifying-question turn.
                     <div className={AI_MESSAGE_CLASS}>
-                      {turn.awaitingComparisonPurchaseReply && (
-                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                          General comparison — not yet checked on Velte
-                        </p>
-                      )}
                       <FormattedReply text={turn.reply} />
                     </div>
                   ) : (
@@ -3536,13 +3565,32 @@ export function SearchHome() {
     initialStatus: string | null = null,
   ): Promise<void> {
     // Text-only history from prior completed turns (see SearchHistoryTurn) —
-    // built before the new turn is appended, so it doesn't include itself.
-    // A failed turn contributes nothing worth replaying to the model.
-    // contextNote (store handles this turn surfaced) rides along on the
-    // assistant's own message, not the buyer's — it's the model's own
-    // breadcrumb, never something the buyer said or saw.
+    // excludes THIS turn explicitly (2026-09-22, fixed — see `t.id !==
+    // turnId` below). The old comment here claimed this was "built before
+    // the new turn is appended, so it doesn't include itself" — true only
+    // the FIRST time a turn is ever run, where it's still `phase: "loading"`
+    // (or unset) at the moment history is computed, so the phase filter
+    // alone happened to exclude it. That guarantee silently broke on a
+    // RESUMED search (resumeRefusedSearch, after topping up credits or
+    // signing in): the SAME turnId is re-run via runSearchIntoTurn, but by
+    // then it already sits in `turns` with `phase: "done"` from its own
+    // PRIOR quota refusal — so it got INCLUDED here, contributing a
+    // duplicate "user" message (the buyer's own agreement text, e.g. "Yes,
+    // look for a vendor") plus an EMPTY "assistant" message (a quota
+    // refusal never populates `reply`). Found live: that empty pair landed
+    // as the new `history.at(-1)`, knocking the REAL offer turn — the one
+    // actually carrying `awaitingVendorSearchOffer: true` — out of the last
+    // position route.ts's classifier reads that structural flag from, so a
+    // buyer who'd agreed to a vendor search, run out of credits, signed in
+    // and topped up came back to a resumed turn that had no idea what it
+    // was even agreeing to, and asked for location then "what service do
+    // you need" from a blank slate. A failed turn still contributes nothing
+    // worth replaying to the model either way. contextNote (store handles
+    // this turn surfaced) rides along on the assistant's own message, not
+    // the buyer's — it's the model's own breadcrumb, never something the
+    // buyer said or saw.
     const history: SearchHistoryTurn[] = turns
-      .filter((t) => t.phase === "done" && !t.error)
+      .filter((t) => t.id !== turnId && t.phase === "done" && !t.error)
       .flatMap((t) => [
         { role: "user" as const, content: t.query || "[sent a photo]" },
         {
@@ -4889,6 +4937,26 @@ export function SearchHome() {
     setIdentityValue("");
   }
 
+  // The `needs_signin` step's own advance (2026-09-22, moved out of the
+  // composer into the chat body — see ConversationTurnView's own render of
+  // GoogleSignInButton for where this is actually called from now). Same
+  // logic that used to live inline as the composer's "signin" branch:
+  // straight to "choose" when the account they just signed into already has
+  // a proven number, otherwise "phone" to ask for one.
+  function handleGoogleSignedIn(signedIn: Buyer) {
+    setIdentityCapture((prev) =>
+      prev
+        ? {
+            ...prev,
+            step: signedIn.phoneVerified && signedIn.phone ? "choose" : "phone",
+            phone:
+              signedIn.phoneVerified && signedIn.phone ? signedIn.phone : "",
+          }
+        : prev,
+    );
+    setIdentityValue("");
+  }
+
   async function handleIdentitySubmit() {
     if (!identityCapture || identitySubmitting) return;
     const value = identityValue.trim();
@@ -5203,42 +5271,6 @@ export function SearchHome() {
             </button>
           </div>
         </div>
-      ) : identityCapture?.step === "signin" ? (
-        // Sign-in, before anything else (2026-08-29). Shown instead of the
-        // input composer because there is nothing to type — the whole step
-        // is one tap, and asking for a phone number before there is an
-        // account to attach it to is what this replaces.
-        //
-        // Advances IN PLACE rather than closing: the buyer is mid-request,
-        // and dropping them back to a blank composer would lose the thread
-        // they were told this was for. Straight to "choose" when the account
-        // they just signed into already has a proven number.
-        <div className="flex flex-col bg-surface rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
-          <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-            <PhoneIcon size={12} className="text-orange-400 shrink-0" />
-            Sign in so a vendor knows who they&apos;re replying to.
-          </label>
-          <GoogleSignInButton
-            onSignedIn={(signedIn) => {
-              setIdentityCapture((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      step:
-                        signedIn.phoneVerified && signedIn.phone
-                          ? "choose"
-                          : "phone",
-                      phone:
-                        signedIn.phoneVerified && signedIn.phone
-                          ? signedIn.phone
-                          : "",
-                    }
-                  : prev,
-              );
-              setIdentityValue("");
-            }}
-          />
-        </div>
       ) : identityCapture?.step === "choose" ? (
         // The saved-number confirmation (2026-08-26). Shown instead of the
         // input composer because there is nothing to type — the number is
@@ -5271,7 +5303,7 @@ export function SearchHome() {
             </button>
           </div>
         </div>
-      ) : identityCapture ? (
+      ) : identityCapture && identityCapture.step !== "signin" ? (
         // The composer's own phone/OTP identity-capture mode (see
         // IdentityCapture's own comment) — the free-text textarea below is
         // swapped for a dedicated single-line input for exactly this one
@@ -5279,6 +5311,15 @@ export function SearchHome() {
         // as the SAME composer, not a different UI dropped in. Reverts to
         // the ordinary textarea the moment identityCapture clears
         // (handleIdentitySubmit, on a real terminal result).
+        //
+        // `step !== "signin"` excludes exactly one step (2026-09-22,
+        // explicit request): the Google sign-in tap itself no longer
+        // replaces the composer at all — GoogleSignInButton now renders
+        // inline in the chat body instead (ConversationTurnView's own
+        // render of `turn.buyerRequestOffer`, status "needs_signin"), so the
+        // ordinary textarea stays visible underneath it. Every step AFTER
+        // sign-in (phone/otp/budget/choose) still uses the composer-swap
+        // pattern unchanged — this only ever matched "signin" itself.
         <div className="flex flex-col bg-surface rounded-[28px] border border-orange-200 shadow-sm focus-within:border-orange-300 focus-within:shadow-md transition-shadow px-5 py-3.5">
           <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
             {identityCapture.step === "budget" ? (
@@ -5689,6 +5730,7 @@ export function SearchHome() {
                     onAnswerClarification={handleClarificationAnswer}
                     onLocationShared={handleLocationShared}
                     onPickItem={handleItemPick}
+                    onIdentitySignedIn={handleGoogleSignedIn}
                     expandedServicesVendorId={expandedServicesVendorId}
                     onToggleServices={toggleServices}
                     isEditing={editingTurnId === turn.id}

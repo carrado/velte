@@ -34,10 +34,20 @@ const SEARCH_URL = "https://google.serper.dev/search";
 
 // Same instinct as serper.ts's own TIMEOUT_MS: the buyer has already been
 // told Velte has nothing by the time this runs, so a hung request must not
-// make a bad moment worse by making them wait even longer for it.
-const TIMEOUT_MS = 6000;
+// make a bad moment worse by making them wait even longer for it. Doubled
+// from 6000 (2026-09-22) now that this can run up to two passes (see
+// searchInstagramBusinesses' own header) — still a single ceiling shared
+// across both, never per-pass, so a slow first pass can't double the total
+// wait on its own.
+const TIMEOUT_MS = 10000;
 
-const DEFAULT_LIMIT = 4;
+// Raised from 4 (2026-09-22, explicit request: "search Instagram very very
+// well and deep") — this is now the FIRST fallback tier for a buyer who
+// explicitly opted into a real vendor (route.ts's own isAnsweringVendorSearchOffer,
+// Google Places demoted to Instagram's own fallback there), not a
+// second-string list shown alongside Places, so it's worth surfacing more
+// of what a deeper search finds.
+const DEFAULT_LIMIT = 6;
 
 interface SerperOrganicItem {
   title?: string;
@@ -73,10 +83,92 @@ const NON_PROFILE_HANDLES = new Set([
   "web",
 ]);
 
+/** One Serper `/search` call against `site:instagram.com`, parsed down to
+ *  real profile leads. Split out from searchInstagramBusinesses (2026-09-22)
+ *  so that function can run it TWICE with different query shapes — see its
+ *  own header for why one pass was never enough. Never throws — same
+ *  connector contract as every other external source here; a failure just
+ *  means this particular pass found nothing. */
+async function runInstagramQuery(
+  q: string,
+  apiKey: string,
+  businessType: string,
+  location: string | null,
+  signal: AbortSignal,
+): Promise<InstagramLead[]> {
+  try {
+    const res = await fetch(SEARCH_URL, {
+      method: "POST",
+      headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+      // gl: "ng" — same reasoning as serper.ts's own product search: without
+      // it this returns whatever ranks well globally, not for a Nigerian
+      // buyer. num raised from 10 to 20 (2026-09-22, "search very very well
+      // and deep") — more candidates for the PROFILE_URL filter below to
+      // sift through before this pass gives up.
+      body: JSON.stringify({ q, gl: "ng", hl: "en", num: 20 }),
+      signal,
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      // 401/429 are the two worth recognising — see serper.ts's own note on
+      // why this stays a log line rather than a thrown error.
+      console.error(
+        `[connectors/instagramBusinessSearch] request failed: ${res.status}`,
+      );
+      return [];
+    }
+    const data = (await res.json()) as { organic?: SerperOrganicItem[] };
+    const leads: InstagramLead[] = [];
+    for (const item of data.organic ?? []) {
+      const url = item.link?.trim();
+      const title = item.title?.trim();
+      if (!url || !title) continue;
+      const match = PROFILE_URL.exec(url);
+      if (!match) continue;
+      if (NON_PROFILE_HANDLES.has(match[1].toLowerCase())) continue;
+      leads.push({
+        url,
+        handle: match[1],
+        title,
+        snippet: item.snippet?.trim() || null,
+        need: businessType,
+        location,
+      });
+    }
+    return leads;
+  } catch (err) {
+    // Includes an abort. Never rethrown — same connector contract as every
+    // other external source here.
+    console.error(
+      "[connectors/instagramBusinessSearch] lookup failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return [];
+  }
+}
+
 /**
  * Searches for real, public Instagram business pages matching a business
- * type (and, when the buyer named one, a place) — a genuine STORE dead
- * end's third fallback tier, after Velte itself and Google Places.
+ * type (and, when the buyer named one, a place) — the FIRST fallback tier
+ * for a buyer who's explicitly opted into a real vendor (route.ts's own
+ * isAnsweringVendorSearchOffer), with Google Places demoted to Instagram's
+ * OWN fallback there (2026-09-22, explicit product decision — most small
+ * Nigerian vendors this offer exists for run off an Instagram page with no
+ * separate listing Places would ever index).
+ *
+ * TWO PASSES, not one (2026-09-22, explicit request: "search Instagram very
+ * very well and deep") — a real bakery's own bio is far more likely to say
+ * "Cakes", "Custom Cakes", "Confectionery" or "Baker" than the buyer's own
+ * exact phrase ("birthday cake"), and the original single exact-phrase-AND
+ * query required BOTH the business type AND the location to appear
+ * verbatim, which is precise but easily misses a real, findable page. Pass
+ * 1 stays exact-phrase (fast, high-precision — most business types DO
+ * appear close to verbatim in a real bio, e.g. "tailor", "caterer") and
+ * only Pass 2 — run ONLY when Pass 1 found nothing — drops the quotes
+ * around `businessType` for a broader keyword match. The LOCATION
+ * constraint is NEVER loosened in either pass — see the query-building
+ * code below for why (the live Sacramento-appliance-shop incident this
+ * guard already exists for).
  *
  * Never throws: a failed or unconfigured lookup returns an empty array,
  * exactly like every other external connector in this codebase, so a dead
@@ -116,58 +208,36 @@ export async function searchInstagramBusinesses(params: {
   // signal on its own, and stacking both would risk excluding a genuine
   // local business whose bio never spells out the country.
   const location = params.location?.trim() || "Nigeria";
-  const q = `site:instagram.com "${businessType}" "${location}"`;
+  const locationOut = params.location?.trim() || null;
+  const limit = params.limit ?? DEFAULT_LIMIT;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(SEARCH_URL, {
-      method: "POST",
-      headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-      // gl: "ng" — same reasoning as serper.ts's own product search: without
-      // it this returns whatever ranks well globally, not for a Nigerian
-      // buyer.
-      body: JSON.stringify({ q, gl: "ng", hl: "en", num: 10 }),
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      // 401/429 are the two worth recognising — see serper.ts's own note on
-      // why this stays a log line rather than a thrown error.
-      console.error(
-        `[connectors/instagramBusinessSearch] request failed: ${res.status}`,
-      );
-      return [];
-    }
-    const data = (await res.json()) as { organic?: SerperOrganicItem[] };
-    const limit = params.limit ?? DEFAULT_LIMIT;
-    const leads: InstagramLead[] = [];
-    for (const item of data.organic ?? []) {
-      const url = item.link?.trim();
-      const title = item.title?.trim();
-      if (!url || !title) continue;
-      const match = PROFILE_URL.exec(url);
-      if (!match) continue;
-      if (NON_PROFILE_HANDLES.has(match[1].toLowerCase())) continue;
-      leads.push({
-        url,
-        handle: match[1],
-        title,
-        snippet: item.snippet?.trim() || null,
-        need: businessType,
-        location: params.location?.trim() || null,
-      });
-      if (leads.length >= limit) break;
-    }
-    return leads;
-  } catch (err) {
-    // Includes the abort above. Never rethrown — same connector contract
-    // as every other external source here.
-    console.error(
-      "[connectors/instagramBusinessSearch] lookup failed:",
-      err instanceof Error ? err.message : err,
+    const preciseQuery = `site:instagram.com "${businessType}" "${location}"`;
+    let leads = await runInstagramQuery(
+      preciseQuery,
+      apiKey,
+      businessType,
+      locationOut,
+      controller.signal,
     );
-    return [];
+    if (!leads.length) {
+      // Pass 2 — broader keyword match, location still quoted/required.
+      // Deliberately only reached when Pass 1 found literally nothing: the
+      // exact-phrase query is the higher-confidence read, and running both
+      // unconditionally would just double the API cost for no benefit on
+      // the (common) case where Pass 1 already worked.
+      const broadQuery = `site:instagram.com ${businessType} "${location}"`;
+      leads = await runInstagramQuery(
+        broadQuery,
+        apiKey,
+        businessType,
+        locationOut,
+        controller.signal,
+      );
+    }
+    return leads.slice(0, limit);
   } finally {
     clearTimeout(timer);
   }

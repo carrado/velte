@@ -105,6 +105,27 @@ export function StoreResultCard({
   }, [match.description]);
   const hasMore = descOverflows || match.sectors.length > 3;
 
+  // The sector this search actually matched on, pinned first (2026-09-22,
+  // explicit request) — a plain slice(0, 3) used to show whichever 3
+  // sectors happened to be listed first on the vendor's own profile,
+  // regardless of which one this specific search actually matched. Found
+  // live: a vendor whose only reason for matching a "plot of land" search
+  // was its 4th-listed "Real Estate & Property Sales" sector never showed
+  // that sector on the card at all — a buyer had no way to see WHY this
+  // vendor had been suggested. `matchedSector` (staffly-ai-backend's own
+  // best-effort phrase match, see StoreMatch's own comment) moves to the
+  // front when present and not already visible; every other sector keeps
+  // its original relative order behind it.
+  const orderedSectors =
+    match.matchedSector && match.sectors.includes(match.matchedSector)
+      ? [
+          match.matchedSector,
+          ...match.sectors.filter((s) => s !== match.matchedSector),
+        ]
+      : match.sectors;
+  const visibleSectors = orderedSectors.slice(0, 3);
+  const hiddenSectorCount = orderedSectors.length - visibleSectors.length;
+
   return (
     <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm p-4 space-y-2.5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="flex items-center gap-2">
@@ -165,9 +186,9 @@ export function StoreResultCard({
         );
       })()}
 
-      {match.sectors.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {match.sectors.slice(0, 3).map((sector) => (
+      {visibleSectors.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {visibleSectors.map((sector) => (
             <span
               key={sector}
               className="text-[11px] font-medium text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full"
@@ -175,6 +196,15 @@ export function StoreResultCard({
               {sector}
             </span>
           ))}
+          {/* Count only, never the hidden labels themselves (2026-09-22) —
+              a buyer curious what they are already has "See more" right
+              above, which opens the full list in VendorDetailModal; this is
+              just an honest "there's more" signal, not a second listing. */}
+          {hiddenSectorCount > 0 && (
+            <span className="text-[11px] font-medium text-gray-400">
+              +{hiddenSectorCount}
+            </span>
+          )}
         </div>
       )}
 

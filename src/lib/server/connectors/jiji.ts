@@ -268,8 +268,15 @@ const jijiSearchLink = (q: string) =>
  *  whenever real matching finds nothing or the page can't be read at all —
  *  see this file's own header on why a dead end must never come back with
  *  literally nothing to try. Exactly what serper.ts's buildJijiOffer used
- *  to be, moved here since Jiji now has its own connector. */
-function buildSearchFallback(q: string): ExternalOffer {
+ *  to be, moved here since Jiji now has its own connector.
+ *
+ *  `linkQuery` (2026-09-22) is the URL's own query string, separate from
+ *  `q` (the title) — defaults to `q` but the caller passes the
+ *  location-biased `fetchQuery` when one exists, so a buyer who taps
+ *  through to search Jiji themselves lands on the SAME location-biased
+ *  results this connector's own real matching just tried, not a plain
+ *  nationwide search for the bare item name. */
+function buildSearchFallback(q: string, linkQuery: string = q): ExternalOffer {
   return {
     id: "jiji-search",
     title: q,
@@ -281,7 +288,7 @@ function buildSearchFallback(q: string): ExternalOffer {
     merchant: "Jiji",
     platform: "jiji",
     source: "jiji",
-    url: jijiSearchLink(q),
+    url: jijiSearchLink(linkQuery),
     isDirectLink: false,
   };
 }
@@ -293,21 +300,37 @@ export const jijiConnector: ExternalConnector = {
     return scrapeEnabled();
   },
 
-  async search({ query, limit = DEFAULT_LIMIT }) {
+  async search({ query, location, limit = DEFAULT_LIMIT }) {
     const q = query.trim();
     if (!q) return [];
-    const fallback = buildSearchFallback(q);
+    // Folded into the FETCH only, never into `q` itself (2026-09-22, found
+    // live: a buyer who named "Anambra" directly got land listings back
+    // from Ibadan, Ikorodu and Abuja — this connector never had a location
+    // parameter at all). `q` stays the buyer's plain item term everywhere
+    // else in this function — the fallback link's own title, and
+    // `looksRelevant`'s recall check against each listing's TITLE below —
+    // because a real listing's title says what the item IS, not where it
+    // is; requiring "Anambra" to also appear in a genuine cake listing's
+    // own title would reject real matches instead of finding location-
+    // biased ones. Jiji's own search ranks a location mentioned in the
+    // query text as a real signal, same as a buyer typing "cake Anambra"
+    // themselves would get biased results without needing an exact filter.
+    const fetchQuery = location?.trim() ? `${q} ${location.trim()}` : q;
+    const fallback = buildSearchFallback(q, fetchQuery);
     if (!scrapeEnabled()) return [fallback];
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      const res = await fetch(`${SEARCH_URL}?query=${encodeURIComponent(q)}`, {
-        headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
-        signal: controller.signal,
-        cache: "no-store",
-        redirect: "follow",
-      });
+      const res = await fetch(
+        `${SEARCH_URL}?query=${encodeURIComponent(fetchQuery)}`,
+        {
+          headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+          signal: controller.signal,
+          cache: "no-store",
+          redirect: "follow",
+        },
+      );
       if (!res.ok || !res.body) {
         console.error(`[connectors/jiji] search page responded ${res.status}`);
         return [fallback];
@@ -332,7 +355,7 @@ export const jijiConnector: ExternalConnector = {
       if (!listings.length) return [fallback];
 
       const offers: ExternalOffer[] = listings.slice(0, limit).map((l) => {
-        const cleanUrl = cleanListingUrl(l.url) ?? jijiSearchLink(q);
+        const cleanUrl = cleanListingUrl(l.url) ?? jijiSearchLink(fetchQuery);
         return {
           id: `jiji-${l.id}`,
           title: l.title,
