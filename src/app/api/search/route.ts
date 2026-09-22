@@ -1,7 +1,7 @@
 import { stepCountIs, type ModelMessage, type UserContent } from "ai";
 import * as chrono from "chrono-node";
 
-import { buildProductTerm } from "@/lib/productTerm";
+import { buildProductTerm, cleanBusinessType } from "@/lib/productTerm";
 import { parseOfferPrice } from "@/lib/priceText";
 import { generateUUID } from "@/lib/uuid";
 import { callLLM } from "@/lib/server/ai/router";
@@ -67,7 +67,9 @@ import {
   noVendorEvenBySectorPhrase,
   noVendorButOnlineOffersPhrase,
   isAcknowledgementReply,
+  isAskingForExplanation,
   isOfferDeclineReply,
+  offerDeclinedPhrase,
   splittingRequestPhrase,
   itemPickQuestionPhrase,
   buildingShoppingPlanPhrase,
@@ -1314,6 +1316,24 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   const storeCall = result.toolCalls.findLast(
     (c) => c.toolName === "searchStores",
   );
+  // Cleaned in place, here, once — every read of `storeCall.input
+  // .businessType` anywhere below (the dead-end term, the dual-intent
+  // check, every phrase function's own `what`) is a raw, unmodified read
+  // of whatever the model wrote, and searchStoresCore's own cleaning (see
+  // its own comment) only ever covers the search it actually runs, not
+  // this object. Found live: "DJ services one day" reached a buyer-facing
+  // dead-end sentence verbatim ("No one on Velte sells DJ services one
+  // day") because nothing between the model and that text ever stripped
+  // it. `input` is a plain object off the SDK's own tool-call result, safe
+  // to mutate — this file already reads it as `unknown` and casts at every
+  // call site, so there is no single funnel to fix this in short of
+  // touching every one of those casts individually.
+  if (storeCall?.input && typeof storeCall.input === "object") {
+    const input = storeCall.input as { businessType?: string };
+    if (typeof input.businessType === "string") {
+      input.businessType = cleanBusinessType(input.businessType);
+    }
+  }
 
   type ProductToolOutput = {
     results?: VendorMatch[];
@@ -1593,15 +1613,27 @@ async function handleSearch(req: Request) {
   // A VENDOR signed in on /chat is a real account too, on a different cookie
   // (`auth_token`, not `buyer_auth_token`). Reading only the buyer one made
   // them look anonymous here: refused photo search and told to sign in while
-  // already signed in. Buyer wins when both cookies exist — on /chat they are
-  // acting as a buyer, and only a buyer account carries a plan.
-  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
-  const actorType: "guest" | "buyer" | "vendor" = buyerAuth
-    ? "buyer"
-    : vendorAuth
-      ? "vendor"
+  // already signed in.
+  //
+  // VENDOR wins when both cookies exist (2026-09-22, reversed — see
+  // resolveActor.js's identical fix in velte-backend, same day, same root
+  // cause: a vendor signed into /chat with Google using their own vendor
+  // email kept being metered as the separate buyer account Google sign-in
+  // creates, never recognised as themselves). Safe to prefer unconditionally
+  // whenever BOTH cookies are simultaneously valid, without a separate link
+  // check here: firebaseSignIn/loginAsVendor (identityLink.service.js) both
+  // enforce cookie pairing/clearing at sign-in time — a mismatched vendor
+  // cookie from an unrelated account gets CLEARED the moment a buyer signs
+  // in under a different email, and vice versa — so two independently valid
+  // cookies in the same browser are guaranteed to already be the same
+  // linked person by the time this ever runs, never a coincidence.
+  const vendorAuth = await getOptionalVendorAuth();
+  const actorType: "guest" | "buyer" | "vendor" = vendorAuth
+    ? "vendor"
+    : buyerAuth
+      ? "buyer"
       : "guest";
-  const actorCookie = buyerAuth?.cookie ?? vendorAuth?.cookie ?? null;
+  const actorCookie = vendorAuth?.cookie ?? buyerAuth?.cookie ?? null;
   // The turn's action, and therefore its price: a photo turn costs a
   // multiple of a text turn because it genuinely costs that much more to
   // serve (see CREDIT_COST for the current numbers — deliberately not
@@ -2479,8 +2511,20 @@ async function handleSearch(req: Request) {
       // itself already requires the classifier to have judged that the last
       // turn asked something at all, so this isn't fired on an ordinary
       // reply with no question in it.
+      //
+      // ORed with isAskingForExplanation(message) (2026-09-22) — live-traced
+      // on this exact request/history shape, repeatedly, on this branch
+      // alone: `wantsExplanation` is one LLM judgment call on a short,
+      // ambiguous phrase, and came back inconsistent turn to turn for the
+      // identical "Can you explain please" reply — true some runs, false
+      // (and once landing on a totally unrelated gate) on others. The
+      // classifier's read is kept as the primary signal (it catches
+      // phrasings no fixed pattern would); the regex is what makes the
+      // common, easily-recognised phrasings ("please explain", "what do you
+      // mean", "I don't understand") reliable regardless of that noise —
+      // see isAskingForExplanation's own comment.
       if (
-        wantsExplanation &&
+        (wantsExplanation || isAskingForExplanation(message)) &&
         lastTurn?.role === "assistant" &&
         lastTurn.content.trim()
       ) {
@@ -3781,10 +3825,49 @@ async function handleSearch(req: Request) {
         // ENTIRE normal pipeline below (including the first ordinary
         // callLLM call) — there is nothing to search here, only a name to
         // ask for or a request to create. Still requires
-        // `!isOfferDeclineReply` — a decline belongs to the ORDINARY
-        // pipeline's own already-correct decline handling (re-search,
-        // reveal Places), not this one.
+        // `!isOfferDeclineReply` — a decline is handled by its own
+        // deterministic short-circuit right below (isDecliningOffer), not
+        // this one.
         const lastHistoryTurn = history.at(-1);
+
+        // Deterministic short-circuit for a DECLINE of either reach-out
+        // offer (2026-09-22, explicit request — a decline's reply "has to
+        // follow the flow of the conversation," not read as though it was
+        // never heard). Checked BEFORE isAnsweringOffer and
+        // isAnsweringVendorSearchOffer below, both of which already
+        // exclude a decline via `!isOfferDeclineReply` on the assumption
+        // it would be handled elsewhere — this is that elsewhere.
+        //
+        // Previously there was no "elsewhere": a decline fell straight
+        // through to the ordinary pipeline, which has no notion of "the
+        // buyer just said no to something" — the model, still holding the
+        // full conversation (including the original search and the offer)
+        // in context, quietly re-ran the search on its own initiative and
+        // surfaced a DIFFERENT, often weaker result (no location, a
+        // "similar match" instead of the original direct one) right under
+        // a message that had just declined the offer about the FIRST
+        // result. That reads as Velte not having heard the decline at
+        // all — a buyer who says "no thanks" expects the exchange to
+        // close, not a second, unprompted pitch.
+        //
+        // Same structural guard as its agree-direction siblings: a buyer
+        // who ignores the offer and asks for something else entirely
+        // (`requestRelation !== "new"` fails, and no isContinuation) must
+        // still fall through to the ordinary pipeline rather than being
+        // swallowed here as a decline.
+        const isDecliningOffer =
+          lastHistoryTurn?.role === "assistant" &&
+          (lastHistoryTurn.awaitingBuyerRequestReply === true ||
+            lastHistoryTurn.awaitingVendorSearchOffer === true) &&
+          isOfferDeclineReply(message) &&
+          (Boolean(body?.isContinuation) || requestRelation !== "new");
+
+        if (isDecliningOffer) {
+          const declineReply = pickAvoiding(offerDeclinedPhrase(), []);
+          await sendBareFinal(declineReply, null);
+          return;
+        }
+
         const isAnsweringOffer =
           lastHistoryTurn?.role === "assistant" &&
           lastHistoryTurn.awaitingBuyerRequestReply === true &&
@@ -5399,7 +5482,19 @@ async function handleSearch(req: Request) {
                 usableAttributes(deadEndProductInput.attributes),
               )
             : null;
-          const storeTerm = deadEndStoreInput?.businessType ?? null;
+          // cleanBusinessType, not the raw field, for the same reason
+          // buildProductTerm above already strips the product side — found
+          // live: "DJ services one day"/"DJ services wedding full-day"
+          // reached this buyer-facing dead-end line verbatim. The earlier
+          // in-place cleanup on `storeCall.input` (right after storeCall is
+          // first extracted) only covers the FIRST model call this turn —
+          // a location retry or a later cross-check can re-derive
+          // `outcome.storeCall` from a fresh, uncleaned tool call, so this
+          // read needs its own guard rather than trusting that one upstream
+          // mutation to have already covered it.
+          const storeTerm = deadEndStoreInput?.businessType
+            ? cleanBusinessType(deadEndStoreInput.businessType)
+            : null;
           // Name EVERY product this turn actually searched for, not just
           // whichever call happened to run last (2026-09-05, found live on
           // a compare turn; generalized 2026-09-15, found live on a plain
@@ -5562,12 +5657,51 @@ async function handleSearch(req: Request) {
           } else if (storeScanEligibility.eligible) {
             outcome = { ...outcome, buyerRequestOffered: true };
             buyerRequestMatchQuery = scanTerm;
+            // Same external-offer check the asymmetric productCall-only
+            // fallback above already does before making its own reach-out
+            // offer (2026-09-22, explicit fix — found live: "laptop for
+            // programming" landed HERE, not there, purely because the
+            // model had already tried both searchProducts AND searchStores
+            // on its own this turn — the more thorough search behavior —
+            // and reached the buyer with only a vendor offer, no "here's
+            // where else you can buy it" even though Jiji/Google Shopping
+            // were never actually asked. Two separate code paths can both
+            // end in "offer to reach out to a vendor," and only one of
+            // them had this step; this is the other one getting it too, so
+            // which path you land on no longer changes what gets checked.
+            // Skipped for a service term (nobody buys a service off Jiji)
+            // and gated on hasExternalConnectors(), same as the sibling.
+            const isServiceQuery = looksLikeServiceTask(scanTerm);
+            if (!isServiceQuery && hasExternalConnectors()) {
+              push(checkingElsewherePhrase(scanTerm));
+              const offers = await fetchExternalOffers({
+                query: scanTerm,
+                maxBudgetNaira: usableBudget(rememberedBudget),
+                location: scanLocation,
+              }).catch((err) => {
+                console.error(
+                  "[search] external offers failed for sector-match fallback:",
+                  err,
+                );
+                return [] as ExternalOffer[];
+              });
+              if (offers.length) {
+                const verified = await verifyOfferMatches({
+                  query: scanTerm,
+                  offers,
+                  referenceImageUrl: imageUrl,
+                });
+                earlyExternalOffers = verified.kept;
+              }
+            }
             replyOverride = pickAvoiding(
-              foundPossibleVendorPhrase(
-                scanTerm,
-                looksLikeServiceTask(scanTerm),
-                storeScanEligibility.kept[0]?.sectors,
-              ),
+              earlyExternalOffers.length
+                ? externalOffersWithLocalOfferPhrase(scanTerm, isServiceQuery)
+                : foundPossibleVendorPhrase(
+                    scanTerm,
+                    isServiceQuery,
+                    storeScanEligibility.kept[0]?.sectors,
+                  ),
               [],
             );
           } else {

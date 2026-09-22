@@ -145,6 +145,38 @@ export function isAcknowledgementReply(text: string): boolean {
   return ACKNOWLEDGEMENT_REPLIES.has(normalized);
 }
 
+// Deterministic companion to classifyScopeTool's own `wantsExplanation`
+// field (2026-09-22). Found live: "Can you explain please", answering a
+// genuine clarifying question ("What kind of decorations do you have in
+// mind for your wedding, and do you have a budget range?"), got the SAME
+// question back verbatim instead of an explanation — repeatedly, on the
+// local dev server, live-traced request by request. Root cause:
+// `wantsExplanation` is a single LLM judgment call on a short, easily
+// ambiguous phrase, and it is genuinely inconsistent turn to turn on
+// exactly this kind of input — same message, same history, sometimes
+// classified true, sometimes false, occasionally even losing the thread
+// entirely onto an unrelated gate (a fresh "share your location?" ask was
+// observed too). route.ts's own explain branch was never the problem —
+// explainClarification() itself answers correctly and quickly whenever it
+// is actually reached.
+//
+// This is a plain regex safety net, ORed alongside the classifier's own
+// read (never replacing it) — the same layered shape BUDGET_CLARIFY_PATTERN
+// gives `askedBudget` in route.ts: a structural/pattern signal for the
+// common, easily-recognised phrasings, so the buyer isn't left entirely at
+// the mercy of one noisy model call for something this common. A false
+// positive here just re-explains an assistant turn that didn't actually
+// need it — cheap, since explainClarification always asks for the SAME
+// underlying information as before, never a different question.
+const EXPLANATION_REQUEST_PATTERN =
+  /\b(explain|clarify|clarification|rephrase)\b|what\s+do\s+you\s+mean|what\s+does\s+that\s+mean|i\s+don'?t\s+understand|didn'?t\s+understand|not\s+sure\s+what\s+you\s+mean|come\s+again|say\s+that\s+again|what'?s?\s+that\s+mean/i;
+
+export function isAskingForExplanation(text: string): boolean {
+  const normalized = text.trim();
+  if (!normalized) return false;
+  return EXPLANATION_REQUEST_PATTERN.test(normalized);
+}
+
 // Narrower than isAcknowledgementReply above (which deliberately mixes
 // agreement AND decline together — it only ever needed to know "is this a
 // bare acknowledgement at all," for quote-suppression purposes) — these two
@@ -189,6 +221,28 @@ function normalizeReply(text: string): string {
     .trim()
     .toLowerCase()
     .replace(/[.!?]+$/, "");
+}
+
+// Closes the exchange after a buyer DECLINES a reach-out offer (either
+// shape — Buyer Request or the plain vendor-search offer), 2026-09-22.
+// Found live: a decline used to fall through to the ordinary pipeline,
+// which had no special handling for it at all — the model, still holding
+// the full conversation in context, quietly re-ran the search on its own
+// initiative and surfaced a DIFFERENT (often weaker — "similar match", no
+// location) result right under a message the buyer had just said no to.
+// That reads as Velte not having heard the decline at all. A decline is a
+// clean stop, not an invitation to try again unprompted — same "don't
+// trust the model, verify/force it" class of gap isAnsweringOffer already
+// exists to guard against for the AGREE direction; this is that same fix
+// for DECLINE. Short and plain on purpose — no offer to search again
+// baked in here (the buyer can always just ask), so this never reads as
+// a second, smaller pitch right after the first was turned down.
+export function offerDeclinedPhrase(): string[] {
+  return [
+    "No problem — let me know if you'd like help with anything else.",
+    "Understood, no worries. I'm here if you need anything else.",
+    "Alright, no problem. Feel free to ask if something else comes up.",
+  ];
 }
 
 export function isOfferAgreementReply(text: string): boolean {

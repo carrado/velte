@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { aiSearchData } from "@/lib/server/aiSearchBackend";
-import { isVagueReference } from "@/lib/productTerm";
+import { cleanBusinessType, isVagueReference } from "@/lib/productTerm";
 import { resolveSearchLocation } from "@/lib/server/ai/resolveBuyerCoords";
 import { allowsNearbyBusinesses } from "@/lib/server/ai/sectorClarifiers";
 import {
@@ -103,7 +103,7 @@ export interface SearchStoresCoreResult {
  */
 export async function searchStoresCore(
   {
-    businessType,
+    businessType: rawBusinessType,
     location,
     radiusKm,
     attributes,
@@ -131,6 +131,12 @@ export async function searchStoresCore(
 ): Promise<
   SearchStoresCoreResult | { error: "location-not-found"; message: string }
 > {
+  // Cleaned ONCE, here, so every use below (the actual search query, the
+  // status line, matchedQuery tagging, the WhatsApp handoff text) sees the
+  // same clean value — see cleanBusinessType's own comment for the live
+  // bug this fixes ("DJ services one day" reaching the backend AND the
+  // buyer-facing dead-end text verbatim).
+  const businessType = cleanBusinessType(rawBusinessType);
   push?.(
     searchingPhrase(
       businessType,

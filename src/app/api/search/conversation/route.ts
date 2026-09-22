@@ -45,10 +45,19 @@ export async function GET(req: Request) {
   // Widens ownership to the account, so a buyer (or vendor) opens their own
   // thread on a browser that never created it. Optional by design: an
   // anonymous buyer still reaches their own conversations by deviceId
-  // exactly as before. Buyer wins when both cookies exist, same precedence
-  // /api/search's own actorType uses.
+  // exactly as before.
+  //
+  // BOTH fetched unconditionally, deliberately NOT the "vendor wins" swap
+  // /api/search's own actorType uses (2026-09-22) — this endpoint isn't
+  // deciding who's billed or which single list to show, it's "does THIS
+  // specific conversation belong to any identity I hold", checked below
+  // against both ownerBuyerId and ownerVendorId. Nulling either one out
+  // here would mean a linked vendor could no longer reopen a conversation
+  // they created back when they were still resolving as the buyer — signing
+  // in must only ever widen access, never narrow it (see this function's
+  // own comment on the mismatch check just below).
   const buyerAuth = await getOptionalBuyerAuth();
-  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  const vendorAuth = await getOptionalVendorAuth();
 
   try {
     const conversation = await getSearchConversation({
@@ -115,8 +124,12 @@ export async function POST(req: Request) {
     );
   }
 
+  // Both fetched unconditionally — same reasoning as GET above in this same
+  // file: appending to an EXISTING conversation the caller already has a
+  // legitimate claim to, under whichever identity actually owns it, not a
+  // "which single identity wins" decision.
   const buyerAuth = await getOptionalBuyerAuth();
-  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  const vendorAuth = await getOptionalVendorAuth();
   try {
     await appendSearchTurn({
       conversationId: body.conversationId,

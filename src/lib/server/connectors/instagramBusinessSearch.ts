@@ -102,10 +102,19 @@ async function runInstagramQuery(
       headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
       // gl: "ng" — same reasoning as serper.ts's own product search: without
       // it this returns whatever ranks well globally, not for a Nigerian
-      // buyer. num raised from 10 to 20 (2026-09-22, "search very very well
-      // and deep") — more candidates for the PROFILE_URL filter below to
-      // sift through before this pass gives up.
-      body: JSON.stringify({ q, gl: "ng", hl: "en", num: 20 }),
+      // buyer. num was briefly raised 10 → 20 (2026-09-22, "search Instagram
+      // very very well and deep") and that broke EVERY call outright: Serper's
+      // free tier rejects num > 10 alongside a search operator (`site:`, a
+      // quoted phrase) with a 400 ("Query pattern not allowed for free
+      // accounts") — verified live against this project's own key, num:11
+      // included. serper.ts's own organic call already discovered and
+      // documented this exact ceiling for itself; this file just hadn't hit
+      // it yet. The 400 is caught and logged below, never surfaced, so this
+      // silently zeroed every Instagram lead for as long as num stayed at 20
+      // — a real, well-matched vendor (a Lagos wedding DJ) existed and was
+      // found instantly once num went back to 10. Never raise this past 10
+      // without re-verifying against Serper's actual response first.
+      body: JSON.stringify({ q, gl: "ng", hl: "en", num: 10 }),
       signal,
       cache: "no-store",
     });
@@ -159,16 +168,30 @@ async function runInstagramQuery(
  * TWO PASSES, not one (2026-09-22, explicit request: "search Instagram very
  * very well and deep") — a real bakery's own bio is far more likely to say
  * "Cakes", "Custom Cakes", "Confectionery" or "Baker" than the buyer's own
- * exact phrase ("birthday cake"), and the original single exact-phrase-AND
- * query required BOTH the business type AND the location to appear
- * verbatim, which is precise but easily misses a real, findable page. Pass
- * 1 stays exact-phrase (fast, high-precision — most business types DO
- * appear close to verbatim in a real bio, e.g. "tailor", "caterer") and
- * only Pass 2 — run ONLY when Pass 1 found nothing — drops the quotes
- * around `businessType` for a broader keyword match. The LOCATION
- * constraint is NEVER loosened in either pass — see the query-building
- * code below for why (the live Sacramento-appliance-shop incident this
- * guard already exists for).
+ * exact phrase ("birthday cake"). Pass 1 uses the specific place the buyer
+ * named; Pass 2 — run ONLY when Pass 1 found nothing — swaps it for the
+ * bare country term, widening the geographic net. The LOCATION TERM is
+ * NEVER dropped outright in either pass — see the query-building code
+ * below for why (the live Sacramento-appliance-shop incident this guard
+ * already exists for).
+ *
+ * `num` MUST STAY AT 10 here (2026-09-22, found live, verified directly
+ * against Serper's own API) — this file briefly ran at `num: 20` (the "very
+ * very well and deep" change, same date) and that broke EVERY call
+ * outright: this project's Serper plan rejects `num` above 10 whenever the
+ * query also carries a search operator (`site:`, a quoted phrase) —
+ * `{"message":"Query pattern not allowed for free accounts.","statusCode":
+ * 400}` — silently, every single call, which is why this connector
+ * returned empty 100% of the time for as long as `num` stayed at 20, no
+ * matter how good a match existed ("DJ services" for a Lagos wedding DJ
+ * whose own bio says almost exactly that — found instantly once `num` went
+ * back to 10). `site:` and quoted phrases are both FINE on their own —
+ * serper.ts's own organic call already discovered and documented this
+ * exact ceiling for itself; this file just hadn't hit it yet. The 400 is
+ * caught and logged in runInstagramQuery, never surfaced, so a regression
+ * here looks identical to "no real vendor exists," not to "the query
+ * itself was rejected" — re-verify against a live call before ever raising
+ * `num` past 10 again.
  *
  * Never throws: a failed or unconfigured lookup returns an empty array,
  * exactly like every other external connector in this codebase, so a dead

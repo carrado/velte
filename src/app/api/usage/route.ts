@@ -22,9 +22,12 @@ import { GUEST_CREDITS } from "@/lib/credits";
 // and the server has no way to know it. The client overrides this value with
 // the local one; sending it at all keeps the response shape uniform.
 export async function GET() {
-  const buyerAuth = await getOptionalBuyerAuth();
-  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
-  const cookie = buyerAuth?.cookie ?? vendorAuth?.cookie;
+  // VENDOR wins when both cookies exist (2026-09-22, reversed — see
+  // search/route.ts's own comment for the full reasoning). This is what
+  // decides whose balance the credit gauge actually shows.
+  const vendorAuth = await getOptionalVendorAuth();
+  const buyerAuth = vendorAuth ? null : await getOptionalBuyerAuth();
+  const cookie = vendorAuth?.cookie ?? buyerAuth?.cookie;
 
   if (!cookie) {
     return NextResponse.json({

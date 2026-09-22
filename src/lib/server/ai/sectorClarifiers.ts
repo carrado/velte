@@ -287,8 +287,18 @@ function normalizePhrases(text: string): string {
 // (product-appropriate) vs "offers"/"does" (service-appropriate) wording
 // in buyer-facing dead-end messages — a plumber or a repair job is never
 // something a vendor "carries".
+// "services" (plural) was missing entirely (found live, 2026-09-22): "DJ
+// services" never matched "service"/"servicing" here — `\bservice\b`'s own
+// trailing boundary fails the instant "service" is followed by another
+// word character ("s"), and every other entry with a common plural
+// ("repair"/"repairs", "mover"/"movers") already lists both forms
+// explicitly. This is what fed BOTH statusPhrases.ts's product-vs-service
+// wording pick AND selectClarifierFields — "DJ services" read as a product
+// the whole time, producing "No one on Velte sells DJ services... it isn't
+// a category the vendors here carry" for a request that was never a
+// product in the first place.
 const TASK_KEYWORDS =
-  /\b(repair|repairs|fix|fixing|install|installation|service|servicing|replace|replacement|clean|cleaning|cleaner|wash|washing|deliver|delivery|maintain|maintenance|plumber|electrician|caterer|catering|tailor|tailoring|mechanic|photographer|planner|developer|designer|decorator|barber|tutor|mover|movers|contractor|painter|technician|consultant|stylist)\b/i;
+  /\b(repair|repairs|fix|fixing|install|installation|service|services|servicing|replace|replacement|clean|cleaning|cleaner|wash|washing|deliver|delivery|maintain|maintenance|plumber|electrician|caterer|catering|tailor|tailoring|mechanic|photographer|planner|developer|designer|decorator|barber|tutor|mover|movers|contractor|painter|technician|consultant|stylist)\b/i;
 
 export function looksLikeServiceTask(query: string): boolean {
   return TASK_KEYWORDS.test(query);
