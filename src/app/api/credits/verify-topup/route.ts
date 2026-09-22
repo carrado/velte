@@ -17,14 +17,15 @@ import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
 // caller's OWN session before crediting anything — nothing here decides an
 // amount or an owner.
 //
-// Same actor priority as /api/credits/checkout (buyer cookie wins when both
-// exist) — whichever cookie is forwarded only has to reach the account, since
+// Same actor priority as /api/credits/checkout (vendor cookie wins when both
+// exist, 2026-09-22, reversed — see search/route.ts's own comment) —
+// whichever cookie is forwarded only has to reach the account, since
 // the backend checks the reference's own metadata against req.actor and 403s
 // a mismatch regardless of which cookie got it there.
 export async function POST(req: Request) {
-  const buyerAuth = await getOptionalBuyerAuth();
-  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
-  const cookie = buyerAuth?.cookie ?? vendorAuth?.cookie;
+  const vendorAuth = await getOptionalVendorAuth();
+  const buyerAuth = vendorAuth ? null : await getOptionalBuyerAuth();
+  const cookie = vendorAuth?.cookie ?? buyerAuth?.cookie;
   if (!cookie) {
     return NextResponse.json(
       { error: "Sign in to verify a top-up." },

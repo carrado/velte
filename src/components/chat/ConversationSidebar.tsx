@@ -193,7 +193,19 @@ export function ConversationSidebar() {
   // and the account footer). Buyer-owned surfaces (conversations, Your
   // requests) still gate on `buyer` alone below, since those collections
   // are keyed to a Buyer document a vendor-only session has no claim on.
-  const identity = buyer ?? vendor ?? null;
+  //
+  // VENDOR preferred when both exist (2026-09-22, reversed — was `buyer ??
+  // vendor`). Found live: the header (ChatHeader.tsx) already renders
+  // `userDetails ? ... : buyer ? ...` — vendor first — while this sidebar
+  // did the opposite, so a linked vendor saw themselves in the header chip
+  // and a stranger-to-them buyer identity in the very next panel over on
+  // the same page. ChatHeader's own effect already clears a genuinely
+  // MISMATCHED buyer from this same store (a different person's stale
+  // cookie) — that's a different problem from this one: a CORRECTLY linked
+  // buyer is never cleared, it's real and it's theirs, it just shouldn't
+  // outrank the vendor identity they're also signed into. This mirrors
+  // ChatHeader's render-time precedence exactly, not its clearing effect.
+  const identity = vendor ?? buyer ?? null;
   const pathname = usePathname();
 
   // Mobile only in effect: on desktop the slide-over flag is already false
@@ -548,12 +560,17 @@ export function ConversationSidebar() {
 
           {identity && (
             <AccountFooter
+              // Vendor first, matching `identity`'s own precedence just
+              // above (and ChatHeader's identical render order) — this used
+              // to check `buyer` first, so a linked vendor's OWN account
+              // footer showed their buyer name/avatar instead of their
+              // business's.
               name={
-                buyer
-                  ? (buyer.name ?? buyer.email ?? "Account")
-                  : (vendor?.company?.name ?? vendor?.name ?? "Account")
+                vendor
+                  ? (vendor.company?.name ?? vendor.name ?? "Account")
+                  : (buyer?.name ?? buyer?.email ?? "Account")
               }
-              avatar={(buyer ? buyer.avatar : vendor?.avatar) ?? undefined}
+              avatar={(vendor ? vendor.avatar : buyer?.avatar) ?? undefined}
             />
           )}
         </div>

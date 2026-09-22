@@ -11,9 +11,11 @@ import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
 // Nothing about the amount is decided here, because anything decided here is
 // something a client could decide instead.
 export async function POST(req: Request) {
-  const buyerAuth = await getOptionalBuyerAuth();
-  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
-  const cookie = buyerAuth?.cookie ?? vendorAuth?.cookie;
+  // VENDOR wins when both cookies exist (2026-09-22, reversed — see
+  // search/route.ts's own comment for the full reasoning).
+  const vendorAuth = await getOptionalVendorAuth();
+  const buyerAuth = vendorAuth ? null : await getOptionalBuyerAuth();
+  const cookie = vendorAuth?.cookie ?? buyerAuth?.cookie;
   if (!cookie) {
     return NextResponse.json(
       { error: "Sign in to top up credits." },

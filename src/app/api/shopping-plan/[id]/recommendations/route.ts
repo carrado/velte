@@ -150,8 +150,11 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const buyerAuth = await getOptionalBuyerAuth();
-  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  // VENDOR wins when both cookies exist — see search/route.ts's own comment
+  // (2026-09-22) on why this is safe unconditionally, no separate link
+  // check needed here.
+  const vendorAuth = await getOptionalVendorAuth();
+  const buyerAuth = vendorAuth ? null : await getOptionalBuyerAuth();
   if (!buyerAuth && !vendorAuth) {
     return jsonError(401, "Sign in to view your Shopping Plans.");
   }
@@ -161,7 +164,7 @@ export async function GET(
   try {
     ({ plan } = await backendData<{ plan: ShoppingPlan }>(
       `/shopping-plans/${encodeURIComponent(id)}`,
-      { cookie: buyerAuth?.cookie ?? vendorAuth?.cookie ?? "" },
+      { cookie: vendorAuth?.cookie ?? buyerAuth?.cookie ?? "" },
     ));
   } catch (err) {
     if (err instanceof BackendError && err.status < 500) {

@@ -22,7 +22,16 @@ import { callLLM } from "@/lib/server/ai/router";
 // buyer can still skip it or answer it exactly as before; only the WORDING
 // changes.
 
-const TIMEOUT_MS = 6000;
+// Widened 6000 → 10000 (2026-09-22) — live-traced against the running dev
+// server: entry into this whole function is now far more reliable (see
+// route.ts's own isAskingForExplanation OR), which means its own 6s budget
+// gets exercised far more often too, and a single slow "openai" attempt
+// followed by a "groq" fallback (both sequential inside ONE callLLM call —
+// see router.ts) can genuinely exceed 6s without either provider being
+// actually down. A miss here still degrades gracefully to the original
+// question verbatim, never an error — this is purely about shrinking how
+// often that fallback fires.
+const TIMEOUT_MS = 10000;
 const PROVIDER_ORDER = ["openai", "groq"] as const;
 const MAX_QUESTION_LENGTH = 500;
 
@@ -55,18 +64,50 @@ function systemPromptFor(originalQuestion: string, itemTerm: string): string {
   ].join("\n");
 }
 
-function isUsableQuestion(s: string | undefined): s is string {
+// Normalizes away whitespace/punctuation/case differences that don't
+// change what a buyer reads as "the same question again" — a trailing
+// period or a capitalization change is not a genuine rewrite.
+function normalizeForComparison(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/, "")
+    .replace(/\s+/g, " ");
+}
+
+// `originalQuestion` is required (not just length/emptiness) — live-traced
+// against the running dev server (2026-09-22): the model itself, not a
+// network failure, was the dominant source of the exact bug this whole file
+// exists to fix. Over half of a real, direct sample of calls against the
+// same input returned the ORIGINAL question completely unchanged as their
+// "explanation" — a fast, error-free, structurally valid tool call that
+// nonetheless violates the system prompt's own explicit "never restate the
+// original question verbatim" rule. `isUsableQuestion` alone (length and
+// emptiness only) accepted that output as a success, so the caller never
+// even knew to retry — it just displayed the buyer's own unmet complaint
+// back at them a second time.
+function isUsableQuestion(
+  s: string | undefined,
+  originalQuestion: string,
+): s is string {
   if (!s) return false;
   const t = s.trim();
-  return t.length > 0 && t.length <= MAX_QUESTION_LENGTH;
+  if (t.length === 0 || t.length > MAX_QUESTION_LENGTH) return false;
+  return normalizeForComparison(t) !== normalizeForComparison(originalQuestion);
 }
+
+const MAX_ATTEMPTS = 2;
 
 /**
  * Rewrites `originalQuestion` with concrete examples so a buyer who asked
- * "please explain" can actually answer it. Returns null on ANY failure or
- * unusable output — the caller falls back to re-showing the original
- * question verbatim, which keeps the conversation's intent intact even
- * when this call itself doesn't work. Never throws.
+ * "please explain" can actually answer it. Retries once (MAX_ATTEMPTS) when
+ * the model hands back the original question unchanged, since that failure
+ * mode is a coin-flip on this exact input, not a persistent one — see
+ * isUsableQuestion's own comment. Returns null on total failure or
+ * unusable output across every attempt — the caller falls back to
+ * re-showing the original question verbatim, which keeps the
+ * conversation's intent intact even when this call itself doesn't work.
+ * Never throws.
  */
 export async function explainClarification(params: {
   originalQuestion: string;
@@ -75,14 +116,25 @@ export async function explainClarification(params: {
   const originalQuestion = params.originalQuestion.trim();
   if (!originalQuestion) return null;
 
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const rewritten = await attemptExplainClarification(
+      originalQuestion,
+      params.itemTerm,
+    );
+    if (rewritten) return rewritten;
+  }
+  return null;
+}
+
+async function attemptExplainClarification(
+  originalQuestion: string,
+  itemTerm: string,
+): Promise<string | null> {
   try {
     const result = await Promise.race([
       callLLM(
         {
-          system: systemPromptFor(
-            originalQuestion,
-            params.itemTerm.trim() || "this",
-          ),
+          system: systemPromptFor(originalQuestion, itemTerm.trim() || "this"),
           messages: [
             {
               role: "user",
@@ -107,7 +159,9 @@ export async function explainClarification(params: {
       (r) => r.toolName === "explainClarification",
     )?.output as { question?: string } | undefined;
 
-    return isUsableQuestion(output?.question) ? output.question.trim() : null;
+    return isUsableQuestion(output?.question, originalQuestion)
+      ? output.question.trim()
+      : null;
   } catch (err) {
     console.error(
       "[search] explain-clarification failed, re-showing original question:",

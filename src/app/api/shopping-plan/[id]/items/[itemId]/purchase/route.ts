@@ -15,8 +15,11 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string; itemId: string }> },
 ) {
-  const buyerAuth = await getOptionalBuyerAuth();
-  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  // VENDOR wins when both cookies exist — see search/route.ts's own comment
+  // (2026-09-22) on why this is safe unconditionally, no separate link
+  // check needed here.
+  const vendorAuth = await getOptionalVendorAuth();
+  const buyerAuth = vendorAuth ? null : await getOptionalBuyerAuth();
   if (!buyerAuth && !vendorAuth) {
     return jsonError(401, "Sign in to manage your Shopping Plan.");
   }
@@ -36,7 +39,7 @@ export async function PATCH(
           candidateId: body.candidateId,
           purchased: body?.purchased === true,
         },
-        cookie: buyerAuth?.cookie ?? vendorAuth?.cookie ?? "",
+        cookie: vendorAuth?.cookie ?? buyerAuth?.cookie ?? "",
       },
     );
     return NextResponse.json({ plan });

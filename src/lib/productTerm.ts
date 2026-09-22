@@ -136,20 +136,75 @@ function stripBudgetPhrase(text: string): string {
   return text.replace(BUDGET_PHRASE, " ").replace(/\s+/g, " ").trim();
 }
 
+// Same class of bug as BUDGET_PHRASE above, found live 2026-09-22:
+// searchStoresTool's own schema already tells the model a booking-length
+// detail ("for a day", "for 2 hours") belongs in `attributes`, as its own
+// standalone entry — same rule the schema already states for attributes in
+// general — never glued into `businessType` itself. The model did it
+// anyway: `businessType: "DJ services one day"` reached the actual search
+// query AND the buyer-facing dead-end text verbatim ("No one on Velte sells
+// DJ services one day"), the exact "prose riding along in the query text"
+// shape the budget guard above already exists to catch — a prompt is a
+// request, not a guarantee, same lesson, different field. `businessType`
+// has no separate "attributes" to join it against (unlike `product`, whose
+// join already runs through buildProductTerm below) — it should just never
+// carry this kind of clause at all, so this strips rather than relocates.
+//
+// Matches BOTH "for a day"/"for 2 hours" (with the connector) AND a bare
+// "one day"/"2 hours" (no connector at all — the exact shape found live,
+// nothing between "services" and "one day"). Deliberately also strips a
+// bare "<number> hour(s)" even as a business's own selling point ("24 hour
+// locksmith") — an occasional lost descriptor is a smaller cost than a
+// garbled search term and a buyer-facing sentence quoting it back.
+const DURATION_PHRASE =
+  /\bfor\s+(?:the\s+)?(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|\d+)?\s*(?:half|full|whole)?[- ]?(?:day|days|hour|hours|week|weeks|month|months|night|nights|evening|evenings|weekend|weekends)\b|\b(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(?:days?|hours?|weeks?|months?|nights?|evenings?)\b|\b(?:half|full|whole)[- ]day\b|\bovernight\b/gi;
+
+function stripDurationPhrase(text: string): string {
+  return text.replace(DURATION_PHRASE, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Cleans a raw `businessType` (searchStoresTool's own field) of a
+ * budget/duration clause the model glued in despite its schema saying
+ * these belong elsewhere — same "code-level guard, not just a prompt"
+ * reasoning as buildProductTerm's own stripBudgetPhrase, applied to the
+ * ONE field that has no attributes array to fall back on. Returns the
+ * original string, never empty, if stripping would leave nothing — a
+ * businessType with no real content left is a separate problem
+ * (isVagueReference already exists for that), not this function's job.
+ */
+// Both guards chained together — a duration clause is just as much "real
+// information that belongs in a dedicated field, not glued into the search
+// term" as a budget clause is (see BUDGET_PHRASE's own comment), and found
+// living in the SAME field: "DJ services wedding for a day any music"
+// reached a buyer-facing dead-end line with the duration clause intact
+// because buildProductTerm below used to strip budget only. One shared
+// name so `product`/`attributes` (this function) and `businessType`
+// (cleanBusinessType) can never drift into stripping a different set of
+// clauses from each other again.
+function stripQueryNoise(text: string): string {
+  return stripDurationPhrase(stripBudgetPhrase(text));
+}
+
+export function cleanBusinessType(businessType: string): string {
+  const cleaned = stripQueryNoise(businessType);
+  return cleaned || businessType;
+}
+
 export function buildProductTerm(
   product: string,
   attributes?: string[],
 ): string {
-  const cleanProduct = stripBudgetPhrase(product) || product;
+  const cleanProduct = stripQueryNoise(product) || product;
   const usedStems = new Set(tokenize(cleanProduct));
   const lead: string[] = [];
   const trail: string[] = [];
   for (const rawAttr of attributes ?? []) {
     // Dropped entirely, not partially edited, when stripping leaves nothing
-    // — "100000 naira budget" as a whole attribute has no product-
-    // identifying content left once the budget clause is gone, unlike
+    // — "100000 naira budget"/"for a day" as a whole attribute has no
+    // product-identifying content left once the clause is gone, unlike
     // `product` above (where SOME real item name is expected to remain).
-    const attr = stripBudgetPhrase(rawAttr);
+    const attr = stripQueryNoise(rawAttr);
     if (!attr) continue;
     const words = attr.split(/\s+/).filter(Boolean);
     const newWords = words.filter((word) => {

@@ -9,14 +9,15 @@ import type { ShoppingPlanSummary } from "@/types/shoppingPlan";
 // source. Every plan this buyer OR vendor has started, newest first, in
 // the lighter summary shape (see velte-backend's toSummaryShape) — the
 // detail page (/api/shopping-plan/:id) is what loads one plan's full
-// items/candidate data. Buyer wins when both cookies exist.
+// items/candidate data. VENDOR wins when both cookies exist (2026-09-22,
+// reversed — see search/route.ts's own comment for the full reasoning).
 //
 // Plan CREATION deliberately has no route here — it only ever happens
 // server-side, inside /api/search/route.ts's own deadline branch, which
 // already has a session to act under and calls velte-backend directly.
 export async function GET() {
-  const buyerAuth = await getOptionalBuyerAuth();
-  const vendorAuth = buyerAuth ? null : await getOptionalVendorAuth();
+  const vendorAuth = await getOptionalVendorAuth();
+  const buyerAuth = vendorAuth ? null : await getOptionalBuyerAuth();
   if (!buyerAuth && !vendorAuth) {
     return jsonError(401, "Sign in to view your Shopping Plans.");
   }
@@ -24,7 +25,7 @@ export async function GET() {
   try {
     const { plans } = await backendData<{ plans: ShoppingPlanSummary[] }>(
       "/shopping-plans",
-      { cookie: buyerAuth?.cookie ?? vendorAuth?.cookie ?? "" },
+      { cookie: vendorAuth?.cookie ?? buyerAuth?.cookie ?? "" },
     );
     return NextResponse.json({ plans });
   } catch (err) {
