@@ -839,10 +839,23 @@ export const serperConnector: ExternalConnector = {
     return Boolean(process.env.SERPER_API_KEY);
   },
 
-  async search({ query, country = "ng", limit = DEFAULT_LIMIT }) {
+  async search({ query, country = "ng", location, limit = DEFAULT_LIMIT }) {
     const apiKey = process.env.SERPER_API_KEY;
-    const q = query.trim();
-    if (!apiKey || !q) return [];
+    const baseQuery = query.trim();
+    if (!apiKey || !baseQuery) return [];
+    // Folded into BOTH the shopping and organic queries below (2026-09-22,
+    // found live: a buyer who named "Anambra" directly got land listings
+    // back from Ibadan, Ikorodu and Abuja — this connector never had a
+    // location parameter at all, so a buyer-named place was extracted for
+    // Velte's own search and then silently dropped before it ever reached
+    // here). Plain concatenation, not a quoted phrase or a `site:`-style
+    // operator — Google Shopping/organic both already rank a location
+    // mentioned in the query text as a real relevance signal on their own,
+    // the same way a buyer typing "birthday cake Anambra" themselves would
+    // get biased results without needing an exact-match filter. No location
+    // named means no change at all — a nationwide result stays the honest
+    // answer to a location-free query, same as Velte's own search.
+    const q = location?.trim() ? `${baseQuery} ${location.trim()}` : baseQuery;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

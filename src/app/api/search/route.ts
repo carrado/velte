@@ -391,12 +391,45 @@ const STRUCTURED_BREAKDOWN_MARKERS =
   /\b(strengths?|downsides?|pros?|cons?)\s*:/i;
 const MARKDOWN_HEADING_LINE = /^#{1,6}\s/m;
 const BULLET_LINE = /^\s*[-*•]\s+/gm;
+// Raised from 600 (2026-09-21, found live: buildComparisonAnswerSystemPrompt
+// was reworded the same day — see its own header — to explicitly REQUIRE "a
+// genuine short paragraph, several sentences of real substance, that
+// actually walks through 2–4 concrete points of difference" instead of "a
+// few natural sentences", because a bare one-line verdict with no reasoning
+// was itself the violation being caught live at the time. Nobody updated
+// THIS number to match: a model correctly complying with the new, longer
+// requirement routinely runs past 600 characters, so this backstop was
+// silently discarding a good, compliant, substantive answer and replacing
+// it with the exact bare-verdict template the prompt rewrite existed to
+// stop — the buyer saw the short fallback line on nearly every comparison,
+// looking exactly like the model had ignored the elaboration rule when it
+// may well have complied and been overruled here instead. 1600 gives a
+// real 2-4-point paragraph room to breathe; the OTHER three checks below
+// (headings, "Strengths:"/"Downsides:" markers, 2+ bullet lines) are what
+// actually detect a rigid table/breakdown — length alone was never a
+// precise signal for that shape, only a rough proxy that stopped being
+// valid the moment the target length changed.
+const MAX_COMPARISON_ANSWER_LENGTH = 1600;
+// Raised from 2 (2026-09-21, same pass as MAX_COMPARISON_ANSWER_LENGTH above,
+// same root cause) — buildComparisonAnswerSystemPrompt now explicitly
+// invites "a short list... when the comparison genuinely breaks down into a
+// small set of discrete factors", reversing the old "never bullet lists"
+// rule this threshold was tuned against. 2 bullets was never a list, it was
+// a trip-wire: it fired on the exact kind of short, legitimate highlight
+// list (camera / battery / price, say) the prompt now asks for, discarding
+// a good compliant answer the same way the old length check did. What
+// actually distinguishes a genuine "rigid per-option breakdown" (the live
+// incident this whole detector exists for) is a bullet count roughly
+// doubled by covering BOTH options' strengths AND downsides separately —
+// typically 6+ in practice — not merely "more than one point worth
+// listing".
+const MAX_COMPARISON_ANSWER_BULLETS = 8;
 function looksLikeStructuredBreakdown(text: string): boolean {
-  if (text.length > 600) return true;
+  if (text.length > MAX_COMPARISON_ANSWER_LENGTH) return true;
   if (MARKDOWN_HEADING_LINE.test(text)) return true;
   if (STRUCTURED_BREAKDOWN_MARKERS.test(text)) return true;
   const bulletLines = text.match(BULLET_LINE)?.length ?? 0;
-  return bulletLines >= 2;
+  return bulletLines > MAX_COMPARISON_ANSWER_BULLETS;
 }
 
 /**
@@ -500,10 +533,11 @@ async function getVendorStoresForProducts(
           gallery: store.gallery,
           // A plain vendorId lookup, not a search — no businessType query
           // to attribute this store to (see StoreMatch's own comment), and
-          // so nothing to tag attributes/budget against either.
+          // so nothing to tag attributes/budget/sector against either.
           matchedQuery: null,
           matchedAttributes: [],
           matchedBudgetNaira: null,
+          matchedSector: null,
         };
         return result;
       } catch (err) {
@@ -4116,12 +4150,19 @@ async function handleSearch(req: Request) {
               ? (storeResult.externalSuggestions ?? [])
               : [];
           // The full vendor chain the offer promised (2026-09-16, explicit
-          // request): Velte vendors first, then Google Places, then
-          // Instagram business leads — the same three tiers the ordinary
-          // vendor/store dead end already runs, which this short-circuit
-          // used to stop two tiers short of. Only when Velte itself has no
-          // verified vendor: a real Velte match is the answer, and the
-          // buyer never asked for an off-Velte list alongside it.
+          // request, re-ordered 2026-09-22 also explicit): Velte vendors
+          // first, then INSTAGRAM, then Google Places only as Instagram's
+          // OWN fallback — reversed from Places-then-Instagram because most
+          // small Nigerian vendors this offer exists for (caterers, cake
+          // bakers, tailors, event stylists) run off an Instagram page with
+          // no separate business listing Places would ever index, so
+          // Instagram is the higher-yield source for exactly the
+          // "opted in for a real vendor" case this block handles — Places
+          // stays as the fallback for whatever Instagram genuinely has
+          // nothing on, not a co-equal second list shown alongside it.
+          // Still only when Velte itself has no verified vendor: a real
+          // Velte match is the answer, and the buyer never asked for an
+          // off-Velte list alongside it.
           const vendorInstagramLeads =
             businessType &&
             vendorStores.length === 0 &&
@@ -4137,10 +4178,16 @@ async function handleSearch(req: Request) {
                   return [] as InstagramLead[];
                 })
               : [];
+          // Places already came back bundled with the Velte store search
+          // above (searchStoresCore fetches both in one backend call, so
+          // there's no extra cost to having it in hand) — only SHOWN when
+          // Instagram found nothing, per the fallback ordering above.
+          const shownVendorPlaces =
+            vendorInstagramLeads.length > 0 ? [] : vendorPlaces;
           const vendorReply = businessType
             ? vendorStores.length > 0
               ? "Here's who I found who might be able to help with that — take a look below."
-              : vendorPlaces.length > 0 || vendorInstagramLeads.length > 0
+              : vendorInstagramLeads.length > 0 || shownVendorPlaces.length > 0
                 ? "No Velte vendor for that yet — but here are some businesses off Velte that might be able to help."
                 : "Couldn't find a vendor for that on Velte, and nothing nearby came up either."
             : "Couldn't tell what to look for a vendor for — try describing what you need again.";
@@ -4166,7 +4213,7 @@ async function handleSearch(req: Request) {
               "matchQuality" in storeResult
                 ? storeResult.matchQuality
                 : undefined,
-            externalStoreSuggestions: vendorPlaces,
+            externalStoreSuggestions: shownVendorPlaces,
             instagramLeads: vendorInstagramLeads,
             vendorProducts: [],
             vendorProductsStore: null,
@@ -5255,6 +5302,7 @@ async function handleSearch(req: Request) {
                 const offers = await fetchExternalOffers({
                   query: businessType,
                   maxBudgetNaira: budget,
+                  location: productInput.location,
                 }).catch((err) => {
                   console.error(
                     "[search] external offers failed for asymmetric store fallback:",
@@ -5929,11 +5977,21 @@ async function handleSearch(req: Request) {
                 product?: string;
                 attributes?: string[];
                 maxBudgetNaira?: number;
+                location?: string;
               }
             | undefined;
           const storeInput = storeCall?.input as
-            | { businessType?: string }
+            | { businessType?: string; location?: string }
             | undefined;
+          // The buyer's own named place, if either tool call carried one
+          // this turn (2026-09-22, found live: a buyer who named "Anambra"
+          // directly got land listings back from Ibadan, Ikorodu and Abuja
+          // — this was extracted for Velte's own search and then never
+          // reached the external fallback at all). Never a device
+          // coordinate — see ExternalConnector.search's own comment on why
+          // only a NAME the buyer actually said is ever passed along.
+          const externalLocation =
+            productInput?.location ?? storeInput?.location ?? undefined;
           // Was bare `productInput?.product` — found live: a "good camera,
           // high storage" phone request, genuinely empty on Velte, fell
           // back to a Serper search and a wrong-kind-of-item check both run
@@ -6012,6 +6070,7 @@ async function handleSearch(req: Request) {
                   const offers = await fetchExternalOffers({
                     query,
                     maxBudgetNaira: effectiveBudget,
+                    location: externalLocation,
                   }).catch((err) => {
                     // One option failing must not lose the other's listings:
                     // a comparison with one side missing is still worth more
@@ -6079,6 +6138,7 @@ async function handleSearch(req: Request) {
               externalOffers = await fetchExternalOffers({
                 query: externalQuery,
                 maxBudgetNaira: effectiveBudget,
+                location: externalLocation,
               });
             }
             // The same kind-of-item gate searchProductsCore runs on Velte's

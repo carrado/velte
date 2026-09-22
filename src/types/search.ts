@@ -319,6 +319,17 @@ export interface StoreMatch {
   name: string;
   description: string;
   sectors: string[];
+  // Which ONE of `sectors` above this search actually turned up on, if any
+  // (2026-09-22, staffly-ai-backend's own bestMatchingSector) — a
+  // best-effort, phrase-level explanation of a real embedding/rerank match,
+  // never a second scoring pass. StoreResultCard pins this sector into its
+  // visible pills rather than always showing a store's first 3 — found
+  // live: a vendor's real-estate sector, the one reason a "plot of land"
+  // search matched it at all, sat 4th in the array and never rendered.
+  // null when nothing recognisably overlaps (a pure semantic match with no
+  // explainable keyword phrase) — the card falls back to its own default
+  // ordering in that case, never a guess.
+  matchedSector: string | null;
   whatsapp: string | null;
   area: string | null;
   state: string | null;
@@ -526,6 +537,16 @@ export interface ExternalOffer {
    *  source that CAN'T always produce a direct link" this field was
    *  originally kept around for. */
   isDirectLink: boolean;
+  /** True when this offer is priced ABOVE the buyer's stated
+   *  `maxBudgetNaira` and is only here because nothing affordable filled
+   *  the list on its own (2026-09-22 — see connectors/index.ts's own
+   *  fetchExternalOffers for the fallback that sets this). Never set when
+   *  no budget was given, or when the offer's own price is within it or
+   *  unparseable. `ExternalOfferCard` reads this to label the mismatch
+   *  plainly rather than let a buyer discover it only after tapping
+   *  through — the same "never let a claim look more confident than it is"
+   *  rule this whole file already follows for match quality/direct links. */
+  overBudget?: boolean;
 }
 
 // One item from getVendorProductsTool — a SPECIFIC, already-identified

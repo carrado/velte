@@ -28,6 +28,18 @@ export interface ExternalConnector {
     query: string;
     /** ISO country for regional results — "ng" in practice. */
     country?: string;
+    /** The place name the buyer's own words named, if any (e.g. "Anambra",
+     *  "Enugu") — never a raw lat/lng, only a NAME to fold into the query
+     *  text the same way instagramBusinessSearch.ts already does for its
+     *  own connector (2026-09-22, found live: a buyer who named "Anambra"
+     *  directly got back land listings in Ibadan, Ikorodu and Abuja — this
+     *  field never existed on the connector contract at all, so a buyer's
+     *  stated location was extracted for Velte's own search but silently
+     *  dropped before it ever reached an external one). Omitted when the
+     *  buyer named no place — a connector must NEVER guess one; a
+     *  nationwide result is the honest answer to a location-free query,
+     *  same as Velte's own search already treats it. */
+    location?: string | null;
     limit?: number;
   }): Promise<ExternalOffer[]>;
 }

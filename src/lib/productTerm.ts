@@ -104,14 +104,53 @@ function tokenize(text: string): string[] {
 const CONDITION_ATTRIBUTE =
   /^(brand[- ]new|new|fairly used|foreign used|uk[- ]used|tokunbo|second[- ]?hand|pre[- ]?owned|refurbished|used)$/i;
 
+// A code-level guard against a budget/price clause landing in `product` or
+// an `attributes` entry — searchProductsTool.ts's own schema already tells
+// the model this belongs ONLY in its dedicated `maxBudgetNaira` field, never
+// here, but a prompt is a request, not a guarantee. Found live, 2026-09-22:
+// despite that instruction, "birthday cake 100000 naira budget" still
+// reached this function's own join and became the literal search term shown
+// to a buyer ("No vendor on Velte has...") AND sent to an external
+// connector as a real query — the exact "prose riding along in the query
+// text" this whole budget-as-a-filter design was built to prevent
+// (searchProductsTool.ts's own maxBudgetNaira comment). Fixed HERE, in the
+// one shared join every caller (route.ts, searchProductsTool.ts,
+// resolveSearchItem.ts, SearchHome.tsx) already goes through, rather than
+// trusting each call site to sanitize its own input — same "one
+// implementation, not a per-site exemption to remember" reasoning this
+// codebase already applies elsewhere.
+//
+// Matches a currency amount (a number, optionally with "k"/"thousand"/
+// "million"/"naira"/"ngn"/a "₦" sign) combined with "budget", "under",
+// "below", "less than", "max(imum)" — deliberately requires BOTH a number
+// AND one of those words together, never either alone: a bare number is
+// often real product content ("iPhone 15", "50i"), and the bare word
+// "budget" on its own is a real, common product descriptor ("budget
+// smartphone" means "affordable", not a stated price) that must never be
+// stripped just because it happens to also be the word used for a genuine
+// budget clause elsewhere.
+const BUDGET_PHRASE =
+  /\b(?:under|below|less than|not more than|max(?:imum)?)\s*(?:₦\s?)?\d[\d,]*\s*(?:k\b|thousand\b|million\b)?(?:\s*naira\b|\s*ngn\b)?|\b(?:₦\s?\d[\d,]*|\d[\d,]*\s*(?:k\b|thousand\b|million\b)?\s*(?:naira|ngn))\s*budget\b|\bbudget\s*(?:of|is|:)?\s*(?:₦\s?)?\d[\d,]*\s*(?:k\b|thousand\b|million\b)?(?:\s*naira\b)?/gi;
+
+function stripBudgetPhrase(text: string): string {
+  return text.replace(BUDGET_PHRASE, " ").replace(/\s+/g, " ").trim();
+}
+
 export function buildProductTerm(
   product: string,
   attributes?: string[],
 ): string {
-  const usedStems = new Set(tokenize(product));
+  const cleanProduct = stripBudgetPhrase(product) || product;
+  const usedStems = new Set(tokenize(cleanProduct));
   const lead: string[] = [];
   const trail: string[] = [];
-  for (const attr of attributes ?? []) {
+  for (const rawAttr of attributes ?? []) {
+    // Dropped entirely, not partially edited, when stripping leaves nothing
+    // — "100000 naira budget" as a whole attribute has no product-
+    // identifying content left once the budget clause is gone, unlike
+    // `product` above (where SOME real item name is expected to remain).
+    const attr = stripBudgetPhrase(rawAttr);
+    if (!attr) continue;
     const words = attr.split(/\s+/).filter(Boolean);
     const newWords = words.filter((word) => {
       const stems = tokenize(word);
@@ -128,7 +167,7 @@ export function buildProductTerm(
       tokenize(word).forEach((s) => usedStems.add(s));
     }
   }
-  return [...lead, product, ...trail].join(" ");
+  return [...lead, cleanProduct, ...trail].join(" ");
 }
 
 // Words that point AT something without naming it — on top of STOPWORDS,

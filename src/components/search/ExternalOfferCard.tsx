@@ -192,6 +192,17 @@ export function ExternalOfferCard({
             {offer.priceText}
           </p>
         )}
+        {/* Only ever set when this listing is here BECAUSE nothing within
+            budget filled the list on its own (2026-09-22, see
+            connectors/index.ts's own fetchExternalOffers) — the buyer sees
+            the mismatch plainly on the card itself, before ever tapping
+            through, rather than discovering it only on the merchant's own
+            page. */}
+        {offer.overBudget && (
+          <p className="inline-flex w-fit items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+            Above your budget
+          </p>
+        )}
         {/* Real spec pairs the page published (see ExternalOffer.attributes)
             — capped at 3 and comma-joined rather than a full table, since
             this is a compact card, not the listing's own page. Currently

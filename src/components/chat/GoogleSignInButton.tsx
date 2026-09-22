@@ -11,6 +11,7 @@ import {
 } from "@/lib/buyerReferralCode";
 import { firebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
 import { useBuyerStore } from "@/store/buyerStore";
+import { cn } from "@/lib/utils";
 import type { Buyer } from "@/types/buyer";
 
 // Google sign-in for buyers, via Firebase Auth (2026-08-26).
@@ -53,10 +54,22 @@ function messageForFirebaseError(code: string): string | null {
 
 export function GoogleSignInButton({
   onSignedIn,
+  variant = "full",
 }: {
   /** Fired after the session cookie is set and the buyer is in the store —
    *  used by the caller to close whatever prompted the sign-in. */
   onSignedIn?: (buyer: Buyer) => void;
+  /** "full" (default, unchanged) stretches to its container's width, for
+   *  the empty-state/quota-gate cards this originally shipped for. "compact"
+   *  (2026-09-22, explicit request) sizes itself to its content instead —
+   *  same inline-pill proportions as CreditsButton's "Top up credits"
+   *  elsewhere on /chat (px-4/h-10/rounded-full/text-sm) — for a spot like
+   *  the Buyer-Request chat-body sign-in prompt, where a button stretched to
+   *  the full width of the thread read as far too heavy for a single tap
+   *  sitting under a couple of sentences of reply text. Google's own
+   *  required mark/colors are untouched either way — only the sizing
+   *  changes. */
+  variant?: "full" | "compact";
 }) {
   const setBuyer = useBuyerStore((s) => s.setBuyer);
   const queryClient = useQueryClient();
@@ -135,13 +148,23 @@ export function GoogleSignInButton({
     );
   }
 
+  const compact = variant === "compact";
+
   return (
-    <div className="flex flex-col items-center gap-2 w-full">
+    <div
+      className={cn(
+        "flex flex-col gap-2",
+        compact ? "items-start" : "items-center w-full",
+      )}
+    >
       <button
         type="button"
         onClick={() => void handleClick()}
         disabled={busy}
-        className="w-full flex items-center justify-center gap-2.5 h-11 px-4 rounded-full bg-surface border border-gray-200 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        className={cn(
+          "flex items-center justify-center gap-2.5 rounded-full border border-gray-200 bg-surface hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors cursor-pointer",
+          compact ? "h-10 px-4" : "h-11 px-4 w-full",
+        )}
       >
         {/* Google's mark, inline rather than a remote asset — their branding
             guidelines require the official four-colour "G" on a sign-in
@@ -169,7 +192,12 @@ export function GoogleSignInButton({
         </span>
       </button>
       {error && !busy && (
-        <p className="text-xs text-red-600 text-center max-w-[240px]">
+        <p
+          className={cn(
+            "text-xs text-red-600",
+            compact ? "text-left" : "text-center max-w-[240px]",
+          )}
+        >
           {error}
         </p>
       )}

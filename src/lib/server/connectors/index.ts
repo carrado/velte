@@ -70,12 +70,24 @@ export async function fetchExternalOffers(params: {
   // could hand a buyer who said "under ₦400k" a Google Shopping result
   // priced at ₦900k with nothing marking it as out of range — the exact
   // "the model translates, the data decides" rule this whole product runs
-  // on, just for a price ceiling instead of a vendor claim. Only ever
-  // drops a PARSEABLE price that's actually over budget — see
-  // parseOfferPrice's own strictness note on why a range or an unreadable
-  // price is kept rather than guessed at: an offer this can't judge is not
-  // the same as one it knows is over.
+  // on, just for a price ceiling instead of a vendor claim.
+  //
+  // NOT a hard drop (2026-09-22, reversed — see this function's own body):
+  // a within-budget/unpriced listing is always preferred, but an over-budget
+  // one only gets left out while there's enough affordable to fill the list
+  // without it — never leaving a buyer with nothing shown just because
+  // nothing genuinely fit their number. See parseOfferPrice's own
+  // strictness note on why a range or an unreadable price is never treated
+  // as over budget either: an offer this can't judge is not the same as one
+  // it knows is over.
   maxBudgetNaira?: number;
+  // The place name the buyer's own words named, if any (e.g. "Anambra") —
+  // see ExternalConnector.search's own comment on this field for the live
+  // bug it fixes and why it's a NAME, never a raw coordinate. Threaded
+  // straight through to every connector unchanged; this orchestrator has no
+  // location logic of its own to apply, same as it has none for the query
+  // text itself.
+  location?: string | null;
 }): Promise<ExternalOffer[]> {
   const enabled = CONNECTORS.filter((c) => c.isEnabled());
   // See isVagueReference's own comment — "all of them"/"the best" carry no
@@ -104,6 +116,7 @@ export async function fetchExternalOffers(params: {
       c.search({
         query: params.query,
         country: params.country,
+        location: params.location,
         limit: fetchLimit,
       }),
     ),
@@ -121,24 +134,12 @@ export async function fetchExternalOffers(params: {
     for (const offer of result.value) {
       const key = titleKey(offer.title);
       if (!key || seen.has(key)) continue;
-      // The one hard filter this orchestrator applies itself, same spirit
-      // as verifyOfferMatches' kind-of-item gate downstream in route.ts: a
-      // buyer who named a ceiling is not shown something priced above it,
-      // whatever else about the listing fits. Checked BEFORE `seen.add` so
-      // an over-budget duplicate never blocks a later, cheaper listing of
-      // the same title from a different source.
-      if (params.maxBudgetNaira != null) {
-        const price = parseOfferPrice(offer.priceText);
-        if (price != null && price > params.maxBudgetNaira) continue;
-      }
       seen.add(key);
       merged.push(offer);
       // Only short-circuit early when there's no budget to weigh. With one,
-      // the confirmed-price-first sort below needs to see every candidate
-      // that passed the filter above, not just the first `limit` of them in
-      // encounter order — otherwise a run of price-less listings could fill
-      // every slot before a verified-affordable one further down the
-      // connector's results was ever compared against them.
+      // every candidate has to be collected first — the within/over-budget
+      // split below needs the WHOLE set, not just the first `limit` of them
+      // in encounter order.
       if (params.maxBudgetNaira == null && merged.length >= limit) {
         return merged;
       }
@@ -147,20 +148,50 @@ export async function fetchExternalOffers(params: {
 
   if (params.maxBudgetNaira == null) return merged.slice(0, limit);
 
-  // A CONFIRMED in-budget price outranks a listing this can't verify at
-  // all (no price shown, or a range parseOfferPrice won't guess at) — found
-  // live: a buyer who gave a ₦400k budget got back two listings with no
-  // price on either one, shown with exactly the same confidence a verified
-  // match would have had. Everything in `merged` already cleared the budget
-  // filter above (nothing over budget survives it), so this is purely a
-  // presentation order, never a second filter — an unpriced listing is
-  // still shown, just after anything that could actually be confirmed.
-  const withPrice: ExternalOffer[] = [];
-  const withoutPrice: ExternalOffer[] = [];
+  // BUDGET IS A PREFERENCE ORDER, NOT A HARD DROP (2026-09-22, explicit
+  // product decision reversing the prior "over budget is dropped entirely"
+  // rule) — found live: a ₦100k birthday-cake budget with nothing genuinely
+  // available under it came back with NOTHING at all, because every real
+  // listing above the ceiling was silently discarded here, leaving only
+  // Jiji's own always-there search-link fallback. A buyer is better served
+  // by seeing what's actually out there, clearly marked as over budget, than
+  // by a dead end that hides real options that exist. `overBudget` is never
+  // a second filter on top of this — it's the flag `ExternalOfferCard` reads
+  // to label a listing honestly rather than let a buyer discover the
+  // mismatch only after tapping through.
+  //
+  // A CONFIRMED in-budget price still outranks a listing this can't verify
+  // at all (no price shown, or a range parseOfferPrice won't guess at) —
+  // found live: a buyer who gave a ₦400k budget got back two listings with
+  // no price on either one, shown with exactly the same confidence a
+  // verified match would have had. An unparseable price is never treated as
+  // over budget either (parseOfferPrice's own strictness note: a range or
+  // an unreadable price is kept rather than guessed at — an offer this
+  // can't judge is not the same as one it knows is over).
+  const withinBudget: ExternalOffer[] = [];
+  const unpriced: ExternalOffer[] = [];
+  const overBudget: ExternalOffer[] = [];
   for (const offer of merged) {
-    (parseOfferPrice(offer.priceText) != null ? withPrice : withoutPrice).push(
-      offer,
-    );
+    const price = parseOfferPrice(offer.priceText);
+    if (price == null) unpriced.push(offer);
+    else if (price <= params.maxBudgetNaira) withinBudget.push(offer);
+    else overBudget.push(offer);
   }
-  return [...withPrice, ...withoutPrice].slice(0, limit);
+  const affordable = [...withinBudget, ...unpriced];
+  if (affordable.length >= limit) return affordable.slice(0, limit);
+
+  // Not enough that fit — fill the remaining slots with the cheapest
+  // over-budget listings rather than leaving the list thinner than it needs
+  // to be, each one marked so the buyer sees the mismatch on the card
+  // itself, before ever tapping through.
+  const overBudgetSorted = overBudget
+    .slice()
+    .sort(
+      (a, b) =>
+        (parseOfferPrice(a.priceText) ?? Infinity) -
+        (parseOfferPrice(b.priceText) ?? Infinity),
+    )
+    .slice(0, limit - affordable.length)
+    .map((offer) => ({ ...offer, overBudget: true }));
+  return [...affordable, ...overBudgetSorted];
 }
