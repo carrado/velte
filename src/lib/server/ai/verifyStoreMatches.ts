@@ -87,6 +87,7 @@ function buildSystemPrompt(): string {
     "- 'mismatch' ONLY when it is a different KIND of business altogether — one the buyer would look at and say 'that's not what I asked for at all'.",
     "- When the buyer named a specific TYPE or SPECIALITY within a broader trade (a WEDDING photographer, an EMERGENCY plumber, a CORPORATE caterer), a vendor plainly outside that speciality but genuinely in the broader trade is still 'close', not 'mismatch' — reserve 'mismatch' for a vendor not really in that trade at all.",
     "- 'close', NOT 'mismatch', when it is genuinely the same kind of business and only the specialisation, scale, or completeness of their profile differs.",
+    "- A vendor can run SEVERAL unrelated lines of business (a caterer that also sells land, say). If one of their sector tags, or their description, plainly covers what the buyer named, that line counts — 'close' at least — even when their name, photos and listings all come from a different line. Only the line the buyer asked about matters.",
     "- 'close' whenever you genuinely cannot tell — a bare profile with no description and no listings is NOT enough evidence to call a mismatch. Never guess a 'mismatch'.",
     "",
     "A wrong 'mismatch' deletes a real vendor's real listing from the buyer's results, so only call one when you are confident. Judge only what you can read — never infer quality, reliability, or reputation from any of this.",
@@ -105,8 +106,19 @@ function describeStore(store: StoreMatch, services: VendorMatch[]): string[] {
       store.sectors.length ? ` — sectors: ${store.sectors.join(", ")}` : ""
     }`,
   ];
+  // Which of the sectors above the search actually matched on, when the
+  // retrieval backend could tell — points the verdict at the relevant line
+  // of a multi-line vendor rather than whichever one dominates the profile.
+  if (store.matchedSector) {
+    lines.push(`matched on sector: ${store.matchedSector}`);
+  }
+  // 600, was 220 (2026-09-23): the cut landed mid-word in "…and sales of
+  // apart[ments]" for a caterer that also sells land, so the verifier only
+  // ever saw the food half and rejected a real real-estate vendor. A
+  // vendor's secondary lines are exactly what sits at the END of a
+  // description.
   if (store.description) {
-    lines.push(`description: ${store.description.slice(0, 220)}`);
+    lines.push(`description: ${store.description.slice(0, 600)}`);
   }
   if (services.length) {
     lines.push(

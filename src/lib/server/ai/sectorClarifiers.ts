@@ -298,7 +298,7 @@ function normalizePhrases(text: string): string {
 // a category the vendors here carry" for a request that was never a
 // product in the first place.
 const TASK_KEYWORDS =
-  /\b(repair|repairs|fix|fixing|install|installation|service|services|servicing|replace|replacement|clean|cleaning|cleaner|wash|washing|deliver|delivery|maintain|maintenance|plumber|electrician|caterer|catering|tailor|tailoring|mechanic|photographer|planner|developer|designer|decorator|barber|tutor|mover|movers|contractor|painter|technician|consultant|stylist)\b/i;
+  /\b(repair|repairs|fix|fixing|install|installation|service|services|servicing|replace|replacement|clean|cleaning|cleaner|wash|washing|deliver|delivery|maintain|maintenance|plumber|electrician|caterer|catering|tailor|tailoring|mechanic|photographer|planner|developer|designer|decorator|barber|tutor|mover|movers|contractor|painter|technician|consultant|stylist|agent|agents|realtor|broker|surveyor)\b/i;
 
 export function looksLikeServiceTask(query: string): boolean {
   return TASK_KEYWORDS.test(query);

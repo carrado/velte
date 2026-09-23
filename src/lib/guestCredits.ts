@@ -194,7 +194,9 @@ export function refundGuestCredits(cost: number): void {
  * Zeroes this browser's guest ledger — called the moment it's known to
  * belong to a SIGNED-IN buyer (see buyerStore.ts's own `setBuyer`), which is
  * every sign-in AND every restored session on page load, not just a live
- * Google popup (2026-09-11).
+ * Google popup (2026-09-11). Vendors too since 2026-09-23 (userStore.ts's
+ * `setUser`) — before that a vendor session never touched this cookie, so
+ * logging a vendor out revealed the same untouched allowance.
  *
  * WHY: this cookie is otherwise completely independent of auth state —
  * logging in or out never touched it before this existed. A guest who

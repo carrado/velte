@@ -11,8 +11,10 @@ import {
 } from "@/lib/buyerReferralCode";
 import { firebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
 import { useBuyerStore } from "@/store/buyerStore";
+import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
 import type { Buyer } from "@/types/buyer";
+import type { User } from "@/types/user";
 
 // Google sign-in for buyers, via Firebase Auth (2026-08-26).
 //
@@ -108,6 +110,37 @@ export function GoogleSignInButton({
       // lose the referrer their bonus on any sign-in that failed partway.
       clearBuyerReferralCode();
       setBuyer(buyer);
+
+      // The backend pairs cookies at this sign-in: a verified vendor with the
+      // same email gets `auth_token` set alongside the buyer one, and a stale
+      // unrelated vendor cookie is cleared. Its response only carries the
+      // buyer, though, so without this re-read the vendor store stays as it
+      // was until the next full load — a linked vendor saw their Google
+      // name and avatar instead of their store (ChatHeader and the sidebar
+      // both prefer the vendor identity when it's present). Same route
+      // IdentitySessionSync uses on mount.
+      //
+      // The buyer is re-taken from this read too: on the sign-in that FIRST
+      // links the accounts, the response's buyer was loaded before
+      // `linkedVendorId` was written, and ChatHeader treats a buyer whose
+      // link doesn't name the current vendor as a stranger's session —
+      // clearing it and resetting the chat.
+      try {
+        const res = await fetch("/api/auth/session", {
+          credentials: "same-origin",
+        });
+        if (res.ok) {
+          const session = (await res.json()) as {
+            vendor: User | null;
+            buyer: Buyer | null;
+          };
+          if (session.buyer) setBuyer(session.buyer);
+          if (session.vendor) useUserStore.getState().setUser(session.vendor);
+          else useUserStore.getState().clearUser();
+        }
+      } catch {
+        /* best-effort — the next page load's IdentitySessionSync corrects it */
+      }
 
       // No claim step: conversations are only ever created for a signed-in
       // buyer (2026-08-27), so there are never unowned threads on this

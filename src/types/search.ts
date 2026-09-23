@@ -1468,3 +1468,11 @@ export interface StoredConversation {
   buyerId?: string | null;
   vendorId?: string | null;
 }
+
+/** A buying question answered before any search (lib/server/ai/adviceAnswer.ts). */
+export interface AdviceAnswer {
+  reply: string;
+  /** What a "yes" should search for — null when no usable term came back,
+   *  in which case the reply must not be treated as an open offer. */
+  searchTerm: string | null;
+}

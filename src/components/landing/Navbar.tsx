@@ -100,7 +100,7 @@ export default function Navbar({
             </Link>
             {/* Light/dark switch (2026-09-17, explicit request) — visible at
                 every width, not `hidden sm:block` like "How it works": a
-                40px icon button costs the tight mobile row far less than a
+                56px slider costs the tight mobile row far less than a
                 text link would, and the ability to switch shouldn't be
                 desktop-only. */}
             <ThemeToggleButton className="-mr-0.5" />

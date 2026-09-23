@@ -148,6 +148,9 @@ interface GenerateTextOpts {
   // comment) — everywhere else relies on the model's own judgment ('auto',
   // the SDK default) over which tool, if any, to call.
   toolChoice?: Parameters<typeof generateText>[0]["toolChoice"];
+  // Per-step overrides — route.ts uses it to force a search on the FIRST
+  // step only of a confirmed-pick turn, leaving the reply step free.
+  prepareStep?: Parameters<typeof generateText>[0]["prepareStep"];
 }
 
 /**
