@@ -1,4 +1,5 @@
 import { formatNaira } from "@/lib/utils";
+import type { StoreMatch } from "@/types/search";
 
 // Curated status-line variants for the search stream's "staged reveal" (spec
 // §7 — never raw model chain-of-thought, only pre-written progress text).
@@ -812,22 +813,44 @@ export function externalOffersWithLocalOfferPhrase(
 // a real, already-true fact about this listing" would risk fabricating a
 // claim. Optional and additive: every call site that can't cheaply supply
 // it yet still gets the plain phrase, exactly as before.
-function vendorFitNote(vendorSectors?: string[]): string {
-  return vendorSectors && vendorSectors.length
-    ? ` (their store lists: ${vendorSectors.slice(0, 3).join(", ")})`
-    : "";
+// Leads with the sector the search actually matched on, and says where the
+// vendor is (2026-09-23). Found live: "land in Enugu" offered a
+// caterer-that-also-sells-land as "(their store lists: Catering & Event
+// Food, Event Planning Services, Ushering Services)" — the first three of
+// four sectors, cutting off the one that matched (Real Estate) — with no
+// hint the vendor was in Anambra, not Enugu. Falls back to the first three
+// only when the backend couldn't name a matched sector.
+function vendorFitNote(
+  vendor?: Pick<StoreMatch, "sectors" | "matchedSector" | "area" | "state">,
+): string {
+  if (!vendor) return "";
+  const sectorPart = vendor.matchedSector
+    ? `they list ${vendor.matchedSector}`
+    : vendor.sectors.length
+      ? `their store lists: ${vendor.sectors.slice(0, 3).join(", ")}`
+      : "";
+  const area = vendor.area?.trim() ?? "";
+  const state = vendor.state?.trim() ?? "";
+  // Vendors often type the state into their area too ("Ifite school
+  // junction Anambra") — don't print it twice.
+  const place =
+    area && state && area.toLowerCase().includes(state.toLowerCase())
+      ? area
+      : [area, state].filter(Boolean).join(", ");
+  const parts = [sectorPart, place ? `based in ${place}` : ""].filter(Boolean);
+  return parts.length ? ` (${parts.join(", ")})` : "";
 }
 
 export function foundPossibleVendorPhrase(
   what: string,
   isService: boolean,
-  vendorSectors?: string[],
+  vendor?: Pick<StoreMatch, "sectors" | "matchedSector" | "area" | "state">,
 ): string[] {
   const w = snippetTerms(what, 60);
-  const note = vendorFitNote(vendorSectors);
+  const note = vendorFitNote(vendor);
   return [
     `No direct listing, but I found a business whose sector fits "${w}"${note} — want me to reach out to them on your behalf?`,
-    `Nothing listed exactly, but a vendor nearby looks like a fit for "${w}"${note} — want me to check with them?`,
+    `Nothing listed exactly, but a vendor looks like a fit for "${w}"${note} — want me to check with them?`,
     `Found a business that might handle "${w}"${note}, even without a direct listing — should I reach out for you?`,
     `Not listed directly, but there's a vendor whose store fits "${w}"${note} — want me to get in touch with them?`,
     isService

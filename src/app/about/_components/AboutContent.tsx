@@ -48,7 +48,7 @@ import {
 // two women at a food stall, Benin City, Nigeria. Unsplash's license
 // doesn't require attribution, but it's kept here for maintainability.
 const storyPhoto = {
-  src: "https://images.unsplash.com/photo-1765584830351-b751c8937c75",
+  src: "/ben-iwara-w1EaPjX71Sw-unsplash.jpg",
   alt: "Two women at a food stall, Benin City, Nigeria",
 };
 
@@ -365,66 +365,81 @@ export default function AboutContent() {
           </motion.div>
         </section>
 
-        {/* CTA */}
+        {/* CTA — redesigned 2026-09-23 (explicit request). Was one centred
+            block on `bg-white/60`, which stays literal white in dark mode
+            (only bg-surface is themed) while ink/gray text flip light — a
+            grey haze with near-invisible copy. Now one card per audience,
+            the usual way a closer serves two kinds of reader: each says who
+            it's for, what they get, and has its own action, instead of two
+            buttons under one sentence trying to address both at once.
+            Themed tokens only (surface, ink, gray ramp), so it holds in both
+            modes. The /chat and /auth/signup targets are unchanged — see
+            git history for why each points where it does. */}
         <section className="max-w-7xl mx-auto px-5 sm:px-8">
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="relative rounded-3xl overflow-hidden"
           >
-            {/* Static warm mesh, not a spinning ring — that's FAQ's
-                signature closing move, this page's own is the photo above,
-                so the closer stays quiet by comparison. */}
-            <motion.div
-              animate={{ x: [0, 24, 0], y: [0, -16, 0] }}
-              transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -top-10 -left-10 w-72 h-72 bg-orange-300/20 rounded-full blur-[90px] pointer-events-none"
-            />
-            <motion.div
-              animate={{ x: [0, -20, 0], y: [0, 18, 0] }}
-              transition={{ duration: 13, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -bottom-10 -right-10 w-72 h-72 bg-orange-400/15 rounded-full blur-[90px] pointer-events-none"
-            />
-            <div className="relative bg-white/60 rounded-3xl p-12 text-center">
-              <h3 className="text-3xl font-bold text-ink mb-4 text-balance">
+            <div className="text-center mb-8 sm:mb-10">
+              <h3 className="text-2xl sm:text-3xl font-bold text-ink mb-3 text-balance">
                 Looking for something, or have something to sell?
               </h3>
-              <p className="text-gray-500 mb-6 max-w-xl mx-auto">
-                Browse real listings as a buyer, or list your business so nearby
-                buyers can find you.
+              <p className="text-gray-500 max-w-xl mx-auto">
+                Velte works for both sides of the deal. Pick where you fit.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                {/* Was "Browse Products" → /marketplace — that path isn't
-                    promoted anywhere on the site anymore (AI search at
-                    /chat replaced it, see Footer.tsx's own comment on why
-                    /marketplace stopped being linked from navigation); this
-                    button now goes straight to the thing that's actually
-                    live. AskVeluxButton's separate "full" chip that used to
-                    sit below this row is retired here too — a second link
-                    to the same /chat destination right underneath a
-                    primary button pointing there already was redundant. */}
-                <Link href="/chat">
+            </div>
+
+            <div className="grid gap-4 sm:gap-5 md:grid-cols-2">
+              <div className="flex flex-col rounded-2xl border border-gray-200 bg-surface p-6 sm:p-8">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 mb-5">
+                  <SearchIcon className="w-5 h-5 text-orange-500" />
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                  For buyers
+                </p>
+                <h4 className="text-lg font-semibold text-ink mb-2">
+                  Find it from a real vendor nearby
+                </h4>
+                <p className="text-sm text-gray-500 leading-relaxed mb-6">
+                  Describe what you need in your own words or send a photo —
+                  Velte shows you vendors who actually have it, then you chat
+                  with them directly.
+                </p>
+                <Link href="/chat" className="mt-auto">
                   <Button
                     size="lg"
-                    className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 gap-2 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98]"
+                    className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white gap-2 h-11 w-full sm:w-auto"
                   >
                     Find something now
                     <ArrowRightIcon className="w-4 h-4" />
                   </Button>
                 </Link>
-                {/* → /auth/signup directly — /join is just a redirect
-                    shim now (kept alive for old external links/bookmarks),
-                    so this skips the extra hop, same as Navbar's own "Join"
-                    button. */}
-                <Link href="/auth/signup">
+              </div>
+
+              <div className="flex flex-col rounded-2xl border border-gray-200 bg-surface p-6 sm:p-8">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 mb-5">
+                  <StoreIcon className="w-5 h-5 text-ink" />
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                  For vendors
+                </p>
+                <h4 className="text-lg font-semibold text-ink mb-2">
+                  Get found by buyers already looking
+                </h4>
+                <p className="text-sm text-gray-500 leading-relaxed mb-6">
+                  List your products and services once. Velte matches you to
+                  real buyer demand nearby, and you only pay when a buyer
+                  reaches out.
+                </p>
+                <Link href="/auth/signup" className="mt-auto">
                   <Button
                     size="lg"
                     variant="outline"
-                    className="text-gray-700 cursor-pointer hover:bg-gray-100 border-gray-300 h-12 w-full sm:w-auto transition-transform hover:scale-[1.03] active:scale-[0.98] gap-2"
+                    className="text-ink cursor-pointer hover:bg-gray-100 border-gray-300 gap-2 h-11 w-full sm:w-auto"
                   >
-                    Join as a Vendor
+                    Join as a vendor
                     <ArrowUpRightIcon className="w-4 h-4" />
                   </Button>
                 </Link>

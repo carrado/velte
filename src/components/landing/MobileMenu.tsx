@@ -17,7 +17,6 @@ import {
   FileTextIcon,
   HelpCircleIcon,
   MailIcon,
-  NewspaperIcon,
   RouteIcon,
   ShieldIcon,
   UserIcon,
@@ -117,10 +116,7 @@ const exploreItems: {
 // FAQ says "We're finalising exact pricing as Velte rolls out," and the
 // numbers on it are vendor lead-cost info, not something the buyer majority
 // of this drawer's visitors have any use for.
-const resourceItems = [
-  { icon: NewspaperIcon, title: "Blog", href: "/blog" },
-  { icon: HelpCircleIcon, title: "FAQ", href: "/faq" },
-];
+const resourceItems = [{ icon: HelpCircleIcon, title: "FAQ", href: "/faq" }];
 
 // Privacy/Terms folded in here rather than a fourth accordion section for
 // just two links — same "Legal" pair Footer.tsx groups separately, but this

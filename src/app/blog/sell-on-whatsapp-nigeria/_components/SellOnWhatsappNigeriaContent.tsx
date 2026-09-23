@@ -9,7 +9,7 @@ import { CheckCircleIcon, XCircleIcon } from "@/components/icons/hero";
 // (unsplash.com/photos/H1KbBGUs4bM) — license doesn't require attribution,
 // kept here for maintainability.
 const heroPhoto = {
-  src: "https://images.unsplash.com/photo-1687422808384-c896d0efd4ab",
+  src: "/ali-mkumbwa-H1KbBGUs4bM-unsplash.jpg",
   alt: "Woman standing in front of a store holding a cell phone",
 };
 

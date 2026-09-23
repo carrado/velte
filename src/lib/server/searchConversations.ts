@@ -29,11 +29,12 @@ export interface BuyerLocationUpdate {
 // `vendorId` (2026-09-17) is the vendor-identity twin of `buyerId` — a
 // vendor with no linked buyer account browsing /chat is a real authenticated
 // person too (see ConversationSidebar's own `identity` note), and their
-// searches deserve the same saved-and-listed treatment a buyer's get. The
-// two are never sent together with real values by any caller here (buyer
-// wins whenever both sessions exist — the same precedence /api/search's own
-// actorType uses), so functions below just carry both as independent
-// optional owner stamps rather than a discriminated union.
+// searches deserve the same saved-and-listed treatment a buyer's get.
+// Functions below carry both as independent optional owner stamps rather
+// than a discriminated union. The READ side (get, list, delete) sends both
+// when both sessions exist, since a linked account's history is split
+// across the two ids (2026-09-23); which one a NEW thread is stamped with is
+// the caller's precedence decision (see /api/search's own actorType).
 
 export interface EnsuredSearchConversation {
   conversationId: string;
@@ -183,8 +184,8 @@ export async function getSearchConversation(params: {
  *  for good (2026-09-09, widened 2026-09-17) — the sidebar's own delete
  *  action. buyerId/vendorId-only ownership, same as the list this is
  *  deleting a row out of; see the backend controller's own comment for why
- *  deviceId ownership doesn't apply here. Exactly one of the two — never
- *  both — same precedence every other dual-identity caller here follows. */
+ *  deviceId ownership doesn't apply here. Both are sent when both sessions
+ *  exist — a linked account's history is split across the two ids. */
 export async function deleteSearchConversation(params: {
   conversationId: string;
   buyerId?: string | null;
@@ -192,7 +193,7 @@ export async function deleteSearchConversation(params: {
 }): Promise<void> {
   const query = new URLSearchParams();
   if (params.buyerId) query.set("buyerId", params.buyerId);
-  else if (params.vendorId) query.set("vendorId", params.vendorId);
+  if (params.vendorId) query.set("vendorId", params.vendorId);
   await aiSearchData(
     `/search/conversations/${encodeURIComponent(params.conversationId)}?${query.toString()}`,
     { method: "DELETE" },
@@ -201,9 +202,9 @@ export async function deleteSearchConversation(params: {
 
 /** The chat-history list for a signed-in buyer OR vendor, newest first.
  *  Titles and counts only — never turns, which carry whole result sets (see
- *  the backend's own listConversations comment). Exactly one of buyerId/
- *  vendorId — never both — same precedence every other dual-identity caller
- *  here follows. */
+ *  the backend's own listConversations comment). Both ids are sent when
+ *  both sessions exist: a linked account's threads from before its vendor
+ *  cookie was paired carry buyerId, later ones vendorId (2026-09-23). */
 export async function listSearchConversations(params: {
   buyerId?: string | null;
   vendorId?: string | null;
@@ -212,7 +213,7 @@ export async function listSearchConversations(params: {
 }): Promise<SearchConversationList> {
   const query = new URLSearchParams();
   if (params.buyerId) query.set("buyerId", params.buyerId);
-  else if (params.vendorId) query.set("vendorId", params.vendorId);
+  if (params.vendorId) query.set("vendorId", params.vendorId);
   if (params.limit) query.set("limit", String(params.limit));
   if (params.before) query.set("before", params.before);
   return aiSearchData<SearchConversationList>(

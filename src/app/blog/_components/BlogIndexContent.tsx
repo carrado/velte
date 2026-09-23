@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { BLOG_LINK_PROPS } from "@/lib/blogLinks";
 import { motion } from "motion/react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
@@ -84,7 +85,11 @@ export default function BlogIndexContent() {
         >
           {sorted.map((post, i) => (
             <motion.div key={post.slug} variants={fadeUp}>
-              <Link href={`/blog/${post.slug}`} className="group block">
+              <a
+                href={`/blog/${post.slug}`}
+                {...BLOG_LINK_PROPS}
+                className="group block"
+              >
                 <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-100 mb-5">
                   {post.image && (
                     <Image
@@ -121,7 +126,7 @@ export default function BlogIndexContent() {
                   Read the guide
                   <ArrowRightIcon className="w-3.5 h-3.5 transition-transform duration-300 group-hover:translate-x-1" />
                 </span>
-              </Link>
+              </a>
             </motion.div>
           ))}
         </motion.div>

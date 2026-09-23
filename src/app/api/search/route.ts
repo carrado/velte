@@ -79,6 +79,8 @@ import {
   buildDeadlineAskGate,
   composeDeadlineAskReply,
 } from "@/lib/server/ai/deadlineAskGate";
+import { confirmBulkPurchase } from "@/lib/server/ai/confirmBulkPurchase";
+import { answerBuyingQuestion } from "@/lib/server/ai/adviceAnswer";
 import {
   buildBudgetAskGate,
   composeBudgetAskReply,
@@ -411,7 +413,13 @@ const BULLET_LINE = /^\s*[-*•]\s+/gm;
 // actually detect a rigid table/breakdown — length alone was never a
 // precise signal for that shape, only a rough proxy that stopped being
 // valid the moment the target length changed.
-const MAX_COMPARISON_ANSWER_LENGTH = 1600;
+// Raised again to 3000 (2026-09-23, measured, not guessed): four live
+// comparisons — Camry vs Accord, Camon 30 vs A15, two runs each — were all
+// good, compliant 4–5 point answers at 1,834–2,028 characters, and every one
+// was discarded here for the bare "Between these, I'd go with X" line. The
+// prompt now asks for ~700–1,100 characters itself; this is only the
+// runaway-answer backstop, not the target.
+const MAX_COMPARISON_ANSWER_LENGTH = 3000;
 // Raised from 2 (2026-09-21, same pass as MAX_COMPARISON_ANSWER_LENGTH above,
 // same root cause) — buildComparisonAnswerSystemPrompt now explicitly
 // invites "a short list... when the comparison genuinely breaks down into a
@@ -2328,6 +2336,7 @@ async function handleSearch(req: Request) {
       // here: this only ever ADDS the explain-and-re-ask branch below,
       // never replaces the ordinary answer path.
       let wantsExplanation = false;
+      let asksForAdvice = false;
 
       // Was the LAST assistant turn a suggestBuyingGuidance reply (real-
       // world brand/model names offered on a genuine Velte dead end — see
@@ -2434,6 +2443,8 @@ async function handleSearch(req: Request) {
           )?.output as
             | {
                 inScope: boolean;
+                aboutOtherPlatform: boolean;
+                asksForAdvice: boolean;
                 namesPlace: boolean;
                 hasMultipleIntents: boolean;
                 itemTerm: string | null;
@@ -2447,6 +2458,29 @@ async function handleSearch(req: Request) {
                 wantsExplanation: boolean;
               }
             | undefined;
+          // Checked before the general off-topic decline — a question about
+          // another shopping platform is shopping-shaped, so inScope reads it
+          // as in scope, but Velte never compares, rates or recommends other
+          // platforms (2026-09-23, explicit product rule). Its own wording:
+          // the generic "doesn't look like something I can search for" line
+          // would read oddly for a question that plainly is about shopping.
+          //
+          // Only when no item is named: the field alone also fires on a
+          // passing mention ("I saw this phone on Jumia for 250k, can I get
+          // it cheaper?" — tested), and that buyer wants the phone. With an
+          // item, the turn searches for it and the main prompt's own rule
+          // keeps the reply off the other platform.
+          if (
+            scopeOutput?.aboutOtherPlatform === true &&
+            !scopeOutput.itemTerm?.trim() &&
+            !imageUrl
+          ) {
+            await sendBareFinal(
+              "I can't compare or recommend other shopping platforms — but I can help you find what you need right here on Velte, from real vendors near you. What are you shopping for?",
+              null,
+            );
+            return;
+          }
           if (scopeOutput?.inScope === false && !imageUrl) {
             await sendBareFinal(
               "That doesn't look like something I can search for — I'm a shopping assistant for Velte, here to help you find products, food, services, or vendors. What are you looking for?",
@@ -2481,7 +2515,23 @@ async function handleSearch(req: Request) {
           deadlineDate = hasDeadline ? resolveDeadlineDate(message) : null;
           hasDeadline = hasDeadline && deadlineDate !== null;
           isBulkPurchase = scopeOutput?.isBulkPurchase ?? false;
+          // A positive is double-checked by a focused call — see
+          // confirmBulkPurchase.ts's header: this field came back true for
+          // "3 plots of land" and "20 office chairs" alike. Skipped when the
+          // buyer picked the Shopping Plan tool themselves (nothing to
+          // second-guess) and on photo turns (the gate below never fires on
+          // them anyway).
+          if (isBulkPurchase && activeTool !== "shopping_plan" && !imageUrl) {
+            isBulkPurchase = await confirmBulkPurchase([
+              ...history.slice(-4).map((turn) => ({
+                role: turn.role,
+                content: turn.content,
+              })),
+              { role: "user" as const, content: message },
+            ]);
+          }
           wantsExplanation = scopeOutput?.wantsExplanation ?? false;
+          asksForAdvice = scopeOutput?.asksForAdvice ?? false;
         } catch (err) {
           console.error("[search] scope check failed, failing open:", err);
         }
@@ -2555,8 +2605,25 @@ async function handleSearch(req: Request) {
       // comparison template is reserved for comparing different LISTINGS of
       // the SAME item, which only ever happens once the buyer commits to
       // one (see pendingComparisonPick right below).
+      //
+      // A scope-detected comparison needs at least two distinct options
+      // (2026-09-23). Found live: "I saw a Tecno Camon 30 on Jumia for 250k,
+      // can I get it cheaper?" came back isComparison with ONE option and
+      // got "Between these, I'd go with Tecno Camon 30" instead of a search.
+      // A picked Compare tool is exempt — toolAlignment.ts vetted that.
+      //
+      // Nor a bare acknowledgement ("yes", "ok") — measured 2026-09-23: a
+      // "yes" to "Want me to find land in Enugu on Velte?", after an advice
+      // answer naming Udi, Nkanu and Agbani, came back isComparison with
+      // those areas as options, and got a comparison of them instead of the
+      // search it had just agreed to. The options come from history; the
+      // message itself compares nothing.
       const isFreshComparisonRequest =
-        activeTool === "compare" || (!activeTool && scopeSaysComparison);
+        activeTool === "compare" ||
+        (!activeTool &&
+          scopeSaysComparison &&
+          comparisonOptions.length >= 2 &&
+          !isAcknowledgementReply(message));
 
       // Phase 2's own trigger: was the LAST assistant turn a fresh
       // comparison's own "want me to find it on Velte?" ask, and does this
@@ -2760,6 +2827,72 @@ async function handleSearch(req: Request) {
         });
         controller.close();
         return;
+      }
+
+      // A buying QUESTION is answered before anything is searched
+      // (2026-09-23 — see adviceAnswer.ts's header for the live case). Runs
+      // after the comparison short-circuit on purpose: the classifier also
+      // flags a named comparison as advice, and that must stay a comparison.
+      // Closes as an open offer the next turn's "yes" resolves through
+      // pendingComparisonPick, exactly like a comparison's own pick.
+      if (
+        asksForAdvice &&
+        !isCompareTurn &&
+        !imageUrl &&
+        !activeTool &&
+        message
+      ) {
+        push(["Thinking this through…", "Looking into that for you…"]);
+        const advice = await answerBuyingQuestion(
+          [
+            ...history.slice(-6).map((turn) => ({
+              role: turn.role,
+              content: turn.content,
+            })),
+            { role: "user" as const, content: message },
+          ],
+          itemTerm,
+        );
+        if (advice) {
+          await sendFinal({
+            type: "final",
+            reply: advice.reply,
+            toolCalled: false,
+            clarification: null,
+            products: [],
+            weakProducts: [],
+            stores: [],
+            furtherStores: [],
+            storesQuery: null,
+            productStores: [],
+            storeServices: [],
+            productsMatchTier: null,
+            storesMatchTier: null,
+            productsMatchQuality: undefined,
+            storesMatchQuality: undefined,
+            externalStoreSuggestions: [],
+            instagramLeads: [],
+            vendorProducts: [],
+            vendorProductsStore: null,
+            buyerRequestOffer: null,
+            buyerRequestOffered: false,
+            backgroundItems: [],
+            dualIntentItemALabel: null,
+            awaitingBuyerRequestReply: false,
+            buyerRequestMatchQuery: null,
+            awaitingVendorSearchOffer: false,
+            vendorSearchMatchQuery: null,
+            recommendation: null,
+            externalOffers: [],
+            awaitingComparisonPurchaseReply: Boolean(advice.searchTerm),
+            comparisonPickItem: advice.searchTerm,
+            comparisonOptions: null,
+          });
+          controller.close();
+          return;
+        }
+        // A failed answer falls through to the ordinary search — the buyer
+        // still gets something, just without the advice.
       }
 
       // Shopping Plan — conversational management (Phase 3, 2026-09-19,
@@ -4341,8 +4474,19 @@ async function handleSearch(req: Request) {
             // table removes the option to comply badly — a compliant model
             // was always going to search anyway, so this only ever
             // constrains the non-compliant case.
+            //
+            // The Buyer Request tools go too (2026-09-23, measured: 2 of 4
+            // "yes" replies to "Want me to find land in Enugu on Velte?"
+            // got "what's your name, so I can pass it on?" — the prompt's
+            // standing "a plain yes → ask their name for createBuyerRequest"
+            // rule winning over toolNote). That "yes" confirms a SEARCH; no
+            // reach-out was ever offered.
             tools: pendingComparisonPick
-              ? searchTools
+              ? {
+                  searchProducts: searchTools.searchProducts,
+                  searchStores: searchTools.searchStores,
+                  getVendorProducts: searchTools.getVendorProducts,
+                }
               : {
                   ...searchTools,
                   askClarifyingQuestion: askClarifyingQuestionTool(),
@@ -4358,6 +4502,17 @@ async function handleSearch(req: Request) {
             // 4 steps (call → call → possible redundant call → final text)
             // keeps a guaranteed last step for text generation.
             stopWhen: stepCountIs(4),
+            // A confirmed pick MUST search (2026-09-23, measured): with
+            // the note above and the reach-out tools removed, 4 of 6 "yes"
+            // replies to "Want me to find land in Enugu on Velte?" still
+            // called no tool at all and wrote "what's your name, so I can
+            // pass it on?" — after which the dead-end handler searched
+            // online for the literal word "yes". Forced on step 0 only, so
+            // the model still writes its reply once results are in.
+            prepareStep: pendingComparisonPick
+              ? ({ stepNumber }) =>
+                  stepNumber === 0 ? { toolChoice: "required" } : {}
+              : undefined,
           },
           providerOrder,
           "main-loop",
@@ -5126,7 +5281,7 @@ async function handleSearch(req: Request) {
               foundPossibleVendorPhrase(
                 cascadeTerm,
                 looksLikeServiceTask(cascadeTerm),
-                cascadeKept[0]?.sectors,
+                cascadeKept[0],
               ),
               [],
             );
@@ -5411,7 +5566,7 @@ async function handleSearch(req: Request) {
                   : foundPossibleVendorPhrase(
                       businessType,
                       isServiceQuery,
-                      asymmetricEligibility.kept[0]?.sectors,
+                      asymmetricEligibility.kept[0],
                     ),
                 [],
               );
@@ -5700,7 +5855,7 @@ async function handleSearch(req: Request) {
                 : foundPossibleVendorPhrase(
                     scanTerm,
                     isServiceQuery,
-                    storeScanEligibility.kept[0]?.sectors,
+                    storeScanEligibility.kept[0],
                   ),
               [],
             );
@@ -6507,7 +6662,19 @@ async function handleSearch(req: Request) {
         // for. Hoisted up here so both paths share one verification pass
         // instead of the compare branch running its own second one.
         if (!clarification && (stores.length || furtherStores.length)) {
-          const storeQuery = message || storesQuery || "what you asked for";
+          // The store search's OWN term first, with the buyer's words as
+          // context (2026-09-23, was `message || storesQuery`). On a
+          // follow-up turn the message is often just the answer to a
+          // question — found live: "2 million naira, my purpose is
+          // residential" was what a real-estate vendor got verified
+          // against, and a caterer-that-also-sells-land was dropped for
+          // not offering "2 million naira". The term alone would lose a
+          // paraphrase the model got wrong, which is why the message still
+          // rides along.
+          const storeQuery =
+            storesQuery && message && storesQuery !== message
+              ? `${storesQuery} (the buyer's own latest message: "${message}")`
+              : storesQuery || message || "what you asked for";
           const [storeVerification, furtherStoreVerification] =
             await Promise.all([
               verifyStoreMatches({
@@ -6538,6 +6705,30 @@ async function handleSearch(req: Request) {
               ),
             );
             displayFurtherStores = furtherStoreVerification.kept;
+          }
+          // Every store the model saw was dropped, and nothing else is on
+          // screen. The model wrote its reply BEFORE this pass, about those
+          // stores — found live: "take a look at the card below" with no
+          // card below it. Replaced with the same honest dead-end line a
+          // store search that found nothing gets, unless something upstream
+          // already chose the reply.
+          if (
+            replyOverride === null &&
+            displayStores.length === 0 &&
+            displayFurtherStores.length === 0 &&
+            products.length === 0 &&
+            vendorProducts.length === 0
+          ) {
+            const deadEndTermForReply = storesQuery || "that";
+            replyOverride = pickAvoiding(
+              noVendorEvenBySectorPhrase(
+                deadEndTermForReply,
+                externalStoreSuggestions.length > 0 ||
+                  instagramLeads.length > 0,
+                looksLikeServiceTask(deadEndTermForReply),
+              ),
+              [],
+            );
           }
         }
         // The distinct-terms guard: when the model called searchProducts

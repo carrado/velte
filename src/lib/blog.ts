@@ -20,7 +20,7 @@ export const blogPosts: BlogPost[] = [
     // — Unsplash's license doesn't require attribution, kept for
     // maintainability.
     image: {
-      src: "https://images.unsplash.com/photo-1687422808384-c896d0efd4ab",
+      src: "/ali-mkumbwa-H1KbBGUs4bM-unsplash.jpg",
       alt: "Woman standing in front of a store holding a cell phone",
     },
   },
@@ -38,7 +38,7 @@ export const blogPosts: BlogPost[] = [
     // — two women at a food stall, Benin City, Nigeria. License doesn't
     // require attribution, kept for maintainability.
     image: {
-      src: "https://images.unsplash.com/photo-1765584830351-b751c8937c75",
+      src: "/ben-iwara-w1EaPjX71Sw-unsplash.jpg",
       alt: "Two women at a food stall, Benin City, Nigeria",
     },
   },

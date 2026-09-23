@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { exhaustGuestCredits } from "@/lib/guestCredits";
 import type { User } from "@/types/user";
 
 export type { User };
@@ -19,7 +20,13 @@ interface UserStore {
 
 export const useUserStore = create<UserStore>()((set) => ({
   user: null,
-  setUser: (user) => set({ user }),
+  setUser: (user) => {
+    set({ user });
+    // Same reason as buyerStore.ts's setBuyer: a browser known to belong to a
+    // signed-in vendor must not keep an untouched guest allowance to cash in
+    // by logging out. See guestCredits.ts's exhaustGuestCredits.
+    if (user) exhaustGuestCredits();
+  },
 
   updateUser: (updatedFields) =>
     set((state) => ({

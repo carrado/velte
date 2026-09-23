@@ -10,17 +10,16 @@ import { getOptionalVendorAuth, jsonError } from "@/lib/server/guards";
 // 2026-09-17). Guarded exactly like the list this is deleting a row out of
 // (GET /api/search/conversations) — a real session's buyerId/vendorId,
 // never a query parameter a caller supplies, same reasoning as that route's
-// own top comment. VENDOR wins when both cookies exist (2026-09-22,
-// reversed — MUST stay in lockstep with the list's own precedence: a row
-// deleted here has to be identified under the SAME identity that route
-// listed it under, or this silently targets the wrong owner's history and
-// deletes nothing).
+// own top comment. BOTH identities when both cookies exist (2026-09-23) —
+// MUST stay in lockstep with the list: it now shows threads owned by either
+// id, so a row deleted here has to be matched the same way, or deleting a
+// buyer-owned thread from a linked vendor session would silently 404.
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const vendorAuth = await getOptionalVendorAuth();
-  const buyerAuth = vendorAuth ? null : await getOptionalBuyerAuth();
+  const buyerAuth = await getOptionalBuyerAuth();
   if (!buyerAuth && !vendorAuth) {
     return jsonError(401, "Sign in to manage your conversations.");
   }

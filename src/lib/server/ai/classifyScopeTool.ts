@@ -66,7 +66,27 @@ export function classifyScopeTool() {
       inScope: z
         .boolean()
         .describe(
-          "true if this is (or could plausibly be) a shopping/product/service/vendor request, or a bare greeting inviting one. false only when the message is clearly about something else entirely — general-knowledge questions, coding/writing/homework help, personal advice unrelated to shopping, random text/gibberish/a pasted token or hash, or anything else with no real connection to finding something to buy.",
+          "true ONLY when the buyer wants to find, buy, hire, price or choose between PRODUCTS or SERVICES — things a person pays a vendor for — or asks for advice about buying one ('what should I look out for when buying a used car', 'is a refurbished iPhone worth it'), or is greeting/thanking to start or close that. Also true for a reply that answers Velte's own previous question in an ongoing shopping request. false for everything else, however it is phrased: comparing or rating people, athletes, celebrities, teams, countries or anything else that is not for sale ('Messi or Yamal, who is better' is false — two names being weighed does not make it shopping); general knowledge, news, sports, trivia; coding/writing/homework; personal advice not about something to buy; gibberish or a pasted token. Judge what is being asked ABOUT, not the sentence shape.",
+        ),
+      // Found live (2026-09-23): "between Jumia and Jiji, which platform is
+      // best for my shopping experience" counted as in scope (it IS about
+      // shopping), went down the comparison flow as if the two were
+      // products, and Velte recommended Jiji. Its own field, placed right
+      // after inScope on purpose: late fields in this schema proved
+      // unreliable (see confirmBulkPurchase.ts), the first ones hold.
+      aboutOtherPlatform: z
+        .boolean()
+        .describe(
+          "true when this message asks Velte ABOUT other shopping platforms, marketplaces, apps or online stores — comparing, rating, recommending or asking how to use them (Jumia, Jiji, Konga, Amazon, AliExpress, Temu, Jiji vs Jumia, 'which app is best for shopping', 'is Konga legit'). false when the buyer wants something found and only mentions another platform in passing ('I saw this phone on Jumia, can I get it cheaper?' is a search for the phone, false). false for everything else.",
+        ),
+      // Found live (2026-09-23): "I want to get a land in Enugu, which
+      // place will it be cheaper for me" is a QUESTION, and went straight
+      // to a vendor offer with the question never answered. Early in the
+      // schema for the same reason as aboutOtherPlatform above.
+      asksForAdvice: z
+        .boolean()
+        .describe(
+          "true when the buyer asks a QUESTION wanting information or advice to make a buying decision — which area or kind is cheaper or better value, what to look out for, is it worth it, how to choose, what affects the price — whether or not they also say they want to buy. 'I want land in Enugu, which area is cheaper?' is true. false for a plain find/buy request with no question to answer ('where can I get a phone', 'I need a plumber in Lekki'), false for weighing NAMED options against each other (isComparison covers that), and false for a reply answering Velte's own previous question.",
         ),
       namesPlace: z
         .boolean()
@@ -116,7 +136,7 @@ export function classifyScopeTool() {
       isComparison: z
         .boolean()
         .describe(
-          "true when the buyer is asking to weigh two or more alternatives against each other rather than simply find one thing — judged by the comparison rule given in the system prompt. false when no alternatives are in play. Read the whole message and the conversation above, never just the opening sentence.",
+          "true when the buyer is asking to weigh two or more PRODUCTS, SERVICES or vendors against each other rather than simply find one thing — judged by the comparison rule given in the system prompt. false when no alternatives are in play, and false when the alternatives are not things anyone buys or hires (people, athletes, teams, places to visit). Read the whole message and the conversation above, never just the opening sentence.",
         ),
       // WHAT is being compared, when isComparison is true (2026-09-05).
       //
@@ -174,13 +194,16 @@ export function classifyScopeTool() {
           [
             "Decide with ONE test: would genuinely satisfying this need plausibly require buying several DIFFERENT KINDS of things, not just one item (however specific) and not two? If yes, true — even when the buyer named none of them yet.",
             "",
+            "QUANTITY IS NOT VARIETY — check this first: many units of ONE kind of thing is a single item, false, however large the number or budget. '3 plots of land', '20 office chairs', '5 bags of rice', 'two iPhones', '100 branded T-shirts' are all false.",
+            "",
             "A GOAL or PURPOSE that implies acquiring a whole set of different things counts on its own, with no item list required — 'furnish/furnishing my apartment', 'kit out/equip my new office', 'stock my shop', 'set up a small restaurant', 'plan my wedding/traditional engagement'. Every one of those plausibly means a sofa AND a bed AND a wardrobe AND more — or a desk AND chairs AND a printer — never just one thing. Treat these as bulk immediately; do not wait for the buyer to enumerate items first.",
             "",
             "This holds even when a single SERVICE could also nominally satisfy the same goal — hiring an interior decorator to furnish a home, a contractor to kit out an office, an event planner for a wedding. Read what the buyer is trying to ACHIEVE, not the first noun that could answer it: 'I want to furnish my 2 bedroom apartment' is a furniture-buying project (true), not a request to hire a decorator, unless the buyer explicitly names the professional/service they want ('I need an interior decorator', 'looking for a wedding planner') — that alone is a single service, false.",
             "",
             "Also true for three or more items actually named ('a sofa, a dining set, curtains and a rug'). False for exactly two named needs — that is a dual-intent request, judged separately by hasMultipleIntents above, handled as an immediate two-part search rather than a tracked plan. False for a single item however elaborated ('a red leather sofa for my living room' is one item, however specific).",
+
             "",
-            "When genuinely unsure, prefer true here specifically — unlike most fields in this schema, the safer failure direction is reversed: a missed single-service read just means one extra deadline question the buyer can skip with 'no rush'; missing a real furnishing/setup project sends it down an ordinary single-service search that can never actually satisfy a multi-item need.",
+            "When genuinely unsure between a goal that implies a set of different things and a single item, lean true — a missed furnishing/setup project sends it down an ordinary search that can never satisfy a multi-item need. That lean never applies to quantity of one kind of thing (above), which is always false.",
           ].join("\n"),
         ),
       // Found live (2026-09-17): "Where can I get a good fashion designer"
@@ -195,6 +218,8 @@ export function classifyScopeTool() {
     }),
     execute: async ({
       inScope,
+      aboutOtherPlatform,
+      asksForAdvice,
       namesPlace,
       hasMultipleIntents,
       itemTerm,
@@ -208,6 +233,8 @@ export function classifyScopeTool() {
       wantsExplanation,
     }) => ({
       inScope,
+      aboutOtherPlatform,
+      asksForAdvice,
       namesPlace,
       hasMultipleIntents,
       itemTerm,

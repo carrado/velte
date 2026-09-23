@@ -80,7 +80,6 @@ const footerGroups: {
     links: [
       { label: "How It Works", href: "/how-it-works" },
       { label: "Ask Velte", href: "/chat" },
-      { label: "Blog", href: "/blog" },
       { label: "FAQ", href: "/faq" },
     ],
   },

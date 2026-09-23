@@ -19,18 +19,17 @@ import { getOptionalVendorAuth, jsonError } from "@/lib/server/guards";
 // from a verified session here, never from a query parameter a caller
 // supplies.
 //
-// VENDOR wins when both cookies exist (2026-09-22, reversed — see
-// search/route.ts's own identical fix for the full reasoning). Found live:
-// this is what made the sidebar show a linked vendor's BUYER history while
-// the header, driven by a separate identity check, showed them as the
-// vendor — the two disagreeing about who "you" are on the same page.
-// listSearchConversations only ever queries ONE identity at a time
-// (buyerId preferred internally when both are passed), so nulling buyerAuth
-// out here is what actually makes the vendor's own conversations win, not
-// just a cosmetic reorder.
+// BOTH identities when both cookies exist (2026-09-23). From 2026-09-22 to
+// today this was vendor-only, which fixed the header and sidebar disagreeing
+// about who "you" are — but a linked account's history is split across the
+// two ids (threads from while it resolved as the buyer carry buyerId, later
+// ones vendorId), so listing one hid the other half. The backend now matches
+// a thread owned by either. Same both-ids rule /api/search/conversation
+// already uses to OPEN a thread; the two cookies are paired or cleared
+// together at every login, so both being present means one person.
 export async function GET(req: Request) {
   const vendorAuth = await getOptionalVendorAuth();
-  const buyerAuth = vendorAuth ? null : await getOptionalBuyerAuth();
+  const buyerAuth = await getOptionalBuyerAuth();
   if (!buyerAuth && !vendorAuth) {
     return jsonError(401, "Sign in to view your conversations.");
   }
