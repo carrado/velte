@@ -11,7 +11,7 @@ import { CheckCircleIcon, XCircleIcon } from "@/components/icons/hero";
 // Benin City, Nigeria. License doesn't require attribution, kept for
 // maintainability.
 const heroPhoto = {
-  src: "https://images.unsplash.com/photo-1765584830351-b751c8937c75",
+  src: "/ben-iwara-w1EaPjX71Sw-unsplash.jpg",
   alt: "Two women at a food stall, Benin City, Nigeria",
 };
 

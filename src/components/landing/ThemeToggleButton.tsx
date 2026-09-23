@@ -32,24 +32,20 @@ export function ThemeToggleButton({ className }: { className?: string }) {
       aria-label={label}
       title={label}
       className={cn(
-        "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full bg-gray-200 p-1 sm:h-8 sm:w-14 transition-colors hover:bg-gray-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2",
+        "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full bg-gray-200 p-1 sm:h-6 sm:w-11 sm:p-0.5 transition-colors hover:bg-gray-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2",
         className,
       )}
     >
       <span
         aria-hidden
         className={cn(
-          "flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-surface shadow-sm transition-transform duration-300 ease-out",
+          "flex h-5 w-5 items-center justify-center rounded-full bg-surface shadow-sm transition-transform duration-300 ease-out",
           isDark
-            ? "translate-x-5 sm:translate-x-6 text-orange-400"
+            ? "translate-x-5 text-orange-400"
             : "translate-x-0 text-orange-500",
         )}
       >
-        {isDark ? (
-          <MoonIcon size={12} className="sm:size-3.5" />
-        ) : (
-          <SunIcon size={12} className="sm:size-3.5" />
-        )}
+        {isDark ? <MoonIcon size={12} /> : <SunIcon size={12} />}
       </span>
     </button>
   );

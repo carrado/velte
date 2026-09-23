@@ -22,7 +22,7 @@ const fadeUp = {
 // a woman browsing a clothing shop, Lagos. Unsplash's license doesn't
 // require attribution, but it's kept here for maintainability.
 const image: FaqSectionImage = {
-  src: "https://images.unsplash.com/photo-1751276651319-d311a9d0b8af",
+  src: "/michael-umoh-s8KvpUV65sY-unsplash.jpg",
   alt: "Woman browsing a clothing store in Lagos, Nigeria",
   credit: "Michael Umoh",
 };

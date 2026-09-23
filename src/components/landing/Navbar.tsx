@@ -92,18 +92,19 @@ export default function Navbar({
               place to tap it, not two. Join Velte stays hamburger-only:
               still the drawer's primary CTA, not this row's job. */}
           <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Light/dark switch (2026-09-17, explicit request) — visible at
+                every width, not `hidden sm:block` like "How it works": a
+                48px slider costs the tight mobile row far less than a
+                text link would, and the ability to switch shouldn't be
+                desktop-only. First in the row since 2026-09-23 (explicit
+                request), ahead of "How it works". */}
+            <ThemeToggleButton />
             <Link
               href="/how-it-works"
               className="hidden sm:block text-sm font-medium text-gray-600 hover:text-gray-900"
             >
               How it works
             </Link>
-            {/* Light/dark switch (2026-09-17, explicit request) — visible at
-                every width, not `hidden sm:block` like "How it works": a
-                56px slider costs the tight mobile row far less than a
-                text link would, and the ability to switch shouldn't be
-                desktop-only. */}
-            <ThemeToggleButton className="-mr-0.5" />
             <Link href="/auth/login">
               <Button
                 variant="ghost"
