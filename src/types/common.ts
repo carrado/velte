@@ -1,4 +1,9 @@
-import type { ComponentType, ReactNode, SVGProps } from "react";
+import type {
+  AnchorHTMLAttributes,
+  ComponentType,
+  ReactNode,
+  SVGProps,
+} from "react";
 
 /** Shared prop contract for every component in `src/components/icons/` —
  *  mirrors lucide-react's own icon API (`size`, `strokeWidth`, plus any
@@ -63,6 +68,9 @@ export interface NavItem {
   icon: React.ReactNode;
   href: string;
   id?: string;
+  /** A count bubble beside the label (e.g. pending buyer requests). Hidden
+   *  when 0 or absent. */
+  badge?: number;
 }
 
 export interface NavSection {
@@ -136,3 +144,12 @@ export interface AuthPanelContent {
   subtitle: string;
   features: AuthPanelFeature[];
 }
+
+/** Props for DashboardLink — an in-dashboard link that prefetches before it
+ *  routes. Same surface as a plain anchor, with an app-internal `href`. */
+export type DashboardLinkProps = Omit<
+  AnchorHTMLAttributes<HTMLAnchorElement>,
+  "href"
+> & {
+  href: string;
+};

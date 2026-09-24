@@ -518,8 +518,18 @@ export interface ExternalOffer {
    *  for this platform than for the other three). A merchant whose platform
    *  can't be told apart (the generic URL-shape-only match) never produces
    *  an offer at all, rather than guessing which bucket it belongs in — so
-   *  every offer that exists here has one. */
-  platform: "jumia" | "shopify" | "woocommerce" | "jiji";
+   *  every offer that exists here has one.
+   *
+   *  "konga" and "propertypro" (2026-09-24) only ever appear on a search
+   *  link (connectors/searchLinks.ts, `isDirectLink: false`) — never on a
+   *  matched listing, so they have no results bucket of their own. */
+  platform:
+    | "jumia"
+    | "shopify"
+    | "woocommerce"
+    | "jiji"
+    | "konga"
+    | "propertypro";
   /** Which connector produced this (see ExternalConnector.name). */
   source: string;
   url: string;
@@ -531,11 +541,10 @@ export interface ExternalOffer {
    *  lands on a results page for the item's name). Also true for a
    *  real Jiji listing match (2026-09-21, connectors/jiji.ts) — it links
    *  straight to that ad's own page, same as any other direct link; FALSE
-   *  only for Jiji's own last-resort fallback (a plain search-results link,
-   *  used when nothing on the page matched or it couldn't be read at all —
-   *  see that file's own buildSearchFallback). This is exactly the "future
-   *  source that CAN'T always produce a direct link" this field was
-   *  originally kept around for. */
+   *  only for a "keep looking yourself" search link (connectors/
+   *  searchLinks.ts — Jumia, Konga, Jiji, PropertyPro, 2026-09-24), which is
+   *  never a result: route.ts doesn't count it as one, and SearchHome
+   *  renders it as a plain line, never a card. */
   isDirectLink: boolean;
   /** True when this offer is priced ABOVE the buyer's stated
    *  `maxBudgetNaira` and is only here because nothing affordable filled
@@ -1074,6 +1083,12 @@ export type SearchStreamEvent =
       // buyer declines the offer on a later turn (a fresh search, this
       // flag false that time — see systemPrompt.ts's own rule).
       buyerRequestOffered: boolean;
+      // True when that offer names ONE specific vendor ("a vendor looks like a
+      // fit… want me to check with them?") rather than reaching out broadly —
+      // the agree button reads "Yes, please" then, and "Yes, find someone" only
+      // for the broad ask (2026-09-24, explicit request). Optional: absent on
+      // turns saved before it existed, which fall back to the broad label.
+      buyerRequestNamedVendor?: boolean;
       // Empty except on a genuine DUAL-intent turn (the buyer named a
       // specific item AND a separate kind of business, e.g. "fix my laptop
       // screen, and also a plumber") — see route.ts's own comment on where
@@ -1354,6 +1369,12 @@ export interface StoredSearchTurn {
   } | null;
   buyerRequestOffer: BuyerRequestOffer | null;
   buyerRequestOffered: boolean;
+  // True when that offer names ONE specific vendor ("a vendor looks like a
+  // fit… want me to check with them?") rather than reaching out broadly —
+  // the agree button reads "Yes, please" then, and "Yes, find someone" only
+  // for the broad ask (2026-09-24, explicit request). Optional: absent on
+  // turns saved before it existed, which fall back to the broad label.
+  buyerRequestNamedVendor?: boolean;
   interimReplies: string[];
   awaitingBuyerRequestReply: boolean;
   buyerRequestMatchQuery: string | null;

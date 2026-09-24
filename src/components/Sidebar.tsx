@@ -7,6 +7,10 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
 import { getInitial } from "@/lib/initials";
+import {
+  badgeLabel,
+  usePendingBuyerRequests,
+} from "@/hooks/usePendingBuyerRequests";
 import type { NavItem, NavSection } from "@/types/common";
 import {
   GiftIcon,
@@ -32,7 +36,17 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       <span className={active ? "text-white" : "text-gray-500"}>
         {item.icon}
       </span>
-      <span>{item.label}</span>
+      <span className="flex-1 text-left">{item.label}</span>
+      {item.badge ? (
+        <span
+          aria-label={`${item.badge} waiting`}
+          className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-[11px] font-bold leading-none ${
+            active ? "bg-white text-orange-600" : "bg-orange-500 text-white"
+          }`}
+        >
+          {badgeLabel(item.badge)}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -42,6 +56,8 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 export default function Sidebar() {
   const pathname = usePathname();
   const userDetails = useUserStore((state) => state.user);
+  // Requests matched to this vendor that they haven't accepted or declined.
+  const pendingRequests = usePendingBuyerRequests();
 
   const sections: NavSection[] = [
     {
@@ -75,6 +91,7 @@ export default function Sidebar() {
           icon: <MessageSquareIcon size={16} />,
           href: "buyer-requests",
           id: "buyer-requests-nav",
+          badge: pendingRequests,
         },
       ],
     },

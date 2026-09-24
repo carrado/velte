@@ -26,4 +26,11 @@ export const queryKeys = {
   referrals: {
     mine: ["referrals", "mine"] as const,
   },
+  // The vendor's matched Buyer Requests. Detail nests under the list key on
+  // purpose: invalidating the list (after accept/decline) refreshes the
+  // detail too, and the nav badge + Products banner share the list entry.
+  vendorBuyerRequests: {
+    list: ["vendor-buyer-requests"] as const,
+    detail: (id: string) => ["vendor-buyer-requests", id] as const,
+  },
 };

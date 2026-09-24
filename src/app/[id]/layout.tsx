@@ -39,6 +39,9 @@ function getTitle(pathname: string): string {
   // segments[0] is the [id] param; everything after is the sub-path
   const subPath = segments.slice(1).join("/");
   if (PATH_TITLES[subPath]) return PATH_TITLES[subPath];
+  // A single buyer request: never the raw request id in the header.
+  if (segments.length === 3 && segments[1] === "buyer-requests")
+    return "Buyer's Request";
   // Handle dynamic sub-paths: /products/[id]/edit → "Edit Listing"
   if (segments.at(-1) === "edit" && segments.at(-3) === "products")
     return "Edit Listing";

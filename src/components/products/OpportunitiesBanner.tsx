@@ -1,10 +1,8 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
 import { useNavigation } from "@/components/NavigationProgressContext";
-import type { BuyerRequest } from "@/types/buyerRequest";
+import { usePendingBuyerRequests } from "@/hooks/usePendingBuyerRequests";
 import { ArrowRightIcon, SparklesIcon } from "@/components/icons/hero";
 
 /* The scoped version of "Velte Demand" (2026-08-15) — per the earlier
@@ -23,15 +21,11 @@ export function OpportunitiesBanner() {
   const params = useParams<{ id: string }>();
   const { navigate } = useNavigation();
 
-  const { data } = useQuery({
-    queryKey: ["vendor-buyer-requests"],
-    queryFn: () =>
-      api.get<{ requests: BuyerRequest[] }>("/api/vendor/buyer-requests"),
-  });
-
-  const requests = data?.requests ?? [];
-  const unresponded = requests.filter((r) => !r.myDecision);
-  if (unresponded.length === 0) return null;
+  // The same count as the nav badge — open and unanswered only (the list
+  // also carries answered history since 2026-09-24). One hook, so the banner
+  // and the badge can never disagree.
+  const pending = usePendingBuyerRequests();
+  if (pending === 0) return null;
 
   return (
     <button
@@ -44,14 +38,11 @@ export function OpportunitiesBanner() {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-dash-body font-semibold text-ink">
-          {unresponded.length}{" "}
-          {unresponded.length === 1
-            ? "buyer opportunity"
-            : "buyer opportunities"}{" "}
-          waiting
+          {pending}{" "}
+          {pending === 1 ? "buyer opportunity" : "buyer opportunities"} waiting
         </p>
         <p className="text-dash-caption text-gray-500 truncate">
-          {unresponded.length === 1
+          {pending === 1
             ? "Someone near you is looking for what you sell."
             : "People near you are looking for what you sell."}
         </p>

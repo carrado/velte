@@ -20,10 +20,10 @@ import type { ExternalOffer } from "@/types/search";
 // header, for the buyer-facing half of this), and mark a matched listing as
 // what it actually is — a real, individual peer's ad, not a checked retailer
 // — rather than pretending it carries the same confidence as a Jumia/
-// Shopify/WooCommerce match. The plain search-link fallback (this file's own
-// buildSearchFallback) stays as the last resort when nothing here matches
-// or the page can't be read — a dead end must never come back with nothing
-// to try, same rule every connector in this codebase already follows.
+// Shopify/WooCommerce match. When nothing here matches or the page can't be
+// read, this returns nothing: the "search Jiji yourself" link that used to
+// be this file's fallback now comes from connectors/searchLinks.ts
+// (2026-09-24), alongside Jumia/Konga/PropertyPro, for every dead end.
 //
 // NEEDS NO API KEY, unlike serper.ts — this reads Jiji's own public search
 // page directly rather than going through Google/Serper, so `isEnabled`
@@ -40,9 +40,10 @@ import type { ExternalOffer } from "@/types/search";
 // same "absence means the old/safe behavior" direction every other flag in
 // this codebase defaults to — so a production incident (Jiji blocking the
 // UA, the page shape changing and `extractListings` silently returning
-// nothing) can be killed instantly without a deploy: unset it and this
-// connector falls back to being exactly the old plain-search-link behavior,
-// forever, with no code change.
+// nothing) can be killed instantly without a deploy: set it to "false" and
+// this connector stops running, with no code change. (searchLinks.ts's
+// "search Jiji yourself" link still shows as long as any other connector,
+// i.e. Serper, is enabled — see fetchExternalOffers.)
 function scrapeEnabled(): boolean {
   return process.env.JIJI_SCRAPE_ENABLED !== "false";
 }
@@ -262,37 +263,6 @@ function cleanListingUrl(rawUrl: string): string | null {
 const jijiSearchLink = (q: string) =>
   `${ORIGIN}/search?query=${encodeURIComponent(q)}`;
 
-/** The last-resort offer this connector always has ready — a plain link to
- *  Jiji's own search results for the buyer's exact query, no listing
- *  matched. Needs no network call and can't fail, so it's safe to hand back
- *  whenever real matching finds nothing or the page can't be read at all —
- *  see this file's own header on why a dead end must never come back with
- *  literally nothing to try. Exactly what serper.ts's buildJijiOffer used
- *  to be, moved here since Jiji now has its own connector.
- *
- *  `linkQuery` (2026-09-22) is the URL's own query string, separate from
- *  `q` (the title) — defaults to `q` but the caller passes the
- *  location-biased `fetchQuery` when one exists, so a buyer who taps
- *  through to search Jiji themselves lands on the SAME location-biased
- *  results this connector's own real matching just tried, not a plain
- *  nationwide search for the bare item name. */
-function buildSearchFallback(q: string, linkQuery: string = q): ExternalOffer {
-  return {
-    id: "jiji-search",
-    title: q,
-    priceText: null,
-    imageUrl: null,
-    galleryUrls: [],
-    description: null,
-    attributes: [],
-    merchant: "Jiji",
-    platform: "jiji",
-    source: "jiji",
-    url: jijiSearchLink(linkQuery),
-    isDirectLink: false,
-  };
-}
-
 export const jijiConnector: ExternalConnector = {
   name: "jiji",
 
@@ -307,8 +277,7 @@ export const jijiConnector: ExternalConnector = {
     // live: a buyer who named "Anambra" directly got land listings back
     // from Ibadan, Ikorodu and Abuja — this connector never had a location
     // parameter at all). `q` stays the buyer's plain item term everywhere
-    // else in this function — the fallback link's own title, and
-    // `looksRelevant`'s recall check against each listing's TITLE below —
+    // else in this function — `looksRelevant`'s recall check against each listing's TITLE below —
     // because a real listing's title says what the item IS, not where it
     // is; requiring "Anambra" to also appear in a genuine cake listing's
     // own title would reject real matches instead of finding location-
@@ -316,8 +285,7 @@ export const jijiConnector: ExternalConnector = {
     // query text as a real signal, same as a buyer typing "cake Anambra"
     // themselves would get biased results without needing an exact filter.
     const fetchQuery = location?.trim() ? `${q} ${location.trim()}` : q;
-    const fallback = buildSearchFallback(q, fetchQuery);
-    if (!scrapeEnabled()) return [fallback];
+    if (!scrapeEnabled()) return [];
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -333,7 +301,7 @@ export const jijiConnector: ExternalConnector = {
       );
       if (!res.ok || !res.body) {
         console.error(`[connectors/jiji] search page responded ${res.status}`);
-        return [fallback];
+        return [];
       }
 
       const reader = res.body.getReader();
@@ -352,7 +320,7 @@ export const jijiConnector: ExternalConnector = {
       const listings = extractListings(html).filter((l) =>
         looksRelevant(q, l.title),
       );
-      if (!listings.length) return [fallback];
+      if (!listings.length) return [];
 
       const offers: ExternalOffer[] = listings.slice(0, limit).map((l) => {
         const cleanUrl = cleanListingUrl(l.url) ?? jijiSearchLink(fetchQuery);
@@ -372,12 +340,6 @@ export const jijiConnector: ExternalConnector = {
         };
       });
 
-      // The plain search link still rides along at the end, capacity
-      // permitting — matched listings are real, individual ads (see this
-      // file's own header on why that's a lower confidence tier than a
-      // Jumia/Shopify/WooCommerce match, never a reason to hide the option
-      // to keep looking on Jiji directly).
-      if (offers.length < limit) offers.push(fallback);
       return offers;
     } catch (err) {
       // Timeout, DNS, a bot wall, Jiji restructuring the page — all the
@@ -387,7 +349,7 @@ export const jijiConnector: ExternalConnector = {
         "[connectors/jiji] lookup failed:",
         err instanceof Error ? err.message : err,
       );
-      return [fallback];
+      return [];
     } finally {
       clearTimeout(timer);
     }

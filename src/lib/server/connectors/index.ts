@@ -1,5 +1,6 @@
 import { serperConnector } from "@/lib/server/connectors/serper";
 import { jijiConnector } from "@/lib/server/connectors/jiji";
+import { buildSearchLinks } from "@/lib/server/connectors/searchLinks";
 import type { ExternalConnector } from "@/lib/server/connectors/types";
 import type { ExternalOffer } from "@/types/search";
 import { isVagueReference } from "@/lib/productTerm";
@@ -58,7 +59,7 @@ function titleKey(title: string): string {
  * the product, not a detail: the business is the vendor handoff, and this
  * is the consolation that keeps a dead end from being a dead stop.
  */
-export async function fetchExternalOffers(params: {
+async function fetchListings(params: {
   query: string;
   country?: string;
   limit?: number;
@@ -132,6 +133,9 @@ export async function fetchExternalOffers(params: {
       continue;
     }
     for (const offer of result.value) {
+      // Real listings only — "search this site" links are built once,
+      // below, by buildSearchLinks, not per connector.
+      if (!offer.isDirectLink) continue;
       const key = titleKey(offer.title);
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -194,4 +198,25 @@ export async function fetchExternalOffers(params: {
     .slice(0, limit - affordable.length)
     .map((offer) => ({ ...offer, overBudget: true }));
   return [...affordable, ...overBudgetSorted];
+}
+
+/**
+ * Real listings (see fetchListings above), followed by "keep looking
+ * yourself" search links for the sites that fit the query (see
+ * connectors/searchLinks.ts) — always last, never counted against the
+ * listing cap, and always `isDirectLink: false`, which is how route.ts and
+ * SearchHome keep them from ever reading as a result.
+ */
+export async function fetchExternalOffers(
+  params: Parameters<typeof fetchListings>[0],
+): Promise<ExternalOffer[]> {
+  const listings = await fetchListings(params);
+  if (
+    !hasExternalConnectors() ||
+    !params.query.trim() ||
+    isVagueReference(params.query)
+  ) {
+    return listings;
+  }
+  return [...listings, ...buildSearchLinks(params.query, params.location)];
 }

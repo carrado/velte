@@ -35,6 +35,16 @@ export interface BuyerRequest {
   // This vendor's own decision on this request — null until they accept or
   // decline (see GET /api/vendor/buyer-requests and its /:id counterpart).
   myDecision: BuyerRequestDecision | null;
+  // How many matched businesses have accepted so far — every business
+  // counts, not just this one. Stored on the request document, so both
+  // vendor endpoints already send it; optional for older payloads.
+  acceptedCount?: number;
+  // This vendor's own quote — null unless they accepted (2026-09-24).
+  myQuote?: BuyerRequestQuote | null;
+  // When the buyer messaged THIS vendor from their requests page — i.e. the
+  // vendor won the request. Null otherwise, and null for anything contacted
+  // before the backend started recording it (2026-09-24).
+  myContactedAt?: string | null;
 }
 
 // ── The BUYER's own view of a request (2026-08-30) ──────────────────────────
@@ -112,3 +122,40 @@ export interface MyBuyerRequest {
 export interface MyBuyerRequestList {
   requests: MyBuyerRequest[];
 }
+
+/** How the buyer's "Your requests" page reads a request (RequestsPage.tsx) —
+ *  derived, never stored. "offers": still open and at least one business
+ *  accepted, so the next move is the buyer's. "contacted": the buyer
+ *  messaged someone (stored status `fulfilled`). */
+export type BuyerRequestTone = "offers" | "open" | "contacted" | "closed";
+
+/** The page's sections, in display order. */
+export type BuyerRequestSectionId = "offers" | "waiting" | "past";
+
+/** A vendor's terms on an accepted request — all three optional, since
+ *  accepting without quoting is allowed. Money in kobo. */
+export interface BuyerRequestQuote {
+  priceKobo: number | null;
+  leadTimeDays: number | null;
+  note: string | null;
+}
+
+/** Where a request stands for the vendor looking at it (lib/
+ *  vendorRequestOutcome.ts):
+ *  - new       open, not yet answered
+ *  - awaiting  open, they sent an offer, the buyer hasn't picked anyone
+ *  - won       the buyer messaged THEM
+ *  - lost      they sent an offer, the buyer messaged another business
+ *  - closed    ended without a pick (expired or cancelled)
+ *  - declined  they passed on it */
+export type VendorRequestOutcome =
+  | "new"
+  | "awaiting"
+  | "won"
+  | "lost"
+  | "closed"
+  | "declined";
+
+/** The vendor list page's tabs (/{id}/buyer-requests). "past" holds lost,
+ *  closed and declined. */
+export type VendorRequestTab = "new" | "awaiting" | "won" | "past";
