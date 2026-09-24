@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircleIcon } from "@/components/icons/hero";
+import { ArrowRightIcon, CheckCircleIcon } from "@/components/icons/hero";
+import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import type { BuyerRequestOffer } from "@/types/search";
 
 /* Renders createBuyerRequestTool's outcome (see BuyerRequestOffer's own
@@ -8,7 +9,7 @@ import type { BuyerRequestOffer } from "@/types/search";
    Request" page. Sits below the turn's reply text, same slot
    ClarificationPrompt uses, only actionable while isLatest (see
    SearchHome.tsx). "created" is the one case with anything to render — a
-   plain green confirmation card.
+   plain confirmation card.
 
    `offer.status` is deliberately never "needs_identity" here (2026-08-19
    redesign — see IdentityCapture, types/search.ts): that case used to be
@@ -36,6 +37,7 @@ export function BuyerRequestOfferWidget({
 }: {
   offer: Exclude<BuyerRequestOffer, { status: "needs_identity" }>;
 }) {
+  const { navigate } = useNavigation();
   if (offer.status !== "created") return null;
   return (
     // No max-w here (deliberately) — a fixed cap made this confirmation
@@ -43,14 +45,27 @@ export function BuyerRequestOfferWidget({
     // everything around it. It's still a status card, not a plain reply,
     // so it keeps its bg/border, just sized to the same width as
     // everything else in the thread instead of a bespoke one.
-    <div className="flex items-start gap-2.5 bg-green-50 border border-green-100 rounded-2xl px-4 py-3">
-      <CheckCircleIcon size={17} className="text-green-600 shrink-0 mt-0.5" />
-      <div className="text-sm text-green-800">
-        <p className="font-medium">Request sent.</p>
-        <p className="text-green-700/80">
-          You&apos;ll get an SMS confirming this, and any interested vendor will
-          message you directly on WhatsApp.
+    //
+    // Offers-then-pick wording and orange, not green (2026-09-24): green is
+    // kept for WhatsApp buttons, and the old line ("any interested vendor
+    // will message you directly on WhatsApp") described a flow removed on
+    // 2026-09-03 — businesses never get the buyer's number now.
+    <div className="flex items-start gap-2.5 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+      <CheckCircleIcon size={17} className="mt-0.5 shrink-0 text-orange-500" />
+      <div className="min-w-0 flex-1 text-sm">
+        <p className="font-medium text-ink">Request sent.</p>
+        <p className="text-gray-600">
+          Offers will show up in Your requests — we&apos;ll text you when they
+          arrive.
         </p>
+        <button
+          type="button"
+          onClick={() => navigate("/chat/requests")}
+          className="mt-2 inline-flex cursor-pointer items-center gap-1 text-[13px] font-semibold text-orange-600 transition-colors hover:text-orange-700"
+        >
+          View your requests
+          <ArrowRightIcon size={13} />
+        </button>
       </div>
     </div>
   );

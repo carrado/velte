@@ -4,6 +4,10 @@ import { settingsApi } from "@/services/settings";
 import { walletApi } from "@/services/wallet";
 import { fetchMyReferrals } from "@/services/referrals";
 import { storeApi } from "@/services/store";
+import {
+  fetchVendorBuyerRequest,
+  fetchVendorBuyerRequests,
+} from "@/services/vendorBuyerRequests";
 import { queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
 
@@ -43,6 +47,23 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
       {
         queryKey: queryKeys.products.categories,
         queryFn: categoriesApi.getCategories,
+      },
+    ];
+  }
+
+  // One buyer request (/{userId}/buyer-requests/{requestId}): the request
+  // plus the wallet, which decides whether the offer form can be sent.
+  const requestMatch = routeKey.match(/^buyer-requests\/([^/]+)$/);
+  if (requestMatch) {
+    const requestId = requestMatch[1];
+    return [
+      {
+        queryKey: queryKeys.vendorBuyerRequests.detail(requestId),
+        queryFn: () => fetchVendorBuyerRequest(requestId),
+      },
+      {
+        queryKey: queryKeys.wallet.detail,
+        queryFn: walletApi.getWallet,
       },
     ];
   }
@@ -89,6 +110,17 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
         {
           queryKey: queryKeys.referrals.mine,
           queryFn: fetchMyReferrals,
+        },
+      ];
+    case "buyer-requests":
+      return [
+        {
+          queryKey: queryKeys.vendorBuyerRequests.list,
+          queryFn: fetchVendorBuyerRequests,
+        },
+        {
+          queryKey: queryKeys.wallet.detail,
+          queryFn: walletApi.getWallet,
         },
       ];
     case "store":

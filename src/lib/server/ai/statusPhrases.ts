@@ -124,6 +124,9 @@ const ACKNOWLEDGEMENT_REPLIES = new Set([
   // the bare "yes"/"go ahead" entries above), so nothing distinguished it
   // from a fresh request.
   "yes, find someone",
+  // The same button's wording when the offer names one specific vendor
+  // (2026-09-24 — see SearchHome's renderOfferActions).
+  "yes, please",
   "no thanks, that's okay",
   // The vendor-search offer's own agree text (2026-09-15) — deliberately a
   // DIFFERENT literal string from "yes, find someone" just above, even
@@ -206,6 +209,7 @@ const OFFER_AGREEMENT_REPLIES = new Set([
   "great",
   "yes, find someone",
   "yes please",
+  "yes, please",
 ]);
 const OFFER_DECLINE_REPLIES = new Set([
   "no",
@@ -1017,6 +1021,21 @@ export function noVendorButOnlineOffersPhrase(
     `No vendor on Velte has "${w}" yet — but here's where it's selling online right now.`,
     `Couldn't find "${w}" on Velte at all — the closest I can get you is these online listings.`,
     `No Velte vendor for "${w}" yet. Off Velte, these stores are listing it.`,
+  ];
+}
+
+// The dead end where the connectors ran but came back with NOTHING real —
+// only a "search this site yourself" link (2026-09-24, found live on
+// velte-dev: Jiji's page read failed in production, and the reply above the
+// lone link-card still said "these online listings don't show a price",
+// describing listings that were never on screen). Honest that no listing
+// was found; the search link renders as a plain line under this, not a card.
+export function noVendorOnlySearchLinksPhrase(what: string): string[] {
+  const w = snippetTerms(what, 60);
+  return [
+    `No vendor on Velte has "${w}" yet, and I couldn't pull up any listings online for it right now.`,
+    `Couldn't find "${w}" on Velte, and no online listings came back for it just now.`,
+    `Nothing on Velte for "${w}" yet, and I couldn't find a listing online either.`,
   ];
 }
 

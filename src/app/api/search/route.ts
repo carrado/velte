@@ -66,6 +66,7 @@ import {
   externalOffersWithLocalOfferPhrase,
   noVendorEvenBySectorPhrase,
   noVendorButOnlineOffersPhrase,
+  noVendorOnlySearchLinksPhrase,
   isAcknowledgementReply,
   isAskingForExplanation,
   isOfferDeclineReply,
@@ -286,19 +287,26 @@ function buyerRequestStatusReply(
   >,
 ): string {
   switch (offer.status) {
-    // Says WHY an account is needed rather than just demanding one: a
-    // vendor replies to this request personally, so there has to be a real
-    // person on the other end for them to reply to. The Google button
+    // Says WHY an account is needed rather than just demanding one: the
+    // offers businesses send back land on the buyer's own requests page,
+    // so there has to be an account for them to land on. The Google button
     // renders below the reply — never ask them to type anything here.
+    //
+    // All three lines describe the offers-then-pick model (rewritten
+    // 2026-09-24): businesses send offers, the buyer compares them and
+    // messages the one they choose. Businesses never get the buyer's
+    // number, so it doesn't need to be a WhatsApp number — it's only for
+    // Velte's own texts when offers arrive. The old wording ("make sure
+    // vendors can reach you on WhatsApp") predated 2026-09-03.
     case "needs_signin":
-      return "To send this to vendors I'll need you signed in first — that's how a vendor knows who they're replying to, and how you get their reply back. It takes one tap.";
+      return "To send this out I'll need you signed in first — that's where the offers businesses send back will show up, so you can compare them and pick one. It takes one tap.";
     case "needs_identity":
-      return "To reach out on your behalf, I'll just need your WhatsApp number — make sure it's one vendors can actually reach you on there, since that's how they'll get back to you.";
+      return "Last step: your phone number. I'll text you as soon as businesses send offers — they never see your number, so you only hear from the one you choose to message.";
     // Never writes the number out — the confirmation below the reply
     // already shows it, and repeating it here would put a phone number in
     // the reply text, which this route sanitizes against everywhere else.
     case "needs_phone_choice":
-      return "Before I send this out — just confirm the number a vendor should reach you on.";
+      return "Before I send this out — just confirm the number I should text when offers come in.";
     case "no_match":
       return "Couldn't find anyone on Velte to contact for this right now.";
   }
@@ -5213,6 +5221,14 @@ async function handleSearch(req: Request) {
         // model-authored reply is never touched: it had the turn's real
         // context and this doesn't.
         let deadEndTerm: string | null = null;
+        // deadEndTerm without the attributes — what the reply quotes back
+        // to the buyer (see cascadeLabel's own comment). deadEndTerm itself
+        // still feeds guidance and the nearby-business check.
+        let deadEndLabel: string | null = null;
+        // Set wherever the reach-out offer names ONE specific vendor
+        // (foundPossibleVendorPhrase) — the page's agree button reads "Yes,
+        // please" then, not the broad "Yes, find someone".
+        let buyerRequestNamedVendor = false;
         // Whether deadEndTerm actually names an ITEM/SERVICE the buyer
         // wants (a product term, or several compared options) rather than
         // just a business/vendor TYPE they're looking for (storeTerm with
@@ -5247,6 +5263,13 @@ async function handleSearch(req: Request) {
                 cascadeProductInput.attributes,
               )
             : "that";
+          // What the BUYER is shown — the item alone. cascadeTerm keeps the
+          // attributes because it drives matching; a reply quoting it read
+          // back the buyer's own follow-up answers ("custom birthday cake
+          // for wedding any flavour design", found live 2026-09-24).
+          const cascadeLabel = cascadeProductInput.product
+            ? buildProductTerm(cascadeProductInput.product)
+            : "that";
           const storeBusinessType = (
             outcome.storeCall?.input as { businessType?: string } | undefined
           )?.businessType;
@@ -5277,9 +5300,10 @@ async function handleSearch(req: Request) {
           };
           if (canContact) {
             buyerRequestMatchQuery = matchQuery;
+            buyerRequestNamedVendor = true;
             replyOverride = pickAvoiding(
               foundPossibleVendorPhrase(
-                cascadeTerm,
+                cascadeLabel,
                 looksLikeServiceTask(cascadeTerm),
                 cascadeKept[0],
               ),
@@ -5458,6 +5482,8 @@ async function handleSearch(req: Request) {
               productInput.product,
               productInput.attributes,
             );
+            // Buyer-facing label — see cascadeLabel's own comment.
+            const businessLabel = buildProductTerm(productInput.product);
             const fallback = await searchStoresCore(
               {
                 businessType,
@@ -5536,7 +5562,7 @@ async function handleSearch(req: Request) {
                         | undefined
                     )?.maxBudgetNaira,
                   ) ?? usableBudget(rememberedBudget);
-                push(checkingElsewherePhrase(businessType));
+                push(checkingElsewherePhrase(businessLabel));
                 const offers = await fetchExternalOffers({
                   query: businessType,
                   maxBudgetNaira: budget,
@@ -5557,14 +5583,17 @@ async function handleSearch(req: Request) {
                   earlyExternalOffers = verified.kept;
                 }
               }
+              buyerRequestNamedVendor = !earlyExternalOffers.some(
+                (o) => o.isDirectLink,
+              );
               replyOverride = pickAvoiding(
-                earlyExternalOffers.length
+                earlyExternalOffers.some((o) => o.isDirectLink)
                   ? externalOffersWithLocalOfferPhrase(
-                      businessType,
+                      businessLabel,
                       isServiceQuery,
                     )
                   : foundPossibleVendorPhrase(
-                      businessType,
+                      businessLabel,
                       isServiceQuery,
                       asymmetricEligibility.kept[0],
                     ),
@@ -5693,8 +5722,28 @@ async function handleSearch(req: Request) {
           const scanLocation =
             deadEndProductInput?.location ?? deadEndStoreInput?.location;
 
-          push(notFoundDirectlyPhrase(scanTerm));
-          push(scanningVendorsPhrase(scanTerm));
+          // Buyer-facing label — the same shape as scanTerm, minus every
+          // attribute (see cascadeLabel's own comment). scanTerm still
+          // drives the vendor scan, the external fetch and the match query.
+          const allProductLabels = Array.from(
+            new Set(
+              outcome.productCalls
+                .map((call) => {
+                  const product = (
+                    call.input as { product?: string } | undefined
+                  )?.product;
+                  return product ? buildProductTerm(product) : null;
+                })
+                .filter((term): term is string => Boolean(term)),
+            ),
+          );
+          const scanLabel =
+            allProductLabels.length > 1
+              ? allProductLabels.join(isCompareTurn ? " or " : " and ")
+              : (allProductLabels[0] ?? storeTerm ?? "that");
+
+          push(notFoundDirectlyPhrase(scanLabel));
+          push(scanningVendorsPhrase(scanLabel));
           const scanStartedAt = Date.now();
 
           // CROSS-CHECK: try each term against the OTHER index than it was
@@ -5828,7 +5877,7 @@ async function handleSearch(req: Request) {
             // and gated on hasExternalConnectors(), same as the sibling.
             const isServiceQuery = looksLikeServiceTask(scanTerm);
             if (!isServiceQuery && hasExternalConnectors()) {
-              push(checkingElsewherePhrase(scanTerm));
+              push(checkingElsewherePhrase(scanLabel));
               const offers = await fetchExternalOffers({
                 query: scanTerm,
                 maxBudgetNaira: usableBudget(rememberedBudget),
@@ -5849,11 +5898,14 @@ async function handleSearch(req: Request) {
                 earlyExternalOffers = verified.kept;
               }
             }
+            buyerRequestNamedVendor = !earlyExternalOffers.some(
+              (o) => o.isDirectLink,
+            );
             replyOverride = pickAvoiding(
-              earlyExternalOffers.length
-                ? externalOffersWithLocalOfferPhrase(scanTerm, isServiceQuery)
+              earlyExternalOffers.some((o) => o.isDirectLink)
+                ? externalOffersWithLocalOfferPhrase(scanLabel, isServiceQuery)
                 : foundPossibleVendorPhrase(
-                    scanTerm,
+                    scanLabel,
                     isServiceQuery,
                     storeScanEligibility.kept[0],
                   ),
@@ -5919,13 +5971,14 @@ async function handleSearch(req: Request) {
             };
             replyOverride = pickAvoiding(
               noVendorEvenBySectorPhrase(
-                scanTerm,
+                scanLabel,
                 mergedExternal.length > 0 || instagramLeads.length > 0,
                 looksLikeServiceTask(scanTerm),
               ),
               [],
             );
             deadEndTerm = scanTerm;
+            deadEndLabel = scanLabel;
             deadEndHasNamedItem =
               Boolean(productTerm) || allProductTerms.length > 1;
           }
@@ -5981,6 +6034,7 @@ async function handleSearch(req: Request) {
             await retryLocationOnly());
           replyOverride = null;
           deadEndTerm = null;
+          deadEndLabel = null;
           deadEndHasNamedItem = false;
         }
 
@@ -6477,6 +6531,26 @@ async function handleSearch(req: Request) {
           }
         }
 
+        // A "search this site yourself" link (connectors/searchLinks.ts) is
+        // not a listing, so it doesn't count as one (2026-09-24, found live
+        // on velte-dev): when Jiji's page read failed, the lone search link
+        // was treated as an offer — rendered as an image-less result card,
+        // with a reply claiming "these online listings" sat underneath.
+        // Split out here so every check below (the reply, the comparison,
+        // the vendor-search offer) sees only real listings. The links still
+        // go to the client, appended to externalOffers at sendFinal, where
+        // SearchHome renders them as a plain line rather than a card.
+        // One per site: a comparison turn fetches once per option, so each
+        // site's link would otherwise appear once per option compared.
+        const externalSearchLinks = Array.from(
+          new Map(
+            externalOffers
+              .filter((o) => !o.isDirectLink)
+              .map((o) => [o.platform, o] as const),
+          ).values(),
+        );
+        externalOffers = externalOffers.filter((o) => o.isDirectLink);
+
         // See deadEndTerm's own comment — the line that said "nothing
         // close by either" was written before the connectors ran, and is
         // now demonstrably wrong on screen.
@@ -6500,13 +6574,22 @@ async function handleSearch(req: Request) {
               : undefined;
           replyOverride = pickAvoiding(
             noVendorButOnlineOffersPhrase(
-              deadEndTerm,
+              deadEndLabel ?? deadEndTerm,
               unconfirmedBudgetNaira,
               // Only when a comparison will actually render below — the
               // wording promises one, so it must not appear on a compare
               // turn that produced too few offers to compare.
               isCompareTurn && externalOffers.length >= 2,
             ),
+            [],
+          );
+        } else if (externalSearchLinks.length > 0 && deadEndTerm) {
+          // Connectors ran and found no real listing — only a search link.
+          // Said plainly; the vendor-search offer below still fires for
+          // this case (see vendorSearchOffered), so the turn ends on a real
+          // next step rather than a link dressed up as a result.
+          replyOverride = pickAvoiding(
+            noVendorOnlySearchLinksPhrase(deadEndLabel ?? deadEndTerm),
             [],
           );
         } else if (
@@ -6893,7 +6976,7 @@ async function handleSearch(req: Request) {
           stores.length === 0 &&
           products.length === 0 &&
           Boolean(vendorSearchTerm) &&
-          externalOffers.length > 0;
+          (externalOffers.length > 0 || externalSearchLinks.length > 0);
 
         await sendFinal({
           type: "final",
@@ -6927,6 +7010,8 @@ async function handleSearch(req: Request) {
           vendorProductsStore,
           buyerRequestOffer,
           buyerRequestOffered,
+          buyerRequestNamedVendor:
+            buyerRequestOffered && buyerRequestNamedVendor,
           // Empty on this, the ordinary single-item path — only the
           // dual-intent branch further up this file (its own early
           // `return`) ever populates this.
@@ -6945,7 +7030,9 @@ async function handleSearch(req: Request) {
           awaitingVendorSearchOffer: vendorSearchOffered,
           vendorSearchMatchQuery: vendorSearchOffered ? vendorSearchTerm : null,
           recommendation,
-          externalOffers,
+          // Search links last — SearchHome splits them back out by
+          // isDirectLink and renders them as a line, not a card.
+          externalOffers: [...externalOffers, ...externalSearchLinks],
           // Resolved either way by the time this turn reaches here: a
           // FRESH comparison never gets this far (its own short-circuit
           // above ends the turn), and the confirmation turn's own exchange

@@ -3,6 +3,10 @@
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import {
+  badgeLabel,
+  usePendingBuyerRequests,
+} from "@/hooks/usePendingBuyerRequests";
+import {
   LayoutGridIcon,
   MessageSquareIcon,
   PlusCircleIcon,
@@ -13,6 +17,8 @@ import {
 export default function BottomNav() {
   const pathname = usePathname();
   const { navigate } = useNavigation();
+  // Requests matched to this vendor that they haven't accepted or declined.
+  const pendingRequests = usePendingBuyerRequests();
 
   const segments = pathname.split("/").filter(Boolean);
   const userId = segments[0];
@@ -58,6 +64,7 @@ export default function BottomNav() {
       segment: "buyer-requests",
       active: subPath.startsWith("buyer-requests"),
       id: "buyer-requests-mobile",
+      badge: pendingRequests,
     },
     {
       label: "Settings",
@@ -80,7 +87,19 @@ export default function BottomNav() {
               item.active ? "text-orange-500" : "text-gray-500"
             }`}
           >
-            {item.icon}
+            {/* The bubble sits on the icon's top-right corner, ringed in
+                the bar's own surface colour so it reads as a separate dot. */}
+            <span className="relative">
+              {item.icon}
+              {"badge" in item && item.badge ? (
+                <span
+                  aria-label={`${item.badge} waiting`}
+                  className="absolute -right-2.5 -top-1.5 min-w-[18px] rounded-full bg-orange-500 px-1 py-0.5 text-center text-[10px] font-bold leading-none text-white ring-2 ring-surface"
+                >
+                  {badgeLabel(item.badge)}
+                </span>
+              ) : null}
+            </span>
             <span className="text-dash-caption font-medium">{item.label}</span>
           </button>
         ))}

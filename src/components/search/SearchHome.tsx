@@ -102,6 +102,7 @@ import type {
 } from "@/types/search";
 import { isComparisonTemplate } from "@/types/search";
 import {
+  ExternalLinkIcon,
   MapPinIcon,
   PhoneIcon,
   ShieldCheckIcon,
@@ -161,12 +162,11 @@ const AI_MESSAGE_CLASS = "max-w-none w-full";
 
 // The buckets the off-Velte offers list is grouped into (2026-09-14, "jiji"
 // added 2026-09-20 — see connectors/serper.ts's Merchant.platform and its
-// buildJijiOffer for the full reasoning on each). Order matters here — it's
-// display order, confirmed listings first (Jumia, then the two platform
-// buckets), Jiji LAST since it's a search link rather than a matched
-// listing — the other three should read as "here it is", Jiji as "keep
-// looking here". A bucket with no offers this turn simply isn't rendered;
-// see the map site below.
+// connectors/jiji.ts for the full reasoning on each). Order matters here —
+// it's display order, retail listings first (Jumia, then the two platform
+// buckets), Jiji LAST since its listings are individual peers' ads, a
+// lower confidence tier. A bucket with no offers this turn simply isn't
+// rendered; see the map site below.
 const EXTERNAL_OFFER_PLATFORMS: {
   key: ExternalOffer["platform"];
   label: string;
@@ -176,6 +176,11 @@ const EXTERNAL_OFFER_PLATFORMS: {
   { key: "woocommerce", label: "On WooCommerce stores" },
   { key: "jiji", label: "On Jiji" },
 ];
+
+// A real listing (its own product page), as opposed to a connector's
+// "search this site yourself" fallback link — the latter is never a result
+// card, only a plain line under the results. See ExternalOffer.isDirectLink.
+const isListing = (offer: ExternalOffer) => offer.isDirectLink;
 
 // Found live: the gate used to fire even when the buyer's OWN message
 // already named a place ("...in Lekki") — it only ever checked device
@@ -495,6 +500,7 @@ function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
     vendorProductsStore: turn.vendorProductsStore,
     buyerRequestOffer: turn.buyerRequestOffer,
     buyerRequestOffered: turn.buyerRequestOffered,
+    buyerRequestNamedVendor: turn.buyerRequestNamedVendor,
     interimReplies: turn.interimReplies,
     awaitingBuyerRequestReply: turn.awaitingBuyerRequestReply,
     buyerRequestMatchQuery: turn.buyerRequestMatchQuery,
@@ -892,6 +898,9 @@ interface ConversationTurn {
   // first, Google Places only surfaces if the buyer declines on a later
   // turn (that turn re-searches with this false again).
   buyerRequestOffered: boolean;
+  // See the same field on SearchStreamEvent's "final" — picks the agree
+  // button's wording.
+  buyerRequestNamedVendor?: boolean;
   // Standalone bubbles that arrived mid-turn, before the final event (see
   // SearchStreamEvent's own "reply" comment) — route.ts's unified dead-end
   // handler uses this to close the loop on the search that just ran while
@@ -1193,8 +1202,15 @@ function ConversationTurnView({
     kind: "buyerRequest" | "vendorSearch" = "buyerRequest",
   ) {
     if (!isLatest) return null;
+    // "Yes, please" when the offer names one specific vendor — "find
+    // someone" only fits the broad ask (2026-09-24, explicit request).
+    // All three strings are registered in statusPhrases.ts's reply sets.
     const agreeText =
-      kind === "vendorSearch" ? "Yes, look for a vendor" : "Yes, find someone";
+      kind === "vendorSearch"
+        ? "Yes, look for a vendor"
+        : turn.buyerRequestNamedVendor
+          ? "Yes, please"
+          : "Yes, find someone";
     return (
       <div className="flex flex-wrap items-center gap-4">
         <button
@@ -1726,8 +1742,11 @@ function ConversationTurnView({
                         there's no chance of reading them as Velte
                         listings. Rendered BELOW nearby businesses when
                         both exist: a real shop the buyer can walk into is
-                        the better answer here than an online link. */}
-                      {turn.externalOffers.length > 0 && (
+                        the better answer here than an online link.
+                        Real listings only — a "search this site yourself"
+                        link (isDirectLink false) is not a result, so it
+                        never gets a card; it renders as a line below. */}
+                      {turn.externalOffers.some(isListing) && (
                         <div className="space-y-3" data-results-group>
                           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                             Available online — not on Velte
@@ -1762,14 +1781,14 @@ function ConversationTurnView({
                             this safe: connectors/serper.ts only ever
                             produces an offer once it has a confirmed
                             platform, and for the first three that also means
-                            a confirmed direct product-page link — Jiji is
-                            the one deliberate exception, always a plain
-                            search-page link instead (see ExternalOfferCard's
-                            own `isDirectLink` branch for how that renders
-                            differently). */}
+                            a confirmed direct product-page link. Jiji's
+                            listings are direct links too since its own
+                            connector (2026-09-21); its search-page fallback
+                            is filtered out here and shown as a line below. */}
                           {EXTERNAL_OFFER_PLATFORMS.map(({ key, label }) => {
                             const offers = turn.externalOffers.filter(
-                              (offer) => offer.platform === key,
+                              (offer) =>
+                                isListing(offer) && offer.platform === key,
                             );
                             if (!offers.length) return null;
                             return (
@@ -1796,6 +1815,53 @@ function ConversationTurnView({
                           })}
                         </div>
                       )}
+                      {/* "Keep looking yourself" links (connectors/
+                        searchLinks.ts) — Jumia/Konga/Jiji, or PropertyPro/
+                        Jiji for property — a way to keep looking, not a
+                        result (2026-09-24, found live: a lone Jiji search
+                        link rendered as an image-less result card when
+                        Jiji's page couldn't be read). One plain line, so
+                        it never reads as something Velte found. Deduped by
+                        site for turns saved before the server did it. */}
+                      {(() => {
+                        const links = Array.from(
+                          new Map(
+                            turn.externalOffers
+                              .filter((offer) => !isListing(offer))
+                              .map((offer) => [offer.platform, offer]),
+                          ).values(),
+                        );
+                        if (!links.length) return null;
+                        return (
+                          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-gray-500">
+                            <span>Keep looking yourself:</span>
+                            {links.map((offer, i) => (
+                              <span
+                                key={offer.id}
+                                className="inline-flex items-center gap-1.5"
+                              >
+                                {i > 0 && (
+                                  <span aria-hidden className="text-gray-300">
+                                    ·
+                                  </span>
+                                )}
+                                <a
+                                  href={offer.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                  className="inline-flex items-center gap-1 font-medium text-orange-600"
+                                >
+                                  {offer.merchant ?? "Search online"}
+                                  <ExternalLinkIcon
+                                    size={12}
+                                    className="shrink-0"
+                                  />
+                                </a>
+                              </span>
+                            ))}
+                          </p>
+                        );
+                      })()}
                       {/* The reach-out question + Yes/No pair, AFTER the
                         result cards rather than stacked above them
                         (2026-09-15, explicit request) — the buyer sees what
@@ -3854,6 +3920,7 @@ export function SearchHome() {
             vendorProductsStore: event.vendorProductsStore,
             buyerRequestOffer: event.buyerRequestOffer,
             buyerRequestOffered: event.buyerRequestOffered,
+            buyerRequestNamedVendor: event.buyerRequestNamedVendor,
             awaitingBuyerRequestReply: event.awaitingBuyerRequestReply,
             buyerRequestMatchQuery: event.buyerRequestMatchQuery,
             awaitingVendorSearchOffer: event.awaitingVendorSearchOffer,
@@ -4861,21 +4928,21 @@ export function SearchHome() {
         // it — without this, the stored conversation still ends on the
         // needs_identity turn and a refresh would wrongly re-open
         // phone/OTP capture for a request that already resolved.
-        query: "Verified my WhatsApp number",
+        query: "Verified my phone number",
         ephemeral: false,
       });
     } else {
       updateTurn(turnId, {
         phase: "done",
         reply:
-          "I've reached out to a few businesses about this — if anyone's interested, they'll message you directly on WhatsApp. You'll also get an SMS confirming this went out.",
+          "Done — I've sent this to businesses that fit. I'll text you when they send offers, and you'll see them side by side in Your requests. Pick the one you like and message them from there — your number stays private until you do.",
         buyerRequestOffer: {
           status: "created",
           requestId: request.id,
           description: offer.description,
         },
         // Same as the no_match branch above — see that comment.
-        query: "Verified my WhatsApp number",
+        query: "Verified my phone number",
         ephemeral: false,
       });
     }
@@ -5275,11 +5342,12 @@ export function SearchHome() {
         // The saved-number confirmation (2026-08-26). Shown instead of the
         // input composer because there is nothing to type — the number is
         // already known and verified; the only question is whether it's
-        // still the right one to give a vendor.
+        // still the right one for Velte to text when offers arrive (vendors
+        // never receive it — see route.ts's buyerRequestStatusReply).
         <div className="flex flex-col bg-surface rounded-[28px] border border-orange-200 shadow-sm px-5 py-4 gap-3">
           <label className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-            <PhoneIcon size={12} className="text-orange-400 shrink-0" />A vendor
-            will reach you on WhatsApp — use this number?
+            <PhoneIcon size={12} className="text-orange-400 shrink-0" />
+            We&apos;ll text you here when offers arrive — use this number?
           </label>
           <p className="text-base font-semibold text-ink tracking-wide">
             {identityCapture.phone}
@@ -5331,8 +5399,8 @@ export function SearchHome() {
             ) : identityCapture.step === "phone" ? (
               <>
                 <PhoneIcon size={12} className="text-orange-400 shrink-0" />
-                What&apos;s your WhatsApp number? Velte will text you when
-                businesses answer.
+                What&apos;s your phone number? Velte texts you when offers
+                arrive — businesses never see it.
               </>
             ) : (
               <>
