@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { DashboardLink } from "@/components/DashboardLink";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,13 +32,9 @@ import { useNavigation } from "@/components/NavigationProgressContext";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { cn, formatNaira, timeAgo } from "@/lib/utils";
 import { leadTimeLabel } from "@/lib/quoteCompare";
-import {
-  msLeft,
-  timeLeft,
-  URGENT_MS,
-  windowElapsed,
-} from "@/lib/requestWindow";
+import { msLeft, URGENT_MS, windowElapsed } from "@/lib/requestWindow";
 import { useNow } from "@/hooks/useNow";
+import { Countdown } from "./Countdown";
 import { vendorRequestOutcome } from "@/lib/vendorRequestOutcome";
 import { leadCost, walletApi } from "@/services/wallet";
 import type { IconComponent } from "@/types/common";
@@ -70,7 +66,7 @@ function Fact({
 }: {
   icon: IconComponent;
   label: string;
-  value: string;
+  value: ReactNode;
   tone?: "default" | "accent" | "urgent";
 }) {
   return (
@@ -81,7 +77,7 @@ function Fact({
       </p>
       <p
         className={cn(
-          "mt-1 truncate text-lg font-bold",
+          "mt-1 truncate text-base font-bold sm:text-lg",
           tone === "accent" && "text-orange-600",
           tone === "urgent" && "text-red-600",
           tone === "default" && "text-ink",
@@ -301,7 +297,7 @@ export function VendorRequestDetail() {
                 </span>
               </div>
 
-              <p className="mt-3 text-lg font-medium leading-relaxed text-ink sm:text-xl">
+              <p className="mt-3 text-[15px] font-medium leading-relaxed text-ink sm:text-xl">
                 {request.description}
               </p>
 
@@ -348,9 +344,7 @@ export function VendorRequestDetail() {
               icon={urgent ? FlameIcon : ClockIcon}
               label="Closes in"
               value={
-                isOpen
-                  ? timeLeft(request.expiresAt, now).replace(" left", "")
-                  : "Closed"
+                isOpen ? <Countdown expiresAt={request.expiresAt} /> : "Closed"
               }
               tone={urgent ? "urgent" : "default"}
             />
@@ -372,7 +366,7 @@ export function VendorRequestDetail() {
                     urgent ? "text-red-600" : "text-gray-500",
                   )}
                 >
-                  {timeLeft(request.expiresAt, now)}
+                  <Countdown expiresAt={request.expiresAt} suffix=" left" />
                 </span>
               </div>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
@@ -448,7 +442,7 @@ export function VendorRequestDetail() {
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     You quoted
                   </p>
-                  <p className="mt-0.5 text-2xl font-bold text-ink">
+                  <p className="mt-0.5 text-xl font-bold text-ink sm:text-2xl">
                     {request.myQuote?.priceKobo != null
                       ? formatNaira(request.myQuote.priceKobo)
                       : "No price"}

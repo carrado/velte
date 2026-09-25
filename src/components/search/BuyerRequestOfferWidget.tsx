@@ -2,6 +2,7 @@
 
 import { ArrowRightIcon, CheckCircleIcon } from "@/components/icons/hero";
 import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
+import { BuyerPushPrompt } from "@/components/BuyerPushPrompt";
 import type { BuyerRequestOffer } from "@/types/search";
 
 /* Renders createBuyerRequestTool's outcome (see BuyerRequestOffer's own
@@ -50,23 +51,31 @@ export function BuyerRequestOfferWidget({
     // kept for WhatsApp buttons, and the old line ("any interested vendor
     // will message you directly on WhatsApp") described a flow removed on
     // 2026-09-03 — businesses never get the buyer's number now.
-    <div className="flex items-start gap-2.5 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
-      <CheckCircleIcon size={17} className="mt-0.5 shrink-0 text-orange-500" />
-      <div className="min-w-0 flex-1 text-sm">
-        <p className="font-medium text-ink">Request sent.</p>
-        <p className="text-gray-600">
-          Offers will show up in Your requests — we&apos;ll text you when they
-          arrive.
-        </p>
-        <button
-          type="button"
-          onClick={() => navigate("/chat/requests")}
-          className="mt-2 inline-flex cursor-pointer items-center gap-1 text-[13px] font-semibold text-orange-600 transition-colors hover:text-orange-700"
-        >
-          View your requests
-          <ArrowRightIcon size={13} />
-        </button>
+    <div className="space-y-2">
+      <div className="flex items-start gap-2.5 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+        <CheckCircleIcon
+          size={17}
+          className="mt-0.5 shrink-0 text-orange-500"
+        />
+        <div className="min-w-0 flex-1 text-sm">
+          <p className="font-medium text-ink">Request sent.</p>
+          <p className="text-gray-600">
+            Offers will show up in Your requests — we&apos;ll text you when they
+            arrive.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/chat/requests")}
+            className="mt-2 inline-flex cursor-pointer items-center gap-1 text-[13px] font-semibold text-orange-600 transition-colors hover:text-orange-700"
+          >
+            View your requests
+            <ArrowRightIcon size={13} />
+          </button>
+        </div>
       </div>
+      {/* The moment a buyer is most likely to say yes: they have just asked
+          and are now waiting on an answer. */}
+      <BuyerPushPrompt />
     </div>
   );
 }

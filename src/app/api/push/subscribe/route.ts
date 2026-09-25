@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { requireAuth, fail } from "@/lib/server/guards";
+import { fail, unauthorized } from "@/lib/server/guards";
+import { pushSession } from "@/lib/server/pushSession";
 import { backendFetch } from "@/lib/server/backend";
 
 // POST /api/push/subscribe   body: { subscription }
 export async function POST(req: Request) {
-  const gate = await requireAuth();
-  if ("response" in gate) return gate.response;
+  // Either kind of account (2026-09-24) — see pushSession.
+  const gate = await pushSession();
+  if (!gate) return unauthorized();
   const body = await req.json().catch(() => ({}));
   try {
     await backendFetch("/push/subscribe", {

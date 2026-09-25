@@ -36,3 +36,18 @@ export function windowElapsed(
     ? Math.min(1, Math.max(0, (now - started) / (ends - started)))
     : 1;
 }
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Live ticking form of `timeLeft` — "1d 04:12:09", or "04:12:09" inside the
+ *  last day. Rounded down to the second, same promise as `timeLeft`. */
+export function countdown(expiresAt: string, now: number): string {
+  const ms = new Date(expiresAt).getTime() - now;
+  if (!Number.isFinite(ms) || ms <= 0) return "closing now";
+  const total = Math.floor(ms / 1000);
+  const days = Math.floor(total / 86_400);
+  const clock = `${pad(Math.floor((total % 86_400) / 3600))}:${pad(
+    Math.floor((total % 3600) / 60),
+  )}:${pad(total % 60)}`;
+  return days > 0 ? `${days}d ${clock}` : clock;
+}

@@ -75,6 +75,27 @@ function cleanSearchTerm(term: string | undefined): string {
     .trim();
 }
 
+/** Whether the buyer's own words actually ASK something (2026-09-24,
+ *  explicit product decision: explain only when asked, otherwise search).
+ *
+ *  Found live: "I need a good laptop for my programming work" got a four-
+ *  bullet explainer on CPUs and RAM before any search, because the
+ *  classifier read "good … for programming" as "how do I choose". A stated
+ *  use is a requirement to search WITH — the recommendation layer already
+ *  ranks results against the buyer's full message — not a question to
+ *  answer first. The classifier alone decided this before; this is the
+ *  in-code check it lacked, and it can only NARROW the classifier (both must
+ *  agree), so a real question is never newly sent to the explainer by it.
+ *
+ *  "where" is deliberately absent: "where can I get a phone" is a find
+ *  request, however it's phrased. Pidgin interrogatives included. */
+export function looksLikeQuestion(message: string): boolean {
+  if (message.includes("?")) return true;
+  return /\b(which|what|what's|whats|wetin|how|why|should i|shall i|is it|is there|are there|does it|do i need|do you think|worth it|difference between|pros and cons|advise|advice|tell me about|explain)\b/i.test(
+    message,
+  );
+}
+
 export async function answerBuyingQuestion(
   messages: { role: "user" | "assistant"; content: string }[],
   fallbackTerm: string | null,

@@ -225,6 +225,78 @@ export function buildProductTerm(
   return [...lead, cleanProduct, ...trail].join(" ");
 }
 
+/** A whole attribute that is a preference, not a feature: an alternation
+ *  ("i5 or i7", "USB-C / Thunderbolt"), a range ("14–15 inch") or a purpose
+ *  ("good thermals for compiling"). Dropped from the search entirely. */
+const PREFERENCE_ATTRIBUTE = /\s(or|and)\s|\/|[–—]|\s-\s|\bfor\b/i;
+
+/** Quality words no listing title carries — trimmed OFF an attribute rather
+ *  than dropping it, so "good camera" still searches "camera". */
+const QUALITY_WORDS =
+  /\b(good|great|nice|very|really|fast|strong|comfortable|decent|quality|durable|reliable|affordable|lightweight|powerful|solid|sturdy|smooth|clear|bright|preferred|ideally|preferably)\b/gi;
+
+/** At most this many attributes ride on an off-Velte search. */
+const MAX_SEARCH_ATTRIBUTES = 2;
+
+/** The part of an attribute worth putting in a search box, or null. */
+function searchableAttribute(attr: string): string | null {
+  const noAside = attr.replace(/\([^)]*\)/g, " ");
+  if (PREFERENCE_ATTRIBUTE.test(noAside)) return null;
+  const trimmed = noAside
+    .replace(QUALITY_WORDS, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!trimmed || trimmed.split(" ").length > 3) return null;
+  return trimmed;
+}
+
+/** Whether an attribute NAMES the thing — a capacity or model number
+ *  ("16GB RAM", "iPhone 13"), a condition, a single word or capitalised
+ *  name ("SSD", "HP", "Samsung") — rather than describing a feature. These
+ *  go first, because they are what a listing title actually carries. */
+function isIdentifying(attr: string): boolean {
+  return (
+    CONDITION_ATTRIBUTE.test(attr) ||
+    /\d/.test(attr) ||
+    !attr.includes(" ") ||
+    /^[A-Z]/.test(attr)
+  );
+}
+
+/**
+ * The term an OFF-Velte search (Google Shopping, Jiji, the "search it
+ * yourself" links) is actually sent — fetch broadly, rank afterwards
+ * (2026-09-25, explicit product decision).
+ *
+ * Found live: a laptop dead end sent "laptop Intel i5 or i7 or Ryzen 5 or
+ * Ryzen 7 16GB RAM SSD (NVMe preferred) 14–15 inch IPS screen comfortable
+ * keyboard long battery life USB-C / Thunderbolt port good thermals for
+ * compiling" — buildProductTerm joining every attribute on. No listing title
+ * contains that, so every source came back empty and the photo check was
+ * judged against it too.
+ *
+ * Not the bare product either: that was the bug before this one — "phone"
+ * alone, for a buyer who asked for a good camera and high storage, fetched
+ * a ₦10,000 button phone. So attributes are TRIMMED to their searchable core
+ * ("good camera" → "camera"), preferences are dropped, identifying ones go
+ * first, and at most two ride along: "laptop 16GB RAM SSD". Everything else
+ * is for the ranking step (pickExternalRecommendation), where it chooses
+ * between real listings rather than filtering all of them out.
+ */
+export function buildSearchQuery(
+  product: string,
+  attributes?: string[],
+): string {
+  const searchable = (attributes ?? [])
+    .map(searchableAttribute)
+    .filter((a): a is string => a !== null);
+  const picked = [
+    ...searchable.filter(isIdentifying),
+    ...searchable.filter((a) => !isIdentifying(a)),
+  ].slice(0, MAX_SEARCH_ATTRIBUTES);
+  return buildProductTerm(product, picked);
+}
+
 // Words that point AT something without naming it — on top of STOPWORDS,
 // which already strips connectors that carry no content either way.
 const REFERENTIAL_WORDS = new Set([
@@ -288,4 +360,27 @@ export function isVagueReference(term: string): boolean {
       (w) => w.length > 0 && !STOPWORDS.has(w) && !REFERENTIAL_WORDS.has(w),
     );
   return words.length === 0;
+}
+
+/**
+ * What the ranking step judges "best for this buyer" against (2026-09-25).
+ *
+ * Was the buyer's current message alone — which on a follow-up turn is
+ * "yes please help me find", carrying none of what they need. The full
+ * product term (every attribute, preferences included) is exactly what
+ * buildSearchQuery keeps OUT of the search, so it has to arrive here or it
+ * is lost altogether. Appended rather than substituted, because the
+ * message itself often carries the purpose ("for my programming work").
+ */
+export function rankingBrief(
+  message: string | null | undefined,
+  product: string | undefined,
+  attributes: string[] | undefined,
+): string {
+  const full = product ? buildProductTerm(product, attributes) : "";
+  const said = message?.trim() ?? "";
+  if (!full) return said || "the item in the photo";
+  if (!said) return full;
+  if (said.toLowerCase().includes(full.toLowerCase())) return said;
+  return `${said} (looking for: ${full})`;
 }

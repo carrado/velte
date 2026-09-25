@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
 import { DeleteConversationModal } from "@/components/chat/DeleteConversationModal";
 import { fetchNotifications } from "@/services/notifications";
+import { fetchMyRequests } from "@/services/buyerRequests";
 import { Avatar } from "@/components/Avatar";
 import {
   BellIcon,
@@ -83,6 +84,9 @@ function MenuLink({
   // when > 0: a "0" badge is a permanent piece of furniture that trains the
   // eye to stop seeing the badge at all, which costs the one that matters.
   badge,
+  // What the number counts, for screen readers. "unread" unless the row
+  // counts something else (Your requests counts offers).
+  badgeNoun = "unread",
 }: {
   href: string;
   icon: React.ReactNode;
@@ -90,6 +94,7 @@ function MenuLink({
   active: boolean;
   onNavigate: () => void;
   badge?: number;
+  badgeNoun?: string;
 }) {
   // A button, not a Link, since 2026-09-11 — these rows are exactly
   // the "vendor dashboard" navigation-progress treatment the /chat tree
@@ -118,7 +123,7 @@ function MenuLink({
         <span
           // The count is also announced, not just shown — a bare number
           // beside a label says nothing on its own to a screen reader.
-          aria-label={`${badge} unread`}
+          aria-label={`${badge} ${badgeNoun}`}
           className="ml-auto min-w-[20px] rounded-full bg-orange-500 px-1.5 py-0.5 text-center text-[11px] font-bold leading-4 text-white"
         >
           {badge > 99 ? "99+" : badge}
@@ -254,7 +259,43 @@ export function ConversationSidebar() {
     refetchInterval: 60_000,
   });
   const unreadCount = notificationData?.unreadCount ?? 0;
+
+  // The offers bubble on the Your requests row (2026-09-24): every business
+  // that accepted one of this buyer's STILL-OPEN requests. Closed ones drop
+  // out, since there is nothing left to act on — the status is already aged
+  // server-side, so a lapsed request reads "expired" before the sweep runs.
+  //
+  // Same key and fetch as RequestsPage, so opening the page and this badge
+  // share one cache entry. Polled for the same reason as the bell above: an
+  // offer arrives because a VENDOR did something, not this browser.
+  const { data: openOfferCount = 0 } = useQuery({
+    queryKey: ["buyer", "requests"],
+    queryFn: fetchMyRequests,
+    enabled: Boolean(buyer),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    select: ({ requests }) =>
+      requests
+        .filter((r) => r.status === "active")
+        .reduce((sum, r) => sum + r.acceptedCount, 0),
+  });
+
+  // A push landing while /chat is open (the service worker posts
+  // "velte-push" to every open tab) refreshes both badges at once instead of
+  // waiting up to a minute for the poll — the vendor dashboard does the same
+  // in useNotificationsSync, which is not mounted here.
   const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "velte-push") return;
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      void queryClient.invalidateQueries({ queryKey: ["buyer", "requests"] });
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () =>
+      navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [queryClient]);
 
   // Delete-from-sidebar (2026-09-09). A confirm step first — same reasoning
   // as DeleteConversationModal's own comment: unlike logout, this is
@@ -399,6 +440,8 @@ export function ConversationSidebar() {
                     label="Your requests"
                     active={pathname === "/chat/requests"}
                     onNavigate={closeOnMobile}
+                    badge={openOfferCount}
+                    badgeNoun={openOfferCount === 1 ? "offer" : "offers"}
                   />
                 )}
                 {/* The credit meter briefly sat here as a third row

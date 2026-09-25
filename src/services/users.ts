@@ -1,6 +1,8 @@
 // services/users.ts
 import { api } from "@/lib/api-client";
 import { useUserStore } from "@/store/userStore";
+import { useBuyerStore } from "@/store/buyerStore";
+import { SEARCH_CONVERSATION_ID_STORAGE_KEY } from "@/lib/searchConversation";
 import type { User } from "@/types/user";
 import type { LoginResult } from "@/types/auth";
 
@@ -24,8 +26,18 @@ export const usersApi = {
   },
 
   logout: async () => {
+    // Ends the buyer session too (see /api/auth/logout), so clear what /chat
+    // would otherwise resume from: the buyer store and the open conversation
+    // id — the next person on this device must not reopen the previous
+    // account's thread (useAccountSignOut does the same).
     const result = await api.post("/api/auth/logout");
     useUserStore.getState().clearUser();
+    useBuyerStore.getState().clearBuyer();
+    try {
+      localStorage.removeItem(SEARCH_CONVERSATION_ID_STORAGE_KEY);
+    } catch {
+      /* blocked storage — nothing was stored to leak either */
+    }
     return result;
   },
 

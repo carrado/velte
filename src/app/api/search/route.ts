@@ -1,7 +1,12 @@
 import { stepCountIs, type ModelMessage, type UserContent } from "ai";
 import * as chrono from "chrono-node";
 
-import { buildProductTerm, cleanBusinessType } from "@/lib/productTerm";
+import {
+  buildProductTerm,
+  buildSearchQuery,
+  cleanBusinessType,
+  rankingBrief,
+} from "@/lib/productTerm";
 import { parseOfferPrice } from "@/lib/priceText";
 import { generateUUID } from "@/lib/uuid";
 import { callLLM } from "@/lib/server/ai/router";
@@ -81,7 +86,10 @@ import {
   composeDeadlineAskReply,
 } from "@/lib/server/ai/deadlineAskGate";
 import { confirmBulkPurchase } from "@/lib/server/ai/confirmBulkPurchase";
-import { answerBuyingQuestion } from "@/lib/server/ai/adviceAnswer";
+import {
+  answerBuyingQuestion,
+  looksLikeQuestion,
+} from "@/lib/server/ai/adviceAnswer";
 import {
   buildBudgetAskGate,
   composeBudgetAskReply,
@@ -2843,8 +2851,13 @@ async function handleSearch(req: Request) {
       // flags a named comparison as advice, and that must stay a comparison.
       // Closes as an open offer the next turn's "yes" resolves through
       // pendingComparisonPick, exactly like a comparison's own pick.
+      //
+      // looksLikeQuestion (2026-09-24): explain ONLY when the buyer actually
+      // asked. A request that merely states its use ("a laptop for
+      // programming") searches straight away instead — see that function.
       if (
         asksForAdvice &&
+        looksLikeQuestion(message ?? "") &&
         !isCompareTurn &&
         !imageUrl &&
         !activeTool &&
@@ -6347,8 +6360,13 @@ async function handleSearch(req: Request) {
           // asked. The buyer-facing dead-end line already builds its own
           // term with buildProductTerm the same way — this was the one
           // place still working off a bare product name instead.
+          //
+          // buildSearchQuery, not buildProductTerm (2026-09-25): fetch
+          // broadly, then rank. Only a couple of TRIMMED attributes ride on
+          // the search; the full list goes to the ranking step instead via
+          // rankingBrief. See buildSearchQuery for the live case.
           const externalQuery = productInput?.product
-            ? buildProductTerm(
+            ? buildSearchQuery(
                 productInput.product,
                 usableAttributes(productInput.attributes),
               )
@@ -6847,10 +6865,16 @@ async function handleSearch(req: Request) {
         ) {
           push(comparingOptionsPhrase(products.length));
           const productInput = productCall?.input as
-            | { product?: string }
+            | { product?: string; attributes?: string[] }
             | undefined;
-          const query =
-            message || productInput?.product || "the item in the photo";
+          // rankingBrief (2026-09-25): the attributes the search term left
+          // out, plus the message — "yes please help me find" alone gave the
+          // ranking step nothing to judge "best for this buyer" against.
+          const query = rankingBrief(
+            message,
+            productInput?.product,
+            usableAttributes(productInput?.attributes),
+          );
           // isCompareTurn (explicit Compare tool, aligned, or auto-detected
           // — see comparisonRule.ts) gets the full "Universal Comparison
           // Template" (comparisonTemplate.ts); every other multi-result turn
@@ -6906,10 +6930,16 @@ async function handleSearch(req: Request) {
           // vendor's own picks.
           push(comparingOptionsPhrase(externalOffers.length));
           const productInput = productCall?.input as
-            | { product?: string }
+            | { product?: string; attributes?: string[] }
             | undefined;
-          const query =
-            message || productInput?.product || "the item in the photo";
+          // rankingBrief (2026-09-25): the attributes the search term left
+          // out, plus the message — "yes please help me find" alone gave the
+          // ranking step nothing to judge "best for this buyer" against.
+          const query = rankingBrief(
+            message,
+            productInput?.product,
+            usableAttributes(productInput?.attributes),
+          );
           recommendation = isCompareTurn
             ? await buildExternalComparisonTemplate({
                 query,

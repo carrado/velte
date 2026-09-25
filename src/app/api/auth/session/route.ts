@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { backendData } from "@/lib/server/backend";
+import { BackendError, backendData } from "@/lib/server/backend";
 import { AUTH_COOKIE } from "@/lib/server/session";
 import { BUYER_AUTH_COOKIE } from "@/lib/server/buyerSession";
 import type { User } from "@/types/user";
@@ -56,11 +56,25 @@ export async function GET() {
         ? { ...data.buyer, id: data.buyer.id ?? data.buyer._id }
         : null,
     });
-  } catch {
-    // Best-effort, same as the silent identity syncs this replaces
-    // (getMeSilent/useBuyerSession's own queryFn) — a failed background
-    // identity check must never surface as an error to a buyer just
-    // browsing /chat; it just leaves both stores empty, same as a guest.
-    return NextResponse.json({ vendor: null, buyer: null });
+  } catch (err) {
+    // A real "you are not signed in" from the backend (an expired or
+    // revoked token) IS an answer — signed out, nothing to retry.
+    if (
+      err instanceof BackendError &&
+      (err.status === 401 || err.status === 403)
+    ) {
+      return NextResponse.json({ vendor: null, buyer: null });
+    }
+    // Anything else: a 503, NOT `{ vendor: null, buyer: null }` (2026-09-25). Found live:
+    // after a dropped connection (or the backend waking from a cold start),
+    // this answered "nobody is signed in" for someone whose cookies were
+    // perfectly valid, and /chat showed them as logged out until a manual
+    // refresh. "Couldn't check" and "checked: signed out" are different
+    // answers — IdentitySessionSync retries the first and trusts the second.
+    // Still never shown to the buyer as an error; callers treat it silently.
+    return NextResponse.json(
+      { error: "Couldn't check the session right now." },
+      { status: 503 },
+    );
   }
 }
