@@ -31,13 +31,9 @@ import { queryKeys } from "@/lib/query-keys";
 import { fetchVendorBuyerRequests } from "@/services/vendorBuyerRequests";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { cn, formatNaira, timeAgo } from "@/lib/utils";
-import {
-  msLeft,
-  timeLeft,
-  URGENT_MS,
-  windowElapsed,
-} from "@/lib/requestWindow";
+import { msLeft, URGENT_MS, windowElapsed } from "@/lib/requestWindow";
 import { useNow } from "@/hooks/useNow";
+import { Countdown } from "./Countdown";
 import { leadCost, walletApi } from "@/services/wallet";
 import type { IconComponent } from "@/types/common";
 import {
@@ -132,23 +128,26 @@ function StatTile({
   tone?: "default" | "strong" | "urgent";
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-surface px-4 py-3.5">
+    // Mobile: icon + figure share the top row and the label gets the full
+    // tile width underneath, so it wraps instead of truncating to "Closing…".
+    // From sm up there's room for the label beside the icon again.
+    <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2.5 rounded-2xl border border-gray-100 bg-surface px-4 py-3.5 sm:gap-y-1">
       <span
         className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:row-span-2 sm:h-10 sm:w-10",
           tone === "strong" && "bg-orange-500 text-white",
           tone === "urgent" && "bg-red-50 text-red-600",
           tone === "default" && "bg-orange-50 text-orange-600",
         )}
       >
-        <Icon size={18} />
+        <Icon size={16} />
       </span>
-      <div className="min-w-0">
-        <p className="text-xl font-bold leading-none text-ink">{value}</p>
-        <p className="mt-1 truncate text-[12px] font-medium text-gray-400">
-          {label}
-        </p>
-      </div>
+      <p className="min-w-0 text-lg font-bold leading-none text-ink sm:self-end sm:text-xl">
+        {value}
+      </p>
+      <p className="col-span-2 min-w-0 text-[12px] font-medium leading-snug text-gray-400 sm:col-span-1 sm:self-start sm:truncate">
+        {label}
+      </p>
     </div>
   );
 }
@@ -213,7 +212,7 @@ function RequestCard({
               </p>
               <OutcomePill outcome={outcome} />
             </div>
-            <p className="mt-1 line-clamp-3 text-[15px] font-medium leading-snug text-ink">
+            <p className="mt-1 line-clamp-3 text-[14px] font-medium leading-snug text-ink sm:text-[15px]">
               {request.description}
             </p>
           </div>
@@ -247,7 +246,7 @@ function RequestCard({
               )}
             >
               {urgent ? <FlameIcon size={11} /> : <ClockIcon size={11} />}
-              {timeLeft(request.expiresAt, now)}
+              <Countdown expiresAt={request.expiresAt} suffix=" left" />
             </span>
           )}
           {outcome === "won" && request.myContactedAt && (
@@ -514,14 +513,23 @@ export function VendorRequestsPage() {
 
       {/* ── Tabs ───────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3">
-        <div className="inline-flex rounded-xl border border-gray-100 bg-surface p-1">
+        {/* Scrolls sideways on narrow phones instead of squashing the tabs;
+            swipeable by touch, scrollbar hidden so it reads as a strip. */}
+        <div className="flex min-w-0 overflow-x-auto overscroll-x-contain rounded-xl border border-gray-100 bg-surface p-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={(e) => {
+                setTab(t.id);
+                e.currentTarget.scrollIntoView({
+                  behavior: "smooth",
+                  block: "nearest",
+                  inline: "nearest",
+                });
+              }}
               className={cn(
-                "inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors",
+                "inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors",
                 tab === t.id
                   ? "bg-orange-500 text-white"
                   : "text-gray-500 hover:bg-gray-50",

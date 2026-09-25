@@ -28,6 +28,7 @@ import { ClipboardListIllustration } from "@/components/icons";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import { Avatar } from "@/components/Avatar";
+import { BuyerPushPrompt } from "@/components/BuyerPushPrompt";
 import { fetchMyRequests } from "@/services/buyerRequests";
 import { useBuyerStore } from "@/store/buyerStore";
 import { cn, formatNaira, timeAgo } from "@/lib/utils";
@@ -758,10 +759,14 @@ function StatTile({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-surface px-3.5 py-3 sm:px-4">
+    // Mobile: icon + figure share the top row and the label gets the full
+    // tile width underneath, so it wraps instead of truncating. From sm up
+    // the label sits beside the icon again — same recipe as the vendor
+    // requests page's tiles.
+    <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 rounded-2xl border border-gray-100 bg-surface px-3.5 py-3 sm:gap-y-1 sm:px-4">
       <span
         className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:row-span-2",
           highlight
             ? "bg-orange-500 text-white"
             : "bg-orange-50 text-orange-600",
@@ -769,12 +774,12 @@ function StatTile({
       >
         <Icon size={17} />
       </span>
-      <div className="min-w-0">
-        <p className="text-lg font-bold leading-none text-ink">{value}</p>
-        <p className="mt-1 truncate text-[11px] font-medium text-gray-400">
-          {label}
-        </p>
-      </div>
+      <p className="min-w-0 text-lg font-bold leading-none text-ink sm:self-end">
+        {value}
+      </p>
+      <p className="col-span-2 min-w-0 text-[11px] font-medium leading-snug text-gray-400 sm:col-span-1 sm:self-start sm:truncate">
+        {label}
+      </p>
     </div>
   );
 }
@@ -888,17 +893,11 @@ export function RequestsPage() {
               What Velte asked businesses on your behalf, and who came back.
             </p>
           </div>
-          {requests.length > 0 && (
-            <button
-              type="button"
-              onClick={() => navigate("/chat")}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
-            >
-              <SearchIcon size={14} />
-              New search
-            </button>
-          )}
         </header>
+
+        {/* Only while something is still open — there is nothing to be
+            notified about on a page of closed requests. */}
+        <BuyerPushPrompt show={stats.open > 0} className="mb-5" />
 
         {isLoading && (
           <div className="space-y-3">

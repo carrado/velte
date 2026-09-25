@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useUserStore } from "@/store/userStore";
+import { useBuyerStore } from "@/store/buyerStore";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 
@@ -85,7 +86,13 @@ function computeRemainingDelayMs(baseDelayMs: number): number {
 }
 
 export function usePushNotifications() {
-  const user = useUserStore((s) => s.user);
+  // Either kind of account (2026-09-24): a buyer on /chat subscribes to hear
+  // the moment a vendor answers their request. The backend decides whose
+  // device it is from the session cookie (see lib/server/pushSession.ts);
+  // this id is only the "is anyone signed in" gate and a wire-shape leftover.
+  const vendorId = useUserStore((s) => s.user?.id);
+  const buyerId = useBuyerStore((s) => s.buyer?.id);
+  const ownerId = vendorId ?? buyerId ?? null;
   const isInstalled = useIsInstalled();
   const isStandalone = useIsStandalone();
   const [permission, setPermission] =
@@ -140,7 +147,7 @@ export function usePushNotifications() {
   // Idempotent: the backend upserts by endpoint, and a dead endpoint just 410s
   // again and gets pruned.
   const resyncSubscription = useCallback(async () => {
-    if (!isSupported || !user?.id) return;
+    if (!isSupported || !ownerId) return;
     if (Notification.permission !== "granted") return;
     const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     if (!vapidKey) return;
@@ -174,13 +181,13 @@ export function usePushNotifications() {
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, subscription: sub.toJSON() }),
+        body: JSON.stringify({ userId: ownerId, subscription: sub.toJSON() }),
       });
       if (res.ok) setIsSubscribed(true);
     } catch {
       /* best-effort resync — leave UI state as-is on failure */
     }
-  }, [isSupported, user?.id]);
+  }, [isSupported, ownerId]);
 
   // Run the repair on mount (cold launch) AND every time the app returns to the
   // foreground. A resumed-from-background PWA doesn't reload, so the mount run
@@ -211,7 +218,7 @@ export function usePushNotifications() {
   }, [armDelayTimer]);
 
   const subscribe = useCallback(async () => {
-    if (!isSupported || !user?.id) return;
+    if (!isSupported || !ownerId) return;
     setIsLoading(true);
     try {
       const reg = await navigator.serviceWorker.ready;
@@ -242,7 +249,7 @@ export function usePushNotifications() {
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, subscription: sub.toJSON() }),
+        body: JSON.stringify({ userId: ownerId, subscription: sub.toJSON() }),
       });
       if (!res.ok) {
         // The browser subscription exists but the backend didn't persist it —
@@ -256,10 +263,10 @@ export function usePushNotifications() {
     } finally {
       setIsLoading(false);
     }
-  }, [isSupported, user?.id]);
+  }, [isSupported, ownerId]);
 
   const unsubscribe = useCallback(async () => {
-    if (!isSupported || !user?.id) return;
+    if (!isSupported || !ownerId) return;
     setIsLoading(true);
     try {
       const reg = await navigator.serviceWorker.ready;
@@ -269,7 +276,7 @@ export function usePushNotifications() {
       await fetch("/api/push/unsubscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ userId: ownerId }),
       });
 
       setIsSubscribed(false);
@@ -278,7 +285,7 @@ export function usePushNotifications() {
     } finally {
       setIsLoading(false);
     }
-  }, [isSupported, user?.id]);
+  }, [isSupported, ownerId]);
 
   // X and "Not now"/"Skip" both call this (see PushNotificationManager) —
   // deliberately the same action, both starting the 36-hour cooldown.
@@ -304,7 +311,7 @@ export function usePushNotifications() {
     permission === "default" &&
     !isSubscribed &&
     !isInstalled &&
-    !!user;
+    !!ownerId;
 
   const showAlertsBanner =
     isSupported &&
@@ -312,7 +319,7 @@ export function usePushNotifications() {
     permission === "default" &&
     !isSubscribed &&
     isStandalone &&
-    !!user;
+    !!ownerId;
 
   return {
     isSupported,

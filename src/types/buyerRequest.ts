@@ -159,3 +159,17 @@ export type VendorRequestOutcome =
 /** The vendor list page's tabs (/{id}/buyer-requests). "past" holds lost,
  *  closed and declined. */
 export type VendorRequestTab = "new" | "awaiting" | "won" | "past";
+
+export interface CountdownProps {
+  expiresAt: string;
+  /** Appended after the ticking clock, e.g. " left". Omitted once closed. */
+  suffix?: string;
+  className?: string;
+}
+
+export interface BuyerPushPromptProps {
+  /** Only show while the buyer actually has something to hear about — an
+   *  open request. Defaults to true for the "Request sent" card. */
+  show?: boolean;
+  className?: string;
+}

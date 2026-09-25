@@ -86,7 +86,7 @@ export function classifyScopeTool() {
       asksForAdvice: z
         .boolean()
         .describe(
-          "true when the buyer asks a QUESTION wanting information or advice to make a buying decision — which area or kind is cheaper or better value, what to look out for, is it worth it, how to choose, what affects the price — whether or not they also say they want to buy. 'I want land in Enugu, which area is cheaper?' is true. false for a plain find/buy request with no question to answer ('where can I get a phone', 'I need a plumber in Lekki'), false for weighing NAMED options against each other (isComparison covers that), and false for a reply answering Velte's own previous question.",
+          "true when the buyer asks a QUESTION wanting information or advice to make a buying decision — which area or kind is cheaper or better value, what to look out for, is it worth it, how to choose, what affects the price — whether or not they also say they want to buy. 'I want land in Enugu, which area is cheaper?' is true. false for a plain find/buy request with no question to answer ('where can I get a phone', 'I need a plumber in Lekki'), and false when the buyer only states what it's FOR ('I need a good laptop for my programming work', 'a generator for my shop') — a stated use is a requirement to search with, not a question, false for weighing NAMED options against each other (isComparison covers that), and false for a reply answering Velte's own previous question.",
         ),
       namesPlace: z
         .boolean()
