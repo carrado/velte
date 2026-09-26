@@ -236,11 +236,14 @@ export function VendorRequestDetail() {
   const pending = decisionMutation.isPending;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 px-4 pb-24 md:px-0">
+    <div className="mx-auto max-w-6xl space-y-4 pb-24 md:px-0">
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_380px]">
         {/* ── The request ─────────────────────────────────────────── */}
         <div className="space-y-4">
-          <article className="overflow-hidden rounded-3xl border border-gray-100 bg-surface">
+          {/* Square and full-bleed (2026-09-26) — matches the list page's
+              blocks. The rounded corners went; the photo and the body inside
+              keep their own radii, which is what actually reads as shape. */}
+          <article className="overflow-hidden md:rounded-3xl border-y border-gray-100 bg-surface">
             {request.imageUrl ? (
               <a
                 href={request.imageUrl}
@@ -329,7 +332,7 @@ export function VendorRequestDetail() {
             </div>
           </article>
 
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 px-3 md:px-0 xl:grid-cols-4">
             <Fact
               icon={WalletIcon}
               label="Budget"
@@ -357,7 +360,7 @@ export function VendorRequestDetail() {
           </div>
 
           {isOpen && (
-            <div className="rounded-2xl border border-gray-100 bg-surface px-4 py-3">
+            <div className="border-y border-gray-100 bg-surface px-4 py-3">
               <div className="flex items-center justify-between text-[12px] text-gray-400">
                 <span>Request window</span>
                 <span
@@ -382,7 +385,7 @@ export function VendorRequestDetail() {
           )}
 
           {request.budgetKobo == null && decision == null && isOpen && (
-            <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-3 text-[13px] text-gray-500">
+            <p className="border-y border-dashed border-gray-200 px-4 py-3 text-[13px] text-gray-500">
               No budget given — quote your honest price. The buyer compares
               offers side by side.
             </p>
@@ -394,7 +397,7 @@ export function VendorRequestDetail() {
           {decision === "accepted" ? (
             <div
               className={cn(
-                "overflow-hidden rounded-3xl border bg-surface",
+                "overflow-hidden sm:rounded-3xl border bg-surface",
                 outcome === "awaiting" || outcome === "won"
                   ? "border-orange-200"
                   : "border-gray-100",
@@ -547,7 +550,7 @@ export function VendorRequestDetail() {
                 e.preventDefault();
                 if (canAfford && !pending) decisionMutation.mutate("accepted");
               }}
-              className="overflow-hidden rounded-3xl border border-orange-200 bg-surface shadow-sm"
+              className="overflow-hidden border-y border-orange-200 bg-surface shadow-sm"
             >
               <div className="border-b border-orange-100 bg-orange-50 px-5 py-4">
                 <p className="flex items-center gap-2 text-base font-bold text-ink">

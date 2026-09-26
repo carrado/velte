@@ -171,20 +171,24 @@ function RequestCard({
   const elapsed = windowElapsed(request.createdAt, request.expiresAt, now);
   const matched = request.matchedVendorIds.length;
   const others = request.acceptedCount ?? 0;
+  const active = outcome === "new" || outcome === "won";
 
   return (
     <motion.li
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, delay: Math.min(index, 8) * 0.04 }}
+      className="border-b border-gray-100"
     >
+      {/* Square, full-width blocks (2026-09-26) — the list reads as one
+          continuous column of requests rather than a grid of cards. The
+          orange rail is what used to be the card's orange border: it keeps
+          "this one is waiting on you / you won this" without a radius. */}
       <DashboardLink
         href={href}
         className={cn(
-          "group flex h-full flex-col rounded-2xl border bg-surface p-4 transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-5",
-          outcome === "new" || outcome === "won"
-            ? "border-orange-200 hover:border-orange-300"
-            : "border-gray-100 hover:border-gray-200",
+          "group flex h-full flex-col bg-surface px-4 py-4 transition-colors sm:px-5 sm:py-5",
+          active ? "hover:bg-orange-50/40" : "hover:bg-gray-50",
         )}
       >
         <div className="flex items-start gap-3">
@@ -315,7 +319,7 @@ function EmptyState({
       past: "Requests you answered show up here once they close.",
     };
     return (
-      <div className="rounded-2xl border border-dashed border-gray-200 bg-surface p-8 text-center">
+      <div className="border-b border-dashed border-gray-200 bg-surface p-8 text-center">
         <p className="mx-auto max-w-sm text-sm font-medium text-gray-500">
           {message[tab]}
         </p>
@@ -323,7 +327,7 @@ function EmptyState({
     );
   }
   return (
-    <div className="rounded-2xl border border-dashed border-gray-200 bg-surface p-8 text-center sm:p-10">
+    <div className="border-b border-dashed border-gray-200 bg-surface p-8 text-center sm:p-10">
       <ClipboardListIllustration size={64} className="mx-auto" />
       <p className="mt-4 text-base font-semibold text-ink">
         No new requests right now
@@ -409,9 +413,9 @@ export function VendorRequestsPage() {
   const visible = byTab[tab];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 md:px-0">
+    <div className="mx-auto max-w-6xl space-y-5 md:px-0">
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <section className="overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50 via-surface to-surface p-5 sm:p-6">
+      <section className="overflow-hidden md:rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50 via-surface to-surface p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-xl">
             <p className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold text-white">
@@ -473,7 +477,7 @@ export function VendorRequestsPage() {
           </DashboardLink>
         </div>
       ) : (
-        <div className="grid gap-2 rounded-2xl border border-gray-100 bg-surface p-3 sm:grid-cols-3 sm:p-4">
+        <div className="grid gap-2 sm:rounded-2xl border border-gray-100 bg-surface p-3 sm:grid-cols-3 sm:p-4">
           {[
             {
               n: 1,
@@ -515,7 +519,7 @@ export function VendorRequestsPage() {
       <div className="flex items-center justify-between gap-3">
         {/* Scrolls sideways on narrow phones instead of squashing the tabs;
             swipeable by touch, scrollbar hidden so it reads as a strip. */}
-        <div className="flex min-w-0 overflow-x-auto overscroll-x-contain rounded-xl border border-gray-100 bg-surface p-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-0 overflow-x-auto overscroll-x-contain sm:rounded-xl border border-gray-100 bg-surface p-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -557,16 +561,16 @@ export function VendorRequestsPage() {
 
       {/* ── List ───────────────────────────────────────────────────── */}
       {isLoading ? (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="border-t border-gray-100">
           {[0, 1, 2, 3].map((i) => (
             <li
               key={i}
-              className="h-56 animate-pulse rounded-2xl border border-gray-100 bg-gray-50"
+              className="h-56 animate-pulse border-b border-gray-100 bg-gray-50"
             />
           ))}
         </ul>
       ) : isError ? (
-        <div className="rounded-2xl border border-gray-100 bg-surface p-6 text-center">
+        <div className="border-b border-gray-100 bg-surface p-6 text-center">
           <p className="text-sm text-gray-500">
             Couldn&apos;t load your requests just now.
           </p>
@@ -581,7 +585,7 @@ export function VendorRequestsPage() {
       ) : visible.length === 0 ? (
         <EmptyState tab={tab} vendorId={params.id} />
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="border-t border-gray-100">
           {visible.map((request, i) => (
             <RequestCard
               key={request.id}
