@@ -33,19 +33,50 @@ function handleUnauthenticated() {
   }
 }
 
+// A deadline on every request made through this client (2026-09-26).
+//
+// fetch() has no timeout of its own, so a request that hung — half-open
+// connection, mobile network that dropped without a FIN — never resolved AND
+// never rejected. Nothing in this file turns that into an ApiError, and the
+// dashboard's init gate (src/app/[id]/layout.tsx) waits on exactly this call:
+// meStatus stayed "loading", which is a full-screen `inset-0 z-[9999]`
+// overlay, and the only escape was a manual refresh. The ceiling turns a hang
+// into ApiError(0) — the transport-failure code callers already branch on —
+// so the app falls through to its own retry path.
+//
+// NOT applied to the search stream, and deliberately not special-cased here
+// either: src/lib/searchStream.ts issues its own raw fetch() with its own
+// AbortSignal (the guest network gate) and never comes through this client,
+// so a turn that streams for a minute is untouched by construction.
+//
+// The escape hatch for anything else long-lived is the rule in request() — a
+// caller that passes its own `signal` owns its own cancellation and gets no
+// deadline imposed on it, so an aborting/streaming call opts out by
+// construction rather than by being name-matched here. Note it is NOT
+// reachable from the `api` object below: those wrappers take (path, body) and
+// never forward a signal, so widening this to a genuinely long-lived call means
+// adding an options parameter there first, not just passing one here.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 async function request<T = unknown>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
   let res: Response;
   try {
+    const { signal, ...rest } = options;
     res = await fetch(path, {
       credentials: "same-origin",
       headers: { "Content-Type": "application/json", ...options.headers },
-      ...options,
+      ...rest,
+      // Set last, and either/or — never both, so a caller's signal can't be
+      // silently overridden and ours can't be silently dropped.
+      signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
-    // fetch() only rejects on a network-level failure (offline/DNS/unreachable).
+    // fetch() rejects on a network-level failure (offline/DNS/unreachable) or
+    // on an abort — which now includes our own timeout above. Both are the
+    // same class of failure to every caller: the request never completed.
     throw new ApiError(
       0,
       "Couldn't reach the server. Please check your internet connection and try again.",

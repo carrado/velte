@@ -89,23 +89,37 @@ export default function DashboardRootLayout({
   // Fetch current user on mount so the store is populated for the shell.
   // Always refetch (even if login already seeded a user) since that seed can
   // be stale (e.g. sectors edited in another tab) — getMe() is the source of
-  // truth. Only fall back to the error overlay if we had nothing cached.
+  // truth.
   useEffect(() => {
-    const hadUser = !!useUserStore.getState().user;
     usersApi
       .getMe()
       .then(() => setMeStatus("ready"))
       .catch((err) => {
-        if (!hadUser) {
-          // status 0 = fetch() itself rejected (offline/DNS/unreachable);
-          // any other failure means the request reached a server that
-          // responded with an error (5xx, bad gateway, etc).
-          setMeStatus(
-            err instanceof ApiError && err.status === 0
-              ? "error-network"
-              : "error-server",
-          );
+        // 2026-09-26: this used to read `if (!hadUser)` and do NOTHING at all
+        // when the store already held a user — on the theory that a good state
+        // was there to preserve. There wasn't. meStatus is only "ready" when
+        // the store was ALREADY populated at mount, so the one case that fell
+        // through here (store filled in between mount and this effect, then a
+        // 5xx) pinned it on "loading" — a full-screen `inset-0 z-[9999]`
+        // overlay, on live, with no way out but a manual refresh.
+        //
+        // Read the store NOW rather than at effect time: that is what closes
+        // the race. Whatever filled it in — a login redirect, a session sync
+        // landing mid-mount — a store with a user in it is a usable shell, so
+        // "ready" is the true answer and the overlay should come down.
+        if (useUserStore.getState().user) {
+          setMeStatus("ready");
+          return;
         }
+        // status 0 = fetch() itself rejected (offline/DNS/unreachable), and
+        // since api-client.ts gained a request timeout, our own deadline too;
+        // any other failure means the request reached a server that responded
+        // with an error (5xx, bad gateway, etc).
+        setMeStatus(
+          err instanceof ApiError && err.status === 0
+            ? "error-network"
+            : "error-server",
+        );
       });
   }, []);
 
