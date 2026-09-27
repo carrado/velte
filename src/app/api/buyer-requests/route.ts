@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { fail, jsonError } from "@/lib/server/guards";
-import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getActorAuth } from "@/lib/server/buyerGuards";
 import { backendData } from "@/lib/server/backend";
 import type { BuyerRequest } from "@/types/buyerRequest";
 
@@ -15,11 +15,15 @@ import type { BuyerRequest } from "@/types/buyerRequest";
 // both ends: the backend guards this route with verifyBuyerAuth, and the OTP
 // endpoints that minted it are behind a session too.
 //
+// A VENDOR's session counts as a real account too since 2026-09-27 — see
+// getActorAuth. The backend resolves which one owns the request; this side
+// only decides whether anyone is signed in at all.
+//
 // Refused HERE as well as upstream, rather than relying on the backend's
 // 401: this saves a round trip on a state the browser already knows it is
 // in, and the message is the one the UI acts on.
 export async function POST(req: Request) {
-  const auth = await getOptionalBuyerAuth();
+  const auth = await getActorAuth();
   if (!auth) {
     return jsonError(401, "Sign in to send this request.");
   }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { fail, jsonError } from "@/lib/server/guards";
-import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getActorAuth } from "@/lib/server/buyerGuards";
 import { backendFetch } from "@/lib/server/backend";
 
 // POST /api/buyer-auth/request-otp — signed in only (2026-08-29).
@@ -12,10 +12,14 @@ import { backendFetch } from "@/lib/server/backend";
 // real account now, so there is nobody left to prove a number for — and with
 // it goes the last way to spend an SMS without an account.
 //
+// Either session since 2026-09-27: the same OTP serves a VENDOR proving an
+// alternate number for a Buyer Request ("use your signup number, or
+// another"), which used to 401 here on the buyer cookie alone.
+//
 // Refused here as well as upstream so the browser doesn't pay a round trip
 // for a state it already knows it is in.
 export async function POST(req: Request) {
-  const auth = await getOptionalBuyerAuth();
+  const auth = await getActorAuth();
   if (!auth) {
     return jsonError(401, "Sign in before verifying a number.");
   }

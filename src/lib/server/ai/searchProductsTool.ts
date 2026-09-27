@@ -199,6 +199,7 @@ export async function searchProductsCore(
     imageUrl,
     weakResultsOut,
     locationLabel,
+    excludeVendorId,
     allowNearbyBusinesses,
   }: {
     buyerLocation?: BuyerLocation;
@@ -219,6 +220,12 @@ export async function searchProductsCore(
     // falls back to the text heuristic; route.ts passes the scope check's
     // own read of buyer intent instead, which is a far better signal than
     // keyword-matching the query.
+    // See this file's sibling searchStoresCore — the acting vendor's own
+    // vendorId, so a vendor browsing /chat never sees their own storefront
+    // offered back to them as a match (or as a reach-out target). Null for
+    // an anonymous or buyer-side search, which is the overwhelming majority
+    // of calls, and the retrieval service leaves every row untouched then.
+    excludeVendorId?: string | null;
     allowNearbyBusinesses?: boolean;
   } = {},
 ): Promise<
@@ -315,6 +322,9 @@ export async function searchProductsCore(
           // the Places call entirely when false — so a product dead end
           // costs nothing at Google, not just "fetched and thrown away".
           includeNearbyBusinesses,
+          // Dropped by the retrieval service's own filter (see its comment):
+          // a vendor's own storefront is never a result of their own search.
+          excludeVendorId,
         },
       }));
   } catch (err) {
@@ -526,6 +536,9 @@ export function searchProductsTool(
   // route.ts — see allowsNearbyBusinesses. Omitted means "decide from the
   // query text".
   allowNearbyBusinesses?: boolean,
+  // The acting vendor's own vendorId when a vendor is browsing /chat — see
+  // this core's own options comment. Never a result of their own search.
+  excludeVendorId?: string | null,
 ) {
   return tool({
     description:
@@ -553,6 +566,7 @@ export function searchProductsTool(
           imageUrl,
           weakResultsOut,
           locationLabel,
+          excludeVendorId,
           allowNearbyBusinesses,
         },
       ),

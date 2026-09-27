@@ -8,7 +8,14 @@
    buyer login page to send them to anyway — a buyer isn't an account, just
    a one-time phone verification (see Buyer.model.js's own comment). This
    client just throws ApiError and leaves handling entirely to the caller —
-   in practice that just means re-showing the phone/OTP capture inline. */
+   in practice that just means re-showing the phone/OTP capture inline.
+
+   Not buyer-only in practice since 2026-09-27: a VENDOR proving an
+   alternate number for a Buyer Request ("use your signup number, or
+   another") goes through the same /api/buyer-auth OTP endpoints, and those
+   routes now accept either session. The same two properties are exactly why
+   that is safe here — it never clears the vendor session and never
+   redirects — so this client keeps being the right one to call for both. */
 
 import { ApiError } from "@/lib/api-client";
 

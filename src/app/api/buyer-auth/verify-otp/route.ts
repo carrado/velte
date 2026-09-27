@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { fail, jsonError } from "@/lib/server/guards";
 import { backendData } from "@/lib/server/backend";
-import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getActorAuth } from "@/lib/server/buyerGuards";
 import type { Buyer } from "@/types/buyer";
 
 // POST /api/buyer-auth/verify-otp — signed in only (2026-08-29).
@@ -18,8 +18,12 @@ import type { Buyer } from "@/types/buyer";
 // the backend too. One outcome remains: { buyer }, with the number attached
 // to their account, so the next reach-out offers it back instead of asking
 // again.
+//
+// Either session since 2026-09-27 — see request-otp's own note. A vendor's
+// proven alternate number answers with `{ verified, phone }` and no buyer,
+// which is why `buyer` is read defensively below.
 export async function POST(req: Request) {
-  const auth = await getOptionalBuyerAuth();
+  const auth = await getActorAuth();
   if (!auth) {
     return jsonError(401, "Sign in before verifying a number.");
   }

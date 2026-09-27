@@ -410,11 +410,7 @@ export function ConversationSidebar() {
 
           {/* Section one — the app's surfaces that aren't a conversation.
               Signed-in only (either identity), per the note at the top of
-              this file. Requests stays buyer-only inside it — Buyer
-              Requests are keyed to a Buyer document with a phone-verified
-              number, which a vendor-only session has no claim on — but
-              Notifications works for either identity, so it isn't gated a
-              second time here. */}
+              this file. */}
           {identity && (
             <>
               <nav className="px-3 pb-3 shrink-0 space-y-0.5">
@@ -433,17 +429,24 @@ export function ConversationSidebar() {
                   active={pathname === "/chat/shopping-plan"}
                   onNavigate={closeOnMobile}
                 />
-                {buyer && (
-                  <MenuLink
-                    href="/chat/requests"
-                    icon={<ClipboardListIcon size={19} className="shrink-0" />}
-                    label="Your requests"
-                    active={pathname === "/chat/requests"}
-                    onNavigate={closeOnMobile}
-                    badge={openOfferCount}
-                    badgeNoun={openOfferCount === 1 ? "offer" : "offers"}
-                  />
-                )}
+                {/* Constantly visible, whichever identity is signed in
+                    (2026-09-27, explicit product direction). Was gated on
+                    `buyer`, on the reasoning that a Buyer Request is keyed to
+                    a Buyer document — true until a vendor could post one too,
+                    which is what made gating it on the buyer session wrong: a
+                    vendor who posts a request has to be able to open the page
+                    that lists it. This page is "requests I POSTED"; the
+                    requests referred TO a vendor stay on the dashboard's own
+                    buyer-requests page, a different surface entirely. */}
+                <MenuLink
+                  href="/chat/requests"
+                  icon={<ClipboardListIcon size={19} className="shrink-0" />}
+                  label="Your requests"
+                  active={pathname === "/chat/requests"}
+                  onNavigate={closeOnMobile}
+                  badge={openOfferCount}
+                  badgeNoun={openOfferCount === 1 ? "offer" : "offers"}
+                />
                 {/* The credit meter briefly sat here as a third row
                     (2026-09-01), then moved to the header, then to the
                     composer — see CreditsSidebarMeter's own header comment
