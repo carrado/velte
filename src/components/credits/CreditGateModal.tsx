@@ -24,7 +24,7 @@ import { useCreditsModal } from "@/components/credits/CreditsModal";
 // signed-in account has no sign-in step left to take:
 //  - GUEST: the fix is signing in. Not because signing in grants anything any
 //    more (it doesn't — see credits.ts's own note on dropping SIGNUP_CREDITS)
-//    but because a guest cannot buy credits at all; the pack grid is
+//    but because a guest cannot buy credits at all; topping up is
 //    signed-in only.
 //  - SIGNED IN: the fix is a top-up, opened straight from here rather than a
 //    second tap — closing this modal only to make them find the credits
@@ -79,8 +79,8 @@ export function CreditGateModal({
                   <GoogleSignInButton onSignedIn={onClose} />
                 </div>
                 <p className="mt-3 text-xs text-gray-500">
-                  Signing in lets you top up — the pack grid isn&apos;t
-                  available to a guest.
+                  Signing in lets you top up — topping up isn&apos;t available
+                  to a guest.
                 </p>
               </>
             ) : (

@@ -12,9 +12,9 @@ import type {
 // model names the catch in one sentence (already server-verified as real),
 // and the buyer can then expand a plain side-by-side that has no room to
 // fabricate anything. Nothing here can say more than the data does.
-// Exported (2026-09-05) so ComparisonTemplate.tsx's own "Worth knowing"
-// section can reuse the exact same factual-diff computation rather than a
-// second copy that could quietly drift from this one.
+// Exported (2026-09-05) so other consumers of a factual side-by-side can
+// reuse the exact same diff computation rather than a second copy that could
+// quietly drift from this one.
 export function buildDifferenceRows(
   tradeoff: VendorMatch,
   topPick: VendorMatch,

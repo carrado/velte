@@ -1024,21 +1024,6 @@ export function noVendorButOnlineOffersPhrase(
   ];
 }
 
-// The dead end where the connectors ran but came back with NOTHING real —
-// only a "search this site yourself" link (2026-09-24, found live on
-// velte-dev: Jiji's page read failed in production, and the reply above the
-// lone link-card still said "these online listings don't show a price",
-// describing listings that were never on screen). Honest that no listing
-// was found; the search link renders as a plain line under this, not a card.
-export function noVendorOnlySearchLinksPhrase(what: string): string[] {
-  const w = snippetTerms(what, 60);
-  return [
-    `No vendor on Velte has "${w}" yet, and I couldn't pull up any listings online for it right now.`,
-    `Couldn't find "${w}" on Velte, and no online listings came back for it just now.`,
-    `Nothing on Velte for "${w}" yet, and I couldn't find a listing online either.`,
-  ];
-}
-
 // BuyerRequestOfferWidget's own "no vendor to notify" message (see that
 // file's comment) — a FINAL statement after actually trying, not an
 // in-progress status line like the pool above it, so it gets its own voice:

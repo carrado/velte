@@ -71,7 +71,6 @@ import {
   externalOffersWithLocalOfferPhrase,
   noVendorEvenBySectorPhrase,
   noVendorButOnlineOffersPhrase,
-  noVendorOnlySearchLinksPhrase,
   isAcknowledgementReply,
   isAskingForExplanation,
   isOfferDeclineReply,
@@ -6686,29 +6685,17 @@ async function handleSearch(req: Request) {
           }
         }
 
-        // A "search this site yourself" link (connectors/searchLinks.ts) is
-        // not a listing, so it doesn't count as one (2026-09-24, found live
-        // on velte-dev): when Jiji's page read failed, the lone search link
-        // was treated as an offer — rendered as an image-less result card,
-        // with a reply claiming "these online listings" sat underneath.
-        // Split out here so every check below (the reply, the comparison,
-        // the vendor-search offer) sees only real listings. The links still
-        // go to the client, appended to externalOffers at sendFinal, where
-        // SearchHome renders them as a plain line rather than a card.
-        // One per site: a comparison turn fetches once per option, so each
-        // site's link would otherwise appear once per option compared.
-        const externalSearchLinks = Array.from(
-          new Map(
-            externalOffers
-              .filter((o) => !o.isDirectLink)
-              .map((o) => [o.platform, o] as const),
-          ).values(),
-        );
-        externalOffers = externalOffers.filter((o) => o.isDirectLink);
-
-        // See deadEndTerm's own comment — the line that said "nothing
-        // close by either" was written before the connectors ran, and is
-        // now demonstrably wrong on screen.
+        // Every external offer is a real listing now: the "search this site
+        // yourself" links (connectors/searchLinks.ts, one pre-filled search
+        // per site) were removed end to end on 2026-09-28, at explicit
+        // request — the plain line SearchHome rendered them as is gone. The
+        // split that used to live here (non-listings set aside so the reply,
+        // comparison and vendor-search offer saw only real listings) went
+        // with them.
+        //
+        // See deadEndTerm's own comment — the line that said "nothing close
+        // by either" was written before the connectors ran, and is now
+        // demonstrably wrong on screen.
         if (externalOffers.length > 0 && deadEndTerm) {
           // Found live: a buyer with a ₦400k budget got two listings back
           // with no price shown on either, presented with the same
@@ -6736,15 +6723,6 @@ async function handleSearch(req: Request) {
               // turn that produced too few offers to compare.
               isCompareTurn && externalOffers.length >= 2,
             ),
-            [],
-          );
-        } else if (externalSearchLinks.length > 0 && deadEndTerm) {
-          // Connectors ran and found no real listing — only a search link.
-          // Said plainly; the vendor-search offer below still fires for
-          // this case (see vendorSearchOffered), so the turn ends on a real
-          // next step rather than a link dressed up as a result.
-          replyOverride = pickAvoiding(
-            noVendorOnlySearchLinksPhrase(deadEndLabel ?? deadEndTerm),
             [],
           );
         } else if (
@@ -7143,7 +7121,7 @@ async function handleSearch(req: Request) {
           stores.length === 0 &&
           products.length === 0 &&
           Boolean(vendorSearchTerm) &&
-          (externalOffers.length > 0 || externalSearchLinks.length > 0);
+          externalOffers.length > 0;
 
         await sendFinal({
           type: "final",
@@ -7197,9 +7175,7 @@ async function handleSearch(req: Request) {
           awaitingVendorSearchOffer: vendorSearchOffered,
           vendorSearchMatchQuery: vendorSearchOffered ? vendorSearchTerm : null,
           recommendation,
-          // Search links last — SearchHome splits them back out by
-          // isDirectLink and renders them as a line, not a card.
-          externalOffers: [...externalOffers, ...externalSearchLinks],
+          externalOffers,
           // Resolved either way by the time this turn reaches here: a
           // FRESH comparison never gets this far (its own short-circuit
           // above ends the turn), and the confirmation turn's own exchange

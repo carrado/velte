@@ -520,9 +520,10 @@ export interface ExternalOffer {
    *  an offer at all, rather than guessing which bucket it belongs in — so
    *  every offer that exists here has one.
    *
-   *  "konga" and "propertypro" (2026-09-24) only ever appear on a search
-   *  link (connectors/searchLinks.ts, `isDirectLink: false`) — never on a
-   *  matched listing, so they have no results bucket of their own. */
+   *  "konga" and "propertypro" (2026-09-24) had no matched-listing source
+   *  either — they only ever appeared on a "keep looking yourself" search
+   *  link, and that whole mechanism was removed 2026-09-28. The two members
+   *  survive only so a conversation stored before then still type-checks. */
   platform:
     | "jumia"
     | "shopify"
@@ -540,11 +541,10 @@ export interface ExternalOffer {
    *  merchant's own search page — no more "View on Slot" that actually
    *  lands on a results page for the item's name). Also true for a
    *  real Jiji listing match (2026-09-21, connectors/jiji.ts) — it links
-   *  straight to that ad's own page, same as any other direct link; FALSE
-   *  only for a "keep looking yourself" search link (connectors/
-   *  searchLinks.ts — Jumia, Konga, Jiji, PropertyPro, 2026-09-24), which is
-   *  never a result: route.ts doesn't count it as one, and SearchHome
-   *  renders it as a plain line, never a card. */
+   *  straight to that ad's own page, same as any other direct link. Every
+   *  connector sets this true today — the only FALSE producer was the
+   *  "keep looking yourself" search links, removed 2026-09-28 — so the
+   *  consumers' `isDirectLink` filters are now no-ops kept as guards. */
   isDirectLink: boolean;
   /** True when this offer is priced ABOVE the buyer's stated
    *  `maxBudgetNaira` and is only here because nothing affordable filled

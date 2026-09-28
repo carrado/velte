@@ -35,8 +35,8 @@ interface CreditsStore {
   /** The VENDOR's lead wallet, in kobo. Null for guests and buyers, who have
    *  no wallet — which is what the panel's funding choice branches on. */
   walletBalanceKobo: number | null;
-  /** The pack currently being paid for, if any. */
-  busyPack: string | null;
+  /** True while a top-up checkout is opening. */
+  busy: boolean;
 
   /** Reads this browser's guest ledger. Synchronous — no network involved. */
   loadGuest: () => void;
@@ -61,7 +61,7 @@ interface CreditsStore {
    *  see `load`'s own comment on why this exists. Internal bookkeeping,
    *  not meant to be read by a component. */
   lastSpendAt: number | null;
-  topUp: (packId: string, source?: TopUpSource) => void;
+  topUp: (amountNgn: number, source?: TopUpSource) => void;
   /** Confirms a CARD top-up directly with Paystack by reference, instead of
    *  waiting on the `charge.success` webhook to land — see
    *  /api/credits/verify-topup's own comment for why the webhook alone
@@ -102,7 +102,7 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
   balance: null,
   used: 0,
   walletBalanceKobo: null,
-  busyPack: null,
+  busy: false,
   lastSpendAt: null,
 
   loadGuest: () => {
@@ -234,9 +234,9 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
     }
   },
 
-  topUp: (packId, source = "card") => {
-    if (get().busyPack) return;
-    set({ busyPack: packId });
+  topUp: (amountNgn, source = "card") => {
+    if (get().busy) return;
+    set({ busy: true });
     void (async () => {
       try {
         if (source === "wallet") {
@@ -247,7 +247,7 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
           const res = await fetch("/api/credits/wallet-topup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ packId }),
+            body: JSON.stringify({ amountNgn }),
           });
           const data = (await res.json().catch(() => null)) as {
             balance?: number;
@@ -258,11 +258,11 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
           if (!res.ok || typeof data?.balance !== "number") {
             // Toasted rather than shown inline (2026-09-17, per explicit
             // request) — the backend's own message names the exact
-            // shortfall ("doesn't have the ₦6,000 for this pack"), which is
+            // shortfall ("doesn't have the ₦6,000 for this top-up"), which is
             // the one thing the vendor needs to read, same reasoning as the
             // BFF route's own comment on passing it through untouched.
             toast.error(data?.error ?? "Couldn't pay from your wallet.");
-            set({ busyPack: null });
+            set({ busy: false });
             return;
           }
           // Both figures move together, from the one response — a refetch
@@ -277,7 +277,7 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
               typeof data.spentSinceTopUp === "number"
                 ? data.spentSinceTopUp
                 : 0,
-            busyPack: null,
+            busy: false,
             ...(typeof data.walletBalanceKobo === "number"
               ? { walletBalanceKobo: data.walletBalanceKobo }
               : {}),
@@ -288,7 +288,7 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
         const res = await fetch("/api/credits/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ packId }),
+          body: JSON.stringify({ amountNgn }),
         });
         const data = (await res.json().catch(() => null)) as {
           authorizationUrl?: string;
@@ -296,17 +296,17 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
         } | null;
         if (data?.authorizationUrl) {
           // Full-page redirect, not a popup — popups are unreliable for
-          // buyers on mobile, the same reasoning as the pay page. `busyPack`
+          // buyers on mobile, the same reasoning as the pay page. `busy`
           // is deliberately left set: the page is on its way out, and
           // clearing it would flash the buttons back to life first.
           window.location.href = data.authorizationUrl;
           return;
         }
         toast.error(data?.error ?? "Couldn't start the payment.");
-        set({ busyPack: null });
+        set({ busy: false });
       } catch {
         toast.error("Couldn't start the payment. Please try again.");
-        set({ busyPack: null });
+        set({ busy: false });
       }
     })();
   },

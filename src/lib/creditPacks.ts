@@ -1,63 +1,47 @@
-// What a top-up buys (2026-08-31, floor raised 2026-09-05 then revised
-// twice more the same day — see the credit count/price history below).
+// What a top-up buys — ONE rate, any amount (2026-09-28).
 //
-// Client-safe, like credits.ts, because the panel renders these and the
-// checkout route reads them — one table, no mirror to drift.
+// The four-pack ladder this file used to hold (₦1,500/30, ₦3,000/66, …) is
+// gone, replaced by a plain amount input and a formula. The buyer names any
+// figure at or above the floor and gets credits in proportion, rounded to the
+// nearest whole credit — so there is no pack to pick between and nothing to
+// compare, exactly the reasoning that retired the subscription tiers before it.
 //
-// REBUILT 2026-09-05 around an explicit floor, moved twice: first 30
-// credits/₦2,500, then "build from ₦1,500 up" (which landed on 15 credits,
-// a freshly-chosen ₦100/credit rate, since no credit count was given that
-// time), then explicitly corrected to 30 credits AT ₦1,500 — so the floor
-// is now the same 30 CREDITS as the very first version, just at 60% of the
-// price (₦50/credit instead of ₦83.33). Every number here is either that
-// direct instruction or DESIGNED to keep the same shape the ladder has had
-// throughout every revision:
-//   - a clean, round base rate — ₦50/credit with no bonus, i.e. exactly
-//     what 30-for-₦1,500 implies — never mechanically carried over from a
-//     previous revision's rate;
-//   - the same bonus-percentage curve every version of this ladder has
-//     used (0% / 10% / 16.67% / 25%), rewarding a bigger top-up with a
-//     better rate — same instinct as the vendor wallet's own balance
-//     tiers, and what keeps every tier strictly better value than the one
-//     below it (never a smaller/cheaper pack worth less per credit than a
-//     bigger one);
-//   - prices doubling tier to tier (₦1,500 / 3,000 / 6,000 / 12,000) for
-//     round, memorable top-up amounts.
-// The old ₦3,500-Plus-bundle anchor this file used to price against no
-// longer applies at this floor — nothing here is calibrated against it any
-// more.
+// THE RATE IS THE FLOOR: ₦2,000 buys 30 credits, and every other amount is a
+// straight multiple of that (₦4,000 → 60, ₦5,000 → 75). No bonus curve, no
+// "better value the more you buy" — the ladder's whole point was to reward a
+// bigger prepay, and with a free amount field there is no fixed rung for a
+// bonus to attach to.
 //
-// The bonus scale rewards prepaying, the same instinct as the vendor wallet's
-// balance tiers — a larger top-up is better cash flow and fewer Paystack fees
-// per naira.
+// Client-safe, like credits.ts, because the panel renders the live estimate as
+// the buyer types and the checkout route reads the same numbers — one table,
+// no mirror to drift. The CHARGE is still built on the server (velte-backend
+// config/creditPacks.js), so an amount that arrives from a client is only ever
+// a REQUEST: the credits it buys are computed there, never sent up.
 
-export interface CreditPack {
-  id: string;
-  priceNgn: number;
-  /** Total credits handed over, bonus included. */
-  credits: number;
-  /** How many of those are the bonus, for the badge. */
-  bonus: number;
-  highlight?: boolean;
-}
+/** The minimum top-up, and the amount the rate is defined against. Below this
+ *  Paystack's per-transaction fee eats an unreasonable share and the buyer
+ *  gets too little to finish a shopping session — a top-up that runs out
+ *  mid-search is worse than not offering it. */
+export const MIN_TOPUP_NGN = 2000;
 
-/** The minimum top-up — the floor pack's own price. Below this, Paystack's
- *  per-transaction fee eats an unreasonable share and the buyer gets too
- *  little to finish a shopping session — a top-up that runs out mid-search
- *  is worse than not offering it. */
-export const MIN_TOPUP_NGN = 1500;
+/** What the floor buys. The rate below is derived from these two together, so
+ *  changing either moves every amount with it. */
+export const CREDITS_AT_MIN_TOPUP = 30;
 
-export const CREDIT_PACKS: CreditPack[] = [
-  { id: "starter", priceNgn: 1500, credits: 30, bonus: 0 },
-  { id: "regular", priceNgn: 3000, credits: 66, bonus: 6 },
-  { id: "shopper", priceNgn: 6000, credits: 140, bonus: 20, highlight: true },
-  { id: "big", priceNgn: 12000, credits: 300, bonus: 60 },
-];
+/** Credits per naira, at one flat rate for everyone and every amount. */
+export const CREDITS_PER_NAIRA = CREDITS_AT_MIN_TOPUP / MIN_TOPUP_NGN;
 
-/** Resolves a pack id from an untrusted request body. Returns null rather than
- *  throwing so a caller can answer 400 in its own words — and NEVER trusts a
- *  price or credit count sent by the client, only the id. */
-export function packFor(id: unknown): CreditPack | null {
-  if (typeof id !== "string") return null;
-  return CREDIT_PACKS.find((pack) => pack.id === id) ?? null;
+/** A ceiling on a single top-up, to bound the credits integer a request can
+ *  ask for. Generous — well above any real one-off purchase — so it only ever
+ *  catches a nonsense figure, not a large legitimate one. */
+export const MAX_TOPUP_NGN = 500000;
+
+/**
+ * The credits `amountNgn` buys, rounded to the nearest whole credit. Returns 0
+ * below the floor, which is what the panel's own "minimum is ₦2,000" message
+ * keys off — the same figure the backend refuses on, computed the same way.
+ */
+export function creditsForAmount(amountNgn: number): number {
+  if (!Number.isFinite(amountNgn) || amountNgn < MIN_TOPUP_NGN) return 0;
+  return Math.round(amountNgn * CREDITS_PER_NAIRA);
 }

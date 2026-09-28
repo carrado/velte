@@ -118,8 +118,8 @@ export function CreditsDonut({
       {/* The split in words. The ring is a glance; this is the fact — so
           nothing here is carried by colour alone.
           //
-          // A GUEST at zero is told to sign in, never to "top up" — the pack
-          // grid is signed-in only (see CreditsPanel), so a guest has no top-up
+          // A GUEST at zero is told to sign in, never to "top up" — topping up
+          // is signed-in only (see CreditsPanel), so a guest has no top-up
           // to reach for yet. No separate bonus line underneath any more
           // (2026-09-06): signing in no longer grants anything on its own —
           // see credits.ts's own note on dropping SIGNUP_CREDITS — so there is

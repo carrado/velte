@@ -1,6 +1,5 @@
 import { serperConnector } from "@/lib/server/connectors/serper";
 import { jijiConnector } from "@/lib/server/connectors/jiji";
-import { buildSearchLinks } from "@/lib/server/connectors/searchLinks";
 import type { ExternalConnector } from "@/lib/server/connectors/types";
 import type { ExternalOffer } from "@/types/search";
 import { isVagueReference } from "@/lib/productTerm";
@@ -133,8 +132,10 @@ async function fetchListings(params: {
       continue;
     }
     for (const offer of result.value) {
-      // Real listings only — "search this site" links are built once,
-      // below, by buildSearchLinks, not per connector.
+      // Real listings only. Every connector sets `isDirectLink: true` today
+      // (the "search this site" link source was removed 2026-09-28), so this
+      // no longer drops anything in practice — kept as the guard that would
+      // catch a future connector emitting a non-listing.
       if (!offer.isDirectLink) continue;
       const key = titleKey(offer.title);
       if (!key || seen.has(key)) continue;
@@ -156,8 +157,8 @@ async function fetchListings(params: {
   // product decision reversing the prior "over budget is dropped entirely"
   // rule) — found live: a ₦100k birthday-cake budget with nothing genuinely
   // available under it came back with NOTHING at all, because every real
-  // listing above the ceiling was silently discarded here, leaving only
-  // Jiji's own always-there search-link fallback. A buyer is better served
+  // listing above the ceiling was silently discarded here, leaving nothing
+  // at all. A buyer is better served
   // by seeing what's actually out there, clearly marked as over budget, than
   // by a dead end that hides real options that exist. `overBudget` is never
   // a second filter on top of this — it's the flag `ExternalOfferCard` reads
@@ -201,22 +202,14 @@ async function fetchListings(params: {
 }
 
 /**
- * Real listings (see fetchListings above), followed by "keep looking
- * yourself" search links for the sites that fit the query (see
- * connectors/searchLinks.ts) — always last, never counted against the
- * listing cap, and always `isDirectLink: false`, which is how route.ts and
- * SearchHome keep them from ever reading as a result.
+ * Real listings only. The "keep looking yourself" search links this used to
+ * append (Jumia/Konga/Jiji/PropertyPro, via the now-deleted
+ * connectors/searchLinks.ts) were removed 2026-09-28, at explicit request —
+ * the plain line they rendered as under every dead end is gone from the UI,
+ * so nothing produces them any more.
  */
 export async function fetchExternalOffers(
   params: Parameters<typeof fetchListings>[0],
 ): Promise<ExternalOffer[]> {
-  const listings = await fetchListings(params);
-  if (
-    !hasExternalConnectors() ||
-    !params.query.trim() ||
-    isVagueReference(params.query)
-  ) {
-    return listings;
-  }
-  return [...listings, ...buildSearchLinks(params.query, params.location)];
+  return fetchListings(params);
 }

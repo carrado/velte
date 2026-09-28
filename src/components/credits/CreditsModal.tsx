@@ -12,7 +12,7 @@ import { useBuyerStore } from "@/store/buyerStore";
 //
 // Replaces the /plans ROUTE entirely, and then the plans themselves — the
 // tiers are gone; this now shows a credit METER — how much of what they have
-// is left — and the top-up packs. A buyer reaching for "Plans" or an
+// is left — and the top-up field. A buyer reaching for "Plans" or an
 // upgrade prompt is always mid-conversation — they have just been refused a
 // search, or run out of briefs, or glanced at the header — and sending
 // them to another URL for that costs the thread its place: the page unmounts,
@@ -101,7 +101,7 @@ function CreditsOverlay({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const { balance, used, isGuest, walletBalanceKobo, topUp, busyPack } =
+  const { balance, used, isGuest, walletBalanceKobo, topUp, busy } =
     useCredits(isOpen);
   // Read here rather than threaded through useCredits: the referral link is
   // an attribute of the buyer, not of their balance, and the store already
@@ -175,7 +175,7 @@ function CreditsOverlay({
             referralCode={referralCode}
             walletBalanceKobo={walletBalanceKobo}
             onTopUp={topUp}
-            busyPack={busyPack}
+            busy={busy}
           />
         </motion.div>
       )}

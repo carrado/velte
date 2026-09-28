@@ -91,9 +91,17 @@ export function CardCarousel<T>({
         // `behavior: "smooth"` independently). Left on, it fights native
         // touch-drag momentum on iOS Safari and several Android WebViews —
         // found live: the row read as stuck/unresponsive to a finger swipe.
-        // `touch-pan-x` prefers horizontal pans so the parent chat's
-        // vertical scroll doesn't steal the gesture mid-swipe.
-        className="flex gap-4 overflow-x-auto overscroll-x-contain snap-x snap-mandatory pb-1 px-1 touch-pan-x [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        // NOT `touch-pan-x` (2026-09-28). That sets `touch-action: pan-x`,
+        // which tells the browser this element handles HORIZONTAL panning
+        // only — so a vertical drag that started on a card could not scroll
+        // the page at all, and the results felt stuck (found live on mobile:
+        // you had to put your finger OUTSIDE the carousel to scroll up).
+        // `touch-manipulation` allows both axes — pan-x AND pan-y — so the
+        // browser picks the dominant one (a horizontal swipe moves the
+        // carousel, a vertical drag scrolls the chat) exactly as a normal
+        // `overflow-x-auto` region should, while still suppressing
+        // double-tap-to-zoom that would otherwise fight the card taps.
+        className="flex gap-4 overflow-x-auto overscroll-x-contain snap-x snap-mandatory pb-1 px-1 touch-manipulation [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       >
         {items.map((item) => (
           <div

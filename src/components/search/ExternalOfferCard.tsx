@@ -7,6 +7,8 @@ import {
   SearchIcon,
 } from "@/components/icons/hero";
 import { cn } from "@/lib/utils";
+import { ComparisonDetailBlock } from "@/components/search/ComparisonTemplate";
+import type { ComparisonDetail } from "@/components/search/ComparisonTemplate";
 import type { ExternalOffer } from "@/types/search";
 
 // An off-Velte product offer (Phase 4) — shown only when Velte itself had
@@ -49,9 +51,15 @@ export function ExternalOfferCard({
   // the two the same way; what differs is what they can honestly say,
   // which pickExternalRecommendation decides, not this component.
   pickBadges,
+  // This offer's best-for / key-strength / main-drawback from the turn's own
+  // comparison (2026-09-28), when the buyer asked to compare — the same three
+  // judgments the retired "Compare your options" table carried, moved onto the
+  // card. Null/omitted on every other turn.
+  comparisonDetail,
 }: {
   offer: ExternalOffer;
   pickBadges?: string[];
+  comparisonDetail?: ComparisonDetail | null;
 }) {
   // Primary first, then the rest of the listing's photos — the same order
   // the comparison call sees them in, so a buyer checking a "the third
@@ -217,6 +225,9 @@ export function ExternalOfferCard({
               .map((a) => a.value)
               .join(" · ")}
           </p>
+        )}
+        {comparisonDetail && (
+          <ComparisonDetailBlock detail={comparisonDetail} />
         )}
         {/* Found live: a "View on Slot" label reads as this exact listing's
             own page no matter what's actually underneath it — and when the
