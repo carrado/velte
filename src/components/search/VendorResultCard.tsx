@@ -5,6 +5,8 @@ import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
+import { ComparisonDetailBlock } from "@/components/search/ComparisonTemplate";
+import type { ComparisonDetail } from "@/components/search/ComparisonTemplate";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { useUserStore } from "@/store/userStore";
@@ -38,11 +40,18 @@ export function VendorResultCard({
   // SearchRecommendation, empty/omitted for every card the comparison
   // didn't single out (and on turns with no recommendation at all).
   pickBadges,
+  // This option's best-for / key-strength / main-drawback from the turn's own
+  // comparison, when the buyer asked to compare (2026-09-28) — the same three
+  // judgments the retired "Compare your options" table carried, moved onto the
+  // card they describe. Null/omitted on every other turn, where the card
+  // renders exactly as it always did.
+  comparisonDetail,
 }: {
   match: VendorMatch;
   showViewStore?: boolean;
   showChatButton?: boolean;
   pickBadges?: string[];
+  comparisonDetail?: ComparisonDetail | null;
 }) {
   const symbol = match.currency === "USD" ? "$" : "₦";
   const isRange = match.priceMax != null && match.priceMax > match.price;
@@ -211,6 +220,9 @@ export function VendorResultCard({
           >
             See more
           </button>
+        )}
+        {comparisonDetail && (
+          <ComparisonDetailBlock detail={comparisonDetail} />
         )}
         <div className="flex items-center gap-2 min-w-0 pt-1">
           <div className="w-7 h-7 rounded-full bg-orange-50 overflow-hidden flex items-center justify-center shrink-0">

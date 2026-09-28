@@ -28,8 +28,8 @@ interface CreditsState {
   used: number;
   isGuest: boolean;
   walletBalanceKobo: number | null;
-  busyPack: string | null;
-  topUp: (packId: string, source?: TopUpSource) => void;
+  busy: boolean;
+  topUp: (amountNgn: number, source?: TopUpSource) => void;
 }
 
 export function useCredits(active = true): CreditsState {
@@ -40,7 +40,7 @@ export function useCredits(active = true): CreditsState {
   const balance = useCreditsStore((s) => s.balance);
   const used = useCreditsStore((s) => s.used);
   const walletBalanceKobo = useCreditsStore((s) => s.walletBalanceKobo);
-  const busyPack = useCreditsStore((s) => s.busyPack);
+  const busy = useCreditsStore((s) => s.busy);
   const topUp = useCreditsStore((s) => s.topUp);
   const load = useCreditsStore((s) => s.load);
   const loadGuest = useCreditsStore((s) => s.loadGuest);
@@ -67,7 +67,7 @@ export function useCredits(active = true): CreditsState {
     used,
     isGuest,
     walletBalanceKobo,
-    busyPack,
+    busy,
     topUp,
   };
 }

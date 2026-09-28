@@ -56,7 +56,11 @@ const inputSchema = z.object({
 // confirmed first, and only the browser can do that — so those all belong
 // to the frontend's own POST /api/buyer-requests, which already sends them.
 export function createBuyerRequestTool(
-  buyerAuth: { buyerId: string; cookie: string } | null,
+  // Either session (2026-09-27) — a vendor posts requests too, and used to
+  // be told to "sign in first" while already signed in, because this only
+  // ever saw the buyer cookie. `type` is which account is asking; the cookie
+  // is what the backend actually resolves ownership from.
+  auth: { type: "buyer" | "vendor"; cookie: string } | null,
 ) {
   return tool({
     description:
@@ -72,8 +76,42 @@ export function createBuyerRequestTool(
       // request off a bare proof-of-number with no account behind it. That
       // path is gone on the backend too: POST /buyer-requests requires a
       // session, and the OTP endpoints are behind one as well.
-      if (!buyerAuth) {
+      if (!auth) {
         return { status: "needs_signin", description, buyerName };
+      }
+
+      // A VENDOR's own signup number — the WhatsApp they already trade
+      // under (`Store.whatsapp` is populated from it, see auth.js). It is
+      // on their own email-verified account, so it is used without a second
+      // OTP round, and it is shown back the same way a buyer's saved number
+      // is: use this one, or give another. Only the "another" path needs
+      // OTP, and only a buyer has one wired today.
+      if (auth.type === "vendor") {
+        let vendorPhone: string | null = null;
+        try {
+          const { vendor } = await backendData<{
+            vendor: { phone?: string | null } | null;
+          }>("/auth/me", { cookie: auth.cookie });
+          if (typeof vendor?.phone === "string" && vendor.phone.trim()) {
+            vendorPhone = vendor.phone.trim();
+          }
+        } catch (err) {
+          // Not fatal: falling through to needs_identity asks for a number,
+          // which is the safe outcome.
+          console.error(
+            "[createBuyerRequest] vendor phone lookup failed:",
+            err,
+          );
+        }
+        if (!vendorPhone) {
+          return { status: "needs_identity", description, buyerName };
+        }
+        return {
+          status: "needs_phone_choice",
+          description,
+          buyerName,
+          phone: vendorPhone,
+        };
       }
 
       // A session alone isn't enough any more (2026-08-26). A buyer signed
@@ -91,7 +129,7 @@ export function createBuyerRequestTool(
       try {
         const { buyer } = await backendData<{
           buyer: { phone: string | null; phoneVerified: boolean };
-        }>("/buyer-auth/me", { cookie: buyerAuth.cookie });
+        }>("/buyer-auth/me", { cookie: auth.cookie });
         if (buyer?.phoneVerified && buyer.phone) savedPhone = buyer.phone;
       } catch (err) {
         // Never fatal: falling through to needs_identity asks for a number,

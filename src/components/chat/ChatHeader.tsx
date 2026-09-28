@@ -370,7 +370,7 @@ export function ChatHeader() {
                 is nobody it should be hidden from now that it shows a
                 balance rather than a tier. This is that entry point
                 (2026-09-05) — CreditsModal already shows a sign-in offer
-                instead of the pack grid for a signed-out tap, so there's
+                instead of the top-up field for a signed-out tap, so there's
                 nothing broken about surfacing it here too. */}
               <CreditsButton className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 sm:px-3 text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900">
                 {/* 20, up from 16 (2026-09-05, per explicit request) — the

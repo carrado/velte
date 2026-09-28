@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 import { backendData } from "@/lib/server/backend";
 import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
 import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
+import { MIN_TOPUP_NGN } from "@/lib/creditPacks";
 
-// POST /api/credits/wallet-topup — buy a credit pack with Velte wallet money.
+// POST /api/credits/wallet-topup — buy credits with Velte wallet money.
 //
 // VENDORS ONLY. A vendor already keeps a float with Velte for lead charges,
 // and making them re-enter a card to buy search is the kind of friction that
@@ -39,10 +40,22 @@ export async function POST(req: Request) {
   }
 
   const body = (await req.json().catch(() => null)) as {
-    packId?: string;
+    amountNgn?: unknown;
   } | null;
-  if (!body?.packId) {
-    return NextResponse.json({ error: "Pick a credit pack." }, { status: 400 });
+  const amountNgn = body?.amountNgn;
+  // Shape check only — the floor and the ceiling, and the credits they buy,
+  // are enforced on the server that actually debits.
+  if (
+    typeof amountNgn !== "number" ||
+    !Number.isInteger(amountNgn) ||
+    amountNgn < MIN_TOPUP_NGN
+  ) {
+    return NextResponse.json(
+      {
+        error: `Enter an amount of at least ₦${MIN_TOPUP_NGN.toLocaleString("en-NG")}.`,
+      },
+      { status: 400 },
+    );
   }
 
   try {
@@ -58,14 +71,15 @@ export async function POST(req: Request) {
       reference: string;
     }>("/credits/wallet-topup", {
       method: "POST",
-      body: { packId: body.packId },
+      body: { amountNgn },
       cookie: vendorAuth.cookie,
     });
     return NextResponse.json(data);
   } catch (err) {
     // `fail` passes the backend's own message through for an AppError, which
-    // matters here: "your wallet doesn't have the ₦3,000 for this pack" is the
-    // one thing the vendor needs to read, and a generic fallback would hide it.
+    // matters here: "your wallet doesn't have the ₦3,000 for this top-up" is
+    // the one thing the vendor needs to read, and a generic fallback would
+    // hide it.
     return fail(err, "Couldn't pay from your wallet.");
   }
 }

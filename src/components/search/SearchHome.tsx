@@ -41,7 +41,11 @@ import {
   RecommendationPicks,
   pickBadgesFor,
 } from "@/components/search/RecommendationPicks";
-import { ComparisonTemplate } from "@/components/search/ComparisonTemplate";
+import {
+  ComparisonNote,
+  ComparisonRecommendation,
+  comparisonDetailFor,
+} from "@/components/search/ComparisonTemplate";
 import { StoreResultCard } from "@/components/search/StoreResultCard";
 import { ExternalBusinessCard } from "@/components/search/ExternalBusinessCard";
 import { InstagramLeadCard } from "@/components/search/InstagramLeadCard";
@@ -102,7 +106,6 @@ import type {
 } from "@/types/search";
 import { isComparisonTemplate } from "@/types/search";
 import {
-  ExternalLinkIcon,
   MapPinIcon,
   PhoneIcon,
   ShieldCheckIcon,
@@ -934,8 +937,9 @@ interface ConversationTurn {
   // above the carousel. Null on turns that didn't qualify (0–1 products)
   // or where the comparison call failed; rendering degrades to plain cards.
   // A genuine Compare turn carries the richer ComparisonTemplate shape
-  // instead (see isComparisonTemplate) — rendered by the ComparisonTemplate
-  // component in place of RecommendationPicks.
+  // instead (see isComparisonTemplate) — rendered as ComparisonNote above the
+  // cards and ComparisonRecommendation below them, in place of
+  // RecommendationPicks (see ComparisonTemplate.tsx).
   recommendation: AnyRecommendation | null;
   // Mirrors SearchStreamEvent's own pair of the same name (2026-09-09) — a
   // fresh comparison's own "want it found on Velte?" ask. Copied verbatim
@@ -1009,7 +1013,7 @@ interface ConversationTurn {
  * here (2026-08-31, item 3 of the credits completion plan). It used to POST
  * straight to /api/buyer-billing/checkout for "Velte Plus" — a product that
  * no longer exists — which would have taken a real payment for a plan
- * nothing reads. The modal is where packs and prices live now, and it opens
+ * nothing reads. The modal is where prices and top-up live now, and it opens
  * over the thread so a refused turn stays on screen behind it.
  */
 function QuotaCard({
@@ -1491,26 +1495,29 @@ function ConversationTurnView({
                             </h2>
                           )}
                           {/* The WHY half of the recommendation layer — the
-                            chips on the cards below say which, this says
-                            why (see RecommendationPicks). Absent whenever
-                            the turn has no recommendation, and the cards
-                            render exactly as they always did. A genuine
-                            Compare turn (explicit or auto-detected — see
-                            classifyScopeTool) carries the richer
-                            ComparisonTemplate shape instead, rendered by its
-                            own component. */}
+                            chips on the cards say which, this says why (see
+                            RecommendationPicks). A genuine Compare turn
+                            (explicit or auto-detected — see classifyScopeTool)
+                            no longer renders a block of its own above the
+                            cards: since 2026-09-28 it is three things only —
+                            the disclosure here above the cards, the
+                            best-for / strength / drawback ON each card, and
+                            "My recommendation" below them. See
+                            ComparisonTemplate.tsx for why the table and
+                            podium were dropped. */}
                           {turn.recommendation &&
-                            (isComparisonTemplate(turn.recommendation) ? (
-                              <ComparisonTemplate
+                            isComparisonTemplate(turn.recommendation) && (
+                              <ComparisonNote
                                 comparison={turn.recommendation}
-                                products={turn.products}
                               />
-                            ) : (
+                            )}
+                          {turn.recommendation &&
+                            !isComparisonTemplate(turn.recommendation) && (
                               <RecommendationPicks
                                 recommendation={turn.recommendation}
                                 products={turn.products}
                               />
-                            ))}
+                            )}
                           <CardCarousel
                             items={turn.products}
                             getKey={(match) => match.productId}
@@ -1521,9 +1528,19 @@ function ConversationTurnView({
                                   match.productId,
                                   turn.recommendation,
                                 )}
+                                comparisonDetail={comparisonDetailFor(
+                                  turn.recommendation,
+                                  match.productId,
+                                )}
                               />
                             )}
                           />
+                          {turn.recommendation &&
+                            isComparisonTemplate(turn.recommendation) && (
+                              <ComparisonRecommendation
+                                comparison={turn.recommendation}
+                              />
+                            )}
                         </div>
                       )}
                       {turn.weakProducts.length > 0 && (
@@ -1563,11 +1580,14 @@ function ConversationTurnView({
                             at all. Only ever the rich template here: the
                             lighter picks layer has never run over stores,
                             so a plain recommendation can't arrive on this
-                            branch. */}
+                            branch. Simplified to note-above / recommendation-
+                            below like the product branch (2026-09-28); store
+                            cards are not product cards, so they do not carry
+                            the best-for/strength/drawback block. */}
                           {turn.recommendation &&
                             turn.products.length === 0 &&
                             isComparisonTemplate(turn.recommendation) && (
-                              <ComparisonTemplate
+                              <ComparisonNote
                                 comparison={turn.recommendation}
                               />
                             )}
@@ -1617,6 +1637,13 @@ function ConversationTurnView({
                               />
                             );
                           })()}
+                          {turn.recommendation &&
+                            turn.products.length === 0 &&
+                            isComparisonTemplate(turn.recommendation) && (
+                              <ComparisonRecommendation
+                                comparison={turn.recommendation}
+                              />
+                            )}
                         </div>
                       )}
                       {turn.furtherStores.length > 0 && (
@@ -1757,21 +1784,24 @@ function ConversationTurnView({
                             Velte found nothing — so the turn's single
                             `recommendation` belongs to whichever is on
                             screen, and RecommendationPicks resolves its
-                            ids against both lists. */}
+                            ids against both lists. A compare turn splits into
+                            note-above / recommendation-below, same as the
+                            product branch (2026-09-28). */}
                           {turn.recommendation &&
-                            (isComparisonTemplate(turn.recommendation) ? (
-                              <ComparisonTemplate
+                            isComparisonTemplate(turn.recommendation) && (
+                              <ComparisonNote
                                 comparison={turn.recommendation}
-                                offers={turn.externalOffers}
                               />
-                            ) : (
+                            )}
+                          {turn.recommendation &&
+                            !isComparisonTemplate(turn.recommendation) && (
                               <RecommendationPicks
                                 recommendation={turn.recommendation}
                                 products={[]}
                                 offers={turn.externalOffers}
                                 valueLabel="Best price"
                               />
-                            ))}
+                            )}
                           {/* Grouped into the buckets the connector
                             confines itself to (2026-09-14, "jiji" added
                             2026-09-20) — Jumia, Shopify, WooCommerce, Jiji —
@@ -1807,61 +1837,24 @@ function ConversationTurnView({
                                         turn.recommendation,
                                         "Best price",
                                       )}
+                                      comparisonDetail={comparisonDetailFor(
+                                        turn.recommendation,
+                                        offer.id,
+                                      )}
                                     />
                                   )}
                                 />
                               </div>
                             );
                           })}
+                          {turn.recommendation &&
+                            isComparisonTemplate(turn.recommendation) && (
+                              <ComparisonRecommendation
+                                comparison={turn.recommendation}
+                              />
+                            )}
                         </div>
                       )}
-                      {/* "Keep looking yourself" links (connectors/
-                        searchLinks.ts) — Jumia/Konga/Jiji, or PropertyPro/
-                        Jiji for property — a way to keep looking, not a
-                        result (2026-09-24, found live: a lone Jiji search
-                        link rendered as an image-less result card when
-                        Jiji's page couldn't be read). One plain line, so
-                        it never reads as something Velte found. Deduped by
-                        site for turns saved before the server did it. */}
-                      {(() => {
-                        const links = Array.from(
-                          new Map(
-                            turn.externalOffers
-                              .filter((offer) => !isListing(offer))
-                              .map((offer) => [offer.platform, offer]),
-                          ).values(),
-                        );
-                        if (!links.length) return null;
-                        return (
-                          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-gray-500">
-                            <span>Keep looking yourself:</span>
-                            {links.map((offer, i) => (
-                              <span
-                                key={offer.id}
-                                className="inline-flex items-center gap-1.5"
-                              >
-                                {i > 0 && (
-                                  <span aria-hidden className="text-gray-300">
-                                    ·
-                                  </span>
-                                )}
-                                <a
-                                  href={offer.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer nofollow"
-                                  className="inline-flex items-center gap-1 font-medium text-orange-600"
-                                >
-                                  {offer.merchant ?? "Search online"}
-                                  <ExternalLinkIcon
-                                    size={12}
-                                    className="shrink-0"
-                                  />
-                                </a>
-                              </span>
-                            ))}
-                          </p>
-                        );
-                      })()}
                       {/* The reach-out question + Yes/No pair, AFTER the
                         result cards rather than stacked above them
                         (2026-09-15, explicit request) — the buyer sees what

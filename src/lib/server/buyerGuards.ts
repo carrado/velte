@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { jsonError } from "./guards";
 import { BUYER_AUTH_COOKIE, verifyBuyerSession } from "./buyerSession";
+import { AUTH_COOKIE, verifySession } from "./session";
 
 /* Buyer-side counterpart to guards.ts's requireAuth — identical pattern,
    reads the separate buyer_auth_token cookie. Reuses jsonError/fail/
@@ -53,4 +54,49 @@ export async function getOptionalBuyerAuth(): Promise<{
   const session = await verifyBuyerSession(token);
   if (!session) return null;
   return { buyerId: session.buyerId, cookie: `${BUYER_AUTH_COOKIE}=${token}` };
+}
+
+/** Either session, for the Buyer Request routes (2026-09-27).
+ *
+ * A VENDOR posts and reads its own requests now, not just a buyer — they buy
+ * things other than what they sell, and /chat is where they do it. Was
+ * buyer-only, which is why a vendor signed into /chat was told to "sign in
+ * first" while already being signed in.
+ *
+ * Hands the BACKEND both sessions rather than deciding here which one the
+ * caller is: ownership (Buyer vs User, and the `Buyer.linkedVendorId` case
+ * where a vendor who signed in with Google resolves as themselves) is
+ * resolveActor's call in velte-backend, and a second copy of that rule on
+ * this side would drift from it. `type`/`id` here are for this side's own
+ * branching only.
+ *
+ * Null when NEITHER session is valid, which the caller answers with its own
+ * 401 — same shape as getOptionalBuyerAuth, and for the same reason: an
+ * invalid token must not read as a real caller. */
+export async function getActorAuth(): Promise<{
+  type: "buyer" | "vendor";
+  id: string;
+  cookie: string;
+} | null> {
+  const jar = await cookies();
+
+  const buyerToken = jar.get(BUYER_AUTH_COOKIE)?.value;
+  const buyerSession = buyerToken ? await verifyBuyerSession(buyerToken) : null;
+
+  const vendorToken = jar.get(AUTH_COOKIE)?.value;
+  const vendorSession = vendorToken ? await verifySession(vendorToken) : null;
+
+  if (!buyerSession && !vendorSession) return null;
+
+  const parts: string[] = [];
+  if (buyerSession && buyerToken) {
+    parts.push(`${BUYER_AUTH_COOKIE}=${buyerToken}`);
+  }
+  if (vendorSession && vendorToken) {
+    parts.push(`${AUTH_COOKIE}=${vendorToken}`);
+  }
+
+  return buyerSession
+    ? { type: "buyer", id: buyerSession.buyerId, cookie: parts.join("; ") }
+    : { type: "vendor", id: vendorSession!.userId, cookie: parts.join("; ") };
 }

@@ -21,9 +21,9 @@ import type { ExternalOffer } from "@/types/search";
 // what it actually is — a real, individual peer's ad, not a checked retailer
 // — rather than pretending it carries the same confidence as a Jumia/
 // Shopify/WooCommerce match. When nothing here matches or the page can't be
-// read, this returns nothing: the "search Jiji yourself" link that used to
-// be this file's fallback now comes from connectors/searchLinks.ts
-// (2026-09-24), alongside Jumia/Konga/PropertyPro, for every dead end.
+// read, this returns nothing. (The "search Jiji yourself" fallback that used
+// to catch exactly that case — last served from connectors/searchLinks.ts —
+// was removed 2026-09-28, so a failed read now simply contributes no offers.)
 //
 // NEEDS NO API KEY, unlike serper.ts — this reads Jiji's own public search
 // page directly rather than going through Google/Serper, so `isEnabled`
@@ -41,9 +41,7 @@ import type { ExternalOffer } from "@/types/search";
 // this codebase defaults to — so a production incident (Jiji blocking the
 // UA, the page shape changing and `extractListings` silently returning
 // nothing) can be killed instantly without a deploy: set it to "false" and
-// this connector stops running, with no code change. (searchLinks.ts's
-// "search Jiji yourself" link still shows as long as any other connector,
-// i.e. Serper, is enabled — see fetchExternalOffers.)
+// this connector stops running, with no code change.
 function scrapeEnabled(): boolean {
   return process.env.JIJI_SCRAPE_ENABLED !== "false";
 }

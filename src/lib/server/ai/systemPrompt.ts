@@ -35,6 +35,18 @@ export function buildSystemPrompt(
     maxBudgetNaira: number | null;
     cheapestSeenNaira: number | null;
     shownCount: number;
+    // The distinguishing detail already established for this request — on a
+    // PHOTO turn that is everything the model read off the image and passed
+    // into searchProducts' own `attributes` (colour, style, sleeve length,
+    // brand markings), which the scorer stores on the goal sheet. Handed in
+    // here because nothing else carries it: prior turns are text-only by
+    // design, and a photo turn's own stored text is a bare "[sent a photo]",
+    // so without this the model's view of a photographed item is the single
+    // word "dress" — which is exactly the state that makes the item look
+    // too thin to act on, and produced a live "What kind of dress are you
+    // looking for? Any specific style, color, or occasion in mind?" on a
+    // request whose photo had already answered that.
+    attributes?: string[];
   } | null,
   // Set only on the turn confirming a fresh comparison's pick (2026-09-09)
   // — route.ts's own "awaiting comparison purchase reply" state, mirrored
@@ -87,6 +99,11 @@ export function buildSystemPrompt(
 
   const goalFacts: string[] = [];
   if (goal?.itemTerm) goalFacts.push(`they're looking for: ${goal.itemTerm}`);
+  if (goal?.attributes?.length) {
+    goalFacts.push(
+      `details already established about it: ${goal.attributes.join(", ")}`,
+    );
+  }
   if (goal?.maxBudgetNaira != null) {
     goalFacts.push(`their stated budget ceiling is ₦${goal.maxBudgetNaira}`);
   }
@@ -99,7 +116,7 @@ export function buildSystemPrompt(
     goalFacts.push(`${goal.shownCount} listing(s) have already been shown`);
   }
   const goalNote = goalFacts.length
-    ? `\n\nWhat you already know about this request (established over earlier turns, still current): ${goalFacts.join("; ")}. Use these as facts rather than re-deriving them from the conversation text. In particular, if the buyer asks for something CHEAPER, set searchProducts' maxBudgetNaira BELOW the cheapest figure above rather than repeating the same ceiling — otherwise you will hand them the same listings again and appear not to have listened. If they raise or replace the budget in their own words, their new number wins outright.`
+    ? `\n\nWhat you already know about this request (established over earlier turns, still current): ${goalFacts.join("; ")}. Use these as facts rather than re-deriving them from the conversation text. In particular, if the buyer asks for something CHEAPER, set searchProducts' maxBudgetNaira BELOW the cheapest figure above rather than repeating the same ceiling — otherwise you will hand them the same listings again and appear not to have listened. If they raise or replace the budget in their own words, their new number wins outright. The details listed above ARE this request's distinguishing detail: an item they describe is never "bare" or too thin to act on, so never ask the buyer to restate a quality already named there — and on a request that began with a PHOTO, those details are what you read off their image, so never ask them to describe in words what their own photo already showed you.`
     : "";
 
   // Only ever shapes WHICH questions askClarifyingQuestion asks and how the
@@ -269,14 +286,36 @@ A message that REACTS to or QUESTIONS what you just told them — doubting, conf
 // extraction half of that flow alone, done a step earlier so route.ts can
 // verify a real vendor actually exists before ever asking for the buyer's
 // name. See buildRequestDescriptionTool's own comment for the full why.
-export function buildDescriptionOnlySystemPrompt(buyerMessage: string): string {
-  return `The buyer just agreed to your own earlier offer to reach out to a business on their behalf about something they need — their message just now ("${buyerMessage}") is a plain agreement, nothing more. Do NOT search again, and do NOT re-verify or re-offer — that offer was already made, and they've already said yes.
+export function buildDescriptionOnlySystemPrompt(
+  buyerMessage: string,
+  // See route.ts's own note on the goal sheet's attributes: on a request that
+  // began with a PHOTO, this is everything the model read off the image, and
+  // it is the ONLY place that detail exists — prior turns are text-only and a
+  // photo turn's stored text is a bare "[sent a photo]". Without it the
+  // summary collapses to the bare item name, which is both a worse brief for
+  // the vendor and the exact condition that made the model judge the request
+  // too thin to act on and ask the buyer to re-describe their own photo.
+  knownDetails?: string[],
+): string {
+  const detailsNote = knownDetails?.length
+    ? `\n\nAlready established about the item/need — fold ALL of this into the summary, it is real detail the buyer has already given (on a photo request, it is what you read off their image): ${knownDetails.join(", ")}.`
+    : "";
+  return `The buyer just agreed to your own earlier offer to reach out to a business on their behalf about something they need — their message just now ("${buyerMessage}") is a plain agreement, nothing more. Do NOT search again, and do NOT re-verify or re-offer — that offer was already made, and they've already said yes.${detailsNote}
 
 Your ONLY job this turn is to call buildRequestDescription with a complete, self-contained summary of what the buyer needs — combine the item/service, and any budget, timeframe, location, or other detail given anywhere earlier in this thread, into one complete summary a business could act on without seeing the rest of the chat. Call it exactly once, with no other text and no other tool call — do not ask for their name here, do not call createBuyerRequest here, that all happens on a later turn.`;
 }
 
-export function buildAgreementOnlySystemPrompt(buyerMessage: string): string {
-  return `The buyer just agreed to your own earlier offer to reach out to a business on their behalf about something they need — their message just now ("${buyerMessage}") is a plain agreement, nothing more. Do NOT search again, and do NOT re-verify or re-offer — that offer was already made, and they've already said yes.
+export function buildAgreementOnlySystemPrompt(
+  buyerMessage: string,
+  // Same detail, same reason as buildDescriptionOnlySystemPrompt above —
+  // createBuyerRequest's `description` is built here, and it is the only
+  // text a vendor ever reads.
+  knownDetails?: string[],
+): string {
+  const detailsNote = knownDetails?.length
+    ? `\n\nThe following is already established about the item/need — include it in \`description\`; it is real detail the buyer has already given (on a photo request, it is what you read off their image, so never ask them to describe it again): ${knownDetails.join(", ")}.`
+    : "";
+  return `The buyer just agreed to your own earlier offer to reach out to a business on their behalf about something they need — their message just now ("${buyerMessage}") is a plain agreement, nothing more. Do NOT search again, and do NOT re-verify or re-offer — that offer was already made, and they've already said yes.${detailsNote}
 
 NEVER call createBuyerRequest until you also know the buyer's NAME. If nothing anywhere earlier in this conversation gave you their name, call askClarifyingQuestion (\`kind: "name"\`, NOT \`"text"\` — this specific question gets its own dedicated composer input on the frontend) and ask for it in one short, natural line (e.g. "Great — what's your name, so I can pass it on?") — that's the ONLY tool call this turn, wait for their real reply, don't call anything else alongside it. If a name was already given earlier in the conversation, skip straight to createBuyerRequest without asking again.
 

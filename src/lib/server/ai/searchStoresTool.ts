@@ -113,6 +113,7 @@ export async function searchStoresCore(
     buyerLocation,
     push,
     locationLabel,
+    excludeVendorId,
     allowNearbyBusinesses,
   }: {
     buyerLocation?: BuyerLocation;
@@ -122,6 +123,13 @@ export async function searchStoresCore(
     // Layout, Enugu" instead of "your area". Never the `location` search
     // parameter: it doesn't re-geocode and can't change what's searched.
     locationLabel?: string;
+    // The acting vendor's own vendorId, when a vendor is browsing /chat
+    // (2026-09-27). Their own storefront must never come back as a result —
+    // found live, a vendor searched for sandals and was offered a reach-out
+    // to their own shop in Independence Layout Enugu. Null for an anonymous
+    // or buyer-side search, where the retrieval service leaves every row
+    // untouched.
+    excludeVendorId?: string | null;
     // Google Places (Tier 5) — service requests only. See
     // allowsNearbyBusinesses. A store search reads as a service one when
     // its own businessType does ("phone repair shop" yes, "electronics
@@ -195,6 +203,9 @@ export async function searchStoresCore(
           // See searchProductsCore's own comment — the backend skips the
           // Places call outright when this is false.
           includeNearbyBusinesses,
+          // See this core's own options comment — the acting vendor's own
+          // storefront is never a result of their own search.
+          excludeVendorId,
         },
       }));
   } catch (err) {
@@ -288,6 +299,9 @@ export function searchStoresTool(
   // See allowsNearbyBusinesses — route.ts resolves this from the scope
   // check's seekingKind; omitted means "decide from the query text".
   allowNearbyBusinesses?: boolean,
+  // The acting vendor's own vendorId when a vendor is browsing /chat — see
+  // this core's own options comment. Never a result of their own search.
+  excludeVendorId?: string | null,
 ) {
   return tool({
     description:
@@ -302,7 +316,13 @@ export function searchStoresTool(
     }) =>
       searchStoresCore(
         { businessType, location, radiusKm, attributes, maxBudgetNaira },
-        { buyerLocation, push, locationLabel, allowNearbyBusinesses },
+        {
+          buyerLocation,
+          push,
+          locationLabel,
+          excludeVendorId,
+          allowNearbyBusinesses,
+        },
       ),
   });
 }

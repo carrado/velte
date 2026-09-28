@@ -71,7 +71,6 @@ import {
   externalOffersWithLocalOfferPhrase,
   noVendorEvenBySectorPhrase,
   noVendorButOnlineOffersPhrase,
-  noVendorOnlySearchLinksPhrase,
   isAcknowledgementReply,
   isAskingForExplanation,
   isOfferDeclineReply,
@@ -324,6 +323,12 @@ function buyerRequestStatusReply(
 async function hasContactableVendorsForQuery(
   query: string,
   buyerLocation?: BuyerLocation,
+  // The acting vendor's own vendorId when a vendor is browsing /chat — see
+  // the handler's own `excludeVendorId`. This is the probe that DECIDES
+  // whether a reach-out offer is made at all, so without it a vendor whose
+  // own shop is the only match would qualify their own store as a
+  // "contactable vendor" and the offer to contact themselves would stand.
+  excludeVendorId?: string | null,
 ): Promise<boolean> {
   const q = query.trim();
   if (!q) return false;
@@ -334,11 +339,11 @@ async function hasContactableVendorsForQuery(
       // nothing reading the result.
       searchProductsCore(
         { product: q },
-        { buyerLocation, allowNearbyBusinesses: false },
+        { buyerLocation, excludeVendorId, allowNearbyBusinesses: false },
       ),
       searchStoresCore(
         { businessType: q },
-        { buyerLocation, allowNearbyBusinesses: false },
+        { buyerLocation, excludeVendorId, allowNearbyBusinesses: false },
       ),
     ]);
     const productHits =
@@ -491,6 +496,10 @@ async function findReachOutEligibleVendors(
   stores: StoreMatch[],
   buyerLocation?: BuyerLocation,
   contactTerm: string = verifyTerm,
+  // See hasContactableVendorsForQuery — threaded through so the
+  // eligibility decision itself can't be satisfied by the acting vendor's
+  // own store.
+  excludeVendorId?: string | null,
 ): Promise<{ eligible: boolean; kept: StoreMatch[] }> {
   if (!verifyTerm.trim() || !stores.length) {
     return { eligible: false, kept: [] };
@@ -507,7 +516,11 @@ async function findReachOutEligibleVendors(
   }
   const eligible =
     verification.kept.length && contactTerm.trim()
-      ? await hasContactableVendorsForQuery(contactTerm, buyerLocation)
+      ? await hasContactableVendorsForQuery(
+          contactTerm,
+          buyerLocation,
+          excludeVendorId,
+        )
       : false;
   return { eligible, kept: verification.kept };
 }
@@ -1658,6 +1671,35 @@ async function handleSearch(req: Request) {
       ? "buyer"
       : "guest";
   const actorCookie = vendorAuth?.cookie ?? buyerAuth?.cookie ?? null;
+  // A vendor browsing /chat must never be shown their own storefront as a
+  // result — or, worse, be offered a reach-out to it (2026-09-27, found
+  // live: a vendor searched for sandals and Velte offered to contact "a
+  // vendor whose store fits 'sandals' … based in Independence Layout
+  // Enugu", which was their own shop). Null for everyone else, and the
+  // retrieval service treats null as "keep every row".
+  //
+  // Passed at EVERY search entry point below — the two tool factories AND
+  // each direct core call (the dead-end cascade's cross-checks, the sector
+  // scan, the similar-match check, the reach-out eligibility probe), since
+  // any of them can surface a store.
+  const excludeVendorId = vendorAuth?.userId ?? null;
+  // Who a Buyer Request posted from this turn would belong to (2026-09-27).
+  // A vendor can post one too, so this is no longer buyer-only — being
+  // buyer-only is what told a vendor signed into /chat to "sign in first".
+  //
+  // Deliberately mirrors velte-backend's resolveActor, which is the thing
+  // that actually decides ownership: a buyer session normally owns the
+  // request, EXCEPT when it carries a `linkedVendorId`, in which case it
+  // resolves as that vendor. Only the vendor-only case is distinguishable
+  // here without another round trip, so that is the one branched on; a
+  // caller with both cookies reports as a buyer, which matches resolveActor
+  // for every unlinked pair (its common case) and only ever affects WHICH
+  // saved number is offered back, never who owns the request.
+  const buyerRequestActor = buyerAuth
+    ? ({ type: "buyer", cookie: buyerAuth.cookie } as const)
+    : vendorAuth
+      ? ({ type: "vendor", cookie: vendorAuth.cookie } as const)
+      : null;
   // The turn's action, and therefore its price: a photo turn costs a
   // multiple of a text turn because it genuinely costs that much more to
   // serve (see CREDIT_COST for the current numbers — deliberately not
@@ -2634,9 +2676,33 @@ async function handleSearch(req: Request) {
       // those areas as options, and got a comparison of them instead of the
       // search it had just agreed to. The options come from history; the
       // message itself compares nothing.
+      // Nor a turn with a PHOTO attached (2026-09-27, found live): a buyer
+      // sent a picture of cross-strap slide sandals captioned "Where can I
+      // get this sandals or pams" — an ordinary find/availability ask, the
+      // exact shape comparisonRule.ts's own rule already excludes ("where
+      // can I get…", 'do you sell X or Y' ask you to CHECK AVAILABILITY,
+      // never to judge). The classifier missed its own rule, returned
+      // isComparison with the two words as options, and Phase 1 answered
+      // from the model's general knowledge with a "Style vs casualness /
+      // Support & comfort / Versatility" essay ending "Want me to find
+      // cross-strap slide sandals on Velte for you?" — a recommendation the
+      // buyer never asked for, on a turn that was meant to be a search, with
+      // the photo discarded (Phase 1 searches nothing by design).
+      //
+      // Structural because the classifier is not reliable here, and because
+      // the photo is what settles it: the buyer has shown THE thing they
+      // want, so "or pams" is a second NAME for it — not two alternatives to
+      // weigh. This is the same neutralisation the scope check already
+      // applies to its own verdicts on a photo turn (see its own comment by
+      // `scopeOutput?.inScope === false && !imageUrl`, and the photo+empty-
+      // caption override of hasMultipleIntents further up) — `isComparison`
+      // was simply the one field left live. A picked Compare tool stays
+      // exempt, exactly as for the two guards above: toolAlignment.ts vetted
+      // that, and choosing the tool is an explicit instruction to weigh.
       const isFreshComparisonRequest =
         activeTool === "compare" ||
         (!activeTool &&
+          !imageUrl &&
           scopeSaysComparison &&
           comparisonOptions.length >= 2 &&
           !isAcknowledgementReply(message));
@@ -3697,6 +3763,41 @@ async function handleSearch(req: Request) {
           }
         }
       }
+      // A turn that is ANSWERING a pending reach-out offer is not a bare
+      // request, and the gate below must never intercept it (2026-09-26,
+      // found live). The whole sequence: a dress PHOTO → the search ran and
+      // returned "similar" listings alongside the reach-out offer
+      // ("Should I reach out to vendors?") → the buyer tapped "Yes, find
+      // someone" → and instead of the vendor flow they got "What kind of
+      // dress are you looking for? Any specific style, color, or occasion
+      // in mind?" — re-asking for detail the photo had already given.
+      //
+      // The gate owes that ask: it is `!imageUrl`-gated, so the photo turn
+      // itself never triggered it, and `hasSpecificDetails` is judged from
+      // what was SAID — a photo turn's own stored text is "[sent a photo]",
+      // which carries no detail at all. So the gate stays armed through the
+      // whole request and its next eligible turn is the agreement reply,
+      // which has no image attached (the client only carries a photo
+      // forward for a location clarify) and re-derives `itemTerm` ("dress")
+      // from the still-open request. Every guard passes and it fires —
+      // BEFORE the two offer short-circuits further down (isAnsweringOffer,
+      // isAnsweringVendorSearchOffer), so the reach-out never runs at all.
+      //
+      // The veto is on INTENT, not just on ordering: a buyer who has just
+      // agreed to a reach-out has told Velte everything it needs to act on,
+      // and asking them for more is friction at the exact moment they
+      // committed. Deliberately the same structural shape as the two
+      // short-circuits it protects (declines excluded — those have their own
+      // deterministic handler; a buried `requestRelation: "new"` overridden
+      // by `isContinuation`, the same way isAnsweringOffer's own comment
+      // documents). This is only the gate's veto; the offers themselves are
+      // still handled by those blocks, unchanged.
+      const answeringPendingOffer =
+        history.at(-1)?.role === "assistant" &&
+        (history.at(-1)?.awaitingBuyerRequestReply === true ||
+          history.at(-1)?.awaitingVendorSearchOffer === true) &&
+        !isOfferDeclineReply(message) &&
+        (Boolean(body?.isContinuation) || requestRelation !== "new");
       if (
         // Every input below comes from the scope check's own reading of the
         // request (itemTerm/seekingKind/hasSpecificDetails), not from
@@ -3707,6 +3808,7 @@ async function handleSearch(req: Request) {
         // distinguishing, budget included, has been said yet.
         itemTerm &&
         !hasSpecificDetails &&
+        !answeringPendingOffer &&
         !imageUrl &&
         // A multi-need message must reach the dual-intent split downstream
         // — pausing one of the needs for a budget question would swallow
@@ -3888,19 +3990,21 @@ async function handleSearch(req: Request) {
             locationLabel,
             rememberedBudget,
             allowNearbyBusinesses,
+            excludeVendorId,
           ),
           searchStores: searchStoresTool(
             body?.buyerLocation,
             push,
             locationLabel,
             allowNearbyBusinesses,
+            excludeVendorId,
           ),
           getVendorProducts: getVendorProductsTool(push),
           // Takes only `buyerAuth` now: the tool no longer creates the
           // request (the phone must be confirmed first, which only the
           // browser can do), so location/image/matchQuery all moved to
           // the frontend's own POST /api/buyer-requests.
-          createBuyerRequest: createBuyerRequestTool(buyerAuth),
+          createBuyerRequest: createBuyerRequestTool(buyerRequestActor),
           offerBuyerRequest: offerBuyerRequestTool(),
         };
         const system = buildSystemPrompt(
@@ -3915,6 +4019,10 @@ async function handleSearch(req: Request) {
                 maxBudgetNaira: storedGoal.maxBudgetNaira,
                 cheapestSeenNaira: storedGoal.cheapestSeenNaira,
                 shownCount: storedGoal.shownProductIds?.length ?? 0,
+                // The photo turn's own captured detail (see buildSystemPrompt's
+                // goal param) — the only thing that keeps a photographed item
+                // from reaching the model as the bare word "dress".
+                attributes: storedGoal.attributes,
               }
             : null,
           // Non-null only on the turn confirming a fresh comparison's pick
@@ -4084,7 +4192,10 @@ async function handleSearch(req: Request) {
 
           const descriptionResult = await callLLM(
             {
-              system: buildDescriptionOnlySystemPrompt(message),
+              system: buildDescriptionOnlySystemPrompt(
+                message,
+                storedGoal?.attributes,
+              ),
               messages,
               tools: {
                 buildRequestDescription: buildRequestDescriptionTool(),
@@ -4119,7 +4230,11 @@ async function handleSearch(req: Request) {
               hasRealMatch = false;
               for (const q of preCheckQueries) {
                 if (
-                  await hasContactableVendorsForQuery(q, body?.buyerLocation)
+                  await hasContactableVendorsForQuery(
+                    q,
+                    body?.buyerLocation,
+                    excludeVendorId,
+                  )
                 ) {
                   hasRealMatch = true;
                   break;
@@ -4132,7 +4247,11 @@ async function handleSearch(req: Request) {
                   {
                     product: candidateDescription || offerMatchQuery || "that",
                   },
-                  { buyerLocation: body?.buyerLocation, allowNearbyBusinesses },
+                  {
+                    buyerLocation: body?.buyerLocation,
+                    excludeVendorId,
+                    allowNearbyBusinesses,
+                  },
                 );
                 preCheckExternalSuggestions =
                   "results" in nearbyProbe
@@ -4204,11 +4323,14 @@ async function handleSearch(req: Request) {
           // reply is built from the ONE tool's own result instead.
           const agreementResult = await callLLM(
             {
-              system: buildAgreementOnlySystemPrompt(message),
+              system: buildAgreementOnlySystemPrompt(
+                message,
+                storedGoal?.attributes,
+              ),
               messages,
               tools: {
                 askClarifyingQuestion: askClarifyingQuestionTool(),
-                createBuyerRequest: createBuyerRequestTool(buyerAuth),
+                createBuyerRequest: createBuyerRequestTool(buyerRequestActor),
               },
               toolChoice: "required",
               stopWhen: stepCountIs(1),
@@ -4356,6 +4478,7 @@ async function handleSearch(req: Request) {
                   buyerLocation: body?.buyerLocation,
                   push,
                   locationLabel,
+                  excludeVendorId,
                   // Nearby businesses ARE worth surfacing here even for a
                   // product-shaped term — the buyer explicitly asked for a
                   // vendor, not a listing, so this is the one case where a
@@ -5299,6 +5422,7 @@ async function handleSearch(req: Request) {
               outcome.stores,
               body?.buyerLocation,
               matchQuery,
+              excludeVendorId,
             );
           // Always hide the cascade store cards — they aren't listings for
           // the buyer's item. Only offer reach-out when matching can deliver.
@@ -5378,6 +5502,7 @@ async function handleSearch(req: Request) {
               { businessType: similarTerm },
               {
                 buyerLocation: body?.buyerLocation,
+                excludeVendorId,
                 allowNearbyBusinesses: false,
               },
             );
@@ -5452,6 +5577,7 @@ async function handleSearch(req: Request) {
                 buyerLocation: body?.buyerLocation,
                 push,
                 weakResultsOut: weakResultsRef,
+                excludeVendorId,
                 allowNearbyBusinesses,
               },
             );
@@ -5506,6 +5632,7 @@ async function handleSearch(req: Request) {
               {
                 buyerLocation: body?.buyerLocation,
                 push,
+                excludeVendorId,
                 allowNearbyBusinesses,
               },
             );
@@ -5527,6 +5654,10 @@ async function handleSearch(req: Request) {
                     businessType,
                     fallback.results,
                     body?.buyerLocation,
+                    // contactTerm defaults to verifyTerm — skipped explicitly
+                    // so the acting vendor's own id lands in its slot.
+                    undefined,
+                    excludeVendorId,
                   )
                 : { eligible: false, kept: [] };
             // Zero real results — whether or not Places turned up
@@ -5853,6 +5984,9 @@ async function handleSearch(req: Request) {
                 scanTerm,
                 storeScanResult.results,
                 body?.buyerLocation,
+                // Same as above — contactTerm defaults to verifyTerm.
+                undefined,
+                excludeVendorId,
               )
             : { eligible: false, kept: [] };
 
@@ -6167,6 +6301,7 @@ async function handleSearch(req: Request) {
                       buyerLocation: body?.buyerLocation,
                       push,
                       locationLabel,
+                      excludeVendorId,
                       allowNearbyBusinesses,
                     },
                   ).catch((err) => {
@@ -6203,6 +6338,7 @@ async function handleSearch(req: Request) {
                       buyerLocation: body?.buyerLocation,
                       push,
                       locationLabel,
+                      excludeVendorId,
                       allowNearbyBusinesses,
                     },
                   ).catch((err) => {
@@ -6549,29 +6685,17 @@ async function handleSearch(req: Request) {
           }
         }
 
-        // A "search this site yourself" link (connectors/searchLinks.ts) is
-        // not a listing, so it doesn't count as one (2026-09-24, found live
-        // on velte-dev): when Jiji's page read failed, the lone search link
-        // was treated as an offer — rendered as an image-less result card,
-        // with a reply claiming "these online listings" sat underneath.
-        // Split out here so every check below (the reply, the comparison,
-        // the vendor-search offer) sees only real listings. The links still
-        // go to the client, appended to externalOffers at sendFinal, where
-        // SearchHome renders them as a plain line rather than a card.
-        // One per site: a comparison turn fetches once per option, so each
-        // site's link would otherwise appear once per option compared.
-        const externalSearchLinks = Array.from(
-          new Map(
-            externalOffers
-              .filter((o) => !o.isDirectLink)
-              .map((o) => [o.platform, o] as const),
-          ).values(),
-        );
-        externalOffers = externalOffers.filter((o) => o.isDirectLink);
-
-        // See deadEndTerm's own comment — the line that said "nothing
-        // close by either" was written before the connectors ran, and is
-        // now demonstrably wrong on screen.
+        // Every external offer is a real listing now: the "search this site
+        // yourself" links (connectors/searchLinks.ts, one pre-filled search
+        // per site) were removed end to end on 2026-09-28, at explicit
+        // request — the plain line SearchHome rendered them as is gone. The
+        // split that used to live here (non-listings set aside so the reply,
+        // comparison and vendor-search offer saw only real listings) went
+        // with them.
+        //
+        // See deadEndTerm's own comment — the line that said "nothing close
+        // by either" was written before the connectors ran, and is now
+        // demonstrably wrong on screen.
         if (externalOffers.length > 0 && deadEndTerm) {
           // Found live: a buyer with a ₦400k budget got two listings back
           // with no price shown on either, presented with the same
@@ -6599,15 +6723,6 @@ async function handleSearch(req: Request) {
               // turn that produced too few offers to compare.
               isCompareTurn && externalOffers.length >= 2,
             ),
-            [],
-          );
-        } else if (externalSearchLinks.length > 0 && deadEndTerm) {
-          // Connectors ran and found no real listing — only a search link.
-          // Said plainly; the vendor-search offer below still fires for
-          // this case (see vendorSearchOffered), so the turn ends on a real
-          // next step rather than a link dressed up as a result.
-          replyOverride = pickAvoiding(
-            noVendorOnlySearchLinksPhrase(deadEndLabel ?? deadEndTerm),
             [],
           );
         } else if (
@@ -7006,7 +7121,7 @@ async function handleSearch(req: Request) {
           stores.length === 0 &&
           products.length === 0 &&
           Boolean(vendorSearchTerm) &&
-          (externalOffers.length > 0 || externalSearchLinks.length > 0);
+          externalOffers.length > 0;
 
         await sendFinal({
           type: "final",
@@ -7060,9 +7175,7 @@ async function handleSearch(req: Request) {
           awaitingVendorSearchOffer: vendorSearchOffered,
           vendorSearchMatchQuery: vendorSearchOffered ? vendorSearchTerm : null,
           recommendation,
-          // Search links last — SearchHome splits them back out by
-          // isDirectLink and renders them as a line, not a card.
-          externalOffers: [...externalOffers, ...externalSearchLinks],
+          externalOffers,
           // Resolved either way by the time this turn reaches here: a
           // FRESH comparison never gets this far (its own short-circuit
           // above ends the turn), and the confirmation turn's own exchange

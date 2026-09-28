@@ -290,11 +290,22 @@ async function judgeCandidates(
           tools: { verifyMatches: verifyMatchesTool() },
           toolChoice: "required",
         },
+        // gpt-5-mini ("openai-strong") — the matching judgment needs the
+        // stronger model: it compares an offer's photo against the buyer's
+        // own reference photo for structural/type differences, which is a
+        // finer visual call than the plain identification "openai"
+        // (gpt-4o-mini) was doing. Same reasoning-effort-low entry route.ts
+        // uses for its own multimodal turns.
+        //
         // Groq is text-only, so it's only a safe fallback when this
         // particular call carries no images at all — handing it one
         // silently misbehaves rather than failing loudly (route.ts's own
-        // note on why the image path has no Groq rung).
-        imageCount > 0 ? ["openai"] : ["openai", "groq"],
+        // note on why the image path has no Groq rung). "openai" stays as
+        // the middle rung so a gpt-5-mini 429 still verifies rather than
+        // dropping straight to keep-everything.
+        imageCount > 0
+          ? ["openai-strong", "openai"]
+          : ["openai-strong", "openai", "groq"],
         "verify-matches",
       ),
       new Promise<never>((_, reject) =>
