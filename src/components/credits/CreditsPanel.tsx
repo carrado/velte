@@ -274,7 +274,7 @@ export function CreditsPanel({
                   : "bg-orange-500 text-white hover:bg-orange-600",
               )}
             >
-              {busy && !isVendor ? "Opening…" : "Pay with card"}
+              {busy && !isVendor ? "Opening…" : "Top up"}
             </button>
           </div>
 

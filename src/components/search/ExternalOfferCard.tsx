@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ComparisonDetailBlock } from "@/components/search/ComparisonTemplate";
 import type { ComparisonDetail } from "@/components/search/ComparisonTemplate";
+import { TOP_PICK_BADGE } from "@/components/search/RecommendationPicks";
 import type { ExternalOffer } from "@/types/search";
 
 // An off-Velte product offer (Phase 4) — shown only when Velte itself had
@@ -176,7 +177,7 @@ export function ExternalOfferCard({
                 key={label}
                 className={cn(
                   "rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm",
-                  label === "Top pick"
+                  label === TOP_PICK_BADGE
                     ? "bg-orange-500 text-white"
                     : "bg-white/95 text-orange-600 border border-orange-100",
                 )}

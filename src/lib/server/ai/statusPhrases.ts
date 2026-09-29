@@ -1019,7 +1019,6 @@ export function noVendorButOnlineOffersPhrase(
   }
   return [
     `No vendor on Velte has "${w}" yet — but here's where it's selling online right now.`,
-    `Couldn't find "${w}" on Velte at all — the closest I can get you is these online listings.`,
     `No Velte vendor for "${w}" yet. Off Velte, these stores are listing it.`,
   ];
 }

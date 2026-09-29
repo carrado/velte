@@ -5,6 +5,7 @@ import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
+import { TOP_PICK_BADGE } from "@/components/search/RecommendationPicks";
 import { ComparisonDetailBlock } from "@/components/search/ComparisonTemplate";
 import type { ComparisonDetail } from "@/components/search/ComparisonTemplate";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
@@ -131,7 +132,7 @@ export function VendorResultCard({
                 key={label}
                 className={cn(
                   "rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm",
-                  label === "Top pick"
+                  label === TOP_PICK_BADGE
                     ? "bg-orange-500 text-white"
                     : "bg-white/95 text-orange-600 border border-orange-100",
                 )}
