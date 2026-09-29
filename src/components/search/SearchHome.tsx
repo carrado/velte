@@ -39,6 +39,7 @@ import { CreditGateModal } from "@/components/credits/CreditGateModal";
 import AnchoredPopover from "@/components/AnchoredPopover";
 import {
   RecommendationPicks,
+  orderWithTopPickFirst,
   pickBadgesFor,
 } from "@/components/search/RecommendationPicks";
 import {
@@ -679,16 +680,47 @@ function MatchingServicesThread({
 // library, since raw "**bold**"/"- item" syntax showing up as literal
 // asterisks and dashes was exactly the "unnecessary special characters"
 // complaint this fixes.
-function renderInlineBold(text: string, keyPrefix: string): React.ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") ? (
-      <strong key={`${keyPrefix}-${i}`} className="font-semibold text-ink">
-        {part.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={`${keyPrefix}-${i}`}>{part}</span>
-    ),
-  );
+function renderInlineBold(
+  text: string,
+  keyPrefix: string,
+  onQuoteClick?: (term: string) => void,
+): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*|"[^"]+")/g).map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={`${keyPrefix}-${i}`} className="font-semibold text-ink">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    // A straight-quoted term ("standing fan") becomes a jump-to-the-cards
+    // link when the caller supplies a handler (see FormattedReply's
+    // quoteScrollTargetId). A <button>, not an <a> — there is no URL to
+    // navigate to; it scrolls up to the cards already rendered above it.
+    // The quotes stay visible so the sentence reads exactly as authored.
+    if (
+      onQuoteClick &&
+      part.length > 2 &&
+      part.startsWith('"') &&
+      part.endsWith('"')
+    ) {
+      const term = part.slice(1, -1);
+      return (
+        <span key={`${keyPrefix}-${i}`}>
+          {'"'}
+          <button
+            type="button"
+            onClick={() => onQuoteClick(term)}
+            className="underline underline-offset-2 text-ink hover:text-orange-500"
+          >
+            {term}
+          </button>
+          {'"'}
+        </span>
+      );
+    }
+    return <span key={`${keyPrefix}-${i}`}>{part}</span>;
+  });
 }
 
 // Shared by paragraph blocks and list items alike — a block/item can itself
@@ -699,11 +731,12 @@ function renderInlineBold(text: string, keyPrefix: string): React.ReactNode[] {
 function renderMultilineBold(
   text: string,
   keyPrefix: string,
+  onQuoteClick?: (term: string) => void,
 ): React.ReactNode[] {
   return text.split("\n").map((line, j) => (
     <span key={`${keyPrefix}-${j}`}>
       {j > 0 && <br />}
-      {renderInlineBold(line, `${keyPrefix}-${j}`)}
+      {renderInlineBold(line, `${keyPrefix}-${j}`, onQuoteClick)}
     </span>
   ));
 }
@@ -716,7 +749,23 @@ type ReplyBlock =
   | { type: "ol"; items: string[] }
   | { type: "p"; lines: string[] };
 
-function FormattedReply({ text }: { text: string }) {
+function FormattedReply({
+  text,
+  quoteScrollTargetId,
+}: {
+  text: string;
+  quoteScrollTargetId?: string;
+}) {
+  // Scrolls up to the results group this explanation describes (2026-09-28,
+  // explicit request) — a quoted term in the reply is a jump link to the
+  // cards already above it, never a new search.
+  const onQuoteClick = quoteScrollTargetId
+    ? () => {
+        document
+          .getElementById(quoteScrollTargetId)
+          ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    : undefined;
   const blocks: ReplyBlock[] = [];
   // Set on a blank source line, cleared the next time real content is
   // processed. A blank line is a deliberate paragraph break (every
@@ -792,7 +841,9 @@ function FormattedReply({ text }: { text: string }) {
           return (
             <ul key={i} className="list-disc pl-5 space-y-1">
               {block.items.map((item, j) => (
-                <li key={j}>{renderMultilineBold(item, `${i}-${j}`)}</li>
+                <li key={j}>
+                  {renderMultilineBold(item, `${i}-${j}`, onQuoteClick)}
+                </li>
               ))}
             </ul>
           );
@@ -801,13 +852,17 @@ function FormattedReply({ text }: { text: string }) {
           return (
             <ol key={i} className="list-decimal pl-5 space-y-1">
               {block.items.map((item, j) => (
-                <li key={j}>{renderMultilineBold(item, `${i}-${j}`)}</li>
+                <li key={j}>
+                  {renderMultilineBold(item, `${i}-${j}`, onQuoteClick)}
+                </li>
               ))}
             </ol>
           );
         }
         return (
-          <p key={i}>{renderMultilineBold(block.lines.join("\n"), `${i}`)}</p>
+          <p key={i}>
+            {renderMultilineBold(block.lines.join("\n"), `${i}`, onQuoteClick)}
+          </p>
         );
       })}
     </div>
@@ -1519,7 +1574,11 @@ function ConversationTurnView({
                               />
                             )}
                           <CardCarousel
-                            items={turn.products}
+                            items={orderWithTopPickFirst(
+                              turn.products,
+                              (match) => match.productId,
+                              turn.recommendation,
+                            )}
                             getKey={(match) => match.productId}
                             renderItem={(match) => (
                               <VendorResultCard
@@ -1731,9 +1790,6 @@ function ConversationTurnView({
                     // AI_MESSAGE_CLASS — but the point stands: every branch
                     // here renders its reply the same way.)
                     <>
-                      <div className={AI_MESSAGE_CLASS}>
-                        <FormattedReply text={turn.reply} />
-                      </div>
                       {turn.externalStoreSuggestions.length > 0 &&
                         !turn.buyerRequestOffered && (
                           <CardCarousel
@@ -1774,7 +1830,11 @@ function ConversationTurnView({
                         link (isDirectLink false) is not a result, so it
                         never gets a card; it renders as a line below. */}
                       {turn.externalOffers.some(isListing) && (
-                        <div className="space-y-3" data-results-group>
+                        <div
+                          className="space-y-3"
+                          data-results-group
+                          id={`external-results-${turn.id}`}
+                        >
                           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                             Available online — not on Velte
                           </h2>
@@ -1816,9 +1876,17 @@ function ConversationTurnView({
                             connector (2026-09-21); its search-page fallback
                             is filtered out here and shown as a line below. */}
                           {EXTERNAL_OFFER_PLATFORMS.map(({ key, label }) => {
-                            const offers = turn.externalOffers.filter(
-                              (offer) =>
-                                isListing(offer) && offer.platform === key,
+                            // Ordered per bucket, not across all offers: the
+                            // top pick can only lead the row it's actually in,
+                            // and each platform is its own carousel.
+                            const offers = orderWithTopPickFirst(
+                              turn.externalOffers.filter(
+                                (offer) =>
+                                  isListing(offer) && offer.platform === key,
+                              ),
+                              (offer) => offer.id,
+                              turn.recommendation,
+                              "Best price",
                             );
                             if (!offers.length) return null;
                             return (
@@ -1855,6 +1923,16 @@ function ConversationTurnView({
                             )}
                         </div>
                       )}
+                      {/* Cards first, explanation after (2026-09-28, explicit
+                        request) — the buyer sees what was found before the
+                        sentence describing it, matching the ordering the
+                        reach-out question below already follows. */}
+                      <div className={AI_MESSAGE_CLASS}>
+                        <FormattedReply
+                          text={turn.reply}
+                          quoteScrollTargetId={`external-results-${turn.id}`}
+                        />
+                      </div>
                       {/* The reach-out question + Yes/No pair, AFTER the
                         result cards rather than stacked above them
                         (2026-09-15, explicit request) — the buyer sees what

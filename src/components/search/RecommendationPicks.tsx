@@ -157,10 +157,54 @@ export function pickBadgesFor(
 ): string[] | undefined {
   if (!recommendation) return undefined;
   const badges: string[] = [];
-  if (recommendation.bestOverallId === productId) badges.push("Top pick");
+  if (recommendation.bestOverallId === productId) badges.push(TOP_PICK_BADGE);
   if (recommendation.bestValueId === productId) badges.push(valueLabel);
   if (recommendation.nearestId === productId) badges.push("Nearest");
   return badges.length ? badges : undefined;
+}
+
+// The badge label that means "this is the one" — the single chip a card can
+// wear that earns it the front of the carousel. A named constant rather than
+// a bare string because two components (VendorResultCard, ExternalOfferCard)
+// style on it and this file both grants and orders by it; a typo in any of
+// those three would silently stop matching rather than fail loudly.
+export const TOP_PICK_BADGE = "Top pick";
+
+// Puts the Top pick FIRST, everything else in the order the server ranked it
+// (2026-09-29, explicit request). The badge already said WHICH card the
+// recommendation chose, but it sat wherever ranking happened to land it —
+// often the third slide, off-screen in a row that only shows one card at a
+// time, which made the chip the buyer most needs to see the one they had to
+// scroll to find.
+//
+// A stable partition, NOT a sort: only the top pick moves, and everything
+// else keeps its relative order, so this can't reshuffle results the ranking
+// deliberately sequenced (distance, trust, placement boost).
+//
+// Deliberately narrow — only the "Top pick" badge reorders. "Best value" and
+// "Nearest" are secondary judgments that often sit on the SAME card, and
+// promoting them too would make the row's order depend on which chips a turn
+// happened to produce. No recommendation, or a top pick that isn't in this
+// list (an id that failed to resolve), returns the array untouched.
+export function orderWithTopPickFirst<T>(
+  items: T[],
+  getId: (item: T) => string,
+  recommendation: SearchRecommendation | null | undefined,
+  valueLabel: string = "Best value",
+): T[] {
+  const topPickId = recommendation?.bestOverallId;
+  if (!topPickId) return items;
+  const index = items.findIndex(
+    (item) =>
+      getId(item) === topPickId &&
+      // Read the badge through the same function the cards do, so "is this
+      // the top pick" can never disagree between the chip and the position.
+      pickBadgesFor(getId(item), recommendation, valueLabel)?.includes(
+        TOP_PICK_BADGE,
+      ),
+  );
+  if (index <= 0) return items;
+  return [items[index], ...items.slice(0, index), ...items.slice(index + 1)];
 }
 
 // The "explain WHY" half of the recommendation layer (Phase 3,
