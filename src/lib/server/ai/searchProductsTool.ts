@@ -20,6 +20,7 @@ import {
   rejectedMatchesNote,
   verifyItemMatches,
 } from "@/lib/server/ai/verifyMatches";
+import { mergeAttributeLists } from "@/lib/server/ai/statedAttributes";
 import type {
   BuyerLocation,
   MatchTier,
@@ -51,7 +52,7 @@ const inputSchema = z.object({
     .array(z.string())
     .optional()
     .describe(
-      "Specific attributes — color, size, brand, material, style, condition, camera/storage/spec, etc. — but ONLY ones the buyer's own words actually named, or that you can genuinely see in an attached photo (for a photo, describe everything visually identifiable, not just the bare category, so matching can tell an exact match from a loosely related one). Never invent, guess, or list out plausible-sounding attributes the buyer never mentioned and no photo shows — e.g. for a bare repair request naming no symptom ('fix my phone', 'my laptop isn't working'), do NOT enumerate possible causes or parts ('screen', 'battery', 'software issue') as if the buyer had named them; leave this empty instead. An empty/omitted attributes list is the correct, honest output far more often than a guessed one. EACH ENTRY IS ONE SHORT, STANDALONE TRAIT (found live: 'with good camera and high storage' as a single entry got joined onto `product` verbatim, connector words and all, producing 'smartphone with good camera and high storage' as the actual search term — a real search term must never read like a clause lifted from the buyer's own sentence) — split a request naming several things into separate short entries ('good camera', 'high storage'), never one long phrase strung together with 'with'/'and'/'for'. And never include a bare intensifier with no real trait attached ('nice', 'good', 'great', 'quality') — 'nice camera' has a real trait (camera) worth keeping; 'nice' alone, or trailing on its own after the real traits are already listed, names nothing a search can filter on and must be dropped. A price or budget figure is NEVER an attribute either, for the same reason `product` above forbids it — 'under 100k', '100000 naira budget' — that belongs only in `maxBudgetNaira`, a real filter, not text joined into the search term itself.",
+      "Specific attributes — color, size, brand, material, style, condition, camera/storage/spec, fabric, capacity, etc. — for ANY product or service, not one category. ONLY ones the buyer's own words actually named, or that you can genuinely see in an attached photo (for a photo, describe everything visually identifiable, not just the bare category, so matching can tell an exact match from a loosely related one). These entries are what split Exact vs Similar on every search: omit a named colour/brand/spec and every listing of that item looks Exact. Never invent, guess, or list out plausible-sounding attributes the buyer never mentioned and no photo shows — e.g. for a bare repair request naming no symptom ('fix my phone', 'my laptop isn't working'), do NOT enumerate possible causes or parts ('screen', 'battery', 'software issue') as if the buyer had named them; leave this empty instead. An empty/omitted attributes list is the correct, honest output far more often than a guessed one. EACH ENTRY IS ONE SHORT, STANDALONE TRAIT (found live: 'with good camera and high storage' as a single entry got joined onto `product` verbatim, connector words and all, producing 'smartphone with good camera and high storage' as the actual search term — a real search term must never read like a clause lifted from the buyer's own sentence) — split a request naming several things into separate short entries ('good camera', 'high storage'), never one long phrase strung together with 'with'/'and'/'for'. And never include a bare intensifier with no real trait attached ('nice', 'good', 'great', 'quality') — 'nice camera' has a real trait (camera) worth keeping; 'nice' alone, or trailing on its own after the real traits are already listed, names nothing a search can filter on and must be dropped. A price or budget figure is NEVER an attribute either, for the same reason `product` above forbids it — 'under 100k', '100000 naira budget' — that belongs only in `maxBudgetNaira`, a real filter, not text joined into the search term itself.",
     ),
   // Optional on purpose: set this ONLY when the buyer's own message names or
   // clearly implies a specific place. Omit it entirely otherwise — the
@@ -201,6 +202,7 @@ export async function searchProductsCore(
     locationLabel,
     excludeVendorId,
     allowNearbyBusinesses,
+    rememberedAttributes: optionsRememberedAttributes,
   }: {
     buyerLocation?: BuyerLocation;
     push?: (candidates: string[]) => void;
@@ -227,6 +229,12 @@ export async function searchProductsCore(
     // of calls, and the retrieval service leaves every row untouched then.
     excludeVendorId?: string | null;
     allowNearbyBusinesses?: boolean;
+    // Matching details already established on THIS request (goal sheet +
+    // earlier turns). Merged with the model's own `attributes` so a colour
+    // named before the details question (colour on a dress, 256GB on a
+    // phone, brand on a generator) cannot be dropped when the buyer later
+    // answers with only size/brand/budget.
+    rememberedAttributes?: string[] | null;
   } = {},
 ): Promise<
   SearchProductsCoreResult | { error: "location-not-found"; message: string }
@@ -255,23 +263,13 @@ export async function searchProductsCore(
   }
   const coords = resolved.kind === "coords" ? resolved.coords : undefined;
 
-  const cleanAttributes = usableAttributes(attributes);
-  // SEARCHED with `product` ALONE now (2026-09-15, explicit request) —
-  // every buyer-facing sentence built from `buildProductTerm(product,
-  // attributes)` elsewhere (route.ts's dead-end phrasing, background-item
-  // labels, the goal sheet's own itemTerm) is untouched, since none of them
-  // read from this function's own local variables. What changed is what
-  // gets SEARCHED with: this used to be that same merged term, so "phone"
-  // plus an attribute like "good camera" became ONE string fed straight
-  // into both the vector search AND the rerank step — and rerank in
-  // particular (a cross-encoder, far more sensitive to exact phrasing than
-  // raw embedding similarity) could mark down a perfectly good phone whose
-  // own listing text just didn't happen to echo those specific words. See
-  // `attributesText` below for where the attributes went instead: a soft
-  // ranking boost on the retrieval backend (retrieval.service.js's
-  // rankCandidates), applied AFTER a listing already qualifies as a real
-  // match on the bare item, never a reason to drop one that qualifies but
-  // says nothing about camera or storage.
+  const cleanAttributes = usableAttributes(
+    mergeAttributeLists(attributes, optionsRememberedAttributes),
+  );
+  // Candidate POOL is still the bare item (2026-09-15) so a colour the
+  // listing never typed still gets found. Rerank + Exact-vs-Similar then
+  // use `attributesText`: a white sneaker is Similar for "black sneakers",
+  // never Exact, and rides in weakResults when anything actually is black.
   const queryText = product.trim();
   const attributesText = cleanAttributes?.join(", ") || undefined;
   // See isVagueReference's own comment — "all of them", "the best" carry no
@@ -385,7 +383,7 @@ export async function searchProductsCore(
   const verifiable = [...results, ...weakResults];
   if (verifiable.length) {
     push?.(checkingPhotosPhrase(product));
-    const { rejected } = await verifyItemMatches({
+    const { rejected, close, matched } = await verifyItemMatches({
       product,
       attributes: cleanAttributes,
       candidates: verifiable,
@@ -397,27 +395,31 @@ export async function searchProductsCore(
       results = results.filter((r) => !droppedIds.has(r.productId));
       weakResults = weakResults.filter((w) => !droppedIds.has(w.productId));
       filteredNote = rejectedMatchesNote(rejected, product) ?? undefined;
-      // Worth a log line either way: this is the one place a real vendor's
-      // listing gets removed from a buyer's results, so a bad gate has to
-      // be diagnosable from the server logs rather than only from a
-      // complaint.
       console.info(
         `[search] dropped ${rejected.length} wrong-kind match(es) for "${product}":`,
         rejected.map((r) => `${r.match.name} → ${r.actualItem}`),
       );
-      if (!results.length) {
-        // Tier and quality describe a result set that no longer exists.
-        // Leaving "similar" behind would put the "No exact match, but N
-        // similar items" heading over an empty section.
-        matchTier = null;
-        matchQuality = undefined;
-        // And weak matches can't stand alone: they're framed as a
-        // supplement to real results ("a couple MORE options"), and the
-        // frontend's own turn shape treats them as always-empty-when-
-        // products-is. An empty set here is a genuine dead end, which the
-        // zero-result path below already handles properly.
-        weakResults = [];
+    }
+    // Right kind, wrong colour/brand/size: keep them, never as Exact.
+    if (close.length) {
+      const closeIds = new Set(close.map((c) => c.productId));
+      const demoted = results.filter((r) => closeIds.has(r.productId));
+      results = results.filter((r) => !closeIds.has(r.productId));
+      const weakById = new Map(weakResults.map((w) => [w.productId, w]));
+      for (const item of demoted) weakById.set(item.productId, item);
+      weakResults = [...weakById.values()].slice(0, 5);
+      if (!results.length && demoted.length) {
+        results = demoted;
+        matchQuality = "similar";
+        weakResults = weakResults.filter((w) => !closeIds.has(w.productId));
+      } else if (results.length && matched.length) {
+        matchQuality = "direct";
       }
+    }
+    if (!results.length) {
+      matchTier = null;
+      matchQuality = undefined;
+      weakResults = [];
     }
   }
 
@@ -539,6 +541,9 @@ export function searchProductsTool(
   // The acting vendor's own vendorId when a vendor is browsing /chat — see
   // this core's own options comment. Never a result of their own search.
   excludeVendorId?: string | null,
+  // Colour/brand/size already named on this request — see searchProductsCore.
+  rememberedAttributes?: string[] | null,
+  onShown?: (results: VendorMatch[]) => void,
 ) {
   return tool({
     description:
@@ -550,8 +555,8 @@ export function searchProductsTool(
       location,
       radiusKm,
       maxBudgetNaira,
-    }) =>
-      searchProductsCore(
+    }) => {
+      const out = await searchProductsCore(
         {
           product,
           attributes,
@@ -568,7 +573,11 @@ export function searchProductsTool(
           locationLabel,
           excludeVendorId,
           allowNearbyBusinesses,
+          rememberedAttributes,
         },
-      ),
+      );
+      if (out.results?.length) onShown?.(out.results);
+      return out;
+    },
   });
 }

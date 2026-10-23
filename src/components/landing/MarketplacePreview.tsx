@@ -8,6 +8,7 @@ import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { AddToCartButton } from "@/components/cart/AddToCartButton";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { buildChatLink } from "@/lib/chatLink";
@@ -197,12 +198,24 @@ export function MarketplaceCard({
             className="text-orange-500 shrink-0 fill-orange-500/15"
           />
         </div>
-        {chatHref && (
-          <WhatsAppButton
-            href={chatHref}
-            label="Chat"
+        {item.checkoutEligible ? (
+          <AddToCartButton
+            productId={item.id}
+            vendorId={item.vendorId}
+            vendorName={item.storeName}
+            name={item.name}
+            imageUrl={item.mainImageUrl}
+            unitPrice={price}
             className="w-full mt-auto !py-2 !text-xs"
           />
+        ) : (
+          chatHref && (
+            <WhatsAppButton
+              href={chatHref}
+              label="Chat"
+              className="w-full mt-auto !py-2 !text-xs"
+            />
+          )
         )}
       </div>
 
@@ -226,6 +239,16 @@ export function MarketplaceCard({
         isOwn={false}
         chatHref={chatHref}
         chatLabel="Chat"
+        cart={
+          item.checkoutEligible
+            ? {
+                productId: item.id,
+                vendorId: item.vendorId,
+                vendorName: item.storeName,
+                unitPrice: price,
+              }
+            : null
+        }
       />
 
       <ImageLightbox

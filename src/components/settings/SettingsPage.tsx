@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUserStore } from "@/store/userStore";
 import { settingsApi, ADDRESS_CHANGE_COOLDOWN_MS } from "@/services/settings";
 import { usersApi } from "@/services/users";
+import { payoutsApi } from "@/services/payouts";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadAvatarToCloudinary, validateImageFile } from "@/lib/cloudinary";
 import LogoutModal from "@/components/LogOutModal";
@@ -23,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import PayoutAccountForm from "@/components/payouts/PayoutAccountForm";
 import type { UserLocation } from "@/types/user";
 import {
   BellIcon,
@@ -41,6 +43,7 @@ import {
   RefreshIcon,
   SendIcon,
   ShieldIcon,
+  TrashIcon,
   UserCogIcon,
   UserIcon,
 } from "@/components/icons/hero";
@@ -820,6 +823,106 @@ function AccountSettingsPanel() {
 // client-side form code, not a secret) — see web3forms.com to create one.
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════════════════
+// PAYOUT ACCOUNT — where sales money is released to
+//
+// Velte holds a buyer's payment until the order is confirmed and then transfers
+// the vendor's share out, so this is a transfer destination, not a Paystack
+// subaccount (a subaccount would pay out the instant the card clears, which is
+// what the hold exists to prevent). Until a vendor sets one, their products
+// can't be checked out — hence the plain warning rather than an empty form.
+//
+// The vendor never types the account NAME: the bank returns it, and we show it
+// back as the confirmation step. Getting the number wrong is the one mistake
+// here that costs real money later, so the name is the loudest thing on the
+// card once saved, with changing it one tap away.
+// ══════════════════════════════════════════════════════════════════════════════
+
+function PayoutAccountSection() {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+
+  const { data: payout, isLoading } = useQuery({
+    queryKey: queryKeys.payouts.account,
+    queryFn: () => payoutsApi.get(),
+  });
+
+  // A vendor with no account on file gets the form straight away, without
+  // pressing anything — `editing` only covers replacing one they already have.
+  const showForm = !isLoading && (!payout || editing);
+
+  const removeMutation = useMutation({
+    mutationFn: () => payoutsApi.remove(),
+    onSuccess: () => {
+      queryClient.setQueryData(queryKeys.payouts.account, null);
+      toast.success("Payout account removed");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error ? error.message : "Couldn't remove that account",
+      );
+    },
+  });
+
+  return (
+    <SectionCard
+      id="payout-account"
+      icon={BuildingIcon}
+      title="Payout Account"
+      description="Where we send your money after a customer's order is confirmed"
+    >
+      {isLoading ? (
+        <div className="h-16 rounded-xl bg-gray-50 animate-pulse" />
+      ) : !showForm && payout ? (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-gray-200 p-4">
+            <p className="text-dash-body font-semibold text-gray-900">
+              {payout.accountName}
+            </p>
+            <p className="text-dash-secondary text-gray-500 mt-1">
+              {payout.bankName} · {payout.accountNumberMasked}
+            </p>
+          </div>
+          <p className="text-dash-secondary text-gray-500">
+            Your bank gave us this name. If it isn&apos;t you, change it now —
+            this is the account we&apos;ll pay into.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => removeMutation.mutate()}
+              disabled={removeMutation.isPending}
+              className="flex items-center gap-2 py-2.5 px-4 text-dash-body font-semibold text-gray-600 hover:text-red-600 disabled:opacity-60 rounded-xl transition-colors cursor-pointer"
+            >
+              <TrashIcon size={14} />
+              Remove
+            </button>
+            <button
+              onClick={() => setEditing(true)}
+              className="flex items-center gap-2 py-2.5 px-5 border border-gray-200 hover:bg-gray-50 text-dash-body font-semibold text-gray-900 rounded-xl transition-colors cursor-pointer"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {!payout && (
+            <p className="text-dash-secondary text-amber-700 bg-amber-50 rounded-xl px-4 py-3">
+              Customers can&apos;t check out from your store until you add a
+              payout account.
+            </p>
+          )}
+
+          <PayoutAccountForm
+            onSaved={() => setEditing(false)}
+            onCancel={payout ? () => setEditing(false) : undefined}
+          />
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
 function FeedbackSection() {
   const user = useUserStore((s) => s.user);
   // company?.name is the reliable source (see AccountSettingsPanel's own
@@ -989,6 +1092,8 @@ export default function SettingsPage() {
         Manage your profile and account security
       </p>
       <AccountSettingsPanel />
+
+      <PayoutAccountSection />
 
       {/* Permanent — not the dismissible install banner PushNotificationManager
           shows on its own delay/cooldown. Same InstallRow the buyer Profile

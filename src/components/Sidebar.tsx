@@ -17,9 +17,11 @@ import {
   ListIcon,
   MessageSquareIcon,
   PlusCircleIcon,
+  SendIcon,
   SettingsIcon,
   StoreIcon,
   WalletIcon,
+  TruckIcon,
 } from "@/components/icons/hero";
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
@@ -93,6 +95,24 @@ export default function Sidebar() {
           id: "buyer-requests-nav",
           badge: pendingRequests,
         },
+        {
+          label: "Orders",
+          icon: <TruckIcon size={16} />,
+          href: "orders",
+          id: "orders-nav",
+        },
+        {
+          label: "Vendors Hub",
+          icon: <SendIcon size={16} />,
+          href: "hub",
+          id: "hub-nav",
+        },
+        {
+          label: "Reports",
+          icon: <WalletIcon size={16} />,
+          href: "reports",
+          id: "reports-nav",
+        },
       ],
     },
     {
@@ -126,6 +146,9 @@ export default function Sidebar() {
   // Helper to build an absolute path for the sidebar link
   const getFullPath = (relativePath: string) => {
     const clean = relativePath.replace(/^\//, "").replace(/\/$/, "");
+    // The vendor Hub shares /hub with the buyer directory. It is not a
+    // screen inside /{userId}/…
+    if (clean === "hub") return "/hub";
     return `/${userId}/${clean}`;
   };
 
@@ -134,6 +157,7 @@ export default function Sidebar() {
     const segments = pathname.split("/").filter(Boolean);
     const currentRoute = segments.slice(1).join("/");
     const normalized = relativePath.replace(/^\//, "").replace(/\/$/, "");
+    if (normalized === "hub") return pathname === "/hub";
     return currentRoute === normalized;
   };
 

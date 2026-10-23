@@ -7,6 +7,7 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useIsInstalled } from "@/hooks/useIsInstalled";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { modalScrimClass } from "@/lib/modalScrim";
 import { installPromptStore } from "@/lib/installPromptStore";
 import { isTranssionDevice } from "@/lib/deviceDetection";
 import {
@@ -204,7 +205,7 @@ export default function PushNotificationManager() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]"
+            className={`fixed inset-0 z-40 h-dvh w-dvw ${modalScrimClass()}`}
             aria-hidden
           />
 

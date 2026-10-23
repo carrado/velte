@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { getInitial } from "@/lib/initials";
 import { Avatar } from "@/components/Avatar";
 import { CreditsButton } from "@/components/credits/CreditsModal";
+import { CartButton } from "@/components/cart/CartDrawer";
 import AnchoredPopover from "@/components/AnchoredPopover";
 import { useAccountSignOut } from "@/hooks/useAccountSignOut";
 import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
@@ -285,6 +286,7 @@ export function ChatHeader() {
           </Link>
         </div>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <CartButton />
           {userDetails ? (
             // A vendor who wandered in from their own dashboard — send them
             // back to it (their wallet, specifically) rather than showing a

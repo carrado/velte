@@ -8,6 +8,12 @@ export interface Store {
   description: string;
   sectors: string[];
   whatsapp: string | null;
+  social?: {
+    instagram: string | null;
+    facebook: string | null;
+    tiktok: string | null;
+    x: string | null;
+  };
   gallery: string[];
 }
 
@@ -35,6 +41,9 @@ export interface PublicStoreProduct {
    *  full only in OfferingDetailModal (the card itself only has room for a
    *  truncated description). */
   attributes: { name: string; value: string }[];
+  /** True when this listing can be added to cart (fixed naira price, stock,
+   *  and the vendor has a payout account). WhatsApp stays the CTA otherwise. */
+  checkoutEligible?: boolean;
 }
 
 /** What the public /store/[handle] page renders. */
@@ -115,6 +124,7 @@ export interface MarketplacePreviewItem {
   storeHandle: string;
   storeAvatar: string | null;
   whatsapp: string | null;
+  checkoutEligible?: boolean;
 }
 
 /** One card in the "/" homepage's Vendors section — a Twitter-profile-style

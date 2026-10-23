@@ -4,11 +4,13 @@ import { settingsApi } from "@/services/settings";
 import { walletApi } from "@/services/wallet";
 import { fetchMyReferrals } from "@/services/referrals";
 import { storeApi } from "@/services/store";
+import { vendorOrdersApi } from "@/services/cart";
 import {
   fetchVendorBuyerRequest,
   fetchVendorBuyerRequests,
 } from "@/services/vendorBuyerRequests";
 import { queryKeys } from "@/lib/query-keys";
+import { fetchHubAdverts, fetchHubContext, fetchHubHome } from "@/services/hub";
 import { getErrorMessage } from "@/lib/error-message";
 
 export type PrefetchTask = {
@@ -23,6 +25,9 @@ export type PrefetchTask = {
 
 export function getRouteKey(href: string): string {
   const segments = href.split("/").filter(Boolean);
+  // /hub is the shared Hub, outside the /{userId}/… dashboard tree, so the
+  // first segment is the route — not a user id to strip.
+  if (segments.length === 1 && segments[0] === "hub") return "hub";
   return segments.slice(1).join("/");
 }
 
@@ -130,6 +135,28 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
           queryFn: storeApi.getMyStore,
         },
       ];
+    case "orders":
+      return [
+        {
+          queryKey: queryKeys.vendorOrders.list(),
+          queryFn: () => vendorOrdersApi.list(),
+        },
+      ];
+    case "hub":
+      return [
+        {
+          queryKey: queryKeys.hub.home("vendor"),
+          queryFn: () => fetchHubHome("vendor"),
+        },
+        {
+          queryKey: queryKeys.hub.context,
+          queryFn: fetchHubContext,
+        },
+        {
+          queryKey: queryKeys.hub.adverts,
+          queryFn: fetchHubAdverts,
+        },
+      ];
     default:
       return [];
   }
@@ -194,6 +221,11 @@ export function normalizeDashboardHref(href: string, pathname: string): string {
     return href;
   }
 
+  // The vendor Hub is the shared /hub page, not a /{userId}/hub dashboard
+  // screen. Leave it unprefixed so the click lands on the hub shell.
+  const clean = href.replace(/^\//, "").replace(/\/$/, "");
+  if (clean === "hub") return "/hub";
+
   if (href.startsWith("/")) {
     const segments = href.split("/").filter(Boolean);
     const userId = pathname.split("/").filter(Boolean)[0];
@@ -204,6 +236,5 @@ export function normalizeDashboardHref(href: string, pathname: string): string {
   }
 
   const userId = pathname.split("/").filter(Boolean)[0];
-  const clean = href.replace(/^\//, "").replace(/\/$/, "");
   return userId ? `/${userId}/${clean}` : `/${clean}`;
 }

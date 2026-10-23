@@ -90,7 +90,15 @@ export default function StorePage() {
   const [seeded, setSeeded] = useState(false);
   if (store && !seeded) {
     setSeeded(true);
-    setForm(store);
+    setForm({
+      ...store,
+      social: {
+        instagram: store.social?.instagram ?? null,
+        facebook: store.social?.facebook ?? null,
+        tiktok: store.social?.tiktok ?? null,
+        x: store.social?.x ?? null,
+      },
+    });
     setSectorValues(sectors);
   }
 
@@ -469,6 +477,39 @@ export default function StorePage() {
         <p className="text-dash-caption text-gray-400 mt-1">
           International format, without + or spaces.
         </p>
+      </SectionCard>
+
+      <SectionCard
+        icon={ExternalLinkIcon}
+        title="Other profiles"
+        hint="Optional https links. Premium buyers see them on your Hub card."
+      >
+        {(
+          [
+            ["instagram", "Instagram"],
+            ["facebook", "Facebook"],
+            ["tiktok", "TikTok"],
+            ["x", "X"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} className="block mb-2 last:mb-0">
+            <span className="text-dash-caption text-gray-500">{label}</span>
+            <input
+              value={form.social?.[key] ?? ""}
+              onChange={(e) =>
+                set("social", {
+                  instagram: form.social?.instagram ?? null,
+                  facebook: form.social?.facebook ?? null,
+                  tiktok: form.social?.tiktok ?? null,
+                  x: form.social?.x ?? null,
+                  [key]: e.target.value.trim() || null,
+                })
+              }
+              placeholder="https://"
+              className={cn(inputClass, "mt-1")}
+            />
+          </label>
+        ))}
       </SectionCard>
 
       {/* ── Photos ─────────────────────────────────────────────────────── */}

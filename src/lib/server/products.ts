@@ -62,6 +62,7 @@ interface ApiProduct {
   modifiers?: ApiModifier[];
   is_suspended?: boolean;
   suspension_reason?: string | null;
+  quantity?: number | null;
 }
 
 interface ApiPagination {
@@ -161,6 +162,7 @@ function mapProduct(p: ApiProduct): CategoryProduct {
     modifiers,
     isSuspended: p.is_suspended ?? false,
     suspensionReason: p.suspension_reason ?? null,
+    quantity: p.quantity ?? null,
   };
 }
 

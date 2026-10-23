@@ -4,6 +4,7 @@ import { fmt } from "@/lib/product-price";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { AddToCartButton } from "@/components/cart/AddToCartButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { TOP_PICK_BADGE } from "@/components/search/RecommendationPicks";
 import { ComparisonDetailBlock } from "@/components/search/ComparisonTemplate";
@@ -246,15 +247,28 @@ export function VendorResultCard({
         </div>
         {isOwn ? (
           <OwnListingBadge label="This is your listing" />
-        ) : (showChatButton && chatHref) ||
+        ) : match.checkoutEligible ||
+          (showChatButton && chatHref) ||
           (showViewStore && match.storeHandle) ? (
           <div className="flex flex-col gap-2 mt-1">
-            {showChatButton && chatHref && (
-              <WhatsAppButton
-                href={chatHref}
-                label="Chat with vendor"
-                className="w-full"
+            {match.checkoutEligible ? (
+              <AddToCartButton
+                productId={match.productId}
+                vendorId={match.vendorId}
+                vendorName={match.vendorName}
+                name={match.name}
+                imageUrl={match.mainImageUrl}
+                unitPrice={match.price}
               />
+            ) : (
+              showChatButton &&
+              chatHref && (
+                <WhatsAppButton
+                  href={chatHref}
+                  label="Chat with vendor"
+                  className="w-full"
+                />
+              )
             )}
             {showViewStore && match.storeHandle && (
               <Link
@@ -299,6 +313,16 @@ export function VendorResultCard({
         }}
         chatHref={chatHref}
         chatLabel="Chat with vendor"
+        cart={
+          match.checkoutEligible
+            ? {
+                productId: match.productId,
+                vendorId: match.vendorId,
+                vendorName: match.vendorName,
+                unitPrice: match.price,
+              }
+            : null
+        }
       />
 
       <ImageLightbox

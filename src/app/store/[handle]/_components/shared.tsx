@@ -6,6 +6,7 @@ import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { AddToCartButton } from "@/components/cart/AddToCartButton";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { buildChatLink } from "@/lib/chatLink";
@@ -206,16 +207,29 @@ export function OfferingCard({
         )}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2.5 mt-auto border-t border-gray-100">
           <Price product={product} />
-          {!isOwn && enquireHref && (
-            <a
-              href={enquireHref}
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[12px] sm:text-[13px] font-semibold rounded-lg transition-colors w-full sm:w-auto shrink-0"
-            >
-              <MessageCircleIcon size={13} />
-              Enquire
-            </a>
-          )}
+          {!isOwn &&
+            (product.checkoutEligible ? (
+              <AddToCartButton
+                productId={product.id}
+                vendorId={vendorId}
+                vendorName={storeName}
+                name={product.name}
+                imageUrl={product.mainImageUrl}
+                unitPrice={product.price / 100}
+                className="w-full sm:w-auto !py-1.5 !px-3 !text-[12px] sm:!text-[13px]"
+              />
+            ) : (
+              enquireHref && (
+                <a
+                  href={enquireHref}
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[12px] sm:text-[13px] font-semibold rounded-lg transition-colors w-full sm:w-auto shrink-0"
+                >
+                  <MessageCircleIcon size={13} />
+                  Enquire
+                </a>
+              )
+            ))}
         </div>
       </div>
 
@@ -236,6 +250,16 @@ export function OfferingCard({
         isOwn={isOwn}
         chatHref={enquireHref}
         chatLabel={isService ? "Enquire about this service" : "Enquire"}
+        cart={
+          product.checkoutEligible
+            ? {
+                productId: product.id,
+                vendorId,
+                vendorName: storeName,
+                unitPrice: product.price / 100,
+              }
+            : null
+        }
       />
 
       <ImageLightbox

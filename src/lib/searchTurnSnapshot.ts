@@ -94,5 +94,6 @@ export function buildTurnSnapshot(
     isGuidanceReply: event.isGuidanceReply ?? false,
     knownBudgetNaira: event.knownBudgetNaira,
     shoppingPlan: event.shoppingPlan ?? null,
+    cartAdd: event.cartAdd ?? null,
   };
 }

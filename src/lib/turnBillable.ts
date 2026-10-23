@@ -32,6 +32,11 @@ export interface BillableTurnShape {
   vendorProducts: unknown[];
   externalOffers: unknown[];
   externalStoreSuggestions: unknown[];
+  // Cart-only turns (add / open checkout) show no search results — they
+  // must not be billed as a search. Optional so older call sites that
+  // never set them still work.
+  cartAdd?: unknown | null;
+  openCart?: boolean;
 }
 
 /**
@@ -78,6 +83,10 @@ export function isBillableTurn(event: BillableTurnShape): boolean {
     event.externalStoreSuggestions.length === 0;
 
   if (event.clarification != null && showedNothing) return false;
+
+  // Adding to cart / opening the sidebar is not a search. Found live:
+  // "Go to checkout" was billed (and searched) as a new text turn.
+  if (showedNothing && (event.openCart || event.cartAdd)) return false;
 
   return true;
 }

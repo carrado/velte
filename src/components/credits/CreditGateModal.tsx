@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { CloseIcon, LockIcon } from "@/components/icons/hero";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { useCreditsModal } from "@/components/credits/CreditsModal";
+import { modalScrimClass } from "@/lib/modalScrim";
 
 // "You can't afford this yet" — shown the moment a buyer picks a composer
 // tool (Compare, Shopping Plan) their CURRENT balance can't cover (2026-09-06).
@@ -50,7 +51,10 @@ export function CreditGateModal({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        className={`absolute inset-0 ${modalScrimClass()}`}
+        onClick={onClose}
+      />
       <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-surface shadow-2xl">
         <button
           onClick={onClose}

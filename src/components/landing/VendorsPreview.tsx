@@ -92,7 +92,17 @@ export function SlidingCover({
 // Exported — the /marketplace browse page reuses this directly (same
 // reasoning as MarketplacePreview's MarketplaceCard export: one card, not a
 // second copy that drifts).
-export function VendorCard({ item }: { item: VendorPreviewItem }) {
+//
+// `verified` gates the checkmark: the Hub passes its computed badge (level-3
+// verification only — Phase 1.2), while /marketplace keeps the default, which
+// preserves today's always-on rendering there untouched.
+export function VendorCard({
+  item,
+  verified = true,
+}: {
+  item: VendorPreviewItem;
+  verified?: boolean;
+}) {
   const chatHref = buildChatLink({
     vendorId: item.vendorId,
     source: "browse",
@@ -155,10 +165,12 @@ export function VendorCard({ item }: { item: VendorPreviewItem }) {
 
         <div className="flex items-center gap-1 min-w-0">
           <p className="font-bold text-ink text-[15px] truncate">{item.name}</p>
-          <BadgeCheckIcon
-            size={15}
-            className="text-orange-500 shrink-0 fill-orange-500/15"
-          />
+          {verified && (
+            <BadgeCheckIcon
+              size={15}
+              className="text-orange-500 shrink-0 fill-orange-500/15"
+            />
+          )}
         </div>
         <p className="text-xs text-gray-400 mb-2">@{item.handle}</p>
 

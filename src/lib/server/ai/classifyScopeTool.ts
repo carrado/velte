@@ -124,7 +124,7 @@ export function classifyScopeTool() {
       hasSpecificDetails: z
         .boolean()
         .describe(
-          "true if the buyer has given ANY distinguishing detail about the ITEM ITSELF beyond its bare name — brand, model, size, color, material, budget, quantity, style, spec, symptom, occasion, or similar — in this message or an earlier turn about the same request. false for a bare mention with nothing distinguishing ('I need a phone', 'looking for a tailor'). A named LOCATION NEVER counts as a detail here, no matter how specific the place is and no matter what else the message contains: 'I need a phone in Lekki' is false, because Lekki says nothing about which phone. Location is judged separately by namesPlace, and this field is only ever about the item.",
+          "true if the buyer has given a MATCHING detail about the ITEM ITSELF — brand, model, size, budget, quantity, storage/RAM, a named spec, a stated symptom, or an occasion — in this message or an earlier turn about the same request. Colour alone is false ('black sneakers', 'red dress' — a colour does not tell you which listing to return). Vague quality words are false ('good', 'nice', 'quality', 'decent'). A named LOCATION NEVER counts, no matter how specific: 'I need a phone in Lekki' is false. Location is judged separately by namesPlace. false for a bare mention with nothing matching ('I need a phone', 'looking for a tailor', 'I need a good black sneakers').",
         ),
       // Moved onto THIS call 2026-09-05. It previously lived in its own
       // dedicated classifier behind a keyword pre-filter, which silently

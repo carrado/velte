@@ -3,44 +3,37 @@ import { z } from "zod";
 
 import { callLLM } from "@/lib/server/ai/router";
 import type { SearchIntentKind } from "@/types/search";
+import type { ClarifierField } from "@/types/sectors";
 
-// The DYNAMIC bare-query gate (2026-09-05, rewritten 2026-09-09) — the "how
-// it's asked" half of the budget-only gate shipped 2026-09-04 (route.ts's
-// own comment on that gate explains WHY budget alone was the first cut).
-// Widened per explicit request, modeled on a live example: "I need a good
-// laptop for my work as a developer" should get budget/dev-type/OS asked
-// together as one natural question — not a generic "what's your budget?"
-// with nothing else.
+// The DYNAMIC pre-search details gate (2026-09-05, rewritten 2026-09-09,
+// templated 2026-10-05).
 //
-// 2026-09-09 REWRITE, per explicit request/feedback on a live example
-// ("Dell XPS 15"): the whole reply used to be assembled in CODE from a
-// fixed template ("Before I search for X — tell me just these N things:
-// 1. ... 2. ... 3. ...", with budget's own sentence hardcoded verbatim) —
-// that read as robotic and repeated byte-for-byte on every bare query. The
-// WORDING is now the model's own, in one natural message — budget is still
-// MANDATORY (the system prompt below requires it, and route.ts's own
-// `askedBudget` structural flag — not a text-pattern scan of this prose —
-// is what guarantees it's never re-asked, see types/search.ts), but there
-// is no more fixed sentence for it to ride in on.
+// Found live: "I need a good black sneakers" searched nationwide after
+// location was declined, THEN asked "Would you like me to filter by size,
+// brand, or price?" — the filtration that should have happened FIRST so
+// those answers could actually retrieve the right listing. Colour / "good"
+// is not matching detail; size, brand, and budget are.
 //
-// The standalone "buying-criteria" bullets ("For X, worth prioritizing: -
-// ...") are GONE, per the same feedback questioning whether they earned
-// their place: they answered a question nobody visibly asked for, ahead of
-// the actual question, and general spec advice with no product attached to
-// it read as filler more often than as help. If a criterion is genuinely
-// worth surfacing it can live inside the model's own question prose now
-// (nothing stops a natural "since it's for programming, worth checking it
-// has decent RAM — what's your budget?"), but it is never a separate,
-// guaranteed block again.
+// The WORDING is still the model's own, in one natural message. WHAT it
+// asks is now a sector template (route.ts passes the unanswered clarifier
+// fields — Brand, Shoe Size, … — plus budget for a purchase). Asked ONCE
+// before search, never after cards. route.ts's `askedBudget` structural
+// flag is what guarantees it is never re-asked.
 //
-// Fails toward the ORIGINAL 2026-09-04 gate (a plain budget-only question,
-// no extras) on any error or unusable output — same "must only ever ADD to
-// the existing flow, never be the reason a buyer sees nothing" rule
+// Fails toward a static fallback that still names the template fields on
+// any error or unusable output — same "must only ever ADD to the existing
+// flow, never be the reason a buyer sees nothing" rule
 // suggestBuyingGuidance.ts already follows.
 
 const TIMEOUT_MS = 6000;
 const PROVIDER_ORDER = ["openai", "groq"] as const;
 const MAX_QUESTION_LENGTH = 500;
+
+function fieldLabel(f: ClarifierField): string {
+  if (!f.example) return f.name;
+  const example = f.example.replace(/^e\.?g\.?\s*/i, "");
+  return `${f.name} (e.g. ${example})`;
+}
 
 function gateTool() {
   return tool({
@@ -55,23 +48,33 @@ function gateTool() {
       question: z
         .string()
         .describe(
-          "One short, friendly, natural message asking the buyer what's needed before searching for their item/service — written entirely in your own words, no fixed template. Ask about budget ONLY when the system prompt's rule says this request genuinely needs one (set asksBudget to match). It MAY also ask up to 2 short things about USE, PREFERENCE, or (for a bounded job) the actual PROBLEM/SPECIFICS — never a raw spec the buyer would have to go look up, and never something their own words already answered. Keep it ONE cohesive message a buyer would actually enjoy reading — conversational prose or a short natural numbered list, your choice — never a rigid form, never more than 3 things total.",
+          "One short, friendly, natural message asking the buyer the template details needed BEFORE searching — written in your own words. Cover the listed fields that aren't already in their message, plus budget when the system prompt says to. Keep it ONE cohesive message — conversational prose or a short natural numbered list, never a rigid form, never more than 3 things total.",
         ),
     }),
     execute: async (v) => v,
   });
 }
 
-function systemPromptFor(itemTerm: string, isService: boolean): string {
+function systemPromptFor(
+  itemTerm: string,
+  isService: boolean,
+  fields: ClarifierField[],
+): string {
+  const templateNote = fields.length
+    ? `This request's details template (ask about these, skip any the buyer's own words already answered): ${fields.map(fieldLabel).join("; ")}.`
+    : "No extra product fields are still missing — only ask what the rules below require (budget, or the actual problem/need).";
+
   return [
-    `A buyer on Velte, a Nigerian shopping assistant, just asked for "${itemTerm}" with no distinguishing detail yet — before searching, write the one message asking what matters.`,
+    `A buyer on Velte, a Nigerian shopping assistant, just asked for "${itemTerm}" without enough matching detail yet — before searching, write the ONE message asking what matters so the search can use their answer.`,
     "",
     isService
       ? "This is a SERVICE request. Anything beyond budget you ask about should be about the actual job — the specific problem, who's doing it, experience, turnaround, materials/process — never a business name."
-      : "This is a purchase. Anything beyond budget you ask about should be a real, general use/preference question for this kind of item.",
+      : "This is a purchase. Ask the template fields that actually match a listing (size, brand, model, spec) — not a vague use/preference stand-in, and never a colour they already named.",
+    "",
+    templateNote,
     "",
     "Hard rules, no exceptions:",
-    "- Read the buyer's own words for a stated USE CASE (e.g. 'for my work as a developer', 'for content creation') and let it shape the question — never ask about something the buyer's own words already answered.",
+    "- Read the buyer's own words and NEVER re-ask something they already answered (a colour already named, a brand already named, a size already named, a use already stated).",
     isService
       ? // Explicit product direction (2026-09-17, found live on "I need a good
         // mechanic nearby" getting asked for a budget, which reads as odd
@@ -91,10 +94,11 @@ function systemPromptFor(itemTerm: string, isService: boolean): string {
         // e.g. for a mechanic: what's wrong with the vehicle, or its make/
         // model, never a business name or a price of your own).
         "- Decide first whether this request's cost genuinely scales with the buyer's own choices (an event's size, a job's duration/scope) — if so, ask budget. If the cost is really set by diagnosing a specific problem rather than by how much the buyer wants to spend, do NOT ask budget at all — ask about the actual problem/need instead (what's wrong, what kind, which model/make — whatever a vendor would actually need to help). Set `asksBudget` to match whichever you actually did."
-      : "- Budget MUST be part of the message, phrased however feels natural — this is the one thing that's always asked for a purchase. Set `asksBudget` to true.",
-    "- Anything else you ask about is USE, PREFERENCE, PROBLEM/NEED, or CATEGORY (e.g. what kind of development, new or used, which room it's for, what's wrong with the vehicle) — never a raw spec the buyer would have to go look up, never a specific product/brand/model name, never a price estimate of your own.",
-    "- If the category is too generic to ask anything beyond the one thing that matters most (budget, or the problem/need), that's fine — a plain, warm question alone is a complete, correct answer.",
-    "- One short, natural message. Never a form, never a wall of bullet points, never filler advice about what to look for — just the question(s).",
+      : "- Budget MUST be part of the message, phrased however feels natural — this is always asked for a purchase. Set `asksBudget` to true.",
+    isService
+      ? "- Anything else you ask about is the PROBLEM/NEED or CATEGORY — never a business name, never a price estimate of your own."
+      : "- Cover the template fields that are still missing (size, brand, model, spec — whatever is listed above). Asking brand or size HERE is correct; those answers get used to search. Never invent a price of your own.",
+    "- This is the only details round — one short, natural message. Never a form, never a wall of bullet points, never filler advice about what to look for, never more than 3 things total.",
   ].join("\n");
 }
 
@@ -117,11 +121,10 @@ export interface BareQueryGateResult {
 }
 
 /**
- * The dynamic bare-query question, written entirely by the model (see this
- * file's own top comment for why nothing here is code-templated anymore).
- * Returns null on ANY failure — the caller already has a working static
- * fallback, so this can only ever ADD to that, never be the reason a buyer
- * sees nothing. Never throws.
+ * The dynamic pre-search details question, written by the model from the
+ * sector template route.ts passed in. Returns null on ANY failure — the
+ * caller already has a working static fallback, so this can only ever ADD
+ * to that, never be the reason a buyer sees nothing. Never throws.
  */
 export async function buildBareQueryGate(params: {
   itemTerm: string;
@@ -130,9 +133,13 @@ export async function buildBareQueryGate(params: {
    *  stated ("for my work as a developer"), which the model reads so it
    *  doesn't re-ask what's already been said. */
   message: string;
+  /** Unanswered sector/general clarifier fields for this item. Empty when
+   *  detection found nothing extra to ask beyond budget / the problem. */
+  fields?: ClarifierField[];
 }): Promise<BareQueryGateResult | null> {
   const itemTerm = params.itemTerm.trim();
   if (!itemTerm) return null;
+  const fields = params.fields ?? [];
 
   try {
     const result = await Promise.race([
@@ -141,6 +148,7 @@ export async function buildBareQueryGate(params: {
           system: systemPromptFor(
             itemTerm,
             params.seekingKind === "get_service",
+            fields,
           ),
           messages: [{ role: "user", content: params.message || itemTerm }],
           tools: { bareQueryGate: gateTool() },
@@ -175,13 +183,27 @@ export async function buildBareQueryGate(params: {
   }
 }
 
+function staticFallback(itemTerm: string, fields: ClarifierField[]): string {
+  const names = fields
+    .map((f) => f.name.toLowerCase())
+    .filter((n) => n !== "color" && n !== "colour");
+  if (names.length === 0) {
+    return `Before I search for "${itemTerm}" — tell me a bit more about what you need (and your budget, if you have one in mind). That'll help me match you with the right option.`;
+  }
+  const listed =
+    names.length === 1
+      ? names[0]
+      : names.length === 2
+        ? `${names[0]} and ${names[1]}`
+        : `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+  return `Before I search for "${itemTerm}" — what's your ${listed}, and do you have a budget in mind? I'll use that to find the right match.`;
+}
+
 /**
  * The reply text a buyer actually reads. `result` is null on a
- * failed/timed-out/unusable call, which collapses to a plain, static
- * fallback question that INVITES a budget without demanding one — the
- * safest possible degrade when there's no model call left to judge whether
- * this particular request actually needs one (see buildBareQueryGate's own
- * top comment).
+ * failed/timed-out/unusable call, which collapses to a static fallback
+ * that still names the template fields so a model outage doesn't skip
+ * the details round entirely.
  *
  * Detecting "budget already asked" no longer scans this text for a fixed
  * phrase (route.ts used to grep for the literal substring "what's your
@@ -193,9 +215,7 @@ export async function buildBareQueryGate(params: {
 export function composeBareQueryReply(
   itemTerm: string,
   result: BareQueryGateResult | null,
+  fields: ClarifierField[] = [],
 ): string {
-  return (
-    result?.question ??
-    `Before I search for "${itemTerm}" — tell me a bit more about what you need (and your budget, if you have one in mind). That'll help me match you with the right option.`
-  );
+  return result?.question ?? staticFallback(itemTerm, fields);
 }

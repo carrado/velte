@@ -10,8 +10,7 @@ import {
   LayoutGridIcon,
   MessageSquareIcon,
   PlusCircleIcon,
-  SettingsIcon,
-  StoreIcon,
+  TruckIcon,
   WalletIcon,
 } from "@/components/icons/hero";
 export default function BottomNav() {
@@ -48,17 +47,9 @@ export default function BottomNav() {
       id: "wallet-mobile",
     },
     {
-      label: "Store",
-      icon: <StoreIcon size={20} />,
-      segment: "store",
-      active: subPath.startsWith("store"),
-      id: "store-mobile",
-    },
-    {
-      // Short label, not "Buyer Requests" — six tabs in this row already
-      // tightens things up (see the sidebar's own comment: mobile has no
-      // drawer, this is the vendor's only nav surface), matches the buyer
-      // side's own nav using "Requests" too.
+      // Short label, not "Buyer Requests" — this row is the vendor's only
+      // daily nav on a phone (the sidebar is desktop-only). Store and
+      // Settings live in the avatar menu, so this bar stays at five.
       label: "Requests",
       icon: <MessageSquareIcon size={20} />,
       segment: "buyer-requests",
@@ -67,11 +58,11 @@ export default function BottomNav() {
       badge: pendingRequests,
     },
     {
-      label: "Settings",
-      icon: <SettingsIcon size={20} />,
-      segment: "settings",
-      active: subPath.startsWith("settings"),
-      id: "settings-mobile",
+      label: "Orders",
+      icon: <TruckIcon size={20} />,
+      segment: "orders",
+      active: subPath.startsWith("orders"),
+      id: "orders-mobile",
     },
   ];
 

@@ -3,6 +3,7 @@
 import { createPortal } from "react-dom";
 import type { LogoutModalProps } from "@/types/common";
 import { CloseIcon } from "@/components/icons/hero";
+import { modalScrimClass } from "@/lib/modalScrim";
 
 export default function LogoutModal({
   isOpen,
@@ -16,7 +17,9 @@ export default function LogoutModal({
   // covered its scrollable ancestor's box, not the real viewport (same
   // clipping bug already fixed for dropdowns via AnchoredPopover).
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div
+      className={`fixed inset-0 z-50 h-dvh w-dvw flex items-center justify-center ${modalScrimClass()}`}
+    >
       <div className="bg-surface rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
           <h3 className="text-dash-heading font-semibold text-ink">

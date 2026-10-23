@@ -9,6 +9,7 @@ import {
   PlusIcon,
   SearchIcon,
 } from "@/components/icons/hero";
+import { modalScrimClass } from "@/lib/modalScrim";
 
 /* Scrollable "fill what applies" picker: every preset renders as a row with a
    value input seeded by a realistic example. No selection step — anything the
@@ -90,7 +91,10 @@ export default function AttributePickerModal({
   // clipping bug already fixed for dropdowns via AnchoredPopover).
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        className={`absolute inset-0 ${modalScrimClass()}`}
+        onClick={onClose}
+      />
       <div className="relative bg-surface rounded-xl shadow-2xl w-full max-w-lg mx-4 z-10 flex flex-col max-h-[85vh]">
         <div className="px-6 py-4 border-b border-gray-100">
           <div className="flex items-center justify-between">

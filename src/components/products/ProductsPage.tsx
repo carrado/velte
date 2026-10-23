@@ -13,6 +13,7 @@ import { categoriesApi } from "@/services/products";
 import { queryKeys } from "@/lib/query-keys";
 import { getErrorMessage } from "@/lib/error-message";
 import { toast } from "sonner";
+import { modalScrimClass } from "@/lib/modalScrim";
 import type {
   CategoryProduct,
   PriceModalProps,
@@ -63,7 +64,10 @@ function PriceModal({ open, product, onClose, onConfirm }: PriceModalProps) {
   // clipping bug already fixed for dropdowns via AnchoredPopover).
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        className={`absolute inset-0 ${modalScrimClass()}`}
+        onClick={onClose}
+      />
       <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">

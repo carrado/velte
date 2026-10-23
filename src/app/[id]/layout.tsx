@@ -12,6 +12,7 @@ import BottomNav from "@/components/BottomNav";
 import { NavigationProgressProvider } from "@/components/NavigationProgressContext";
 import AppInitOverlay from "@/components/AppInitOverlay";
 import OnboardingTour from "@/components/OnboardingTour";
+import PayoutSetupModal from "@/components/payouts/PayoutSetupModal";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { usersApi } from "@/services/users";
 import { ApiError } from "@/lib/api-client";
@@ -31,6 +32,9 @@ const PATH_TITLES: Record<string, string> = {
   products: "My Listings",
   settings: "Settings",
   wallet: "Wallet",
+  reports: "Reports",
+  orders: "Orders",
+  hub: "Vendor Hub",
   "buyer-requests": "Buyer Requests",
 };
 
@@ -152,6 +156,11 @@ export default function DashboardRootLayout({
         </div>
       </div>
       <OnboardingTour />
+      {/* Only once the shell itself is usable — stacking an undismissable
+          dialog on top of AppInitOverlay would be two blocking layers at
+          once, and the payout check can't be trusted while /auth/me is
+          still failing anyway. */}
+      {meStatus === "ready" && <PayoutSetupModal />}
     </NavigationProgressProvider>
   );
 }

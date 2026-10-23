@@ -21,6 +21,7 @@ interface PublicStoreProduct {
   priceMax: number | null;
   currency: string;
   mainImageUrl: string | null;
+  checkoutEligible?: boolean;
 }
 
 interface PublicStoreResponse {
@@ -43,7 +44,13 @@ interface PublicStoreResponse {
  * product source); divided by 100 here to match VendorMatch/StoreProductItem
  * convention.
  */
-export function getVendorProductsTool(push?: (candidates: string[]) => void) {
+export function getVendorProductsTool(
+  push?: (candidates: string[]) => void,
+  onShown?: (
+    results: StoreProductItem[],
+    store: { vendorId: string; name: string },
+  ) => void,
+) {
   return tool({
     description:
       "Fetch a SPECIFIC vendor's own product/offering listings, by the store `handle` from a prior searchStores result — use this when the buyer wants to see what a particular store sells/has 'inside', after that store was already found. Do NOT use this to run a fresh general product search — that's searchProducts, and could return a completely different vendor's items instead of the one the buyer actually means.",
@@ -62,7 +69,9 @@ export function getVendorProductsTool(push?: (candidates: string[]) => void) {
           currency: p.currency,
           mainImageUrl: p.mainImageUrl,
           quoteOnRequest: Boolean(p.quoteOnRequest),
+          checkoutEligible: Boolean(p.checkoutEligible),
         }));
+        onShown?.(results, { vendorId: store.vendorId, name: store.name });
         return {
           results,
           store: {

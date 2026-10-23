@@ -53,8 +53,24 @@ export async function GET() {
        *  against the bundle just bought rather than a lifetime total. See
        *  velte-backend's Credits.model.js for the full reasoning. */
       spentSinceTopUp: number;
+      /** Purchased + remaining free allowance — what a gate should read. */
+      available?: number;
+      allowance?: {
+        kind: "daily" | "window";
+        credits: number;
+        eligible: boolean;
+        reason: string | null;
+        used: number;
+        remaining: number;
+        resetsAt: string | null;
+      } | null;
     }>("/credits", { cookie });
-    return NextResponse.json({ ...data, isGuest: false });
+    return NextResponse.json({
+      ...data,
+      balance: data.available ?? data.balance,
+      purchasedBalance: data.balance,
+      isGuest: false,
+    });
   } catch {
     // Fail SOFT, the same instinct as the charging path: a balance read that
     // can't reach the backend must not break the header it renders in. Zero

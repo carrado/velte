@@ -7,6 +7,7 @@ import { fmt } from "@/lib/product-price";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { AddToCartButton } from "@/components/cart/AddToCartButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { DetailSheet } from "@/components/DetailSheet";
 import {
@@ -70,6 +71,7 @@ export function ListingDetailModal({
   onChatClick,
   vendor = null,
   priceInKobo = true,
+  cart = null,
 }: {
   item: ListingDetailItem;
   open: boolean;
@@ -85,6 +87,13 @@ export function ListingDetailModal({
   onChatClick?: () => void;
   vendor?: ListingDetailVendor | null;
   priceInKobo?: boolean;
+  // When set, this listing is checkout-able — Add to cart replaces WhatsApp.
+  cart?: {
+    productId: string;
+    vendorId: string;
+    vendorName: string;
+    unitPrice: number;
+  } | null;
 }) {
   const isService = item.kind === "service";
   const KindIcon = isService ? WrenchIcon : PackageIcon;
@@ -146,13 +155,24 @@ export function ListingDetailModal({
           <OwnListingBadge label="This is your listing" />
         ) : (
           <div className="flex flex-col gap-2">
-            {chatHref && (
-              <WhatsAppButton
-                href={chatHref}
-                label={chatLabel}
-                className="w-full"
-                onClick={onChatClick}
+            {cart ? (
+              <AddToCartButton
+                productId={cart.productId}
+                vendorId={cart.vendorId}
+                vendorName={cart.vendorName}
+                name={item.name}
+                imageUrl={item.images[0] ?? null}
+                unitPrice={cart.unitPrice}
               />
+            ) : (
+              chatHref && (
+                <WhatsAppButton
+                  href={chatHref}
+                  label={chatLabel}
+                  className="w-full"
+                  onClick={onChatClick}
+                />
+              )
             )}
             {viewStoreHref && (
               <Link

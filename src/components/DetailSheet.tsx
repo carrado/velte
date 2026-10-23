@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { modalScrimClass } from "@/lib/modalScrim";
 
 // Bottom sheet (phone) vs. centered dialog (tablet+) get genuinely different
 // motion values, not just different CSS positioning — a spring slide from
@@ -98,7 +99,7 @@ export function DetailSheet({
           // the page itself would (this is the actual viewport-covering
           // element, not a boxed-in scrollbar squeezed inside the dialog),
           // so the dialog card itself never needs its own internal scroll.
-          className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:block sm:overflow-y-auto sm:p-4"
+          className={`fixed inset-0 z-[9999] h-dvh w-dvw flex items-end justify-center sm:block sm:overflow-y-auto sm:p-4 ${modalScrimClass()}`}
           onClick={onClose}
         >
           <motion.div

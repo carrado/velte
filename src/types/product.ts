@@ -10,6 +10,14 @@ export type ProductTab = "all" | "featured";
 
 export type OfferingKind = "product" | "service";
 
+export type DeliveryMethod = "included" | "none" | "byol";
+
+export interface ProductDelivery {
+  method: DeliveryMethod;
+  areas: string[];
+  note: string | null;
+}
+
 export interface CategoryProduct {
   id: string;
   name: string;
@@ -43,6 +51,9 @@ export interface CategoryProduct {
   isCurrentlyAvailable?: boolean;
   dailyLimit?: number | null;
   allowPreOrder?: boolean;
+  /** Units on the shelf. Null = vendor hasn't set a count, so not checkout-able. */
+  quantity?: number | null;
+  delivery?: ProductDelivery;
   /** Set from the super admin panel. Excluded from buyer-facing surfaces
    * (public store page, AI search) but still shown here, greyed out, so the
    * vendor knows why. */
@@ -197,6 +208,7 @@ export interface RetailProductPayload extends CreateProductBasePayload {
   manufacturing_date?: string | null;
   expiration_date?: string | null;
   attributes?: { name: string; value: string }[];
+  quantity?: number | null;
 }
 
 export interface FoodProductPayload extends CreateProductBasePayload {

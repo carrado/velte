@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { AskVeluxButton } from "@/components/AskVeluxButton";
 import { useUserStore } from "@/store/userStore";
 import { useMutation } from "@tanstack/react-query";
@@ -19,7 +20,13 @@ import { useNavigation } from "@/components/NavigationProgressContext";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
-import { BellIcon, LogOutIcon } from "@/components/icons/hero";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import {
+  BellIcon,
+  LogOutIcon,
+  SettingsIcon,
+  StoreIcon,
+} from "@/components/icons/hero";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Header({ title }: HeaderProps) {
@@ -31,6 +38,13 @@ export default function Header({ title }: HeaderProps) {
   );
   const userId = pathname.split("/")[1];
   const isStandalone = useIsStandalone();
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const onboarding = userDetails?.onboarding === true;
+  // Phone onboarding keeps this open from the first step so the tour can
+  // spotlight My store / Settings (those rows only exist while the menu
+  // is open). Closes once `user.onboarding` flips false.
+  const forceMenuOpen = onboarding && isMobile;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const logoutMutation = useMutation({
     mutationFn: () => usersApi.logout(),
@@ -59,6 +73,8 @@ export default function Header({ title }: HeaderProps) {
     <span>{getInitial(userDetails?.company?.name ?? "")}</span>
   );
 
+  const go = (segment: string) => navigate(`/${userId}/${segment}`);
+
   return (
     <div className="flex items-center px-5 sm:px-0 justify-between gap-4">
       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -67,7 +83,7 @@ export default function Header({ title }: HeaderProps) {
         </h1>
       </div>
 
-      <div className="flex items-center gap-3 md:gap-4">
+      <div className="flex items-center gap-3 md:gap-4 shrink-0">
         {/* A vendor is also a buyer sometimes — this hands them off to the
             buyer-facing search (Velte Connect, at /chat — route history:
             /search → /velux → /chat, see chat/page.tsx's own comment)
@@ -97,68 +113,91 @@ export default function Header({ title }: HeaderProps) {
           <NotificationDropdown />
         </div>
 
-        {/* Mobile avatar — plain, no popover */}
-        <div className="md:hidden w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold flex-shrink-0 overflow-hidden">
-          {avatarInner}
-        </div>
-
-        {/* Desktop avatar with shadcn Popover */}
-        <div className="hidden md:block">
-          <Popover>
-            {/* Explicit id — Base UI's own auto-generated id (useId()-based)
-                is positional, counted across every useId() call earlier in
-                the tree. A count that differs by even one call between the
-                server render and the client's hydration pass (e.g. from any
-                client-only conditional elsewhere in the layout) produces a
-                permanent hydration mismatch warning on this id — even though
-                nothing about THIS component actually differs. A hardcoded id
-                sidesteps that counting entirely: useBaseUiId() uses it
-                verbatim instead of generating one, so it's identical on both
-                passes by construction. See NotificationDropdown's matching
-                fix for the other Header popover that hit the same warning. */}
-            <PopoverTrigger
-              id="header-account-menu-trigger"
-              className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold cursor-pointer flex-shrink-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-1"
-            >
-              {avatarInner}
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              side="bottom"
-              sideOffset={8}
-              className="w-48 p-0 rounded-xl border border-gray-200 shadow-lg overflow-hidden"
-            >
-              <div className="px-3 py-2.5 border-b border-gray-100">
-                <p className="text-dash-body font-semibold text-gray-900 truncate">
-                  {userDetails?.company?.name ?? userDetails?.name}
-                </p>
-                <p className="text-dash-caption text-gray-400 truncate">
-                  @{userDetails?.username}
-                </p>
-              </div>
-              {/* Same control /chat's own account column carries, and the
-                  same placement logic: an appearance switch belongs beside
-                  the other account-scoped actions here, not three clicks
-                  into Settings only (2026-09-18). `iconOnly`, not `compact`:
-                  see Sidebar's own comment — this popover is only 192px
-                  wide, even tighter than the sidebar rail that overflowed
-                  with full labels showing. */}
-              <div className="px-3 py-2.5 border-b border-gray-100">
-                <ThemeToggle iconOnly fullWidth className="justify-center" />
-              </div>
+        <Popover
+          open={forceMenuOpen || menuOpen}
+          triggerId="header-account-menu-trigger"
+          onOpenChange={(next) => {
+            if (forceMenuOpen && !next) return;
+            setMenuOpen(next);
+          }}
+        >
+          {/* Explicit id — Base UI's own auto-generated id (useId()-based)
+              is positional, counted across every useId() call earlier in
+              the tree. A count that differs by even one call between the
+              server render and the client's hydration pass (e.g. from any
+              client-only conditional elsewhere in the layout) produces a
+              permanent hydration mismatch warning on this id — even though
+              nothing about THIS component actually differs. A hardcoded id
+              sidesteps that counting entirely: useBaseUiId() uses it
+              verbatim instead of generating one, so it's identical on both
+              passes by construction. See NotificationDropdown's matching
+              fix for the other Header popover that hit the same warning. */}
+          <PopoverTrigger
+            id="header-account-menu-trigger"
+            className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold cursor-pointer flex-shrink-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-1"
+          >
+            {avatarInner}
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            side="bottom"
+            sideOffset={8}
+            initialFocus={!forceMenuOpen}
+            className="w-48 p-0 gap-0 rounded-xl border border-gray-200 shadow-lg overflow-hidden"
+          >
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <p className="text-dash-body font-semibold text-gray-900 truncate">
+                {userDetails?.company?.name ?? userDetails?.name}
+              </p>
+              <p className="text-dash-caption text-gray-400 truncate">
+                @{userDetails?.username}
+              </p>
+            </div>
+            {/* Phone only — desktop already has Store and Settings in the
+                sidebar. Same ids the onboarding tour aims at. */}
+            <div className="md:hidden border-b border-gray-100">
               <button
-                onClick={() => logoutMutation.mutate()}
-                disabled={logoutMutation.isPending}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-dash-body text-red-500 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-60"
+                id="store-mobile"
+                type="button"
+                onClick={() => go("store")}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
               >
-                <LogOutIcon size={15} />
-                <span>
-                  {logoutMutation.isPending ? "Logging out…" : "Logout"}
-                </span>
+                <StoreIcon size={15} className="text-gray-500" />
+                <span>My store</span>
               </button>
-            </PopoverContent>
-          </Popover>
-        </div>
+              <button
+                id="settings-mobile"
+                type="button"
+                onClick={() => go("settings")}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                <SettingsIcon size={15} className="text-gray-500" />
+                <span>Settings</span>
+              </button>
+            </div>
+            {/* Same control /chat's own account column carries, and the
+                same placement logic: an appearance switch belongs beside
+                the other account-scoped actions here, not three clicks
+                into Settings only (2026-09-18). `iconOnly`, not `compact`:
+                see Sidebar's own comment — this popover is only 192px
+                wide, even tighter than the sidebar rail that overflowed
+                with full labels showing. Desktop only: the phone menu
+                is Store / Settings / Logout. */}
+            <div className="hidden md:block px-3 py-2.5 border-b border-gray-100">
+              <ThemeToggle iconOnly fullWidth className="justify-center" />
+            </div>
+            <button
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-dash-body text-red-500 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-60"
+            >
+              <LogOutIcon size={15} />
+              <span>
+                {logoutMutation.isPending ? "Logging out…" : "Logout"}
+              </span>
+            </button>
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
   );

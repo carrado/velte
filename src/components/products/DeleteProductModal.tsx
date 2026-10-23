@@ -5,6 +5,7 @@ import {
   CloseIcon,
   LoaderIcon,
 } from "@/components/icons/hero";
+import { modalScrimClass } from "@/lib/modalScrim";
 export default function DeleteProductModal({
   open,
   product,
@@ -25,7 +26,7 @@ export default function DeleteProductModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-black/40"
+        className={`absolute inset-0 ${modalScrimClass()}`}
         onClick={isDeleting ? undefined : onClose}
       />
       <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-md mx-4 z-10">

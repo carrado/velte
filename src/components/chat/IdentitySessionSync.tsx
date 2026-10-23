@@ -73,6 +73,15 @@ export function IdentitySessionSync() {
         const res = await fetch("/api/auth/session", {
           credentials: "same-origin",
         });
+        // A presented cookie that no longer resolves. Not a guest, and not
+        // a blip to retry — the session is over, so leave the app.
+        if (res.status === 401) {
+          settled = true;
+          useUserStore.getState().clearUser();
+          useBuyerStore.getState().clearBuyer();
+          window.location.replace("/");
+          return;
+        }
         if (!res.ok) throw new Error(`session check ${res.status}`);
         const { vendor, buyer } = (await res.json()) as {
           vendor: User | null;

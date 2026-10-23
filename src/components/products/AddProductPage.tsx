@@ -23,6 +23,7 @@ import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import AttributePickerModal from "./AttributePickerModal";
 import { cn } from "@/lib/utils";
+import { modalScrimClass } from "@/lib/modalScrim";
 import type {
   ProductModifier,
   ModifierOption,
@@ -379,7 +380,9 @@ function PublishProgressModal({
   // covered its scrollable ancestor's box, not the real viewport (same
   // clipping bug already fixed for dropdowns via AnchoredPopover).
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div
+      className={`fixed inset-0 z-50 h-dvh w-dvw flex items-center justify-center px-4 ${modalScrimClass()}`}
+    >
       <div className="bg-surface rounded-2xl shadow-2xl p-8 w-full max-w-sm flex flex-col items-center gap-5">
         {/* Icon */}
         <div
@@ -608,6 +611,7 @@ export default function AddProductPage({
 
   // Pricing — a single price, or a min–max range when the vendor opts in.
   const [price, setPrice] = useState("");
+  const [quantity, setQuantity] = useState("");
   const [currency, setCurrency] = useState<"NGN" | "USD">("NGN");
   const [isRange, setIsRange] = useState(false);
   const [priceMax, setPriceMax] = useState("");
@@ -809,6 +813,8 @@ export default function AddProductPage({
     setDescription(existingProduct.description ?? "");
     setSelectedCategory(existingProduct.categoryId ?? "");
     setPrice(String(existingProduct.price));
+    if (existingProduct.quantity != null)
+      setQuantity(String(existingProduct.quantity));
     if (existingProduct.currency) setCurrency(existingProduct.currency);
     if (existingProduct.priceMax != null) {
       setIsRange(true);
@@ -1117,10 +1123,9 @@ export default function AddProductPage({
     (isQuote || parseFloat(price) > 0) && // quote services need no price
     (isQuote || !isRange || parseFloat(priceMax) > parseFloat(price)) &&
     hasRequiredMedia &&
-    // Stock quantity/threshold are no longer collected on this form (see the
-    // "Additional Details" block's own comment) — only the conditional
-    // expiration/guarantee date still applies, matching that phase's own
-    // `valid` flag below.
+    // Stock is optional on the form (a listing without it stays on WhatsApp).
+    // The remaining inventory gate is the conditional expiration/guarantee
+    // date for health and electronics.
     (isFood ||
       isService ||
       !(isHealth || isElectronics) ||
@@ -1394,6 +1399,9 @@ export default function AddProductPage({
               ? expirationDate || null
               : null,
           attributes: attributes.map(({ name, value }) => ({ name, value })),
+          ...(!isService && quantity !== ""
+            ? { quantity: parseInt(quantity, 10) }
+            : {}),
         } as RetailProductPayload;
       }
 
@@ -2055,11 +2063,29 @@ export default function AddProductPage({
             </FormSection>
           </PhaseBlock>
 
-          {/* Additional details — retail only; services skip straight past
-              this (no expiry semantics). Stock is no longer tracked at all. */}
+          {/* Additional details — retail only. Stock is what makes a listing
+              checkout-able in-app; without a count the card stays on WhatsApp. */}
           {!isFood && !isService && (
             <PhaseBlock {...phaseProps("inventory")}>
               <FormSection title="Additional Details" icon={LayersIcon}>
+                <div>
+                  <FieldLabel>Stock quantity</FieldLabel>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={quantity}
+                    onChange={(e) =>
+                      setQuantity(e.target.value.replace(/\D/g, ""))
+                    }
+                    placeholder="How many do you have?"
+                    className="w-full h-11 px-3 bg-gray-50 border border-gray-200 rounded-md text-dash-body text-ink focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                  />
+                  <p className="text-dash-caption text-gray-400 mt-1.5">
+                    Buyers can check out this listing in-app only when this is 1
+                    or more and you have a payout account.
+                  </p>
+                </div>
                 {(isHealth || isElectronics) && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {isHealth && (

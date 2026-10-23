@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
+import { clearSessionCookies } from "@/lib/server/clearSessionCookies";
+
 // Infra/utility routes — always accessible, full stop, regardless of auth
 // state. Not "public pages" in the sense the other lists below are about.
 const alwaysPublicRoutes = [
@@ -13,6 +15,7 @@ const alwaysPublicRoutes = [
   "/sitemap.xml",
   "/llms.txt",
   "/payment/callback",
+  "/cart/callback",
   "/s", // branded short-link redirector (see src/app/s/[code]/route.ts)
   // The "Chat on WhatsApp" redirect (src/app/api/chat/route.ts) — same
   // shape as /s above (a real link meant for direct navigation, not a JS
@@ -51,6 +54,10 @@ const publicRegardlessOfAuth = [
   "/terms",
   "/chat",
   "/marketplace",
+  // Shared Hub. A vendor session sees the vendor page; a buyer session
+  // sees the directory. Not a dashboard id, so it must not fall through
+  // to the /:id branch.
+  "/hub",
   "/updates",
   // The installed PWA's entry point (2026-08-29, see app/launch/page.tsx).
   // MUST be listed here: it is a single-segment path, so without this it
@@ -97,6 +104,43 @@ const marketingRoutes = [
   "/join",
 ];
 
+const VENDOR_COOKIE = "auth_token";
+const BUYER_COOKIE = "buyer_auth_token";
+
+async function readSessions(request: NextRequest) {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
+  const vendorToken = request.cookies.get(VENDOR_COOKIE)?.value;
+  const buyerToken = request.cookies.get(BUYER_COOKIE)?.value;
+  let userId: string | null = null;
+  let buyerId: string | null = null;
+  const dead: string[] = [];
+
+  if (vendorToken) {
+    try {
+      const { payload } = await jwtVerify(vendorToken, secret);
+      userId = (payload.userId as string) || null;
+      if (!userId) dead.push(VENDOR_COOKIE);
+    } catch {
+      dead.push(VENDOR_COOKIE);
+    }
+  }
+
+  if (buyerToken) {
+    try {
+      const { payload } = await jwtVerify(buyerToken, secret);
+      if (payload.type === "buyer" && typeof payload.buyerId === "string") {
+        buyerId = payload.buyerId;
+      } else {
+        dead.push(BUYER_COOKIE);
+      }
+    } catch {
+      dead.push(BUYER_COOKIE);
+    }
+  }
+
+  return { userId, buyerId, dead };
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -122,6 +166,9 @@ export async function proxy(request: NextRequest) {
         headers: { "content-type": "text/plain" },
       });
     }
+    // Leave the cookie alone on fetch(). A page navigation is what notices
+    // an expired session and sends the person home; clearing it here first
+    // would make the next click look like a guest and leave them on the page.
     return NextResponse.next();
   }
 
@@ -130,29 +177,31 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Callbacks, the short-link redirector, and /api/chat must keep working
+  // even when a session has died — clearing the cookie here is enough, and
+  // a redirect would swallow the Paystack return or the WhatsApp handoff.
   if (alwaysPublicRoutes.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next();
+    const { dead } = await readSessions(request);
+    return clearSessionCookies(NextResponse.next(), dead);
+  }
+
+  const { userId, buyerId, dead } = await readSessions(request);
+  const pass = (response: NextResponse) => clearSessionCookies(response, dead);
+
+  // A cookie was presented and none of it still verifies. That is a logged-in
+  // session that has expired (or been tampered with). Drop it and leave the
+  // app: every later click otherwise renders the page as if the session were
+  // still there, because /chat, /hub and the other public screens never
+  // looked at the cookie. "/" itself is the destination, so it stays.
+  if (dead.length > 0 && !userId && !buyerId && pathname !== "/") {
+    return pass(NextResponse.redirect(new URL("/", request.url)));
   }
 
   if (publicRegardlessOfAuth.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next();
+    return pass(NextResponse.next());
   }
 
-  const token = request.cookies.get("auth_token")?.value;
-
-  // Resolve a VALID userId up front (an expired/tampered token is treated
-  // the same as no token at all) — both the marketing-route block below and
-  // the dashboard routing further down need to know this.
-  let userId: string | null = null;
-  if (token) {
-    try {
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
-      const { payload } = await jwtVerify(token, secret);
-      userId = (payload.userId as string) || null;
-    } catch {
-      userId = null;
-    }
-  }
+  const token = request.cookies.get(VENDOR_COOKIE)?.value;
 
   // A genuinely logged-in user gets bounced to their dashboard instead of
   // ever seeing a marketing/onboarding page — "on no account can they view
@@ -161,9 +210,11 @@ export async function proxy(request: NextRequest) {
     marketingRoutes.some((route) => pathname.startsWith(route) && route !== "/")
   ) {
     if (userId) {
-      return NextResponse.redirect(new URL(`/${userId}/products`, request.url));
+      return pass(
+        NextResponse.redirect(new URL(`/${userId}/products`, request.url)),
+      );
     }
-    return NextResponse.next();
+    return pass(NextResponse.next());
   }
 
   // If user visits "/" without a valid session, allow the landing page —
@@ -183,7 +234,7 @@ export async function proxy(request: NextRequest) {
   if (pathname === "/") {
     if (!userId) {
       if (request.nextUrl.searchParams.get("source") === "pwa") {
-        return NextResponse.redirect(new URL("/welcome", request.url));
+        return pass(NextResponse.redirect(new URL("/welcome", request.url)));
       }
       // A signed-in BUYER belongs in the chat, not on the marketing site
       // (2026-09-05, per explicit request — the same rule the block above
@@ -198,22 +249,13 @@ export async function proxy(request: NextRequest) {
       // a buyer who decides to start selling. Blocking their way to it to
       // be symmetrical would break the more valuable path.
       //
-      // Verified here rather than trusted: an expired or forged buyer
-      // cookie reads as signed-out and sees the landing page, which is
-      // the correct treatment for someone with no usable session.
-      const buyerToken = request.cookies.get("buyer_auth_token")?.value;
-      if (buyerToken) {
-        try {
-          const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
-          const { payload } = await jwtVerify(buyerToken, secret);
-          if (payload.type === "buyer" && payload.buyerId) {
-            return NextResponse.redirect(new URL("/chat", request.url));
-          }
-        } catch {
-          // Expired or tampered — fall through to the landing page.
-        }
+      // An expired buyer cookie never reaches this branch with buyerId set:
+      // the expiry gate above already cleared it and, on any page but this
+      // one, sent them home.
+      if (buyerId) {
+        return pass(NextResponse.redirect(new URL("/chat", request.url)));
       }
-      return NextResponse.next();
+      return pass(NextResponse.next());
     }
     // Logged-in user visits "/" -> "/:id/products", UNLESS this is the
     // installed PWA launching, which always opens straight to the wallet
@@ -223,20 +265,23 @@ export async function proxy(request: NextRequest) {
       request.nextUrl.searchParams.get("source") === "pwa"
         ? "wallet"
         : "products";
-    return NextResponse.redirect(new URL(`/${userId}/${dest}`, request.url));
+    return pass(
+      NextResponse.redirect(new URL(`/${userId}/${dest}`, request.url)),
+    );
   }
 
   // Everything below this point is a protected dashboard route.
   if (!token) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
+    return pass(NextResponse.redirect(loginUrl));
   }
   if (!userId) {
-    // A cookie existed but failed verification (expired/tampered).
-    const response = NextResponse.redirect(new URL("/auth/login", request.url));
-    response.cookies.delete("auth_token");
-    return response;
+    // Vendor cookie failed verification. A still-valid buyer session belongs
+    // in chat; otherwise the expiry gate already sent them home, and this is
+    // the leftover.
+    const dest = buyerId ? "/chat" : "/";
+    return pass(NextResponse.redirect(new URL(dest, request.url)));
   }
 
   // Break path into segments
@@ -245,16 +290,20 @@ export async function proxy(request: NextRequest) {
   // Logged-in user visits "/:id" -> redirect to "/:id/products"
   if (segments.length === 1) {
     // No need to compare with userId – just redirect to the products home
-    return NextResponse.redirect(new URL(`/${userId}/products`, request.url));
+    return pass(
+      NextResponse.redirect(new URL(`/${userId}/products`, request.url)),
+    );
   }
 
   // Logged-in user visits "/:id/anything" -> verify id matches token
   const routeId = segments[0];
   if (routeId !== userId) {
-    return NextResponse.redirect(new URL(`/${userId}/products`, request.url));
+    return pass(
+      NextResponse.redirect(new URL(`/${userId}/products`, request.url)),
+    );
   }
 
   const response = NextResponse.next();
   response.headers.set("x-user-id", userId);
-  return response;
+  return pass(response);
 }

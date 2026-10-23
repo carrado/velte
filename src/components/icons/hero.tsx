@@ -35,6 +35,7 @@ import {
   GiftIcon as HeroGiftIcon,
   EllipsisHorizontalIcon,
   CubeIcon,
+  TruckIcon as HeroTruckIcon,
   ArrowDownTrayIcon,
   CheckBadgeIcon,
   LockClosedIcon,
@@ -189,6 +190,9 @@ export const MoreHorizontalIcon = wrap(EllipsisHorizontalIcon);
 // "Package" (an order/delivery) — CubeIcon is Heroicons' own box/product
 // glyph; there's no literal "parcel" icon in the set.
 export const PackageIcon = wrap(CubeIcon);
+// Cart / escrow orders — a truck, not the product cube, so the Orders
+// nav rows don't look like another listings item.
+export const TruckIcon = wrap(HeroTruckIcon);
 export const DownloadIcon = wrap(ArrowDownTrayIcon);
 export const BadgeCheckIcon = wrap(CheckBadgeIcon);
 export const LockIcon = wrap(LockClosedIcon);

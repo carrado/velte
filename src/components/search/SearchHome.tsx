@@ -34,6 +34,8 @@ import {
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { lookupCopiedImage, hashBlob } from "@/lib/copiedImageRegistry";
 import { VendorResultCard } from "@/components/search/VendorResultCard";
+import { CartAddWidget } from "@/components/cart/CartReviewCard";
+import { useCartStore } from "@/store/cartStore";
 import { CreditsButton } from "@/components/credits/CreditsModal";
 import { CreditGateModal } from "@/components/credits/CreditGateModal";
 import AnchoredPopover from "@/components/AnchoredPopover";
@@ -102,6 +104,7 @@ import type {
   StoreMatch,
   StoredConversation,
   StoredSearchTurn,
+  ShownProduct,
   StoreProductItem,
   VendorMatch,
 } from "@/types/search";
@@ -437,6 +440,7 @@ function createLoadingTurn(
     externalOffers: [],
     error: null,
     quota: null,
+    cartAdd: null,
   };
 }
 
@@ -472,6 +476,7 @@ function storedTurnToConversationTurn(
     // honestly typed rather than silently `undefined` at runtime.
     awaitingVendorSearchOffer: stored.awaitingVendorSearchOffer ?? false,
     vendorSearchMatchQuery: stored.vendorSearchMatchQuery ?? null,
+    cartAdd: stored.cartAdd ?? null,
   };
 }
 
@@ -520,7 +525,43 @@ function turnToStoredSnapshot(turn: ConversationTurn): StoredSearchTurn {
     // Client-resolved background items never carry a goal-sheet budget of
     // their own — this concept only exists for a real /api/search turn.
     knownBudgetNaira: null,
+    cartAdd: turn.cartAdd ?? null,
   };
+}
+
+function shownCatalogFromTurns(turns: ConversationTurn[]): ShownProduct[] {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const t = turns[i];
+    const rows: ShownProduct[] = [];
+    for (const p of t.products ?? []) {
+      if (!p.productId) continue;
+      rows.push({
+        productId: p.productId,
+        name: p.name,
+        vendorId: p.vendorId,
+        vendorName: p.vendorName,
+        checkoutEligible: Boolean(p.checkoutEligible),
+        attributes: (p.attributes ?? [])
+          .map((a) => a.value)
+          .filter(Boolean)
+          .slice(0, 6),
+      });
+    }
+    const store = t.vendorProductsStore;
+    for (const p of t.vendorProducts ?? []) {
+      if (!p.productId) continue;
+      rows.push({
+        productId: p.productId,
+        name: p.name,
+        vendorId: store?.vendorId ?? "",
+        vendorName: store?.name ?? "",
+        checkoutEligible: Boolean(p.checkoutEligible),
+        attributes: [],
+      });
+    }
+    if (rows.length) return rows;
+  }
+  return [];
 }
 
 function productsNoun(products: VendorMatch[]): string {
@@ -1053,6 +1094,7 @@ interface ConversationTurn {
   // server in the first place. The persist effect only ever touches turns
   // where this is still false.
   persisted?: boolean;
+  cartAdd?: import("@/types/cart").CartAddOutcome | null;
 }
 
 /**
@@ -2088,6 +2130,18 @@ function ConversationTurnView({
                       {renderOfferActions("vendorSearch")}
                     </div>
                   )}
+                  {turn.cartAdd &&
+                    turn.cartAdd.status !== "ok" &&
+                    (turn.cartAdd.status === "needs_signin" ||
+                      turn.cartAdd.status === "needs_options" ||
+                      turn.cartAdd.status === "vendor_mismatch") && (
+                      <div className={cn(AI_MESSAGE_CLASS, "w-full max-w-md")}>
+                        <CartAddWidget
+                          outcome={turn.cartAdd}
+                          isLatest={isLatest}
+                        />
+                      </div>
+                    )}
                 </div>
               )}
           </div>
@@ -3840,6 +3894,9 @@ export function SearchHome() {
         // unknown conversationId as "start a fresh one," never an error.
         deviceId: deviceIdRef.current ?? undefined,
         conversationId: conversationIdRef.current ?? undefined,
+        cartVendorId: useCartStore.getState().vendorId ?? undefined,
+        cartVendorName: useCartStore.getState().vendorName ?? undefined,
+        shownCatalog: shownCatalogFromTurns(turns),
         // Phase 5 — only sent on the turn where location state actually
         // changed (the flag is cleared right after), so an ordinary
         // message doesn't re-send the same thing every time. The server
@@ -4004,7 +4061,15 @@ export function SearchHome() {
             comparisonPickItem: event.comparisonPickItem,
             comparisonOptions: event.comparisonOptions ?? null,
             isGuidanceReply: event.isGuidanceReply ?? false,
+            cartAdd: event.cartAdd ?? null,
           });
+          if (event.cartAdd?.status === "ok") {
+            const { quantity, ...line } = event.cartAdd.line;
+            useCartStore.getState().addItem(line, quantity);
+            useCartStore.getState().openDrawer();
+          } else if (event.openCart) {
+            useCartStore.getState().openDrawer();
+          }
           // A buyer who already has a verified session (a prior visit's
           // identity cookie still valid) skips the composer's own
           // identity-capture mode entirely — createBuyerRequest resolves
