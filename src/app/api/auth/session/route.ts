@@ -62,7 +62,7 @@ export async function GET() {
     const vendorUnverified = data.vendorError?.status === 403;
     const dead: string[] = [];
     if (vendorToken && !vendor && !vendorUnverified) dead.push(AUTH_COOKIE);
-    if (buyerToken && !buyer) dead.push(BUYER_COOKIE);
+    if (buyerToken && !buyer) dead.push(BUYER_AUTH_COOKIE);
     if (dead.length > 0 && !vendor && !buyer && !vendorUnverified) {
       return clearSessionCookies(
         NextResponse.json(
