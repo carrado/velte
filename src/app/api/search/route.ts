@@ -15,6 +15,7 @@ import {
   affordCredits,
   chargeCredits,
   creditMessage,
+  type CreditDecision,
 } from "@/lib/server/creditLedger";
 import { isBillableTurn } from "@/lib/turnBillable";
 import type { CreditAction } from "@/lib/credits";
@@ -1765,8 +1766,14 @@ async function handleSearch(req: Request) {
   // gate here so an empty balance cannot block opening a cart the buyer
   // already filled.
   const cartIntent = !imageUrl ? parseCartIntent(message) : null;
-  const usage = cartIntent
-    ? { allowed: true as const }
+  const usage: CreditDecision = cartIntent
+    ? {
+        allowed: true,
+        balance: 0,
+        cost: 0,
+        action: turnAction,
+        isGuest: actorType === "guest",
+      }
     : await affordCredits({
         actorType,
         cookie: actorCookie,
@@ -3932,8 +3939,7 @@ async function handleSearch(req: Request) {
       // when the classifier called it "specific".
       const weaklySpecifiedProduct =
         seekingKind !== "get_service" &&
-        Boolean(itemTerm) &&
-        isWeakProductQuery(bareQueryMessage, itemTerm);
+        Boolean(itemTerm && isWeakProductQuery(bareQueryMessage, itemTerm));
       if (
         // Every input below comes from the scope check's own reading of the
         // request (itemTerm/seekingKind/hasSpecificDetails), not from
