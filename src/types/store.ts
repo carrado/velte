@@ -24,6 +24,8 @@ export type UpdateStorePayload = Partial<Omit<Store, "sectors">>;
 export interface PublicStoreProduct {
   id: string;
   name: string;
+  /** Public URL path `/{slug}`. Null only for unsynced legacy rows. */
+  slug?: string | null;
   kind: "product" | "service";
   quoteOnRequest?: boolean;
   /** Kobo — the backend stores product prices in minor units. */
@@ -44,6 +46,12 @@ export interface PublicStoreProduct {
   /** True when this listing can be added to cart (fixed naira price, stock,
    *  and the vendor has a payout account). WhatsApp stays the CTA otherwise. */
   checkoutEligible?: boolean;
+  /** Who gets the order to the buyer — see docs/delivery-integration-plan.md. */
+  delivery?: {
+    method: "included" | "none" | "byol";
+    areas: string[];
+    note: string | null;
+  };
 }
 
 /** What the public /store/[handle] page renders. */
@@ -68,6 +76,7 @@ export type PublicStoreTab = "products" | "services";
 export interface PublicStoreProductProps {
   product: PublicStoreProduct;
   storeName: string;
+  storeHandle: string;
   whatsapp: string | null;
   vendorId: string;
   // True when the signed-in viewer IS this store's own vendor — every CTA
@@ -80,6 +89,7 @@ export interface StoreTabsProps {
   goods: PublicStoreProduct[];
   services: PublicStoreProduct[];
   storeName: string;
+  storeHandle: string;
   whatsapp: string | null;
   vendorId: string;
   defaultTab: PublicStoreTab;
@@ -158,4 +168,50 @@ export interface PublicCategory {
   id: string;
   name: string;
   emoji: string | null;
+}
+
+/** Star-rating bucket for product / vendor review summaries. */
+export interface ReviewDistribution {
+  1: number;
+  2: number;
+  3: number;
+  4: number;
+  5: number;
+}
+
+export interface ReviewSummary {
+  avg: number | null;
+  count: number;
+  distribution: ReviewDistribution;
+}
+
+/** Single-product page payload — GET /store/by-handle/:handle/products/:id. */
+export interface PublicProductDetail {
+  product: PublicStoreProduct;
+  store: {
+    handle: string;
+    name: string;
+    description: string | null;
+    sectors: string[];
+    vendorId: string;
+    avatar: string | null;
+    verified: boolean;
+    /** Structured address parts — UI shows these only, never area/street. */
+    state: string | null;
+    country: string | null;
+    locationLabel: string | null;
+    ratingAvg: number | null;
+    ratingCount: number;
+    /** Null unless viewer is Buyer Premium (hub_social_contact). */
+    whatsapp: string | null;
+  };
+  reviews: {
+    product: ReviewSummary;
+    vendor: ReviewSummary;
+  };
+  viewer: {
+    signedIn: boolean;
+    premium: boolean;
+    tier: string;
+  };
 }

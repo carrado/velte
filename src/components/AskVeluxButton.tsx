@@ -54,7 +54,7 @@ export function AskVeluxButton({
       width={avatarSize}
       height={avatarSize}
       className={cn(
-        "rounded-full object-cover shrink-0 ring-2 ring-white",
+        "rounded-full object-cover shrink-0 ring-2 ring-white dark:ring-gray-200",
         variant === "compact" ? "w-5 h-5 sm:w-6 sm:h-6" : "w-9 h-9",
       )}
     />

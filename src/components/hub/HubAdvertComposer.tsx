@@ -8,17 +8,13 @@ import { HubLockedModal } from "./HubLockedModal";
 import { api, ApiError } from "@/lib/api-client";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { formatNaira } from "@/lib/utils";
-import { categoriesApi } from "@/services/products";
-import type { CategoryProduct } from "@/types/product";
 import type { HubContext } from "@/types/hub";
 import { cn } from "@/lib/utils";
 
-type PosterSource = "upload" | "listing" | "template";
+type PosterSource = "upload" | "template";
 
-// Poster source picker + advert composer. Three poster paths per
-// vendor-delivery-and-hub.md: own artwork (upload), a listing photo, or a
-// Velte template. Templates don't exist yet — that tab is an honest
-// coming-soon panel, not a dead button.
+// Poster source picker + advert composer. Creatives only — upload artwork
+// or (later) a Velte template. Listing promotion is Boost, not Place Advert.
 export function HubAdvertComposer({
   context,
   walletHref,
@@ -36,16 +32,12 @@ export function HubAdvertComposer({
 }) {
   const [source, setSource] = useState<PosterSource>("upload");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [productId, setProductId] = useState<string | null>(null);
-  const [productName, setProductName] = useState<string | null>(null);
   const [headline, setHeadline] = useState("");
   const [blurb, setBlurb] = useState("");
   const [boosted, setBoosted] = useState(initialBoosted);
   const [uploading, setUploading] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [needTopup, setNeedTopup] = useState(false);
-  const [listings, setListings] = useState<CategoryProduct[] | null>(null);
-  const [listingsLoading, setListingsLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [templateLocked, setTemplateLocked] = useState(false);
   const [aiOptions, setAiOptions] = useState<{
@@ -71,29 +63,10 @@ export function HubAdvertComposer({
     try {
       const url = await uploadProductMedia(file);
       setImageUrl(url);
-      setProductId(null);
-      setProductName(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
-    }
-  };
-
-  const openListings = async () => {
-    setSource("listing");
-    if (listings !== null || listingsLoading) return;
-    setListingsLoading(true);
-    try {
-      const result = await categoriesApi.getProducts({ limit: 50 });
-      setListings(
-        result.products.filter((p) => !p.isSuspended && p.mainImageUrl),
-      );
-    } catch {
-      toast.error("Couldn't load your listings.");
-      setListings([]);
-    } finally {
-      setListingsLoading(false);
     }
   };
 
@@ -106,7 +79,7 @@ export function HubAdvertComposer({
         blurb: string;
       }>("/api/hub/draft-copy", {
         storeName,
-        productName,
+        productName: null,
         seedHeadline: headline.trim() || null,
       });
       setAiOptions(copy);
@@ -127,7 +100,7 @@ export function HubAdvertComposer({
         headline: headline.trim().slice(0, 80),
         blurb: blurb.trim().slice(0, 280),
         templateId: null,
-        productId,
+        productId: null,
         boosted,
       });
       toast.success(
@@ -136,8 +109,6 @@ export function HubAdvertComposer({
       setHeadline("");
       setBlurb("");
       setImageUrl(null);
-      setProductId(null);
-      setProductName(null);
       setBoosted(false);
       setAiOptions(null);
       onPlaced();
@@ -162,7 +133,7 @@ export function HubAdvertComposer({
         <HubLockedModal
           variant="upgrade"
           title="Extra templates are on Enterprise"
-          body="Upload your own artwork or use a listing photo. Additional poster templates are on Enterprise."
+          body="Upload your own artwork for now. Additional poster templates are on Enterprise."
           ctaLabel="Upgrade to Enterprise"
           ctaHref="/pricing"
           onClose={() => setTemplateLocked(false)}
@@ -178,7 +149,6 @@ export function HubAdvertComposer({
         {(
           [
             { key: "upload", label: "Upload art" },
-            { key: "listing", label: "Listing photo" },
             { key: "template", label: "Template" },
           ] as const
         ).map((tab) => (
@@ -190,8 +160,7 @@ export function HubAdvertComposer({
                 setTemplateLocked(true);
                 return;
               }
-              if (tab.key === "listing") void openListings();
-              else setSource(tab.key);
+              setSource(tab.key);
             }}
             className={cn(
               "inline-flex items-center px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
@@ -226,51 +195,9 @@ export function HubAdvertComposer({
                   : "Upload your poster"}
             </span>
             <span className="text-xs text-gray-400">
-              Your own design, or one an IT specialist made for you
+              Your own design, or generate one with AI on Create Advert
             </span>
           </label>
-        )}
-
-        {source === "listing" && (
-          <div>
-            {listingsLoading ? (
-              <p className="text-xs text-gray-400 py-6 text-center">
-                Loading your listings…
-              </p>
-            ) : listings?.length ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {listings.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      setImageUrl(p.mainImageUrl ?? null);
-                      setProductId(p.id);
-                      setProductName(p.name);
-                    }}
-                    className={cn(
-                      "relative rounded-xl overflow-hidden border-2 transition-colors aspect-square bg-gray-50",
-                      productId === p.id
-                        ? "border-orange-500"
-                        : "border-transparent hover:border-gray-300",
-                    )}
-                    title={p.name}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={p.mainImageUrl ?? ""}
-                      alt={p.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400 py-6 text-center">
-                No listings with photos yet — add one first, or upload art.
-              </p>
-            )}
-          </div>
         )}
 
         {source === "template" && (
@@ -279,8 +206,8 @@ export function HubAdvertComposer({
               Poster templates are on the way
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              Upload artwork or use a listing photo for now — Enterprise gets
-              extra templates when they land.
+              Upload artwork for now — Enterprise gets extra templates when they
+              land. To promote a listing, use Boost.
             </p>
           </div>
         )}
@@ -301,8 +228,7 @@ export function HubAdvertComposer({
       <div className="mt-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-semibold text-gray-500">
-            Stuck on words? AI drafts from your store and listing — you pick and
-            edit.
+            Stuck on words? AI drafts from your store — you pick and edit.
           </p>
           <button
             type="button"

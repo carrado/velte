@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import type { PricingFaqItem } from "@/types/common";
 import PricingContent from "./_components/PricingContent";
@@ -5,34 +6,42 @@ import PricingContent from "./_components/PricingContent";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "No subscription, no listing fee. List your products for free on Velte and only pay when we send you a real, matched lead.",
+    "Buyer Free and Premium, Vendor Basic and Enterprise — clear plans for shopping with Velte’s AI agent or growing your store.",
   alternates: {
     canonical: "/pricing",
   },
   openGraph: {
-    title: "Velte Pricing — pay per lead, not a subscription",
+    title: "Velte Pricing — plans for buyers and vendors",
     description:
-      "List your products for free on Velte and only pay when we send you a real, matched lead.",
+      "Free AI shopping for buyers, Premium for requests and Hub tools. Vendors list free and pay per real lead — or go Enterprise with no lead fee.",
     url: "/pricing",
   },
 };
 
 const faqs: PricingFaqItem[] = [
   {
-    q: "Is there a subscription?",
-    a: "No. There's no monthly fee to list your products or appear in buyer searches. You only pay when we send you a real, matched lead.",
+    q: "Can I change my plan later?",
+    a: "Yes. Buyers can upgrade to Premium anytime from Velte. Vendors can start on Basic (pay per lead) and move to Enterprise when they want the lead fee waived and Hub perks included.",
   },
   {
-    q: "How much does a lead cost?",
-    a: "It scales with your wallet balance — ₦1,000 per lead under ₦5,000, ₦700 from ₦5,000, and ₦500 once you're at ₦10,000 or more. Bigger top-ups unlock a lower rate, and your current rate is always shown in your wallet before it applies — never a surprise charge.",
+    q: "How do credits and photo search work for buyers?",
+    a: "Free registered buyers receive 20 free credits every day and 1 photo search per day. Premium buyers enjoy unlimited credits for shopping, up to 5 photo searches per day, buyer requests to vendors, and full access to Hub tools.",
   },
   {
-    q: "What counts as a lead?",
-    a: "A buyer who searched for something you sell, matched to your listing by meaning, distance and trust, and chose to chat with you.",
+    q: "How much does a vendor lead cost?",
+    a: "Basic vendors pay a flat ₦1,000 per matched lead delivered to their store. Enterprise vendors don’t pay that lead fee and get direct WhatsApp handoff to chat with buyers.",
   },
   {
-    q: "Can I control how much I spend?",
-    a: "Yes — leads are billed from a prepaid wallet you top up yourself, so you always know your spend and can top up on your terms.",
+    q: "Is there a free trial?",
+    a: "You can start on Velte completely for free without a credit card. Buyers receive 20 free credits every day on the Free plan, and vendors can list their store and products for free on the Basic plan.",
+  },
+  {
+    q: "How do I pay?",
+    a: "Subscriptions and wallet top-ups are charged through Paystack (card). Vendors can also fund credit packs from their Velte wallet.",
+  },
+  {
+    q: "Do you offer refunds?",
+    a: "Lead fees and credit spends for completed work aren’t refundable. If a charge looks wrong, contact support and we’ll review it.",
   },
 ];
 
@@ -57,7 +66,9 @@ export default function PricingPage() {
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
-      <PricingContent faqs={faqs} />
+      <Suspense fallback={null}>
+        <PricingContent faqs={faqs} />
+      </Suspense>
     </>
   );
 }

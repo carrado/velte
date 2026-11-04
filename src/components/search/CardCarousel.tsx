@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons/hero";
 
 // Generic horizontal carousel for a row of result cards (products, stores,
 // external suggestions, …) — Google Places-style: one card per slide in a
@@ -126,7 +126,7 @@ export function CardCarousel<T>({
           aria-label="Scroll left"
           className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-surface shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
-          <ChevronLeftIcon size={16} />
+          <ChevronLeft size={16} />
         </button>
       )}
       {canScrollRight && (
@@ -136,7 +136,7 @@ export function CardCarousel<T>({
           aria-label="Scroll right"
           className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-8 h-8 rounded-full bg-surface shadow-md border border-gray-100 items-center justify-center text-gray-600 hover:text-orange-600 hover:shadow-lg transition-all cursor-pointer z-10"
         >
-          <ChevronRightIcon size={16} />
+          <ChevronRight size={16} />
         </button>
       )}
     </div>

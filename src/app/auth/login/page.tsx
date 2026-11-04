@@ -69,9 +69,9 @@ function LoginForm() {
     onSuccess: (result) => {
       toast.success("Welcome back!");
       const dest =
-        redirectTo && redirectTo.startsWith(`/${result.user.id}/`)
-          ? redirectTo
-          : `/${result.user.id}/wallet`;
+        redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+          ? redirectTo.replace(/^\/[a-f0-9]{24}(\/|$)/, "/") || "/wallet"
+          : "/wallet";
       // .replace(), not .push() — otherwise the login form stays one
       // back-press away from the dashboard.
       router.replace(dest);

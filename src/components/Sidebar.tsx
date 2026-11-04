@@ -2,9 +2,8 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { usePathname } from "next/navigation";
-import { VelteLogo } from "@/components/VelteLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useNavigation } from "@/components/NavigationProgressContext";
+import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
 import { getInitial } from "@/lib/initials";
 import {
@@ -30,12 +29,17 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <button
       id={item.id}
+      type="button"
       onClick={() => navigate(item.href)}
       className={`w-full flex items-center gap-3 py-2 px-3 rounded-lg text-dash-body cursor-pointer transition-colors ${
-        active ? "bg-orange-500 text-white" : "text-gray-600 hover:bg-gray-100"
+        active
+          ? "bg-orange-500 text-white font-semibold"
+          : "text-gray-600 dark:text-ink/75 hover:bg-gray-100 dark:hover:bg-white/5"
       }`}
     >
-      <span className={active ? "text-white" : "text-gray-500"}>
+      <span
+        className={active ? "text-white" : "text-gray-500 dark:text-ink/60"}
+      >
         {item.icon}
       </span>
       <span className="flex-1 text-left">{item.label}</span>
@@ -53,12 +57,10 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-// Desktop-only navigation rail. On mobile the BottomNav is the sole
-// navigation surface — there is no drawer.
+// Desktop-only navigation rail. Sits below the unified HubHeader.
 export default function Sidebar() {
   const pathname = usePathname();
   const userDetails = useUserStore((state) => state.user);
-  // Requests matched to this vendor that they haven't accepted or declined.
   const pendingRequests = usePendingBuyerRequests();
 
   const sections: NavSection[] = [
@@ -74,7 +76,7 @@ export default function Sidebar() {
         {
           label: "View Listings",
           icon: <ListIcon size={16} />,
-          href: "products/",
+          href: "products",
           id: "my-listings-nav",
         },
       ],
@@ -140,50 +142,35 @@ export default function Sidebar() {
     },
   ];
 
-  // Extract user ID from the first segment of the pathname
-  const userId = pathname.split("/")[1]; // e.g., "69cc90bae9d771796ecdd3b4"
-
-  // Helper to build an absolute path for the sidebar link
   const getFullPath = (relativePath: string) => {
     const clean = relativePath.replace(/^\//, "").replace(/\/$/, "");
-    // The vendor Hub shares /hub with the buyer directory. It is not a
-    // screen inside /{userId}/…
     if (clean === "hub") return "/hub";
-    return `/${userId}/${clean}`;
+    return `/${clean}`;
   };
 
-  // Helper to check if a given relative path matches the current route
   const isNavActive = (relativePath: string) => {
-    const segments = pathname.split("/").filter(Boolean);
-    const currentRoute = segments.slice(1).join("/");
-    const normalized = relativePath.replace(/^\//, "").replace(/\/$/, "");
-    if (normalized === "hub") return pathname === "/hub";
-    return currentRoute === normalized;
+    const clean = relativePath.replace(/^\//, "").replace(/\/$/, "");
+    if (clean === "products/add") {
+      return pathname === "/products/add";
+    }
+    if (clean === "products") {
+      return (
+        (pathname === "/" ||
+          pathname === "/products" ||
+          pathname.startsWith("/products/")) &&
+        pathname !== "/products/add"
+      );
+    }
+    if (clean === "hub") return pathname === "/hub";
+    return pathname === `/${clean}` || pathname.startsWith(`/${clean}/`);
   };
 
   return (
-    <aside className="hidden lg:flex w-[260px] h-full bg-surface flex-col border-r border-gray-200 overflow-y-auto flex-shrink-0">
-      <div className="flex items-center px-4 py-2 h-[70px] border-b border-gray-200">
-        <div className="flex gap-1.5">
-          {/* Swapped off the stale Cloudinary-hosted copy (2026-08-14) —
-              that upload predates the local file's crop, so it still had
-              the old ~40%-empty-margin version baked in. The local
-              /public asset is the single source of truth for this logo
-              everywhere else; this brings Sidebar in line with that.
-              The `-ml-4` that used to sit here was compensating for that
-              old baked-in margin — with the properly-cropped local asset
-              it just dragged the logo past the row's own px-4 padding, up
-              against the sidebar's left edge (2026-08-17, reported too
-              close to the edge). Dropped now that there's nothing left to
-              compensate for. */}
-          <VelteLogo alt="Velte logo" width={56} height={27} />
-        </div>
-      </div>
-
+    <aside className="hidden lg:flex w-[240px] xl:w-[260px] h-full bg-surface flex-col border-r border-gray-200 dark:border-white/10 overflow-y-auto flex-shrink-0">
       <nav className="flex-1 flex-col px-3 py-4 space-y-5">
         {sections.map((section) => (
           <div key={section.title}>
-            <p className="text-dash-micro font-semibold uppercase text-gray-400 px-3 mb-2 tracking-wider">
+            <p className="text-dash-micro font-semibold uppercase text-gray-400 dark:text-ink/40 px-3 mb-2 tracking-wider">
               {section.title}
             </p>
             <div className="space-y-0.5">
@@ -199,16 +186,11 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Same control, same placement logic as /chat's own sidebar (2026-09-18).
-          `size="sm"` (not `iconOnly`) — the labels stay, just tightened
-          enough to fit this fixed 260px rail; `fullWidth` because this
-          sidebar renders only at `lg:` and up, well past the `sm` breakpoint
-          the component's own default auto-width behaviour keys off. */}
-      <div className="px-3 py-3 border-t border-gray-200">
+      <div className="px-3 py-3 border-t border-gray-200 dark:border-white/10">
         <ThemeToggle size="sm" fullWidth className="justify-between" />
       </div>
 
-      <div className="px-3 py-4 border-t border-gray-200">
+      <div className="px-3 py-4 border-t border-gray-200 dark:border-white/10">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-secondary font-bold flex-shrink-0 overflow-hidden">
             {userDetails?.avatar ? (
@@ -222,10 +204,10 @@ export default function Sidebar() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-dash-body font-semibold text-gray-900 leading-tight">
+            <p className="text-dash-body font-semibold text-ink leading-tight truncate">
               {userDetails?.company?.name}
             </p>
-            <p className="text-dash-caption text-gray-400 truncate">
+            <p className="text-dash-caption text-gray-400 dark:text-ink/50 truncate">
               @{userDetails?.username}
             </p>
           </div>

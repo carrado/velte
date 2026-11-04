@@ -54,7 +54,7 @@ function SuspendedOverlay({
     <button
       onClick={(e) => {
         e.stopPropagation();
-        navigate(`/${userId}/products/${productId}`);
+        navigate(`/products/${productId}`);
       }}
       className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-1.5 bg-black/70 text-white cursor-pointer"
     >
@@ -138,7 +138,7 @@ function ProductCard({
           ) : null}
           {product.featured && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-dash-caption font-semibold bg-amber-400 text-white">
-              <StarIcon size={9} className="fill-white text-white" />
+              <StarIcon size={9} className="text-white" />
               Featured
             </span>
           )}
@@ -223,7 +223,7 @@ function ProductRow({
   return (
     <div className="bg-surface border border-gray-100 rounded-xl overflow-hidden active:bg-gray-50 transition-colors">
       <button
-        onClick={() => navigate(`/${userId}/products/${product.id}`)}
+        onClick={() => navigate(`/products/${product.id}`)}
         className="w-full flex items-center gap-3 px-4 pt-3 text-left cursor-pointer"
       >
         <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0">
@@ -303,10 +303,7 @@ function ProductRow({
               ) : null}
               {product.featured && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-dash-caption font-semibold bg-amber-50 text-amber-700">
-                  <StarIcon
-                    size={9}
-                    className="fill-amber-500 text-amber-500"
-                  />
+                  <StarIcon size={9} className="text-amber-500" />
                   Featured
                 </span>
               )}
@@ -317,7 +314,7 @@ function ProductRow({
 
       <div className="flex items-stretch mt-2.5 mx-4 pb-1 border-t border-gray-100">
         <button
-          onClick={() => navigate(`/${userId}/products/${product.id}/edit`)}
+          onClick={() => navigate(`/products/${product.id}/edit`)}
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-dash-caption font-medium text-gray-600 active:bg-gray-50 transition-colors cursor-pointer"
         >
           <EditIcon size={14} className="text-blue-500" />

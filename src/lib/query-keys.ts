@@ -13,6 +13,9 @@ export const queryKeys = {
   },
   store: {
     mine: ["store", "mine"] as const,
+    /** Public product page (`/{slug}`). Prefetch + page share this key. */
+    productBySlug: (slug: string) =>
+      ["store", "product-by-slug", slug] as const,
   },
   wallet: {
     detail: ["wallet", "detail"] as const,
@@ -49,9 +52,11 @@ export const queryKeys = {
   // detail too, and the nav badge + Products banner share the list entry.
   hub: {
     home: (scope: "buyer" | "vendor" | "open") =>
-      ["hub", "home", 2, scope] as const,
-    context: ["hub", "context"] as const,
+      ["hub", "home", 5, scope] as const,
+    vendors: ["hub", "vendors", 1] as const,
+    context: ["hub", "context", 2] as const,
     adverts: ["hub", "adverts"] as const,
+    boosts: ["hub", "boosts"] as const,
   },
   vendorBuyerRequests: {
     list: ["vendor-buyer-requests"] as const,

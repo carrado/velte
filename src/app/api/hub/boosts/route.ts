@@ -31,11 +31,12 @@ export async function POST(req: Request) {
   }
   const body = (await req.json().catch(() => null)) as {
     productId?: unknown;
+    days?: unknown;
   } | null;
   try {
     const data = await backendData("/hub/boosts", {
       method: "POST",
-      body: { productId: body?.productId },
+      body: { productId: body?.productId, days: body?.days },
       cookie: vendorAuth.cookie,
     });
     return NextResponse.json(data);

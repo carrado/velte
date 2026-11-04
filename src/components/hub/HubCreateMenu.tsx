@@ -124,13 +124,13 @@ export function HubCreateMenu({
 
             <div className="flex flex-wrap gap-2 mt-4">
               <Link
-                href={`/${userId}/products/add`}
+                href={"/products/add"}
                 className="text-xs font-semibold text-gray-500 hover:text-orange-600 transition-colors"
               >
                 Add a listing instead →
               </Link>
               <Link
-                href={`/${userId}/store`}
+                href={"/store"}
                 className="text-xs font-semibold text-gray-500 hover:text-orange-600 transition-colors"
               >
                 Edit contact card →

@@ -21,7 +21,7 @@ export function HubAdvertCard({ advert }: { advert: HubAdvert }) {
           alt={advert.headline}
           className="w-full h-full object-cover"
         />
-        <span className="absolute top-2.5 left-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-white/95 px-2 py-1 rounded-md shadow-sm">
+        <span className="absolute top-2.5 left-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-surface/95 px-2 py-1 rounded-md shadow-sm">
           Sponsored
         </span>
       </div>

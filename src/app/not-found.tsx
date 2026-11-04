@@ -31,7 +31,7 @@ const fadeUp = {
 export default function NotFound() {
   return (
     <>
-      <Navbar />
+      <Navbar hideSearch />
       <main className="relative bg-canvas min-h-screen pt-28 pb-24 overflow-hidden">
         <div className="pointer-events-none absolute -top-16 -left-24 w-72 h-72 bg-orange-500/[0.08] rounded-full blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 -right-20 w-80 h-80 bg-orange-500/[0.07] rounded-full blur-3xl" />

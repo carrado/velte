@@ -1,6 +1,5 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { usePendingBuyerRequests } from "@/hooks/usePendingBuyerRequests";
 import { ArrowRightIcon, SparklesIcon } from "@/components/icons/hero";
@@ -18,7 +17,6 @@ import { ArrowRightIcon, SparklesIcon } from "@/components/icons/hero";
    unresponded ones, or a fetch failure — this is a bonus nudge, never a
    layout shift a vendor has to account for. */
 export function OpportunitiesBanner() {
-  const params = useParams<{ id: string }>();
   const { navigate } = useNavigation();
 
   // The same count as the nav badge — open and unanswered only (the list
@@ -30,7 +28,7 @@ export function OpportunitiesBanner() {
   return (
     <button
       type="button"
-      onClick={() => navigate(`/${params.id}/buyer-requests`)}
+      onClick={() => navigate("/buyer-requests")}
       className="w-full flex items-center gap-3 bg-gradient-to-r from-orange-50 to-orange-50/40 border border-orange-100 rounded-2xl px-4 sm:px-5 py-3.5 text-left hover:border-orange-200 transition-colors cursor-pointer"
     >
       <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center shrink-0">

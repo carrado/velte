@@ -13,6 +13,16 @@ export function formatNaira(kobo: number): string {
   })}`;
 }
 
+/** A listing stays "new" for 30 days. Older uploads — June in October,
+ *  for example — are still listings, they just lose the new label. */
+export const NEW_LISTING_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function isNewListing(at: string, now: number) {
+  const then = new Date(at).getTime();
+  if (Number.isNaN(then)) return false;
+  return now - then < NEW_LISTING_MS;
+}
+
 /** "3h ago", "2d ago", falling back to a plain date past a week — shared
  *  here so every timestamp on the page reads the same way rather than each
  *  caller keeping its own hand-rolled copy. `now` is passed in rather than

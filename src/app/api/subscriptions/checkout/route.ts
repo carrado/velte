@@ -24,6 +24,7 @@ export async function POST(req: Request) {
   try {
     const data = await backendData<{
       authorizationUrl: string;
+      accessCode?: string;
       reference: string;
       amountKobo: number;
     }>("/platform-subscriptions/checkout", {

@@ -265,7 +265,7 @@ export default function ProductsPage() {
         </div>
         <button
           id="add-product-button"
-          onClick={() => navigate(`/${userId}/products/add`)}
+          onClick={() => navigate("/products/add")}
           className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-xl transition-colors cursor-pointer"
         >
           <PlusIcon size={16} />
@@ -336,7 +336,7 @@ export default function ProductsPage() {
             onDelete={(p) => setDeleteModal({ open: true, product: p })}
             isFood={isFood}
             hasActiveSearch={debouncedSearch.trim().length > 0}
-            onAddListing={() => navigate(`/${userId}/products/add`)}
+            onAddListing={() => navigate("/products/add")}
           />
         )}
 

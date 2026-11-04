@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -104,44 +104,46 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-function ReviewBox({ orderId }: { orderId: string }) {
+function ReviewForm({
+  label,
+  placeholder,
+  doneLabel,
+  onSubmit,
+}: {
+  label: string;
+  placeholder: string;
+  doneLabel: string;
+  onSubmit: (rating: number, text: string) => Promise<boolean>;
+}) {
   const [rating, setRating] = useState(5);
   const [text, setText] = useState("");
   const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function send() {
-    const res = await fetch("/api/trust/reviews", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId, rating, text }),
-    });
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-      toast.error(body?.error || "Couldn't save that review.");
-      return;
+    if (busy) return;
+    setBusy(true);
+    try {
+      const ok = await onSubmit(rating, text);
+      if (ok) {
+        setDone(true);
+        toast.success("Review saved.");
+      }
+    } finally {
+      setBusy(false);
     }
-    setDone(true);
-    toast.success("Review saved.");
   }
 
-  if (done)
-    return (
-      <p className="text-xs text-gray-500">Thanks — the vendor can reply.</p>
-    );
+  if (done) return <p className="text-xs text-gray-500">{doneLabel}</p>;
 
   return (
-    <div className="space-y-2 pt-1">
-      <label
-        className="block text-xs font-medium text-ink"
-        htmlFor={`rating-${orderId}`}
-      >
-        Rate this order
-      </label>
+    <div className="space-y-2 rounded-xl border border-gray-100 bg-canvas/40 p-3">
+      <p className="text-xs font-semibold text-ink">{label}</p>
       <select
-        id={`rating-${orderId}`}
         value={rating}
         onChange={(e) => setRating(Number(e.target.value))}
-        className="rounded-lg border border-gray-200 px-2 py-1 text-sm"
+        className="rounded-lg border border-gray-200 bg-surface px-2 py-1 text-sm"
+        aria-label={label}
       >
         {[5, 4, 3, 2, 1].map((n) => (
           <option key={n} value={n}>
@@ -152,17 +154,155 @@ function ReviewBox({ orderId }: { orderId: string }) {
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="What should the next buyer know?"
-        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-gray-200 bg-surface px-3 py-2 text-sm"
         rows={2}
       />
       <button
         type="button"
-        onClick={send}
-        className="cursor-pointer rounded-full bg-orange-500 px-3 py-1.5 text-sm font-semibold text-white"
+        onClick={() => void send()}
+        disabled={busy}
+        className="cursor-pointer rounded-full bg-orange-500 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
       >
-        Submit review
+        {busy ? "Saving…" : "Submit review"}
       </button>
+    </div>
+  );
+}
+
+async function postReview(body: {
+  orderId: string;
+  kind: "vendor" | "product";
+  productId?: string;
+  rating: number;
+  text: string;
+}) {
+  const res = await fetch("/api/trust/reviews", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    toast.error(payload?.error || "Couldn't save that review.");
+    return false;
+  }
+  return true;
+}
+
+function OrderReviews({ order }: { order: CartOrder }) {
+  const queryClient = useQueryClient();
+  const [vendorDone, setVendorDone] = useState(Boolean(order.vendorReviewed));
+  const [productDone, setProductDone] = useState(
+    () => new Set(order.productReviewedIds ?? []),
+  );
+
+  useEffect(() => {
+    if (order.vendorReviewed) setVendorDone(true);
+  }, [order.vendorReviewed]);
+
+  useEffect(() => {
+    setProductDone((current) => {
+      const next = new Set(current);
+      for (const id of order.productReviewedIds ?? []) next.add(id);
+      return next;
+    });
+  }, [order.productReviewedIds]);
+
+  const pendingProducts = order.items.filter(
+    (item) => !productDone.has(item.productId),
+  );
+  const allDone = vendorDone && pendingProducts.length === 0;
+  const refresh = () => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.cart.buyerOrders,
+    });
+  };
+
+  return (
+    <div className="space-y-3 border-t border-gray-100 pt-3">
+      <div>
+        <p className="text-sm font-bold text-ink">Leave a review</p>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Rate the seller and each item you bought. Both are optional, but
+          separate.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+          Vendor
+        </p>
+        {vendorDone ? (
+          <p className="text-xs text-gray-500">
+            Vendor review saved
+            {order.vendorName ? ` for ${order.vendorName}` : ""}.
+          </p>
+        ) : (
+          <ReviewForm
+            label={`Rate ${order.vendorName || "this vendor"}`}
+            placeholder="How was dealing with this seller?"
+            doneLabel="Thanks — the vendor can reply."
+            onSubmit={async (rating, text) => {
+              const ok = await postReview({
+                orderId: order.id,
+                kind: "vendor",
+                rating,
+                text,
+              });
+              if (ok) {
+                setVendorDone(true);
+                refresh();
+              }
+              return ok;
+            }}
+          />
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+          {order.items.length === 1 ? "Product" : "Products"}
+        </p>
+        {pendingProducts.length === 0 ? (
+          <p className="text-xs text-gray-500">
+            Product review{order.items.length === 1 ? "" : "s"} saved.
+          </p>
+        ) : (
+          pendingProducts.map((item) => (
+            <ReviewForm
+              key={item.productId}
+              label={`Rate ${item.name}`}
+              placeholder="How was this product or service?"
+              doneLabel="Thanks — product review saved."
+              onSubmit={async (rating, text) => {
+                const ok = await postReview({
+                  orderId: order.id,
+                  kind: "product",
+                  productId: item.productId,
+                  rating,
+                  text,
+                });
+                if (ok) {
+                  setProductDone((current) => {
+                    const next = new Set(current);
+                    next.add(item.productId);
+                    return next;
+                  });
+                  refresh();
+                }
+                return ok;
+              }}
+            />
+          ))
+        )}
+      </div>
+
+      {allDone && (
+        <p className="text-xs text-gray-500">
+          Thanks — your reviews for this order are in.
+        </p>
+      )}
     </div>
   );
 }
@@ -288,7 +428,7 @@ function BuyerOrderCard({ order, now }: { order: CartOrder; now: number }) {
         </div>
       )}
       {(order.status === "received" || order.status === "confirmed") && (
-        <ReviewBox orderId={order.id} />
+        <OrderReviews order={order} />
       )}
 
       {order.status === "delivered" && order.confirmBy && (

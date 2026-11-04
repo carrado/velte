@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -1434,7 +1434,7 @@ export default function AddProductPage({
 
       await new Promise((r) => setTimeout(r, 1100));
       setPublishModal((prev) => ({ ...prev, open: false }));
-      navigate(`/${userId}/products`);
+      navigate("/products");
 
       // Fired after the publish modal closes (not inside it) — that modal is
       // only on screen for ~1.1s, nowhere near enough to actually read a
@@ -1489,7 +1489,7 @@ export default function AddProductPage({
           </p>
         </div>
         <button
-          onClick={() => navigate(`/${userId}/products`)}
+          onClick={() => navigate("/products")}
           className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-dash-body font-semibold rounded-md transition-colors cursor-pointer"
         >
           <ArrowLeftIcon size={15} />
@@ -2921,7 +2921,7 @@ export default function AddProductPage({
         {isEditMode && (
           <div className="flex justify-end fixed inset-x-0 lg:left-[260px] bottom-[calc(env(safe-area-inset-bottom)+4rem)] md:bottom-0 z-40 py-2 bg-surface border-t border-gray-100 px-5 gap-3">
             <button
-              onClick={() => navigate(`/${userId}/products`)}
+              onClick={() => navigate("/products")}
               disabled={isSubmitting}
               className="flex items-center gap-1.5 border border-gray-200 bg-surface text-ink text-dash-body font-bold px-4 h-10 rounded-md hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
             >

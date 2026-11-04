@@ -239,7 +239,7 @@ export function ChatHeader() {
   return (
     <>
       <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-surface border-b border-gray-100 z-10">
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
           {/* Mobile: opens the slide-over. Desktop: only rendered while the
             sidebar is collapsed — expanded, the sidebar carries its own
             collapse control, so a second always-visible toggle here would
@@ -285,7 +285,7 @@ export function ChatHeader() {
             />
           </Link>
         </div>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <CartButton />
           {userDetails ? (
             // A vendor who wandered in from their own dashboard — send them

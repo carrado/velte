@@ -51,7 +51,7 @@ export default function BlogIndexContent() {
   return (
     <>
       <Navbar />
-      <main className="bg-surface min-h-screen pt-28 sm:pt-32 pb-24">
+      <main className="bg-canvas min-h-screen pt-28 sm:pt-32 pb-24">
         <header className="max-w-5xl mx-auto px-5 sm:px-8 mb-14 sm:mb-16">
           <motion.div initial="hidden" animate="show" variants={stagger}>
             <motion.span

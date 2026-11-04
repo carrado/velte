@@ -12,6 +12,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
+import { ASK_VELTE_EVENT, type AskVelteDetail } from "@/lib/askVelte";
 import { cn } from "@/lib/utils";
 import { generateUUID } from "@/lib/uuid";
 import { buildProductTerm } from "@/lib/productTerm";
@@ -118,25 +119,15 @@ import {
   ScaleIcon,
   ShoppingCartIcon,
 } from "@/components/icons/hero";
-// Composer icons only (upload spinner, remove-photo, camera, send) are
-// lucide-react, not the custom set — reverted 2026-08-17 per explicit
-// request, scoped to just this textarea; every other icon on this page
-// stays on @/components/icons. See [[custom_icon_system]]. Copy/Pencil
-// (the buyer-bubble copy/edit buttons) joined this same lucide exception
-// later, per explicit request, for visual consistency with each other.
-// Camera rejoined the exception 2026-09-06 for the rebuilt tool-menu's own
-// "Search by Photo" entry — ScaleIcon above is the other menu item, and
-// stays on the custom set since it's not part of the original
-// upload/spinner/send cluster this exception was scoped to.
 import {
-  ArrowUp,
-  Camera,
-  Loader2,
-  Pencil,
-  Plus,
-  Square,
-  X,
-} from "lucide-react";
+  ArrowUpIcon,
+  CameraIcon,
+  CloseIcon,
+  LoaderIcon,
+  PencilIcon,
+  PlusIcon,
+  SquareIcon,
+} from "@/components/icons";
 
 // `products` decides the noun: a pure service turn (e.g. "haircut near me")
 // shouldn't be headed "Products", and a turn can genuinely mix both kinds
@@ -1453,7 +1444,7 @@ function ConversationTurnView({
                       aria-label="Edit message"
                       className="-mt-1 inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
                     >
-                      <Pencil size={13} />
+                      <PencilIcon size={13} />
                     </button>
                   )}
                 </div>
@@ -4572,6 +4563,25 @@ export function SearchHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Header Ask Velte search while already on /chat — goAskVelte fires this
+  // because the mount-time ?q= effect above will not re-run.
+  useEffect(() => {
+    function onAsk(e: Event) {
+      const detail = (e as CustomEvent<AskVelteDetail>).detail;
+      const q = detail?.q?.trim();
+      if (!q) return;
+      if (detail.auto) {
+        void submitWithLocationGate(q, null, null);
+      } else {
+        setQuery(q);
+      }
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    window.addEventListener(ASK_VELTE_EVENT, onAsk);
+    return () => window.removeEventListener(ASK_VELTE_EVENT, onAsk);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Shared by the form's onSubmit and the composer textarea's Enter-to-send
   // (see textareaRef below) — both are just "the buyer hit send," the only
   // difference is which DOM event triggered it.
@@ -5417,7 +5427,7 @@ export function SearchHome() {
             />
             {uploadingImage && (
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                <Loader2 size={14} className="animate-spin text-white" />
+                <LoaderIcon size={14} className="animate-spin text-white" />
               </div>
             )}
           </div>
@@ -5427,7 +5437,7 @@ export function SearchHome() {
             className="text-gray-400 hover:text-gray-600"
             title="Remove photo"
           >
-            <X size={16} />
+            <CloseIcon size={16} />
           </button>
         </div>
       )}
@@ -5467,9 +5477,9 @@ export function SearchHome() {
               className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
             >
               {nameSubmitting ? (
-                <Loader2 size={16} className="animate-spin" />
+                <LoaderIcon size={16} className="animate-spin" />
               ) : (
-                <ArrowUp size={18} />
+                <ArrowUpIcon size={18} />
               )}
             </button>
           </div>
@@ -5586,9 +5596,9 @@ export function SearchHome() {
               className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
             >
               {identitySubmitting ? (
-                <Loader2 size={16} className="animate-spin" />
+                <LoaderIcon size={16} className="animate-spin" />
               ) : (
-                <ArrowUp size={18} />
+                <ArrowUpIcon size={18} />
               )}
             </button>
           </div>
@@ -5662,7 +5672,7 @@ export function SearchHome() {
                   return <ToolIcon size={13} className="shrink-0" />;
                 })()}
                 {COMPOSER_TOOL_META[activeTool].label}
-                <X size={12} className="shrink-0" />
+                <CloseIcon size={12} className="shrink-0" />
               </button>
             )}
             <textarea
@@ -5727,7 +5737,7 @@ export function SearchHome() {
               aria-expanded={toolMenuOpen}
               className="shrink-0 w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
             >
-              <Plus size={18} />
+              <PlusIcon size={18} />
             </button>
             {/* Portalled, not an absolutely-positioned panel — the composer
                 sits inside the chat column's own scroll container, and a
@@ -5763,7 +5773,7 @@ export function SearchHome() {
                 }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer text-left"
               >
-                <Camera size={17} className="shrink-0 text-gray-500" />
+                <CameraIcon size={17} className="shrink-0 text-gray-500" />
                 <span className="flex-1 text-sm font-medium text-ink">
                   Search with a photo
                 </span>
@@ -5824,7 +5834,7 @@ export function SearchHome() {
                 title="Stop generating"
                 className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-slab hover:bg-slab text-white transition-colors"
               >
-                <Square size={13} fill="currentColor" />
+                <SquareIcon size={13} />
               </button>
             ) : (
               <button
@@ -5837,7 +5847,7 @@ export function SearchHome() {
                 title="Send"
                 className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white transition-colors"
               >
-                <ArrowUp size={18} />
+                <ArrowUpIcon size={18} />
               </button>
             )}
           </div>

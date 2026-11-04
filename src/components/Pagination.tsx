@@ -2,7 +2,7 @@
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import type { PaginationProps } from "@/types/common";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons/hero";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export function Pagination({
   currentPage,
@@ -80,7 +80,7 @@ export function Pagination({
         disabled={currentPage === 1}
         className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 bg-surface rounded-lg border border-gray-200 text-dash-body text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
       >
-        <ChevronLeftIcon size={16} />
+        <ChevronLeft size={16} />
         <span className="hidden sm:inline">Previous</span>
         <span className="sm:hidden">Prev</span>
       </button>
@@ -120,7 +120,7 @@ export function Pagination({
       >
         <span className="hidden sm:inline">Next</span>
         <span className="sm:hidden">Next</span>
-        <ChevronRightIcon size={16} />
+        <ChevronRight size={16} />
       </button>
     </div>
   );

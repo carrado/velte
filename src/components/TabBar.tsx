@@ -8,40 +8,72 @@ interface TabBarProps<T extends string = string> {
   activeTab: T;
   onChange: (tab: T) => void;
   className?: string;
+  /** Stretch to the container width (chat sidebar theme control, Hub mobile). */
+  fullWidth?: boolean;
+  /** `lg` = taller padding + text-sm (product detail). Default stays compact. */
+  size?: "default" | "lg";
 }
 
+/**
+ * App-standard segmented tabs. Use this for any tab-like switcher
+ * (store, marketplace, hub, product detail, chat sidebar theme control).
+ * Shell: `border-gray-200 bg-gray-50`, active `bg-surface` + shadow.
+ */
 export default function TabBar<T extends string = string>({
   tabs,
   activeTab,
   onChange,
   className,
+  fullWidth = false,
+  size = "default",
 }: TabBarProps<T>) {
+  const large = size === "lg";
   return (
     <div
+      role="tablist"
       className={cn(
-        "grid grid-cols-2 gap-1 md:flex md:flex-row w-full md:w-auto bg-orange-50 rounded-lg sm:p-1 p-2",
+        "flex items-center border border-gray-200 bg-gray-50",
+        large
+          ? "gap-1 rounded-xl p-1 sm:rounded-2xl"
+          : "gap-0.5 rounded-lg p-0.5 sm:rounded-xl",
+        fullWidth ? "w-full" : "w-full sm:w-auto sm:inline-flex",
         className,
       )}
     >
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          onClick={() => onChange(tab.key)}
-          className={cn(
-            "flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer text-dash-body font-medium transition-colors whitespace-nowrap",
-            activeTab === tab.key
-              ? "bg-surface text-[#111827] shadow-sm"
-              : "text-[#4b5563] hover:text-[#111827]",
-          )}
-        >
-          {tab.label}
-          {tab.count !== undefined && (
-            <span className="text-dash-secondary font-bold text-orange-500">
-              ({tab.count})
-            </span>
-          )}
-        </button>
-      ))}
+      {tabs.map((tab) => {
+        const selected = activeTab === tab.key;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(tab.key)}
+            className={cn(
+              "flex items-center justify-center font-semibold transition-colors cursor-pointer whitespace-nowrap",
+              fullWidth || large ? "flex-1" : "flex-1 sm:flex-none",
+              large
+                ? "gap-2 rounded-lg px-4 py-2.5 text-sm sm:rounded-xl sm:px-5 sm:py-3"
+                : "gap-1.5 rounded-md px-2.5 py-1.5 text-xs sm:rounded-lg",
+              selected
+                ? "bg-surface text-ink shadow-sm"
+                : "text-gray-500 hover:text-gray-700",
+            )}
+          >
+            {tab.label}
+            {tab.count !== undefined && (
+              <span
+                className={cn(
+                  "font-bold",
+                  selected ? "text-orange-500" : "text-gray-400",
+                )}
+              >
+                ({tab.count})
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

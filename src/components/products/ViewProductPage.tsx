@@ -173,7 +173,7 @@ function ProductCarousel({
       {/* Featured badge */}
       {featured && (
         <div className="absolute top-3 left-3 flex items-center gap-1 bg-amber-400 text-white text-dash-caption font-bold px-2.5 py-1 rounded-full shadow-md z-10">
-          <StarIcon size={11} fill="white" />
+          <StarIcon size={11} className="text-white" />
           Featured
         </div>
       )}
@@ -307,7 +307,7 @@ export default function ViewProductPage({ productId }: { productId: string }) {
           Listing not found
         </p>
         <button
-          onClick={() => navigate(`/${userId}/products`)}
+          onClick={() => navigate("/products")}
           className="flex items-center gap-2 text-dash-body text-orange-500 hover:underline cursor-pointer"
         >
           <ArrowLeftIcon size={14} />

@@ -147,7 +147,54 @@ export interface HubFeaturedVendor {
   reviewableOrderId: string | null;
 }
 
+/** One card in GET /api/hub/vendors — full buyer directory. */
+export interface HubDirectoryVendor {
+  vendorId: string;
+  name: string;
+  handle: string;
+  description: string | null;
+  sectors: string[];
+  place: string | null;
+  state: string | null;
+  avatar: string | null;
+  imageUrl: string | null;
+  verified: boolean;
+  sponsored: boolean;
+  ratingAvg: number | null;
+  ratingCount: number;
+  whatsapp: string | null;
+  social: HubSocial | null;
+  trusted: boolean;
+  favourite: boolean;
+  fastDelivery: boolean;
+}
+
+export interface HubVendorsDirectory {
+  premium: boolean;
+  vendors: HubDirectoryVendor[];
+  sectors: HubSectorCount[];
+  locations: HubSectorCount[];
+}
+
 export type HubTimelineKind = "product" | "promotion" | "update";
+
+/** The product or service a Hub post opens in ListingDetailModal. */
+export interface HubTimelineListing {
+  productId: string;
+  /** Public product URL is /{slug}. Null only until the listing has a slug. */
+  slug?: string | null;
+  name: string;
+  kind: "product" | "service";
+  quoteOnRequest: boolean;
+  /** Kobo, same unit the Product document stores. */
+  price: number;
+  priceMax: number | null;
+  currency: string;
+  description: string | null;
+  images: string[];
+  attributes: { name: string; value: string }[];
+  checkoutEligible: boolean;
+}
 
 export interface HubTimelineItem {
   id: string;
@@ -176,6 +223,7 @@ export interface HubTimelineItem {
   trusted: boolean;
   sentiment: HubSentiment | null;
   reviewableOrderId: string | null;
+  listing?: HubTimelineListing | null;
 }
 
 export interface HubSentiment {
@@ -217,6 +265,14 @@ export interface HubSectorCount {
 
 /** GET /api/hub/home — shared by a signed-up buyer and a vendor.
  *  Performance and the store are present for a vendor only. */
+/** Present only for Buyer Basic — Hub returns a capped preview. */
+export interface HubPreview {
+  vendorCap: number;
+  listingCap: number;
+  vendorsCapped: boolean;
+  listingsCapped: boolean;
+}
+
 export interface HubHome {
   role: "buyer" | "vendor";
   store: {
@@ -229,6 +285,8 @@ export interface HubHome {
   enterprise: boolean;
   /** Buyer Premium. Social contact on a card is theirs. */
   premium: boolean;
+  /** Null/absent for Premium buyers and vendors. */
+  hubPreview?: HubPreview | null;
   sectors: HubSectorCount[];
   performance: {
     leads: HubWindow;
@@ -247,6 +305,29 @@ export interface CreateBroadcastPayload {
   advertId?: string | null;
 }
 
+export interface HubBoostTier {
+  days: number;
+  costKobo: number;
+  reachMin?: number;
+  reachMax?: number;
+}
+
+export interface HubListingBoost {
+  id: string;
+  productId: string;
+  productName: string;
+  productImage: string | null;
+  productPrice: number | null;
+  days: number;
+  startsAt: string;
+  endsAt: string;
+  status: "active" | "cancelled" | "expired";
+  costKobo: number;
+  reachMin?: number;
+  reachMax?: number;
+  alreadyActive?: boolean;
+}
+
 /** GET /api/hub/context — everything the dashboard publish UI needs in one
  *  call. Prices arrive from the backend, never from client constants. */
 export interface HubContext {
@@ -255,9 +336,16 @@ export interface HubContext {
   advertCostKobo: number;
   broadcastCostKobo: number;
   advertDays: number;
+  boostTiers?: HubBoostTier[];
   maxActiveAdverts: number;
   activeAdverts: number;
   draftBroadcasts: number;
   sendsPerDay: number;
   walletBalanceKobo: number;
+  /** AI advert poster gens — Basic 2 / Enterprise 5; 24h cooldown after last used. */
+  aiPosterLimit?: number;
+  aiPosterUsed?: number;
+  aiPosterRemaining?: number;
+  /** ISO time when a fresh allowance opens (set when the last slot was used). */
+  aiPosterResetsAt?: string | null;
 }

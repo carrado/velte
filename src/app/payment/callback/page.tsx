@@ -47,7 +47,7 @@ function PaymentCallbackContent() {
       try {
         const user = await usersApi.getMe();
         setTimeout(() => {
-          router.replace(`/${user.id}/wallet?topup=success`);
+          router.replace("/wallet?topup=success");
         }, 1200);
       } catch {
         /* handled globally by api-client's 401 handler */

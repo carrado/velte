@@ -25,12 +25,12 @@ export function NotificationDropdown() {
           Popover trigger for the fuller explanation. */}
       <PopoverTrigger
         id="header-notifications-trigger"
-        className="relative text-[#6B7280] hover:text-[#111827] cursor-pointer focus:outline-none"
+        className="relative inline-flex items-center justify-center rounded-xl p-2 text-gray-600 hover:bg-gray-50 cursor-pointer focus:outline-none"
         aria-label="Open notifications"
       >
-        <BellIcon size={20} />
+        <BellIcon size={18} />
         {hasUnread && (
-          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
+          <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-orange-500" />
         )}
       </PopoverTrigger>
       <PopoverContent

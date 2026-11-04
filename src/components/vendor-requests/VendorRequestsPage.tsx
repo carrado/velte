@@ -470,7 +470,7 @@ export function VendorRequestsPage() {
             balance is {formatNaira(balance ?? 0)}.
           </p>
           <DashboardLink
-            href={`/${params.id}/wallet`}
+            href="/wallet"
             className="shrink-0 rounded-xl bg-amber-600 px-3.5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-amber-700"
           >
             Top up
@@ -590,7 +590,7 @@ export function VendorRequestsPage() {
             <RequestCard
               key={request.id}
               request={request}
-              href={`/${params.id}/buyer-requests/${request.id}`}
+              href={`/buyer-requests/${request.id}`}
               now={now}
               index={i}
             />

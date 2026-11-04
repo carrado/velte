@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { fmt } from "@/lib/product-price";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { resolveGalleryImages } from "@/lib/media";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { AddToCartButton } from "@/components/cart/AddToCartButton";
-import { ListingDetailModal } from "@/components/ListingDetailModal";
-import { ImageLightbox } from "@/components/ImageLightbox";
 import { buildChatLink } from "@/lib/chatLink";
 import type {
   PublicStoreProduct,
@@ -128,13 +127,12 @@ function OfferingMedia({
 export function OfferingCard({
   product,
   storeName,
+  storeHandle,
   vendorId,
   isOwn,
 }: PublicStoreProductProps) {
   const isService = product.kind === "service";
   const KindIcon = isService ? WrenchIcon : PackageIcon;
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
   const enquireHref = enquireHrefFor(product, storeName, vendorId);
@@ -142,6 +140,7 @@ export function OfferingCard({
     product.mainImageUrl,
     product.thumbnailUrls,
   );
+  const detailHref = `/${product.slug || product.id}`;
 
   // Same overflow-detection technique as ExpandableText (search results) —
   // only offer "See more" when the description actually got clipped by its
@@ -162,12 +161,7 @@ export function OfferingCard({
 
   return (
     <div className="bg-surface border rounded-2xl border-gray-100 shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md flex flex-col h-full">
-      <div
-        className={
-          product.mainImageUrl ? "relative cursor-zoom-in" : "relative"
-        }
-        onClick={() => product.mainImageUrl && setLightboxOpen(true)}
-      >
+      <Link href={detailHref} className="relative block">
         <OfferingMedia product={product} aspectClassName="aspect-[4/3]" />
         <span className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm text-white text-[11px] font-semibold rounded-full">
           <KindIcon size={11} />
@@ -179,12 +173,15 @@ export function OfferingCard({
             {images.length}
           </span>
         )}
-      </div>
+      </Link>
 
       <div className="p-3 sm:p-4 flex flex-col flex-1 gap-2">
-        <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2 min-w-0">
+        <Link
+          href={detailHref}
+          className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2 min-w-0 hover:text-orange-600"
+        >
           {product.name}
-        </p>
+        </Link>
         {product.description && (
           <p
             ref={descRef}
@@ -194,16 +191,12 @@ export function OfferingCard({
           </p>
         )}
         {hasMore && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setDetailOpen(true);
-            }}
+          <Link
+            href={detailHref}
             className="self-start text-[12px] font-semibold text-orange-600 hover:text-orange-700 underline"
           >
             See more
-          </button>
+          </Link>
         )}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2.5 mt-auto border-t border-gray-100">
           <Price product={product} />
@@ -232,42 +225,6 @@ export function OfferingCard({
             ))}
         </div>
       </div>
-
-      <ListingDetailModal
-        item={{
-          name: product.name,
-          kind: product.kind,
-          quoteOnRequest: product.quoteOnRequest ?? false,
-          price: product.price,
-          priceMax: product.priceMax ?? null,
-          currency: product.currency,
-          images,
-          description: product.description,
-          attributes: product.attributes,
-        }}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        isOwn={isOwn}
-        chatHref={enquireHref}
-        chatLabel={isService ? "Enquire about this service" : "Enquire"}
-        cart={
-          product.checkoutEligible
-            ? {
-                productId: product.id,
-                vendorId,
-                vendorName: storeName,
-                unitPrice: product.price / 100,
-              }
-            : null
-        }
-      />
-
-      <ImageLightbox
-        images={images}
-        open={lightboxOpen}
-        onClose={() => setLightboxOpen(false)}
-        alt={product.name}
-      />
     </div>
   );
 }

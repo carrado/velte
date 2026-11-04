@@ -22,31 +22,35 @@ function koboToNaira(kobo: number) {
   return kobo / 100;
 }
 
+/** Renders the cart drawer whenever `drawerOpen` is true — mount once on
+ *  surfaces that can add to cart (product page, hub) without a cart icon. */
+export function CartDrawerHost() {
+  const open = useCartStore((s) => s.drawerOpen);
+  const closeDrawer = useCartStore((s) => s.closeDrawer);
+  if (!open) return null;
+  return <CartDrawer onClose={closeDrawer} />;
+}
+
 export function CartButton() {
   const count = useCartStore((s) =>
     s.items.reduce((sum, item) => sum + item.quantity, 0),
   );
-  const open = useCartStore((s) => s.drawerOpen);
   const openDrawer = useCartStore((s) => s.openDrawer);
-  const closeDrawer = useCartStore((s) => s.closeDrawer);
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={openDrawer}
-        className="relative inline-flex items-center justify-center rounded-xl p-2 text-gray-600 hover:bg-gray-50"
-        aria-label={count ? `Open cart, ${count} items` : "Open cart"}
-      >
-        <ShoppingCartIcon size={18} />
-        {count > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] rounded-full bg-orange-500 px-1 text-center text-[10px] font-bold leading-4 text-white">
-            {count}
-          </span>
-        )}
-      </button>
-      {open && <CartDrawer onClose={closeDrawer} />}
-    </>
+    <button
+      type="button"
+      onClick={openDrawer}
+      className="relative inline-flex items-center justify-center rounded-xl p-2 text-gray-600 hover:bg-gray-50"
+      aria-label={count ? `Open cart, ${count} items` : "Open cart"}
+    >
+      <ShoppingCartIcon size={18} />
+      {count > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] rounded-full bg-orange-500 px-1 text-center text-[10px] font-bold leading-4 text-white">
+          {count}
+        </span>
+      )}
+    </button>
   );
 }
 

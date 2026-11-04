@@ -1,5 +1,13 @@
 import { ApiError, api } from "@/lib/api-client";
-import type { HubContext, HubHome, HubVendorAdvert } from "@/types/hub";
+import { uploadProductMedia } from "@/lib/cloudinary";
+import { overlayStoreLogoOnPoster } from "@/lib/overlayStoreLogo";
+import type {
+  HubContext,
+  HubHome,
+  HubListingBoost,
+  HubVendorAdvert,
+  HubVendorsDirectory,
+} from "@/types/hub";
 
 // The page-blocking Hub reads. The nav prefetch and the pages share these
 // so a click on Vendors Hub lands with the data already in cache.
@@ -29,10 +37,131 @@ export function fetchHubContext() {
   return api.get<HubContext>("/api/hub/context");
 }
 
+export async function fetchHubVendors(): Promise<HubVendorsDirectory> {
+  const res = await fetch("/api/hub/vendors");
+  if (!res.ok) throw new ApiError(res.status, "Couldn't load vendors.");
+  return (await res.json()) as HubVendorsDirectory;
+}
+
 export async function fetchHubAdverts() {
   try {
     return await api.get<HubVendorAdvert[]>("/api/hub/adverts");
   } catch {
     return [] as HubVendorAdvert[];
+  }
+}
+
+export async function fetchHubBoosts() {
+  return api.get<HubListingBoost[]>("/api/hub/boosts");
+}
+
+export async function createHubBoost(productId: string, days: number) {
+  return api.post<HubListingBoost>("/api/hub/boosts", { productId, days });
+}
+
+export async function cancelHubBoost(id: string) {
+  return api.post<{ id: string }>(`/api/hub/boosts/${id}/cancel`);
+}
+
+export type AiPosterResult = {
+  imageUrl: string;
+  headlines: string[];
+  blurb: string;
+  remaining: number;
+  limit: number;
+  used: number;
+  resetsAt?: string | null;
+};
+
+type AiPosterApiPayload = {
+  imageBase64: string;
+  mimeType?: string;
+  headlines: string[];
+  blurb: string;
+  remaining: number;
+  limit: number;
+  used: number;
+  resetsAt?: string | null;
+};
+
+/** AI poster gen can take >15s — bypasses the shared api-client deadline.
+ *  Server returns PNG bytes; the browser stamps the store logo (when present)
+ *  then hosts on Cloudinary (avoids Node DNS failures for api.cloudinary.com). */
+export async function generateAiPoster(body: {
+  storeName: string;
+  prompt: string;
+  instructions?: string | null;
+  productName?: string | null;
+  /** Store / vendor avatar — omitted or null skips the logo overlay. */
+  logoUrl?: string | null;
+  /** Dominant hex colours from the logo — drives poster palette when set. */
+  palette?: string[] | null;
+}): Promise<AiPosterResult> {
+  let res: Response;
+  try {
+    res = await fetch("/api/hub/ai-poster", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        storeName: body.storeName,
+        prompt: body.prompt,
+        instructions: body.instructions,
+        productName: body.productName,
+        palette: body.palette,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      "Couldn't reach the server. Please check your internet connection and try again.",
+    );
+  }
+
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    /* empty */
+  }
+
+  if (!res.ok) {
+    const rawError = (data as { error?: unknown } | null)?.error;
+    const message =
+      typeof rawError === "string" && rawError.trim()
+        ? rawError
+        : "Couldn't generate an AI poster.";
+    throw new ApiError(res.status, message, data);
+  }
+
+  const payload = data as AiPosterApiPayload;
+  if (!payload?.imageBase64) {
+    throw new ApiError(502, "Couldn't generate an AI poster.");
+  }
+
+  try {
+    const file = await overlayStoreLogoOnPoster(
+      payload.imageBase64,
+      payload.mimeType || "image/png",
+      body.logoUrl,
+    );
+    const imageUrl = await uploadProductMedia(file, "velte/hub-ai-posters");
+    return {
+      imageUrl,
+      headlines: payload.headlines ?? [],
+      blurb: payload.blurb ?? "",
+      remaining: payload.remaining,
+      limit: payload.limit,
+      used: payload.used,
+      resetsAt: payload.resetsAt ?? null,
+    };
+  } catch (err) {
+    throw new ApiError(
+      502,
+      err instanceof Error && err.message.trim()
+        ? err.message
+        : "Couldn't save the poster image. Check your connection and try again.",
+    );
   }
 }

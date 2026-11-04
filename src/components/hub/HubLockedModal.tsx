@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
-import { X } from "lucide-react";
+import { CloseIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { modalScrimClass } from "@/lib/modalScrim";
 
@@ -59,7 +59,7 @@ export function HubLockedModal({
             aria-label="Close"
             className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
           >
-            <X size={16} />
+            <CloseIcon size={16} />
           </button>
         </div>
         <p className="text-lg font-bold text-ink tracking-tight">{title}</p>

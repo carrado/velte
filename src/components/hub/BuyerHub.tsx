@@ -3,43 +3,51 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
-  Baby,
-  BadgeCheck,
-  Bell,
-  Briefcase,
-  Building2,
-  Camera,
-  ChefHat,
-  FileText,
-  Flame,
-  Gift,
-  Heart,
-  Leaf,
-  Lock,
-  MapPin,
-  Monitor,
-  PartyPopper,
-  Phone,
-  Scale,
-  Send,
-  Shield,
-  Shirt,
-  ShoppingCart,
-  Sparkles,
-  Star,
-  Store,
-  Sun,
-  Truck,
-  Utensils,
-  Wrench,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
-import { useCreditsModal } from "@/components/credits/CreditsModal";
+  BabyIcon,
+  BadgeCheckIcon,
+  BellIcon,
+  BriefcaseIcon,
+  BuildingIcon,
+  CameraIcon,
+  ChefHatIcon,
+  FileTextIcon,
+  FlameIcon,
+  GiftIcon,
+  HeartIcon,
+  LeafIcon,
+  LockIcon,
+  MapPinIcon,
+  MonitorIcon,
+  PartyPopperIcon,
+  PhoneIcon,
+  ScaleIcon,
+  SendIcon,
+  ShieldIcon,
+  ShirtIcon,
+  ShoppingCartIcon,
+  SparklesIcon,
+  StarIcon,
+  StoreIcon,
+  SunIcon,
+  TruckIcon,
+  UtensilsIcon,
+  WrenchIcon,
+  ZapIcon,
+} from "@/components/icons";
+import type { IconComponent } from "@/types/common";
+import AnchoredPopover from "@/components/AnchoredPopover";
+import { Ellipsis } from "lucide-react";
+import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
+import { HubLink } from "@/components/hub/HubLink";
 import { CardCarousel } from "@/components/search/CardCarousel";
-import { SECTOR_BY_VALUE, SECTOR_TAXONOMY } from "@/lib/sectors";
+import { HubHero } from "@/components/hub/HubHero";
+import {
+  SECTOR_BY_VALUE,
+  SECTOR_CATEGORY_BY_LABEL,
+  SECTOR_TAXONOMY,
+} from "@/lib/sectors";
 import { modalScrimClass } from "@/lib/modalScrim";
-import { cn, timeAgo } from "@/lib/utils";
+import { cn, isNewListing, timeAgo } from "@/lib/utils";
 import type {
   HubBroadcastPrefs,
   HubBuyerBroadcast,
@@ -49,10 +57,8 @@ import type {
   HubSocial,
   HubTimelineItem,
 } from "@/types/hub";
+import TabBar from "@/components/TabBar";
 import { HubLockedModal } from "./HubLockedModal";
-
-type FeedFilter = "all" | "promotion" | "product" | "rated";
-type FeedSort = "recent" | "rated";
 
 type ContactTarget = {
   vendorId: string;
@@ -78,47 +84,47 @@ function sectorLabel(value: string) {
   return SECTOR_BY_VALUE[value]?.label ?? value.replace(/_/g, " ");
 }
 
-const CATEGORY_ICON: Record<string, LucideIcon> = {
-  food_hospitality: Utensils,
-  event_services: PartyPopper,
-  retail_trade: ShoppingCart,
-  fashion_apparel: Shirt,
-  electronics_technology: Monitor,
-  beauty_personal_care: Sparkles,
-  home_living: Building2,
-  building_construction: Wrench,
-  automotive: Truck,
-  repairs_technical: Wrench,
-  professional_business_services: Briefcase,
-  education_training: FileText,
-  transportation_logistics: Truck,
-  arts_media_entertainment: Camera,
-  home_services_domestic: Sparkles,
+const CATEGORY_ICON: Record<string, IconComponent> = {
+  food_hospitality: UtensilsIcon,
+  event_services: PartyPopperIcon,
+  retail_trade: ShoppingCartIcon,
+  fashion_apparel: ShirtIcon,
+  electronics_technology: MonitorIcon,
+  beauty_personal_care: SparklesIcon,
+  home_living: BuildingIcon,
+  building_construction: WrenchIcon,
+  automotive: TruckIcon,
+  repairs_technical: WrenchIcon,
+  professional_business_services: BriefcaseIcon,
+  education_training: FileTextIcon,
+  transportation_logistics: TruckIcon,
+  arts_media_entertainment: CameraIcon,
+  home_services_domestic: SparklesIcon,
 };
 
-const LEAF_ICON: Record<string, LucideIcon> = {
-  bakery_pastries: ChefHat,
-  confectionery_snacks: ChefHat,
-  bars_lounges_nightlife: Flame,
-  shoes_footwear: ShoppingCart,
-  bags_accessories: Gift,
-  jewelry_watches: Sparkles,
-  phones_accessories: Phone,
-  phone_gadget_repairs: Phone,
-  computers_laptops: Monitor,
-  solar_installation: Sun,
-  generator_sales_repair: Zap,
-  electrical_installation_services: Zap,
-  real_estate_property_sales: Building2,
-  hotels_shortlets: Building2,
-  groceries_supermarket: ShoppingCart,
-  gift_items_souvenirs: Gift,
-  legal_services: Scale,
-  photography_videography: Camera,
-  daycare_creche: Baby,
-  toys_kids_items: Baby,
-  gardening_landscaping: Leaf,
-  security_services: Shield,
+const LEAF_ICON: Record<string, IconComponent> = {
+  bakery_pastries: ChefHatIcon,
+  confectionery_snacks: ChefHatIcon,
+  bars_lounges_nightlife: FlameIcon,
+  shoes_footwear: ShoppingCartIcon,
+  bags_accessories: GiftIcon,
+  jewelry_watches: SparklesIcon,
+  phones_accessories: PhoneIcon,
+  phone_gadget_repairs: PhoneIcon,
+  computers_laptops: MonitorIcon,
+  solar_installation: SunIcon,
+  generator_sales_repair: ZapIcon,
+  electrical_installation_services: ZapIcon,
+  real_estate_property_sales: BuildingIcon,
+  hotels_shortlets: BuildingIcon,
+  groceries_supermarket: ShoppingCartIcon,
+  gift_items_souvenirs: GiftIcon,
+  legal_services: ScaleIcon,
+  photography_videography: CameraIcon,
+  daycare_creche: BabyIcon,
+  toys_kids_items: BabyIcon,
+  gardening_landscaping: LeafIcon,
+  security_services: ShieldIcon,
 };
 
 const CATEGORY_BY_SECTOR = Object.fromEntries(
@@ -141,10 +147,26 @@ function sectorSlug(value: string) {
   return SLUG_BY_LABEL[raw.toLowerCase()] ?? null;
 }
 
-function sectorIcon(value: string) {
+/** Parent taxonomy group for a store sector value (slug or display label). */
+function sectorGroupId(value: string): string | null {
+  const byLabel = SECTOR_CATEGORY_BY_LABEL[value];
+  if (byLabel) return byLabel;
   const slug = sectorSlug(value);
-  if (!slug) return Store;
-  return LEAF_ICON[slug] ?? CATEGORY_ICON[CATEGORY_BY_SECTOR[slug]] ?? Store;
+  if (!slug) return null;
+  return CATEGORY_BY_SECTOR[slug] ?? null;
+}
+
+function inSectorGroup(values: string[] | undefined, groupId: string) {
+  return (values ?? []).some((value) => sectorGroupId(value) === groupId);
+}
+
+function sectorIcon(value: string) {
+  if (CATEGORY_ICON[value]) return CATEGORY_ICON[value];
+  const slug = sectorSlug(value);
+  if (!slug) return StoreIcon;
+  return (
+    LEAF_ICON[slug] ?? CATEGORY_ICON[CATEGORY_BY_SECTOR[slug]] ?? StoreIcon
+  );
 }
 
 function initials(name: string) {
@@ -159,14 +181,11 @@ function Stars({ avg, count }: { avg: number | null; count: number }) {
     <span className="inline-flex items-center gap-1 text-xs text-gray-600">
       <span className="inline-flex">
         {Array.from({ length: 5 }, (_, index) => (
-          <Star
+          <StarIcon
             key={index}
             size={12}
-            className={
-              index < filled
-                ? "fill-amber-500 text-amber-500"
-                : "fill-transparent text-gray-300"
-            }
+            weight={index < filled ? "fill" : "regular"}
+            className={index < filled ? "text-amber-500" : "text-gray-300"}
           />
         ))}
       </span>
@@ -181,7 +200,7 @@ function Stars({ avg, count }: { avg: number | null; count: number }) {
 function VerifiedBadge() {
   return (
     <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-      <BadgeCheck size={12} />
+      <BadgeCheckIcon size={12} />
       Verified Vendor
     </span>
   );
@@ -262,15 +281,159 @@ function contactFromItem(item: HubTimelineItem): ContactTarget {
   };
 }
 
+type MobilePane = "listings" | "vendors";
+
+function FeaturedVendorsPanel({
+  vendors,
+  vendorCap,
+  vendorsCapped,
+  favourites,
+  premium,
+  onContact,
+  onFavourite,
+  onViewAll,
+  onUpgrade,
+}: {
+  vendors: HubFeaturedVendor[];
+  vendorCap: number;
+  vendorsCapped: boolean;
+  favourites: Set<string>;
+  premium: boolean;
+  onContact: (vendor: HubFeaturedVendor) => void;
+  onFavourite: (vendorId: string) => void;
+  onViewAll: () => void;
+  onUpgrade: () => void;
+}) {
+  return (
+    <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-4">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h3 className="text-sm font-bold text-ink">Featured Vendors</h3>
+        {vendors.length > 0 && (
+          <button
+            type="button"
+            onClick={onViewAll}
+            className="text-xs font-semibold text-orange-600 hover:text-orange-700"
+          >
+            View all →
+          </button>
+        )}
+      </div>
+      {vendors.length === 0 ? (
+        <p className="text-xs text-gray-500 py-4 text-center">
+          Vendors show up here as they publish a store.
+        </p>
+      ) : (
+        <ul className="divide-y divide-gray-100">
+          {vendors.slice(0, vendorCap).map((vendor) => (
+            <li key={vendor.vendorId}>
+              <div className="w-full flex items-center gap-3 py-2.5 text-left">
+                <Avatar
+                  name={vendor.name}
+                  src={vendor.avatar}
+                  className="h-10 w-10 rounded-full text-xs shrink-0"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-ink truncate">
+                      {vendor.name}
+                    </span>
+                    {vendor.verified && (
+                      <BadgeCheckIcon
+                        size={14}
+                        className="text-sky-500 shrink-0"
+                      />
+                    )}
+                  </span>
+                  <Stars avg={vendor.ratingAvg} count={vendor.ratingCount} />
+                  {vendor.sentiment && (
+                    <span className="block text-[11px] text-gray-600 line-clamp-2 mt-0.5">
+                      {vendor.sentiment.rating}/5 · {vendor.sentiment.text}
+                    </span>
+                  )}
+                  {vendor.trusted && (
+                    <span className="text-[11px] font-semibold text-emerald-700">
+                      Trusted check
+                    </span>
+                  )}
+                  {vendor.fastDelivery && (
+                    <span className="text-[11px] font-semibold text-sky-700">
+                      Fast delivery
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onContact(vendor)}
+                    className="mt-1 text-[11px] font-semibold text-orange-600 hover:text-orange-700"
+                  >
+                    Contact card
+                  </button>
+                  {vendor.place && (
+                    <span className="flex items-center gap-1 text-[11px] text-gray-500 mt-0.5">
+                      <MapPinIcon size={11} />
+                      <span className="truncate">{vendor.place}</span>
+                    </span>
+                  )}
+                </span>
+                <span className="flex flex-col items-end gap-1 shrink-0">
+                  <button
+                    type="button"
+                    aria-label={
+                      favourites.has(vendor.vendorId)
+                        ? "Remove favourite"
+                        : "Favourite"
+                    }
+                    onClick={() => onFavourite(vendor.vendorId)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:border-orange-300 hover:text-orange-600"
+                  >
+                    {!premium ? (
+                      <LockIcon size={12} />
+                    ) : (
+                      <HeartIcon
+                        size={13}
+                        className={cn(
+                          favourites.has(vendor.vendorId) &&
+                            "text-orange-600 fill-orange-500",
+                        )}
+                      />
+                    )}
+                  </button>
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md",
+                      vendor.sponsored
+                        ? "text-orange-600 bg-orange-50"
+                        : "text-gray-500 bg-gray-100",
+                    )}
+                  >
+                    {vendor.sponsored ? "Sponsored" : "Featured"}
+                  </span>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {vendorsCapped && (
+        <div className="mt-3">
+          <PremiumUpgradeBanner
+            compact
+            title="See more vendors"
+            body={`Basic shows ${vendorCap}. Premium unlocks the full list.`}
+            onUpgrade={onUpgrade}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function BuyerHub({ home }: { home: HubHome }) {
-  const { open: openCredits } = useCreditsModal();
+  const { navigate } = useNavigation();
   const [sector, setSector] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FeedFilter>("all");
-  const [sort, setSort] = useState<FeedSort>("recent");
+  const [mobilePane, setMobilePane] = useState<MobilePane>("listings");
   const [contact, setContact] = useState<ContactTarget | null>(null);
   const [lock, setLock] = useState<
     | "contact"
-    | "review"
     | "visit"
     | "community"
     | "place"
@@ -330,30 +493,41 @@ export function BuyerHub({ home }: { home: HubHome }) {
     visitIntent.current = false;
   }, [contact?.vendorId, home.premium]);
 
-  const sectors = home.sectors ?? [];
+  const sectorGroups = useMemo(() => {
+    const counts = new Map<string, number>();
+    const bump = (values: string[] | undefined) => {
+      const groups = new Set(
+        (values ?? [])
+          .map((value) => sectorGroupId(value))
+          .filter((id): id is string => Boolean(id)),
+      );
+      for (const groupId of groups) {
+        counts.set(groupId, (counts.get(groupId) || 0) + 1);
+      }
+    };
+    for (const vendor of home.featured) bump(vendor.sectors);
+    for (const item of home.timeline) bump(item.sectors);
+    return SECTOR_TAXONOMY.map((category) => ({
+      id: category.id,
+      label: category.label,
+      count: counts.get(category.id) || 0,
+    }))
+      .filter((row) => row.count > 0)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [home.featured, home.timeline]);
 
   const feed = useMemo(() => {
     let items = home.timeline.filter((item) => item.kind !== "update");
-    if (sector) items = items.filter((item) => item.sectors?.includes(sector));
-    if (filter === "promotion")
-      items = items.filter((item) => item.kind === "promotion");
-    if (filter === "product")
-      items = items.filter((item) => item.kind === "product");
-    if (filter === "rated")
-      items = items.filter((item) => item.ratingCount > 0);
-    if (sort === "rated") {
-      items = [...items].sort(
-        (a, b) =>
-          (b.ratingAvg ?? 0) - (a.ratingAvg ?? 0) ||
-          b.ratingCount - a.ratingCount,
-      );
-    }
+    if (sector)
+      items = items.filter((item) => inSectorGroup(item.sectors, sector));
     return items;
-  }, [home.timeline, sector, filter, sort]);
+  }, [home.timeline, sector]);
 
   const featured = useMemo(() => {
     if (!sector) return home.featured;
-    return home.featured.filter((vendor) => vendor.sectors.includes(sector));
+    return home.featured.filter((vendor) =>
+      inSectorGroup(vendor.sectors, sector),
+    );
   }, [home.featured, sector]);
 
   const updates = useMemo(
@@ -413,10 +587,6 @@ export function BuyerHub({ home }: { home: HubHome }) {
   const openReview = (target: ContactTarget) => {
     if (!target.reviewableOrderId) {
       setReviewWait(true);
-      return;
-    }
-    if (!home.premium) {
-      setLock("review");
       return;
     }
     setContact(target);
@@ -598,49 +768,37 @@ export function BuyerHub({ home }: { home: HubHome }) {
     if (res.ok) setPosts((current) => current.filter((post) => post.id !== id));
   };
 
+  const showMobileVendors = mobilePane === "vendors";
+  const vendorCap = home.hubPreview?.vendorCap ?? 6;
+  const vendorsCapped = Boolean(home.hubPreview?.vendorsCapped);
+
+  const featuredPanelProps = {
+    vendors: featured,
+    vendorCap,
+    vendorsCapped,
+    favourites,
+    premium: home.premium,
+    onContact: (vendor: HubFeaturedVendor) =>
+      openContact(contactFromFeatured(vendor)),
+    onFavourite: toggleFavourite,
+    onViewAll: () => navigate("/hub/vendors"),
+    onUpgrade: () => navigate("/pricing?for=buyers"),
+  };
+
   return (
     <div className="space-y-4">
-      <section className="relative overflow-hidden rounded-2xl bg-slab text-white min-h-[280px] sm:min-h-[320px]">
-        <div className="grid md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] min-h-[280px] sm:min-h-[320px]">
-          <div className="relative z-10 flex flex-col justify-center px-6 py-8 sm:px-10 sm:py-12">
-            <p className="text-[11px] sm:text-xs font-bold tracking-[0.22em] text-orange-400">
-              VELTE VENDOR HUB
-            </p>
-            <h2 className="mt-3 text-[2rem] sm:text-5xl font-bold tracking-tight leading-[1.05] text-white">
-              Discover Amazing
-              <br />
-              Local Businesses
-            </h2>
-            <p className="mt-4 max-w-md text-sm sm:text-[15px] leading-relaxed text-white/80">
-              Find trusted vendors, great products and services, all in one
-              place. Shop local. Support real businesses.
-            </p>
-          </div>
-          <div className="relative min-h-[220px]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/hub/buyer-hero-subject.png"
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover object-[62%_center]"
-            />
-            <div className="absolute inset-y-0 left-0 w-16 sm:w-24 bg-gradient-to-r from-slab to-transparent" />
-            <p
-              className="absolute right-4 sm:right-7 top-1/2 -translate-y-1/2 text-right text-orange-400 text-[1.65rem] sm:text-[2rem] leading-[1.15]"
-              style={{
-                fontFamily: '"Segoe Script", "Brush Script MT", cursive',
-              }}
-            >
-              Local
-              <br />
-              Businesses
-              <br />
-              Real People
-              <br />
-              Great Deals
-            </p>
-          </div>
-        </div>
-      </section>
+      <HubHero
+        eyebrow="Vendor Hub"
+        title={
+          <>
+            Discover amazing
+            <br />
+            local businesses
+          </>
+        }
+        subtitle="Find trusted vendors, great products and services, all in one place. Shop local. Support real businesses."
+        photo="/hub/buyer-hub-purchase.jpg"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4 items-start">
         <div className="min-w-0 space-y-4">
@@ -658,294 +816,190 @@ export function BuyerHub({ home }: { home: HubHome }) {
             onLock={(kind) => setLock(kind)}
           />
 
-          <CardCarousel
-            items={[
-              {
-                key: "all",
-                label: "All Vendors",
-                icon: Store,
-                active: sector === null,
-                onClick: () => setSector(null),
-              },
-              ...sectors.map((row) => ({
-                key: row.value,
-                label: sectorLabel(row.value),
-                icon: sectorIcon(row.value),
-                active: sector === row.value,
-                onClick: () => setSector(row.value),
-              })),
-            ]}
-            getKey={(item) => item.key}
-            slideClassName="w-auto"
-            renderItem={(item) => (
-              <SectorChip
-                active={item.active}
-                icon={item.icon}
-                label={item.label}
-                onClick={item.onClick}
-              />
-            )}
-          />
-
-          <div
-            id="hub-vendors"
-            className="scroll-mt-4 flex flex-wrap items-center gap-2"
-          >
-            {(
-              [
-                ["all", "All"],
-                ["promotion", "Promotions"],
-                ["product", "New Listings"],
-                ["rated", "Top Rated"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setFilter(key)}
-                className={cn(
-                  "px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors",
-                  filter === key
-                    ? "border-orange-400 text-orange-600 bg-orange-50"
-                    : "border-gray-200 text-gray-600 bg-surface hover:border-orange-200",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-            <label className="ml-auto inline-flex items-center gap-2 text-xs text-gray-500">
-              <span className="sr-only">Sort</span>
-              <select
-                value={sort}
-                onChange={(event) => setSort(event.target.value as FeedSort)}
-                className="bg-surface border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink"
-              >
-                <option value="recent">Most recent</option>
-                <option value="rated">Top rated</option>
-              </select>
-            </label>
+          {/* Mobile Listings / Featured Vendors — ThemeToggle / TabBar shell */}
+          <div className="lg:hidden px-4">
+            <TabBar
+              fullWidth
+              tabs={[
+                { key: "listings", label: "Listings" },
+                { key: "vendors", label: "Featured Vendors" },
+              ]}
+              activeTab={mobilePane}
+              onChange={setMobilePane}
+            />
           </div>
 
-          <CommunityPanel
-            home={home}
-            posts={posts}
-            updates={updates}
-            now={now}
-            postBody={postBody}
-            posting={posting}
-            onPostBody={setPostBody}
-            onPosted={(post) => setPosts((current) => [post, ...current])}
-            onReport={reportPost}
-            onLock={() => setLock("community")}
-            onPosting={setPosting}
-          />
-
-          {feed.length === 0 ? (
-            <div className="bg-surface border border-gray-200 rounded-2xl p-10 text-center">
-              <p className="font-semibold text-ink">Nothing in this view yet</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Listings and labelled promotions show up as vendors publish
-                them.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {feed.map((item) => (
-                <FeedCard
-                  key={item.id}
-                  item={item}
-                  now={now}
-                  premium={home.premium}
-                  favourite={favourites.has(item.vendorId)}
-                  onContact={() => openContact(contactFromItem(item))}
-                  onVisit={() => openVisit(contactFromItem(item))}
-                  onReview={() => openReview(contactFromItem(item))}
-                  onFavourite={() => toggleFavourite(item.vendorId)}
-                  onBoost={
-                    item.advertId
-                      ? () => boostAdvert(item.advertId as string)
-                      : undefined
-                  }
+          <div id="hub-vendors" className="scroll-mt-4">
+            <CardCarousel
+              items={[
+                {
+                  key: "all",
+                  label: "All sectors",
+                  icon: StoreIcon,
+                  active: sector === null,
+                  onClick: () => setSector(null),
+                },
+                ...sectorGroups.map((row) => ({
+                  key: row.id,
+                  label: row.label,
+                  icon: sectorIcon(row.id),
+                  active: sector === row.id,
+                  onClick: () => setSector(row.id),
+                })),
+              ]}
+              getKey={(item) => item.key}
+              slideClassName="w-auto"
+              renderItem={(item) => (
+                <SectorChip
+                  active={item.active}
+                  icon={item.icon}
+                  label={item.label}
+                  onClick={item.onClick}
                 />
-              ))}
-            </div>
-          )}
+              )}
+            />
+          </div>
 
-          <section className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-4">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-white shrink-0">
-              <Store size={18} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-ink">
-                Want to grow your business on Velte?
-              </p>
-              <p className="text-xs text-gray-600 mt-0.5">
-                Create a contact card, list what you sell, and broadcast an
-                update.
-              </p>
-            </div>
-            <Link
-              href="/auth/signup"
-              className="inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 transition-colors shrink-0"
-            >
-              Learn Now
-              <span aria-hidden className="ml-1">
-                →
-              </span>
-            </Link>
-          </section>
+          <div className={cn("lg:hidden", !showMobileVendors && "hidden")}>
+            <FeaturedVendorsPanel {...featuredPanelProps} />
+          </div>
+
+          <div
+            className={cn("space-y-4", showMobileVendors && "hidden lg:block")}
+          >
+            <CommunityPanel
+              home={home}
+              posts={posts}
+              updates={updates}
+              now={now}
+              postBody={postBody}
+              posting={posting}
+              onPostBody={setPostBody}
+              onPosted={(post) => setPosts((current) => [post, ...current])}
+              onReport={reportPost}
+              onLock={() => setLock("community")}
+              onPosting={setPosting}
+            />
+
+            {feed.length === 0 ? (
+              <div className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-10 text-center">
+                <p className="font-semibold text-ink">
+                  Nothing in this view yet
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Listings and labelled promotions show up as vendors publish
+                  them.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+                {feed.map((item, index) => {
+                  const fadeLast =
+                    Boolean(home.hubPreview?.listingsCapped) &&
+                    index === feed.length - 1;
+                  const fullWidth = item.sponsored || fadeLast;
+                  const card = (
+                    <FeedCard
+                      item={item}
+                      now={now}
+                      premium={home.premium}
+                      favourite={favourites.has(item.vendorId)}
+                      compact={!item.sponsored}
+                      onContact={() => openContact(contactFromItem(item))}
+                      onVisit={() => openVisit(contactFromItem(item))}
+                      onReview={() => openReview(contactFromItem(item))}
+                      onFavourite={() => toggleFavourite(item.vendorId)}
+                      onBoost={
+                        item.advertId
+                          ? () => boostAdvert(item.advertId as string)
+                          : undefined
+                      }
+                    />
+                  );
+                  if (!fadeLast) {
+                    return (
+                      <div
+                        key={item.id}
+                        className={
+                          fullWidth ? "col-span-2 lg:col-span-1" : undefined
+                        }
+                      >
+                        {card}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div
+                      key={item.id}
+                      className="relative col-span-2 lg:col-span-1 overflow-hidden rounded-none lg:rounded-2xl"
+                    >
+                      <div
+                        aria-hidden
+                        className="pointer-events-none select-none blur-[2px] opacity-50 saturate-50 [mask-image:linear-gradient(to_bottom,black_0%,black_35%,transparent_100%)]"
+                      >
+                        {card}
+                      </div>
+                      <div className="absolute inset-0 flex flex-col items-center justify-end pb-6 pt-16 bg-gradient-to-t from-canvas via-canvas/90 to-transparent">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/hub/premium-listings.jpg"
+                          alt=""
+                          className="h-14 w-14 rounded-2xl object-cover shadow-sm ring-1 ring-black/5"
+                        />
+                        <p className="mt-3 text-sm font-bold text-ink text-center px-4">
+                          More products waiting
+                        </p>
+                        <p className="mt-1 text-xs text-gray-600 text-center px-6 max-w-sm leading-relaxed">
+                          Upgrade to Premium to browse every listing vendors put
+                          on Hub.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => navigate("/pricing?for=buyers")}
+                          className="mt-3 inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-orange-600 transition-colors shadow-sm"
+                        >
+                          Upgrade to Premium
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
-        <aside className="space-y-4 lg:self-stretch">
-          <section className="bg-surface border border-gray-200 rounded-2xl p-4">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <h3 className="text-sm font-bold text-ink">Featured Vendors</h3>
-              {featured.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSector(null);
-                    document
-                      .getElementById("hub-vendors")
-                      ?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                  className="text-xs font-semibold text-orange-600 hover:text-orange-700"
-                >
-                  View all →
-                </button>
-              )}
-            </div>
-            {featured.length === 0 ? (
-              <p className="text-xs text-gray-500 py-4 text-center">
-                Vendors show up here as they publish a store.
-              </p>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {featured.slice(0, 6).map((vendor) => (
-                  <li key={vendor.vendorId}>
-                    <div className="w-full flex items-center gap-3 py-2.5 text-left">
-                      <Avatar
-                        name={vendor.name}
-                        src={vendor.avatar}
-                        className="h-10 w-10 rounded-full text-xs shrink-0"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-sm font-semibold text-ink truncate">
-                            {vendor.name}
-                          </span>
-                          {vendor.verified && (
-                            <BadgeCheck
-                              size={14}
-                              className="text-sky-500 shrink-0"
-                            />
-                          )}
-                        </span>
-                        <Stars
-                          avg={vendor.ratingAvg}
-                          count={vendor.ratingCount}
-                        />
-                        {vendor.sentiment && (
-                          <span className="block text-[11px] text-gray-600 line-clamp-2 mt-0.5">
-                            {vendor.sentiment.rating}/5 ·{" "}
-                            {vendor.sentiment.text}
-                          </span>
-                        )}
-                        {vendor.trusted && (
-                          <span className="text-[11px] font-semibold text-emerald-700">
-                            Trusted check
-                          </span>
-                        )}
-                        {vendor.fastDelivery && (
-                          <span className="text-[11px] font-semibold text-sky-700">
-                            Fast delivery
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openContact(contactFromFeatured(vendor))
-                          }
-                          className="mt-1 text-[11px] font-semibold text-orange-600 hover:text-orange-700"
-                        >
-                          Contact card
-                        </button>
-                        {vendor.place && (
-                          <span className="flex items-center gap-1 text-[11px] text-gray-500 mt-0.5">
-                            <MapPin size={11} />
-                            <span className="truncate">{vendor.place}</span>
-                          </span>
-                        )}
-                      </span>
-                      <span className="flex flex-col items-end gap-1 shrink-0">
-                        <button
-                          type="button"
-                          aria-label={
-                            favourites.has(vendor.vendorId)
-                              ? "Remove favourite"
-                              : "Favourite"
-                          }
-                          onClick={() => toggleFavourite(vendor.vendorId)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:border-orange-300 hover:text-orange-600"
-                        >
-                          {!home.premium ? (
-                            <Lock size={12} />
-                          ) : (
-                            <Heart
-                              size={13}
-                              className={cn(
-                                favourites.has(vendor.vendorId) &&
-                                  "text-orange-600 fill-orange-500",
-                              )}
-                            />
-                          )}
-                        </button>
-                        <span
-                          className={cn(
-                            "text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md",
-                            vendor.sponsored
-                              ? "text-orange-600 bg-orange-50"
-                              : "text-gray-500 bg-gray-100",
-                          )}
-                        >
-                          {vendor.sponsored ? "Sponsored" : "Featured"}
-                        </span>
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+        <aside className="hidden lg:block space-y-4 lg:self-stretch">
+          <FeaturedVendorsPanel {...featuredPanelProps} />
 
           <div className="space-y-4 lg:sticky lg:top-16">
-            <section className="bg-surface border border-gray-200 rounded-2xl p-4">
+            <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-4">
               <h3 className="text-sm font-bold text-ink mb-3">
                 Popular Sectors
               </h3>
-              {sectors.length === 0 ? (
+              {sectorGroups.length === 0 ? (
                 <p className="text-xs text-gray-500">
                   Sectors appear once stores choose them.
                 </p>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  {sectors.slice(0, 6).map((row) => {
-                    const Icon = sectorIcon(row.value);
+                  {sectorGroups.slice(0, 6).map((row) => {
+                    const Icon = sectorIcon(row.id);
                     return (
                       <button
-                        key={row.value}
+                        key={row.id}
                         type="button"
-                        onClick={() => setSector(row.value)}
+                        onClick={() => setSector(row.id)}
                         className={cn(
                           "rounded-xl border px-3 py-3 text-left transition-colors",
-                          sector === row.value
+                          sector === row.id
                             ? "border-orange-300 bg-orange-50"
                             : "border-gray-200 bg-surface hover:border-orange-200",
                         )}
                       >
                         <Icon size={16} className="text-orange-500" />
                         <span className="mt-2 block text-xs font-semibold text-ink leading-snug">
-                          {sectorLabel(row.value)}
+                          {row.label}
                         </span>
                         <span className="block text-[11px] text-gray-500 mt-0.5">
                           {row.count} {row.count === 1 ? "vendor" : "vendors"}
@@ -957,7 +1011,7 @@ export function BuyerHub({ home }: { home: HubHome }) {
               )}
             </section>
 
-            <section className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+            <section className="rounded-none lg:rounded-2xl border border-orange-100 bg-orange-50 p-4">
               <h3 className="text-sm font-bold text-ink">
                 Support Local Business
               </h3>
@@ -997,7 +1051,10 @@ export function BuyerHub({ home }: { home: HubHome }) {
                     {contact.name}
                   </h3>
                   {contact.verified && (
-                    <BadgeCheck size={16} className="text-sky-500 shrink-0" />
+                    <BadgeCheckIcon
+                      size={16}
+                      className="text-sky-500 shrink-0"
+                    />
                   )}
                 </div>
                 {contact.sectors[0] && (
@@ -1008,7 +1065,7 @@ export function BuyerHub({ home }: { home: HubHome }) {
                 <Stars avg={contact.ratingAvg} count={contact.ratingCount} />
                 {contact.place && (
                   <p className="mt-1 flex items-center gap-1 text-xs text-gray-500">
-                    <MapPin size={12} />
+                    <MapPinIcon size={12} />
                     {contact.place}
                   </p>
                 )}
@@ -1074,88 +1131,76 @@ export function BuyerHub({ home }: { home: HubHome }) {
                 Fast delivery
               </p>
             )}
-            {contact.reviewableOrderId &&
-              (home.premium ? (
-                <form
-                  className="mt-4 space-y-2"
-                  onSubmit={async (event) => {
-                    event.preventDefault();
-                    if (reviewing) return;
-                    setReviewing(true);
-                    try {
-                      const res = await fetch("/api/trust/reviews", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          orderId: contact.reviewableOrderId,
-                          rating: reviewRating,
-                          text: reviewText,
-                        }),
-                      });
-                      if (res.status === 403) {
-                        setLock("review");
-                        return;
-                      }
-                      if (!res.ok) return;
-                      const text = reviewText.trim();
-                      setContact({
-                        ...contact,
-                        reviewableOrderId: null,
-                        sentiment: text
-                          ? { rating: reviewRating, text }
-                          : contact.sentiment,
-                      });
-                      setReviewText("");
-                    } finally {
-                      setReviewing(false);
-                    }
-                  }}
-                >
-                  <p className="text-xs font-semibold text-ink">
-                    Review this order
-                  </p>
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setReviewRating(value)}
-                        className={cn(
-                          "h-8 w-8 rounded-md text-sm font-semibold",
-                          value <= reviewRating
-                            ? "bg-orange-500 text-white"
-                            : "bg-gray-100 text-gray-500",
-                        )}
-                      >
-                        {value}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={reviewText}
-                    onChange={(event) => setReviewText(event.target.value)}
-                    rows={2}
-                    maxLength={500}
-                    placeholder="How did the order go?"
-                    className="w-full rounded-xl border border-gray-200 bg-surface px-3 py-2 text-sm text-ink placeholder:text-gray-400"
-                  />
-                  <button
-                    type="submit"
-                    disabled={reviewing}
-                    className="w-full rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
-                  >
-                    {reviewing ? "Saving…" : "Save review"}
-                  </button>
-                </form>
-              ) : (
+            {contact.reviewableOrderId && (
+              <form
+                className="mt-4 space-y-2"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  if (reviewing) return;
+                  setReviewing(true);
+                  try {
+                    const res = await fetch("/api/trust/reviews", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        orderId: contact.reviewableOrderId,
+                        kind: "vendor",
+                        rating: reviewRating,
+                        text: reviewText,
+                      }),
+                    });
+                    if (!res.ok) return;
+                    const text = reviewText.trim();
+                    setContact({
+                      ...contact,
+                      reviewableOrderId: null,
+                      sentiment: text
+                        ? { rating: reviewRating, text }
+                        : contact.sentiment,
+                    });
+                    setReviewText("");
+                  } finally {
+                    setReviewing(false);
+                  }
+                }}
+              >
+                <p className="text-xs font-semibold text-ink">
+                  Rate this vendor
+                </p>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setReviewRating(value)}
+                      className={cn(
+                        "h-8 w-8 rounded-md text-sm font-semibold",
+                        value <= reviewRating
+                          ? "bg-orange-500 text-white"
+                          : "bg-gray-100 text-gray-500",
+                      )}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={reviewText}
+                  onChange={(event) => setReviewText(event.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="How was dealing with this seller?"
+                  className="w-full rounded-xl border border-gray-200 bg-surface px-3 py-2 text-sm text-ink placeholder:text-gray-400"
+                />
                 <button
-                  type="button"
-                  onClick={() => setLock("review")}
-                  className="mt-4 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-ink hover:border-orange-300"
+                  type="submit"
+                  disabled={reviewing}
+                  className="w-full rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
                 >
-                  Review this business
+                  {reviewing ? "Saving…" : "Save vendor review"}
                 </button>
-              ))}
+              </form>
+            )}
             {home.premium && visitOpen ? (
               <form
                 className="mt-4 space-y-2"
@@ -1404,52 +1449,107 @@ export function BuyerHub({ home }: { home: HubHome }) {
           stacked={contact !== null}
           variant="upgrade"
           title={
-            lock === "review"
-              ? "Reviews are on Premium"
-              : lock === "visit"
-                ? "A visit check is on Premium"
-                : lock === "community"
-                  ? "Community posts are on Premium"
-                  : lock === "place"
-                    ? "Placing an advert is on Premium"
-                    : lock === "boost"
-                      ? "Boosting is on Premium"
-                      : lock === "broadcast"
-                        ? "Messaging contacts is on Premium"
-                        : lock === "sectors"
-                          ? "Choosing sectors is on Premium"
-                          : lock === "favourite"
-                            ? "Favourites are on Premium"
-                            : "Contact is on Premium"
+            lock === "visit"
+              ? "A visit check is on Premium"
+              : lock === "community"
+                ? "Community posts are on Premium"
+                : lock === "place"
+                  ? "Placing an advert is on Premium"
+                  : lock === "boost"
+                    ? "Boosting is on Premium"
+                    : lock === "broadcast"
+                      ? "Messaging contacts is on Premium"
+                      : lock === "sectors"
+                        ? "Choosing sectors is on Premium"
+                        : lock === "favourite"
+                          ? "Favourites are on Premium"
+                          : "Contact is on Premium"
           }
           body={
-            lock === "review"
-              ? "A review opens after a confirmed order. Premium is what publishes it."
-              : lock === "visit"
-                ? "Premium records whether you visited, saw the stock, and the address matched."
-                : lock === "community"
-                  ? "Reading updates stays open. Posting is part of Premium."
-                  : lock === "place"
-                    ? "Premium places a labelled advert for a vendor, using a photo already on that store."
-                    : lock === "boost"
-                      ? "Premium queues a boost. It is not marked sent, and it does not charge the vendor."
-                      : lock === "broadcast"
-                        ? "Premium sends a note to the Premium buyers you referred."
-                        : lock === "sectors"
-                          ? "Alerts cover every sector. Premium is what lets you pick."
-                          : lock === "favourite"
-                            ? "Premium saves a vendor to your Hub."
-                            : "Premium opens the vendor's own channel from a Hub card. The store page stays open either way."
+            lock === "visit"
+              ? "Premium records whether you visited, saw the stock, and the address matched."
+              : lock === "community"
+                ? "Reading updates stays open. Posting is part of Premium."
+                : lock === "place"
+                  ? "Premium places a labelled advert for a vendor, using a photo already on that store."
+                  : lock === "boost"
+                    ? "Premium queues a boost. It is not marked sent, and it does not charge the vendor."
+                    : lock === "broadcast"
+                      ? "Premium sends a note to the Premium buyers you referred."
+                      : lock === "sectors"
+                        ? "Alerts cover every sector. Premium is what lets you pick."
+                        : lock === "favourite"
+                          ? "Premium saves a vendor to your Hub."
+                          : "Premium opens the vendor's own channel from a Hub card. The store page stays open either way."
           }
           ctaLabel="See Premium"
-          onCta={() => {
-            setLock(null);
-            openCredits();
-          }}
+          ctaHref="/pricing?for=buyers"
           onClose={() => setLock(null)}
         />
       )}
     </div>
+  );
+}
+
+function PremiumUpgradeBanner({
+  title,
+  body,
+  onUpgrade,
+  compact = false,
+}: {
+  title: string;
+  body: string;
+  onUpgrade: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <section
+      className={cn(
+        "rounded-none lg:rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50",
+        compact ? "p-3" : "p-4",
+      )}
+    >
+      <div
+        className={cn("flex gap-3", compact ? "items-start" : "items-center")}
+      >
+        <span
+          className={cn(
+            "inline-flex items-center justify-center rounded-xl bg-orange-500 text-white shrink-0",
+            compact ? "h-8 w-8" : "h-10 w-10",
+          )}
+        >
+          <SparklesIcon size={compact ? 14 : 18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              "font-bold text-ink",
+              compact ? "text-xs" : "text-sm",
+            )}
+          >
+            {title}
+          </p>
+          <p
+            className={cn(
+              "text-gray-600 leading-relaxed",
+              compact ? "text-[11px] mt-0.5" : "text-xs mt-1",
+            )}
+          >
+            {body}
+          </p>
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className={cn(
+              "mt-2 inline-flex items-center justify-center rounded-lg bg-orange-500 font-semibold text-white hover:bg-orange-600 transition-colors",
+              compact ? "px-3 py-1.5 text-[11px]" : "px-3.5 py-2 text-xs",
+            )}
+          >
+            Upgrade to Premium
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1521,17 +1621,17 @@ function BuyerTools({
   };
 
   return (
-    <section className="bg-surface border border-gray-200 rounded-2xl px-4">
+    <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl px-4">
       {notice && (
         <p className="pt-3 text-xs font-semibold text-orange-600">{notice}</p>
       )}
-      <ToolRow icon={Store} title="Promote a shop">
+      <ToolRow icon={StoreIcon} title="Promote a shop">
         <TextAction onClick={onPlace} locked={!home.premium}>
           Place an Advert
         </TextAction>
       </ToolRow>
       <div className="border-t border-gray-100">
-        <ToolRow icon={Bell} title="Vendor alerts">
+        <ToolRow icon={BellIcon} title="Vendor alerts">
           <Switch
             on={prefs.promoEnabled}
             label="Vendor alerts"
@@ -1574,7 +1674,7 @@ function BuyerTools({
         )}
       </div>
       <div className="border-t border-gray-100">
-        <ToolRow icon={Send} title="Message contacts">
+        <ToolRow icon={SendIcon} title="Message contacts">
           {home.premium ? (
             <button
               type="button"
@@ -1624,7 +1724,7 @@ function ToolRow({
   title,
   children,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   children: ReactNode;
 }) {
@@ -1690,7 +1790,7 @@ function TextAction({
   if (!onClick) return <span className={className}>{children}</span>;
   return (
     <button type="button" onClick={onClick} className={className}>
-      {locked && <Lock size={12} className="text-gray-400" />}
+      {locked && <LockIcon size={12} className="text-gray-400" />}
       {children}
     </button>
   );
@@ -1745,12 +1845,12 @@ function CommunityPanel({
   onPosting: (value: boolean) => void;
 }) {
   return (
-    <section className="bg-surface border border-gray-200 rounded-2xl p-4">
+    <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-4">
       <div className="flex items-center justify-between gap-3 mb-3">
         <h3 className="text-sm font-bold text-ink">Community & Updates</h3>
         {!home.premium && (
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500">
-            <Lock size={12} />
+            <LockIcon size={12} />
             Posting is Premium
           </span>
         )}
@@ -1860,7 +1960,7 @@ function CommunityPanel({
           onClick={onLock}
           className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-ink hover:border-orange-300"
         >
-          <Lock size={12} />
+          <LockIcon size={12} />
           Post an update
         </button>
       )}
@@ -1875,7 +1975,7 @@ function SectorChip({
   onClick,
 }: {
   active: boolean;
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   onClick: () => void;
 }) {
@@ -1901,6 +2001,7 @@ function FeedCard({
   now,
   premium,
   favourite,
+  compact = false,
   onContact,
   onVisit,
   onReview,
@@ -1911,41 +2012,91 @@ function FeedCard({
   now: number;
   premium: boolean;
   favourite: boolean;
+  /** Half-width mobile grid cell — denser until lg. */
+  compact?: boolean;
   onContact: () => void;
   onVisit: () => void;
   onReview: () => void;
   onFavourite: () => void;
   onBoost?: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLButtonElement>(null);
   const gallery = [...new Set((item.images ?? []).filter(Boolean))];
   const cover = item.imageUrl || gallery[0] || null;
   const extras = gallery.filter((url) => url !== cover);
   const thumbs = gallery.length > 1 ? extras.slice(0, 3) : [];
   const extra = gallery.length > 1 ? extras.length - thumbs.length : 0;
-  const badge =
-    item.kind === "product"
+  const badge = item.sponsored
+    ? "Sponsored"
+    : item.kind === "product" && isNewListing(item.at, now)
       ? "New Listing"
-      : item.sponsored
-        ? "Sponsored"
+      : item.kind === "product"
+        ? "Listing"
         : "Promotion";
+  // Public product URL is always /{slug} — never /p/….
+  const productHref = item.listing?.slug ? `/${item.listing.slug}` : null;
+
+  const runMenuAction = (action: () => void) => {
+    setMenuOpen(false);
+    action();
+  };
+
+  const coverClass = cn(
+    "w-full object-cover bg-gray-100",
+    compact
+      ? "h-[120px] rounded-lg lg:h-[180px] lg:rounded-xl"
+      : "h-[180px] rounded-xl",
+  );
 
   return (
-    <article className="bg-surface border border-gray-200 rounded-2xl p-3 sm:p-4">
-      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-start">
-        <div className="relative w-full sm:w-[220px] shrink-0">
+    <article
+      className={cn(
+        "relative bg-surface border border-gray-200 rounded-none lg:rounded-2xl h-full",
+        compact ? "p-2 lg:p-4" : "p-3 sm:p-4",
+        // Laptop: title turns orange+underlined on card hover, but not while over CTAs.
+        productHref &&
+          "lg:[&:hover:not(:has([data-card-cta]:hover))_[data-card-title]]:text-orange-600 lg:[&:hover:not(:has([data-card-cta]:hover))_[data-card-title]]:underline lg:[&:hover:not(:has([data-card-cta]:hover))_[data-card-title]]:underline-offset-2",
+      )}
+    >
+      {/* Whole card → product page (prefetch + progress bar); CTAs sit above via z-10. */}
+      {productHref && (
+        <HubLink
+          href={productHref}
+          className="absolute inset-0 z-0 rounded-none lg:rounded-2xl"
+          aria-label={`View ${item.title}`}
+        />
+      )}
+      <div
+        className={cn(
+          "relative flex h-full pointer-events-none",
+          compact
+            ? "flex-col gap-2 lg:flex-row lg:gap-4 lg:items-start"
+            : "flex-col sm:flex-row gap-3 sm:gap-4 sm:items-start",
+        )}
+      >
+        <div
+          className={cn(
+            "relative shrink-0",
+            compact ? "w-full lg:w-[220px]" : "w-full sm:w-[220px]",
+          )}
+        >
           {cover ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={cover}
-              alt=""
-              className="h-[180px] w-full object-cover rounded-xl bg-gray-100"
-            />
+            <img src={cover} alt="" className={coverClass} />
           ) : (
-            <div className="h-[180px] w-full rounded-xl bg-gray-100" />
+            <div
+              className={cn(
+                "w-full bg-gray-100",
+                compact
+                  ? "h-[120px] rounded-lg lg:h-[180px] lg:rounded-xl"
+                  : "h-[180px] rounded-xl",
+              )}
+            />
           )}
           <span
             className={cn(
-              "absolute top-2.5 left-2.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md",
+              "absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md",
               badge === "Sponsored"
                 ? "bg-orange-500 text-white"
                 : "bg-surface/95 text-ink",
@@ -1955,19 +2106,35 @@ function FeedCard({
           </span>
         </div>
         <div className="min-w-0 flex-1 flex flex-col">
-          <div className="flex items-start gap-2.5">
+          <div
+            className={cn(
+              "flex items-start",
+              compact ? "gap-1.5 lg:gap-2.5" : "gap-2.5",
+            )}
+          >
             <Avatar
               name={item.storeName || "Vendor"}
               src={item.avatar}
-              className="h-10 w-10 rounded-full text-xs shrink-0"
+              className={cn(
+                "rounded-full text-xs shrink-0",
+                compact ? "h-7 w-7 lg:h-10 lg:w-10" : "h-10 w-10",
+              )}
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <p className="text-sm font-bold text-ink truncate">
+                <p
+                  className={cn(
+                    "font-bold text-ink truncate",
+                    compact ? "text-xs lg:text-sm" : "text-sm",
+                  )}
+                >
                   {item.storeName || "Vendor"}
                 </p>
                 {item.verified && (
-                  <BadgeCheck size={14} className="text-sky-500 shrink-0" />
+                  <BadgeCheckIcon
+                    size={compact ? 12 : 14}
+                    className="text-sky-500 shrink-0"
+                  />
                 )}
               </div>
               {item.sectors?.[0] && (
@@ -1975,36 +2142,70 @@ function FeedCard({
                   {sectorLabel(item.sectors[0])}
                 </p>
               )}
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+              <div
+                className={cn(
+                  "mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5",
+                  compact && "hidden lg:flex",
+                )}
+              >
                 <Stars avg={item.ratingAvg} count={item.ratingCount} />
                 {item.place && (
                   <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
-                    <MapPin size={11} />
+                    <MapPinIcon size={11} />
                     {item.place}
                   </span>
                 )}
               </div>
             </div>
-            <span className="text-[11px] text-gray-400 shrink-0">
+            <span
+              className={cn(
+                "text-[11px] text-gray-400 shrink-0",
+                compact && "hidden lg:inline",
+              )}
+            >
               {timeAgo(item.at, now)}
             </span>
           </div>
 
-          <h3 className="mt-3 text-base font-bold text-ink leading-snug line-clamp-2">
+          <h3
+            data-card-title
+            className={cn(
+              "font-bold leading-snug line-clamp-2",
+              compact ? "mt-2 text-sm lg:mt-3 lg:text-base" : "mt-3 text-base",
+              productHref
+                ? "text-orange-600 underline underline-offset-2 lg:text-ink lg:no-underline"
+                : "text-ink",
+            )}
+          >
             {item.title}
           </h3>
           {item.placedByBuyer && (
-            <p className="mt-1 text-[11px] font-semibold text-gray-500">
+            <p
+              className={cn(
+                "mt-1 text-[11px] font-semibold text-gray-500",
+                compact && "hidden lg:block",
+              )}
+            >
               Placed by a buyer
             </p>
           )}
           {item.body && item.body !== item.title && (
-            <p className="mt-1 text-sm text-gray-600 line-clamp-2 leading-relaxed">
+            <p
+              className={cn(
+                "mt-1 text-sm text-gray-600 line-clamp-2 leading-relaxed",
+                compact && "hidden lg:block",
+              )}
+            >
               {item.body}
             </p>
           )}
           {item.sentiment && (
-            <p className="mt-2 text-sm text-gray-600 leading-relaxed line-clamp-2">
+            <p
+              className={cn(
+                "mt-2 text-sm text-gray-600 leading-relaxed line-clamp-2",
+                compact && "hidden lg:block",
+              )}
+            >
               <span className="font-semibold text-ink">
                 {item.sentiment.rating}/5
               </span>
@@ -2013,7 +2214,12 @@ function FeedCard({
             </p>
           )}
           {(item.verified || item.trusted) && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div
+              className={cn(
+                "mt-2 flex flex-wrap gap-1.5",
+                compact && "hidden lg:flex",
+              )}
+            >
               {item.verified && <VerifiedBadge />}
               {item.trusted && (
                 <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
@@ -2028,7 +2234,7 @@ function FeedCard({
             </div>
           )}
           {!item.verified && !item.trusted && item.fastDelivery && (
-            <div className="mt-2">
+            <div className={cn("mt-2", compact && "hidden lg:block")}>
               <span className="inline-flex w-fit items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
                 Fast delivery
               </span>
@@ -2036,7 +2242,12 @@ function FeedCard({
           )}
 
           {thumbs.length > 0 && (
-            <div className="mt-3 flex items-center gap-2">
+            <div
+              className={cn(
+                "mt-3 flex items-center gap-2",
+                compact && "hidden lg:flex",
+              )}
+            >
               {thumbs.map((url) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -2054,40 +2265,59 @@ function FeedCard({
             </div>
           )}
 
-          <div className="mt-auto pt-3 flex flex-wrap gap-2">
+          <div
+            data-card-cta
+            className={cn(
+              "relative z-10 mt-auto flex flex-wrap gap-2 pointer-events-auto",
+              compact ? "pt-2 lg:pt-3" : "pt-3",
+            )}
+          >
             <button
               type="button"
               onClick={onContact}
-              className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-3.5 py-2 text-xs font-semibold text-orange-600 hover:bg-orange-100 transition-colors"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 font-semibold text-orange-600 hover:bg-orange-100 transition-colors",
+                compact
+                  ? "flex-1 justify-center px-2 py-1.5 text-[11px] lg:flex-none lg:px-3.5 lg:py-2 lg:text-xs"
+                  : "px-3.5 py-2 text-xs",
+              )}
             >
-              {!premium && <Lock size={12} />}
+              {!premium && <LockIcon size={12} />}
               Contact
             </button>
             <button
               type="button"
               onClick={onVisit}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300",
+                compact && "hidden lg:inline-flex",
+              )}
             >
-              {!premium && <Lock size={12} />}
+              {!premium && <LockIcon size={12} />}
               Visit check
             </button>
             <button
               type="button"
               onClick={onReview}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300",
+                compact && "hidden lg:inline-flex",
+              )}
             >
-              {!premium && item.reviewableOrderId && <Lock size={12} />}
-              Review
+              Review vendor
             </button>
             <button
               type="button"
               onClick={onFavourite}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300",
+                compact && "hidden lg:inline-flex",
+              )}
             >
               {!premium ? (
-                <Lock size={12} />
+                <LockIcon size={12} />
               ) : (
-                <Heart
+                <HeartIcon
                   size={12}
                   className={cn(favourite && "text-orange-600")}
                 />
@@ -2098,11 +2328,80 @@ function FeedCard({
               <button
                 type="button"
                 onClick={onBoost}
-                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300"
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300",
+                  compact && "hidden lg:inline-flex",
+                )}
               >
-                {!premium && <Lock size={12} />}
+                {!premium && <LockIcon size={12} />}
                 Boost
               </button>
+            )}
+            {compact && (
+              <>
+                <button
+                  ref={menuRef}
+                  type="button"
+                  onClick={() => setMenuOpen((open) => !open)}
+                  aria-label="More actions"
+                  aria-expanded={menuOpen}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-transparent text-gray-500 hover:border-orange-300 hover:text-ink lg:hidden"
+                >
+                  <Ellipsis size={16} strokeWidth={2} />
+                </button>
+                <AnchoredPopover
+                  open={menuOpen}
+                  onClose={() => setMenuOpen(false)}
+                  anchorRef={menuRef}
+                  align="auto"
+                  className="w-44 bg-surface rounded-lg shadow-lg border border-gray-100 py-1"
+                >
+                  <button
+                    type="button"
+                    onClick={() => runMenuAction(onVisit)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors"
+                  >
+                    {!premium && (
+                      <LockIcon size={14} className="text-gray-400" />
+                    )}
+                    Visit check
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runMenuAction(onReview)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors"
+                  >
+                    Review vendor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runMenuAction(onFavourite)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors"
+                  >
+                    {!premium ? (
+                      <LockIcon size={14} className="text-gray-400" />
+                    ) : (
+                      <HeartIcon
+                        size={14}
+                        className={cn(favourite && "text-orange-600")}
+                      />
+                    )}
+                    {favourite ? "Saved" : "Favourite"}
+                  </button>
+                  {onBoost && (
+                    <button
+                      type="button"
+                      onClick={() => runMenuAction(onBoost)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors"
+                    >
+                      {!premium && (
+                        <LockIcon size={14} className="text-gray-400" />
+                      )}
+                      Boost
+                    </button>
+                  )}
+                </AnchoredPopover>
+              </>
             )}
           </div>
         </div>

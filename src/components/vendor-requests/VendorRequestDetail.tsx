@@ -166,7 +166,7 @@ export function VendorRequestDetail() {
         toast.success("Offer sent — it's now with the buyer.");
       } else {
         toast.success("Declined.");
-        navigate(`/${params.id}/buyer-requests`);
+        navigate("/buyer-requests");
       }
     },
     onError: (error: unknown) => {
@@ -177,7 +177,7 @@ export function VendorRequestDetail() {
   });
 
   const request = data?.request;
-  const backHref = `/${params.id}/buyer-requests`;
+  const backHref = "/buyer-requests";
 
   if (isLoading) {
     return (
@@ -708,7 +708,7 @@ export function VendorRequestDetail() {
                       offer.
                     </span>
                     <DashboardLink
-                      href={`/${params.id}/wallet`}
+                      href="/wallet"
                       className="shrink-0 font-semibold underline"
                     >
                       Top up

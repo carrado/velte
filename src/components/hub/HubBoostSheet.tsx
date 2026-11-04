@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
 import { toast } from "sonner";
 
+import { CheckIcon } from "@/components/icons";
 import { api, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { categoriesApi } from "@/services/products";
@@ -148,7 +148,7 @@ export function HubBoostSheet({
                   )}
                   {selected && (
                     <span className="absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-white">
-                      <Check size={12} />
+                      <CheckIcon size={12} />
                     </span>
                   )}
                 </div>

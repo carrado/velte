@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { CreditsDonut } from "@/components/credits/CreditsDonut";
-import { SubscribeCard } from "@/components/credits/SubscribeCard";
 import { ReferralCard } from "@/components/credits/ReferralCard";
 import { VENDOR_CATALOG_GRANTS } from "@/lib/credits";
 import type { AllowanceSummary } from "@/lib/entitlements";
@@ -193,7 +192,6 @@ export function CreditsPanel({
         </div>
       ) : (
         <>
-          <SubscribeCard isVendor={isVendor} />
           <div className="mt-8 rounded-2xl border border-gray-200 bg-surface p-5">
             <div className="flex items-baseline justify-between gap-3">
               <h2 className="text-sm font-semibold text-ink">Top up</h2>

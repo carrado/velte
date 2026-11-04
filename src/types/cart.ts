@@ -139,6 +139,10 @@ export interface CartOrder {
   pickupCode?: string | null;
   createdAt: string;
   fulfillment: OrderFulfillment | null;
+  /** Buyer already left a vendor review for this order. */
+  vendorReviewed?: boolean;
+  /** Product ids on this order that already have a product review. */
+  productReviewedIds?: string[];
 }
 
 export interface CartCheckoutResult {

@@ -224,6 +224,7 @@ export default async function PublicStorePage({
           goods={goods}
           services={services}
           storeName={store.name}
+          storeHandle={store.handle}
           whatsapp={store.whatsapp}
           vendorId={store.vendorId}
           defaultTab={defaultTab}

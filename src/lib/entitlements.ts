@@ -32,6 +32,7 @@ export type Capability =
   | "onboard_vendors"
   | "validate_vendor"
   | "review_vendor"
+  | "review_product"
   | "gigs"
   | "list_products"
   | "receive_requests"
@@ -70,7 +71,9 @@ export const CAPABILITIES: Record<Capability, readonly Tier[]> = {
   switch_to_vendor: ["buyer_premium"],
   onboard_vendors: ["buyer_premium"],
   validate_vendor: ["buyer_premium"],
-  review_vendor: ["buyer_premium"],
+  // Order-backed reviews — any signed-up buyer who completed the order.
+  review_vendor: BUYERS,
+  review_product: BUYERS,
   gigs: ["buyer_premium"],
   list_products: VENDORS,
   receive_requests: VENDORS,
@@ -82,7 +85,8 @@ export const CAPABILITIES: Record<Capability, readonly Tier[]> = {
   boost_advert: VENDORS,
   vendor_broadcast: VENDORS,
   analytics_insights: ["vendor_enterprise"],
-  hub_social_contact: ["buyer_premium"],
+  // Buyer Premium + Vendor Enterprise. Basic buyers/vendors stay gated.
+  hub_social_contact: ["buyer_premium", "vendor_enterprise"],
   buyer_place_advert: ["buyer_premium"],
   buyer_boost_advert: ["buyer_premium"],
   buyer_broadcast: ["buyer_premium"],

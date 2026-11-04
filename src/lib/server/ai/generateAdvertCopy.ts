@@ -14,6 +14,8 @@ export interface AdvertCopyArgs {
   storeName: string;
   productName?: string | null;
   seedHeadline?: string | null;
+  /** Full vendor brief for the advert (message, offer, tone). */
+  brief?: string | null;
 }
 
 export interface AdvertCopy {
@@ -49,6 +51,9 @@ export async function generateAdvertCopy(
     args.productName ? `Advertised item: ${args.productName}` : null,
     args.seedHeadline
       ? `Vendor's own draft headline: ${args.seedHeadline}`
+      : null,
+    args.brief?.trim()
+      ? `Vendor brief for the advert: ${args.brief.trim()}`
       : null,
   ]
     .filter(Boolean)
