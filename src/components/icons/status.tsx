@@ -1,3 +1,5 @@
+"use client";
+
 import {
   WarningCircle,
   Warning,

@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { MapPinIcon, StoreIcon } from "@/components/icons";
 export interface StoreFooterProps {

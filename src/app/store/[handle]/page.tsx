@@ -18,7 +18,7 @@ import StoreTabs from "./_components/StoreTabs";
 import SimilarVendors from "./_components/SimilarVendors";
 import { StoreWhatsAppButton } from "./_components/shared";
 import { MapPinIcon, PackageIcon, WrenchIcon } from "@/components/icons";
-import { isEnterpriseVendor } from "@/components/EnterpriseBadge";
+import { isEnterpriseVendor } from "@/lib/enterprise";
 
 // Public storefront — server-rendered for SEO and link previews. This is the
 // page the AI hands buyers off to. A real site shell (Navbar with a "Find on

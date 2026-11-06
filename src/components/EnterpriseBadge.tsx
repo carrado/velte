@@ -2,45 +2,9 @@
 
 import { CrownIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { isEnterpriseVendor } from "@/lib/enterprise";
 
-/**
- * Checks whether a vendor or user profile is on the Enterprise plan.
- */
-export function isEnterpriseVendor(vendor: unknown): boolean {
-  if (!vendor || typeof vendor !== "object") return false;
-  const v = vendor as {
-    tier?: string;
-    plan?: string;
-    isEnterprise?: boolean;
-    enterprise?: boolean;
-    subscription?: { plan?: string; status?: string };
-    store?: {
-      tier?: string;
-      plan?: string;
-      isEnterprise?: boolean;
-      enterprise?: boolean;
-    };
-  };
-  const subStatus = v.subscription?.status;
-  const isSubActive =
-    v.subscription?.plan === "vendor_enterprise" &&
-    (subStatus === "active" ||
-      subStatus === "trialing" ||
-      subStatus === "past_due" ||
-      subStatus === "cancelled");
-
-  return Boolean(
-    v.tier === "vendor_enterprise" ||
-    v.plan === "vendor_enterprise" ||
-    v.isEnterprise === true ||
-    v.enterprise === true ||
-    isSubActive ||
-    v.store?.tier === "vendor_enterprise" ||
-    v.store?.plan === "vendor_enterprise" ||
-    v.store?.isEnterprise === true ||
-    v.store?.enterprise === true,
-  );
-}
+export { isEnterpriseVendor };
 
 interface EnterpriseAvatarBadgeProps {
   size?: "sm" | "md" | "lg";

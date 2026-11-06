@@ -1,3 +1,5 @@
+"use client";
+
 import { forwardRef, type ComponentType, type SVGProps } from "react";
 import type { IconProps, IconWeight } from "@/types/common";
 

@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Compatibility shim — formerly Heroicons wrappers for the /chat tree.
  * Re-exports the Phosphor-backed barrel so existing

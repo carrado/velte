@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Velte's icon barrel — Phosphor Icons (`@phosphor-icons/react`), default
  * weight `duotone`. Same `*Icon` names and `IconProps` as before so call
