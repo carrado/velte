@@ -6,20 +6,184 @@ const IMAGE_MODEL = "gpt-image-2.5-flare";
 const IMAGE_SIZE = "1024x1024";
 const IMAGE_QUALITY = "medium";
 
-/** Velte brand accent when the vendor has no logo palette. */
-const VELTE_ORANGE = "#f97316";
+type NicheCategory =
+  | "food"
+  | "fashion"
+  | "beauty"
+  | "tech"
+  | "home"
+  | "fitness"
+  | "service"
+  | "luxury"
+  | "general";
+
+function detectNiche(text: string): NicheCategory {
+  const lower = text.toLowerCase();
+  if (
+    /\b(food|chicken|shawarma|grill|burger|suya|rice|jollof|cake|bakery|pastry|snack|drink|coffee|juice|soup|dish|restaurant|catering|spicy|delicious|chef|meal|kitchen|pepper|meat|fish|salad|delicacy|delicacies|edible|cuisine)\b/.test(
+      lower,
+    )
+  ) {
+    return "food";
+  }
+  if (
+    /\b(shoe|sneaker|heel|boot|dress|gown|cloth|shirt|pant|trouser|suit|wear|outfit|fabric|ankara|lace|fashion|bag|handbag|tote|watch|jewelry|necklace|bracelet|ring|luxury|couture|tailor|apparel|footwear|wardrobe|attire)\b/.test(
+      lower,
+    )
+  ) {
+    return "fashion";
+  }
+  if (
+    /\b(skin|skincare|serum|cream|lotion|glow|beauty|makeup|lipstick|hair|wig|braid|cosmetic|spa|massage|perfume|fragrance|cologne|facial|body|cleanser|moisturizer|lipgloss)\b/.test(
+      lower,
+    )
+  ) {
+    return "beauty";
+  }
+  if (
+    /\b(phone|iphone|samsung|laptop|computer|macbook|gadget|airpod|earbud|headphone|charger|tech|screen|watch|electronic|smart|camera|device|accessory|cable|powerbank)\b/.test(
+      lower,
+    )
+  ) {
+    return "tech";
+  }
+  if (
+    /\b(furniture|chair|table|bed|sofa|couch|interior|decor|home|curtain|lamp|cushion|shelf|kitchenware|appliance|lighting|living room)\b/.test(
+      lower,
+    )
+  ) {
+    return "home";
+  }
+  if (
+    /\b(gym|fitness|workout|protein|sport|activewear|sneakers|training|health|supplement|exercise|weight)\b/.test(
+      lower,
+    )
+  ) {
+    return "fitness";
+  }
+  if (
+    /\b(clean|repair|auto|car|wash|mechanic|service|plumber|electrician|logistics|delivery|event|photography|design|rent|agency|install|maintenance)\b/.test(
+      lower,
+    )
+  ) {
+    return "service";
+  }
+  return "general";
+}
+
+const NICHE_DESIGN_GUIDANCE: Record<
+  NicheCategory,
+  {
+    colorPalettes: string[];
+    visualMood: string;
+    lightingAndTexture: string;
+  }
+> = {
+  food: {
+    colorPalettes: [
+      "Appetizing warm amber, deep rustic terracotta, golden saffron, and charred charcoal with fresh basil green highlights",
+      "Rich paprika red, toasted sesame, warm timber brown, and glowing golden honey tones",
+      "Moody dark slate backdrop with vibrant fire-roasted coral, fresh citrus yellow, and emerald herb accents",
+    ],
+    visualMood:
+      "Mouth-watering, fresh, aromatic commercial food photography with rich steam, sizzling glaze, and crisp delicious textures",
+    lightingAndTexture:
+      "Warm directional studio spotlighting, shallow depth of field, rustic artisan wooden or slate textures, glistening freshness",
+  },
+  fashion: {
+    colorPalettes: [
+      "Opulent champagne gold, midnight obsidian, and warm ivory with rich bronze accents",
+      "Sophisticated royal emerald green, soft blush beige, and polished brass highlights",
+      "High-fashion monochrome with striking cobalt blue or electric scarlet accent pops",
+      "Warm sand, terracotta velvet, and soft desert rose tones",
+    ],
+    visualMood:
+      "Vogue-grade luxury fashion editorial, architectural podium presentation, sculpted fabric folds, elite retail presence",
+    lightingAndTexture:
+      "Softbox diffused studio lighting, elegant velvet or travertine stone pedestal, crisp silhouettes, pristine reflections",
+  },
+  beauty: {
+    colorPalettes: [
+      "Luminous rose quartz, warm honey amber, soft eucalyptus green, and pearlescent cream",
+      "Radiant golden sunset tones, velvety peach, clean lilac, and warm dewy neutral beige",
+      "Minimalist organic botanical palette: calming sage, crisp porcelain white, and warm terracotta",
+    ],
+    visualMood:
+      "Dewy, glowing, pristine skincare and beauty aesthetic with glistening serum drops, radiant clean reflections, and botanical touches",
+    lightingAndTexture:
+      "Soft diffused morning sunlight, translucent glass textures, gentle water ripples, luminous ethereal glow",
+  },
+  tech: {
+    colorPalettes: [
+      "Cyber deep slate, metallic titanium silver, and electric neon cyan or cobalt blue glow",
+      "Matte obsidian black, stealth graphite, and vibrant electric violet or emerald edge accents",
+      "Clean Scandinavian minimalism: pure snow white, space gray, and warm laser orange highlights",
+    ],
+    visualMood:
+      "Ultra-sleek modern commercial product hero, floating precision components, high-precision industrial design",
+    lightingAndTexture:
+      "Sharp rim and rim-light reflections, dark ambient studio gradient, anti-reflective matte and polished metallic surfaces",
+  },
+  home: {
+    colorPalettes: [
+      "Warm Scandinavian and Afro-modern earth tones: rich walnut, warm cream linen, soft sage, and muted ochre",
+      "Modern Japandi aesthetics: natural light oak, soft oatmeal, charcoal slate, and warm morning gold",
+    ],
+    visualMood:
+      "Inviting, serene, architecturally stunning interior staging showcasing comfort, craftsmanship, and elegant living",
+    lightingAndTexture:
+      "Natural architectural window light, organic textured fabrics, tactile wood grain, gentle shadow play",
+  },
+  fitness: {
+    colorPalettes: [
+      "Electric lime green, deep carbon black, and vibrant cyan athletic energy",
+      "Fiery sunset crimson, energetic orange, and dark metallic gray",
+    ],
+    visualMood:
+      "Dynamic, powerful, motivational athletic performance aesthetic with high momentum and impact",
+    lightingAndTexture:
+      "Dramatic high-contrast rim lighting, sweat/grit particles, subtle motion blur, bold aggressive lines",
+  },
+  service: {
+    colorPalettes: [
+      "Trustworthy royal sapphire blue, crisp clean white, and energizing warm gold accents",
+      "Modern corporate teal, deep twilight navy, and bright energetic coral highlights",
+    ],
+    visualMood:
+      "Professional, reliable, seamless, modern service delivery with high confidence and clarity",
+    lightingAndTexture:
+      "Bright even studio lighting, clean geometric layout, modern graphic icons or pristine equipment in action",
+  },
+  luxury: {
+    colorPalettes: [
+      "Deep royal obsidian, polished 24k gold, and royal midnight indigo",
+      "Rich burgundy velvet, dark mahogany, and platinum silver accents",
+    ],
+    visualMood:
+      "Bespoke high-jewelry and luxury goods showcase, museum-grade pedestals, whisper-quiet prestige",
+    lightingAndTexture:
+      "Pinpoint dramatic spotlights, caustics and diamond sparkle, dark moody velvet and dark mirror reflections",
+  },
+  general: {
+    colorPalettes: [
+      "Vibrant modern marketplace palette: rich royal jewel tones (sapphire, amber gold, ruby) balanced by clean neutral backdrops",
+      "Warm sunset gradient: rich coral, golden honey, and deep plum with crisp white focal highlights",
+      "Fresh contemporary commercial palette: bold indigo, warm mustard gold, and soft cloud gray",
+    ],
+    visualMood:
+      "Eye-catching commercial advertising flyer with bold visual hierarchy, stopping power, and premium polish",
+    lightingAndTexture:
+      "Clean professional studio commercial lighting with depth, soft balanced fill, and crisp product edges",
+  },
+};
 
 const POSTER_STYLES = [
-  "Lifestyle photography — real people or hands with the product in a warm Nigerian setting, shallow depth of field, natural light.",
-  "Bold graphic poster — flat shapes, strong typography blocks (as shapes only, no readable tiny type), high contrast, modern flyer energy.",
-  "Minimal product hero — single product centred on a clean studio backdrop, soft shadows, lots of negative space.",
-  "Editorial magazine cover — sophisticated crop, muted secondary tones, premium retail feel.",
-  "Vibrant marketplace flyer — busy-but-balanced colour blocks, festive Nigerian market energy, playful without clutter.",
-  "Soft pastel brand story — gentle gradients, airy composition, friendly neighbourhood-shop mood.",
-  "Dark moody premium — deep backgrounds, spotlight on the product, luxury boutique atmosphere.",
-  "Illustrated / flat design — clean vector-like product illustration, simple icons, contemporary African design sensibility.",
-  "Collage cut-out — product cut from photo onto a colourful paper-texture or patterned ground, craft-market vibe.",
-  "Geometric modern — diagonal colour fields, sharp product placement, tech-forward retail look.",
+  "High-end commercial studio photography — dramatic key and rim lighting, ultra-sharp product focus, clean editorial background, premium reflections.",
+  "Vibrant social media hero advert — dynamic layout, bold modern color harmony, energetic commercial framing that stops the scroll.",
+  "Editorial luxury campaign — minimalist podium, cinematic depth of field, sophisticated color blocking, high-fashion magazine aesthetic.",
+  "Warm lifestyle in-context — product showcased naturally in a beautiful, modern Nigerian setting with warm golden-hour lighting and authentic atmosphere.",
+  "3D isometric / dimensional product render — floating elements, soft volumetric shadows, clean pastel or rich contrasting backdrop, hyper-clean commercial polish.",
+  "Modern graphic poster — bold geometric framing, high-contrast color fields, dynamic visual hierarchy, sleek contemporary advertising layout.",
 ] as const;
 
 export interface AdvertPosterArgs {
@@ -29,14 +193,12 @@ export interface AdvertPosterArgs {
   /** Visual direction for the poster (layout, colours, mood). */
   instructions?: string | null;
   productName?: string | null;
-  /** Dominant hex colours from the store logo — drives the palette when set. */
+  /** Dominant hex colours from the store logo — used as optional accent when provided. */
   palette?: string[] | null;
 }
 
 export interface AdvertPosterResult extends AdvertCopy {
-  /** PNG bytes as base64 — the browser uploads to Cloudinary (same path as
-   *  product photos). Server-side Cloudinary DNS was failing with ENOTFOUND
-   *  on regenerate. */
+  /** PNG bytes as base64 — the browser uploads to Cloudinary via the dedicated advert profile. */
   imageBase64: string;
   mimeType: "image/png";
 }
@@ -46,7 +208,6 @@ function pickStyle(seed: string): string {
   for (let i = 0; i < seed.length; i++) {
     hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   }
-  // Mix in time so each generate (including regenerate) can land on a new look.
   const idx = Math.abs(hash + Date.now()) % POSTER_STYLES.length;
   return POSTER_STYLES[idx];
 }
@@ -69,31 +230,44 @@ function buildImagePrompt(args: AdvertPosterArgs): string {
   const product = args.productName?.trim();
   const offer = args.prompt.trim();
   const instructions = args.instructions?.trim();
-  const palette = sanitizePalette(args.palette);
-  const style = pickStyle(
-    `${args.storeName}|${offer}|${instructions ?? ""}|${palette.join(",")}`,
-  );
+  const textCorpus = `${product ?? ""} ${offer} ${instructions ?? ""}`;
+  const niche = detectNiche(textCorpus);
+  const guidance = NICHE_DESIGN_GUIDANCE[niche];
 
-  const colourLine =
-    palette.length > 0
-      ? `Brand colour palette from the store logo (use as accents and backgrounds, do not invent other brand marks): ${palette.join(", ")}. Harmonise the whole poster around these hues.`
-      : `Accent colour: Velte orange (${VELTE_ORANGE}) used sparingly as the brand accent — complementary neutrals around it.`;
+  let hash = 0;
+  for (let i = 0; i < textCorpus.length; i++) {
+    hash = (hash * 33 + textCorpus.charCodeAt(i)) | 0;
+  }
+  const chosenPalette =
+    guidance.colorPalettes[
+      Math.abs(hash + Date.now()) % guidance.colorPalettes.length
+    ];
+
+  const logoPalette = sanitizePalette(args.palette);
+  let colorDirection = `Aesthetic Color Palette: ${chosenPalette}. Choose the most visually stunning, high-converting commercial color harmony suited to this exact product.`;
+  if (logoPalette.length > 0) {
+    colorDirection += ` Optional store brand logo colors: (${logoPalette.join(", ")}). You may tastefully incorporate these as subtle secondary brand accents, rim light, or badge highlights if they enhance the design, but prioritize the overall beauty and product-specific appeal of the poster.`;
+  }
+
+  const style = pickStyle(`${args.storeName}|${textCorpus}`);
 
   return [
-    "Create a polished marketplace advert poster for a Nigerian small business.",
-    "Square format, suitable for a social feed sponsored pin.",
-    `Visual style for THIS generation (commit to it; do not default to a generic stock look): ${style}`,
-    colourLine,
-    "No logos of real global brands, no QR codes, no watermarks, no tiny unreadable text.",
-    "Leave a clear focal product/offer area; composition should feel intentional.",
-    // Real store logo is composited later — keep this corner visually quiet.
-    "Leave a clean empty patch in the bottom-left corner (~15% of width) with no text or busy detail, for a store logo badge.",
-    `Store name: ${args.storeName}.`,
-    product ? `Product / service: ${product}.` : null,
-    offer ? `Advert offer / message: ${offer}` : null,
+    "High-converting commercial advertising poster for an authentic business on social media.",
+    "Square format (1:1), scroll-stopping visual hierarchy, award-winning advertising campaign quality.",
+    `Hero Product/Subject: ${product || offer}.`,
+    `Store Brand Identity: Official campaign for store "${args.storeName}".`,
+    offer ? `Advert message & core offer: "${offer}".` : null,
     instructions
-      ? `Vendor poster instructions (follow closely): ${instructions}`
+      ? `Vendor specific creative directions: "${instructions}".`
       : null,
+    `Visual Mood: ${guidance.visualMood}.`,
+    `Lighting & Texture: ${guidance.lightingAndTexture}.`,
+    `Aesthetic Style: ${style}.`,
+    colorDirection,
+    "Composition & Framing: Frame the hero product/subject with magnetic visual impact in the center and upper frame, using professional depth of field, studio edge light, and intentional negative space.",
+    // Authentic store logo & name capsule is composited in the bottom-left corner
+    "Brand Identity Zone: Keep the bottom-left area (~28% of width, ~12% of height) quiet, smooth, and uncluttered with calm background shading or soft gradient shadow so the store logo and name badge read with pristine contrast.",
+    "STRICT DIRECTIVE: ABSOLUTELY NO fake brand logos, NO gibberish lettering or simulated AI text, NO watermarks, NO barcodes. The visual must look like a multi-million-naira professional brand campaign that makes customers want to buy immediately.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -201,9 +375,8 @@ async function generatePosterBase64(args: AdvertPosterArgs): Promise<string> {
 }
 
 /**
- * One AI advert generation: poster bytes (OpenAI) plus editable copy (Groq).
- * Style is rotated per call; colour follows the logo palette when provided,
- * otherwise Velte orange. Cloudinary hosting stays in the browser.
+ * One AI advert generation: poster bytes (OpenAI) plus sales-generating copy (Groq/OpenAI).
+ * Theme and color palette are chosen dynamically for maximum sales conversion and visual appeal.
  */
 export async function generateAdvertPoster(
   args: AdvertPosterArgs,

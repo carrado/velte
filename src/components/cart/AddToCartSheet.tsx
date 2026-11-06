@@ -145,6 +145,14 @@ export function AddToCartSheet({
         return;
       }
 
+      if (result.status === "vendor_mismatch") {
+        setMismatch({
+          currentVendorName: result.currentVendorName,
+          line: result.line,
+        });
+        return;
+      }
+
       setError(result.reason);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {

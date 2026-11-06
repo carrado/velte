@@ -46,6 +46,11 @@ import {
   SECTOR_CATEGORY_BY_LABEL,
   SECTOR_TAXONOMY,
 } from "@/lib/sectors";
+import {
+  EnterpriseAvatarBadge,
+  EnterpriseBadge,
+  isEnterpriseVendor,
+} from "@/components/EnterpriseBadge";
 import { modalScrimClass } from "@/lib/modalScrim";
 import { cn, isNewListing, timeAgo } from "@/lib/utils";
 import type {
@@ -59,6 +64,10 @@ import type {
 } from "@/types/hub";
 import TabBar from "@/components/TabBar";
 import { HubLockedModal } from "./HubLockedModal";
+import { useUserStore } from "@/store/userStore";
+import { useBuyerStore } from "@/store/buyerStore";
+import { assembleHubFeed } from "@/lib/hubFeed";
+import { NewPostsIndicator } from "./NewPostsIndicator";
 
 type ContactTarget = {
   vendorId: string;
@@ -327,16 +336,24 @@ function FeaturedVendorsPanel({
           {vendors.slice(0, vendorCap).map((vendor) => (
             <li key={vendor.vendorId}>
               <div className="w-full flex items-center gap-3 py-2.5 text-left">
-                <Avatar
-                  name={vendor.name}
-                  src={vendor.avatar}
-                  className="h-10 w-10 rounded-full text-xs shrink-0"
-                />
+                <div className="relative shrink-0">
+                  <Avatar
+                    name={vendor.name}
+                    src={vendor.avatar}
+                    className="h-10 w-10 rounded-full text-xs shrink-0"
+                  />
+                  {isEnterpriseVendor(vendor) && (
+                    <EnterpriseAvatarBadge size="sm" />
+                  )}
+                </div>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold text-ink truncate">
                       {vendor.name}
                     </span>
+                    {isEnterpriseVendor(vendor) && (
+                      <EnterpriseBadge size="sm" />
+                    )}
                     {vendor.verified && (
                       <BadgeCheckIcon
                         size={14}
@@ -427,8 +444,15 @@ function FeaturedVendorsPanel({
   );
 }
 
-export function BuyerHub({ home }: { home: HubHome }) {
+export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   const { navigate } = useNavigation();
+  const vendor = useUserStore((s) => s.user);
+  const buyer = useBuyerStore((s) => s.buyer);
+  const isVendorAccount = Boolean(vendor || buyer?.linkedVendorId);
+  const home = useMemo(
+    () => (isVendorAccount ? { ...initialHome, premium: true } : initialHome),
+    [initialHome, isVendorAccount],
+  );
   const [sector, setSector] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<MobilePane>("listings");
   const [contact, setContact] = useState<ContactTarget | null>(null);
@@ -443,6 +467,10 @@ export function BuyerHub({ home }: { home: HubHome }) {
     | "favourite"
     | null
   >(null);
+  const [displayedTimeline, setDisplayedTimeline] = useState<HubTimelineItem[]>(
+    () => home.timeline ?? [],
+  );
+  const [pendingUpdates, setPendingUpdates] = useState<HubTimelineItem[]>([]);
   const [posts, setPosts] = useState(home.community ?? []);
   const [favourites, setFavourites] = useState<Set<string>>(() => {
     const ids = new Set<string>();
@@ -486,6 +514,32 @@ export function BuyerHub({ home }: { home: HubHome }) {
   const now = Date.now();
 
   useEffect(() => {
+    if (!home.timeline) return;
+    if (displayedTimeline.length === 0) {
+      setDisplayedTimeline(home.timeline);
+      return;
+    }
+    const currentIds = new Set(displayedTimeline.map((item) => item.id));
+    const newItems = home.timeline.filter((item) => !currentIds.has(item.id));
+    if (newItems.length > 0) {
+      setPendingUpdates((prev) => {
+        const prevIds = new Set(prev.map((i) => i.id));
+        const trulyNew = newItems.filter((i) => !prevIds.has(i.id));
+        return trulyNew.length > 0 ? [...trulyNew, ...prev] : prev;
+      });
+    }
+  }, [home.timeline, displayedTimeline]);
+
+  const handleApplyUpdates = () => {
+    if (pendingUpdates.length === 0) return;
+    setDisplayedTimeline((prev) => [...pendingUpdates, ...prev]);
+    setPendingUpdates([]);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  useEffect(() => {
     setVisitSaved(false);
     setReviewRating(5);
     setReviewText("");
@@ -506,7 +560,7 @@ export function BuyerHub({ home }: { home: HubHome }) {
       }
     };
     for (const vendor of home.featured) bump(vendor.sectors);
-    for (const item of home.timeline) bump(item.sectors);
+    for (const item of displayedTimeline) bump(item.sectors);
     return SECTOR_TAXONOMY.map((category) => ({
       id: category.id,
       label: category.label,
@@ -514,25 +568,35 @@ export function BuyerHub({ home }: { home: HubHome }) {
     }))
       .filter((row) => row.count > 0)
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  }, [home.featured, home.timeline]);
+  }, [home.featured, displayedTimeline]);
 
   const feed = useMemo(() => {
-    let items = home.timeline.filter((item) => item.kind !== "update");
+    let items = displayedTimeline.filter((item) => item.kind !== "update");
     if (sector)
       items = items.filter((item) => inSectorGroup(item.sectors, sector));
-    return items;
-  }, [home.timeline, sector]);
+    // Assembles feed so sponsored listings/ads come first and appear more frequently,
+    // with newest updates first!
+    return assembleHubFeed(items);
+  }, [displayedTimeline, sector]);
 
   const featured = useMemo(() => {
-    if (!sector) return home.featured;
-    return home.featured.filter((vendor) =>
-      inSectorGroup(vendor.sectors, sector),
-    );
+    let list = home.featured;
+    if (sector)
+      list = home.featured.filter((vendor) =>
+        inSectorGroup(vendor.sectors, sector),
+      );
+    // Sponsored listings appear first
+    return [...list].sort((a, b) => {
+      if (a.sponsored && !b.sponsored) return -1;
+      if (!a.sponsored && b.sponsored) return 1;
+      return 0;
+    });
   }, [home.featured, sector]);
 
   const updates = useMemo(
-    () => home.timeline.filter((item) => item.kind === "update").slice(0, 3),
-    [home.timeline],
+    () =>
+      displayedTimeline.filter((item) => item.kind === "update").slice(0, 3),
+    [displayedTimeline],
   );
 
   const advertVendors = useMemo(() => {
@@ -555,14 +619,14 @@ export function BuyerHub({ home }: { home: HubHome }) {
     };
     for (const vendor of home.featured)
       add(vendor.vendorId, vendor.name, [vendor.imageUrl]);
-    for (const item of home.timeline) {
+    for (const item of displayedTimeline) {
       add(item.vendorId, item.storeName || "Vendor", [
         item.imageUrl,
         ...(item.images ?? []),
       ]);
     }
     return [...byId.values()].filter((vendor) => vendor.images.length > 0);
-  }, [home.featured, home.timeline]);
+  }, [home.featured, displayedTimeline]);
 
   const chosenVendor =
     advertVendors.find((vendor) => vendor.vendorId === placeVendorId) ?? null;
@@ -686,8 +750,43 @@ export function BuyerHub({ home }: { home: HubHome }) {
         return;
       }
       if (!res.ok) return;
+      const advertData = (await res.json().catch(() => null)) as {
+        advert?: { id: string };
+      } | null;
       setPlaceOpen(false);
       setNotice("Advert placed");
+      const chosen = chosenVendor;
+      const newAdvertItem: HubTimelineItem = {
+        id: advertData?.advert?.id || `advert-${Date.now()}`,
+        vendorId: placeVendorId,
+        kind: "promotion",
+        at: new Date().toISOString(),
+        title: placeHeadline.trim(),
+        body: placeBlurb.trim() || null,
+        imageUrl: placeImage,
+        storeName: chosen?.name || "Vendor",
+        storeHandle: chosen?.name
+          ? chosen.name.toLowerCase().replace(/\s+/g, "")
+          : null,
+        avatar: chosen?.images?.[0] || null,
+        verified: true,
+        sponsored: true,
+        sectors: [],
+        place: null,
+        images: [placeImage],
+        ratingAvg: null,
+        ratingCount: 0,
+        whatsapp: null,
+        social: null,
+        advertId: advertData?.advert?.id || `ad-${Date.now()}`,
+        placedByBuyer: true,
+        fastDelivery: false,
+        favourite: false,
+        trusted: true,
+        sentiment: null,
+        reviewableOrderId: null,
+      };
+      setDisplayedTimeline((prev) => [newAdvertItem, ...prev]);
     } finally {
       setPlacing(false);
     }
@@ -786,7 +885,7 @@ export function BuyerHub({ home }: { home: HubHome }) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="w-full">
       <HubHero
         eyebrow="Vendor Hub"
         title={
@@ -800,228 +899,239 @@ export function BuyerHub({ home }: { home: HubHome }) {
         photo="/hub/buyer-hub-purchase.jpg"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4 items-start">
-        <div className="min-w-0 space-y-4">
-          <BuyerTools
-            home={home}
-            prefs={prefs}
-            broadcasts={buyerBroadcasts}
-            body={broadcastBody}
-            sending={broadcasting}
-            notice={notice}
-            onBody={setBroadcastBody}
-            onSend={submitBroadcast}
-            onPlace={openPlace}
-            onPrefs={savePrefs}
-            onLock={(kind) => setLock(kind)}
-          />
-
-          {/* Mobile Listings / Featured Vendors — ThemeToggle / TabBar shell */}
-          <div className="lg:hidden px-4">
-            <TabBar
-              fullWidth
-              tabs={[
-                { key: "listings", label: "Listings" },
-                { key: "vendors", label: "Featured Vendors" },
-              ]}
-              activeTab={mobilePane}
-              onChange={setMobilePane}
-            />
-          </div>
-
-          <div id="hub-vendors" className="scroll-mt-4">
-            <CardCarousel
-              items={[
-                {
-                  key: "all",
-                  label: "All sectors",
-                  icon: StoreIcon,
-                  active: sector === null,
-                  onClick: () => setSector(null),
-                },
-                ...sectorGroups.map((row) => ({
-                  key: row.id,
-                  label: row.label,
-                  icon: sectorIcon(row.id),
-                  active: sector === row.id,
-                  onClick: () => setSector(row.id),
-                })),
-              ]}
-              getKey={(item) => item.key}
-              slideClassName="w-auto"
-              renderItem={(item) => (
-                <SectorChip
-                  active={item.active}
-                  icon={item.icon}
-                  label={item.label}
-                  onClick={item.onClick}
-                />
-              )}
-            />
-          </div>
-
-          <div className={cn("lg:hidden", !showMobileVendors && "hidden")}>
-            <FeaturedVendorsPanel {...featuredPanelProps} />
-          </div>
-
-          <div
-            className={cn("space-y-4", showMobileVendors && "hidden lg:block")}
-          >
-            <CommunityPanel
+      <div className="w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4 items-start">
+          <div className="min-w-0 space-y-4">
+            <BuyerTools
               home={home}
-              posts={posts}
-              updates={updates}
-              now={now}
-              postBody={postBody}
-              posting={posting}
-              onPostBody={setPostBody}
-              onPosted={(post) => setPosts((current) => [post, ...current])}
-              onReport={reportPost}
-              onLock={() => setLock("community")}
-              onPosting={setPosting}
+              prefs={prefs}
+              broadcasts={buyerBroadcasts}
+              body={broadcastBody}
+              sending={broadcasting}
+              notice={notice}
+              onBody={setBroadcastBody}
+              onSend={submitBroadcast}
+              onPlace={openPlace}
+              onPrefs={savePrefs}
+              onLock={(kind) => setLock(kind)}
             />
 
-            {feed.length === 0 ? (
-              <div className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-10 text-center">
-                <p className="font-semibold text-ink">
-                  Nothing in this view yet
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Listings and labelled promotions show up as vendors publish
-                  them.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
-                {feed.map((item, index) => {
-                  const fadeLast =
-                    Boolean(home.hubPreview?.listingsCapped) &&
-                    index === feed.length - 1;
-                  const fullWidth = item.sponsored || fadeLast;
-                  const card = (
-                    <FeedCard
-                      item={item}
-                      now={now}
-                      premium={home.premium}
-                      favourite={favourites.has(item.vendorId)}
-                      compact={!item.sponsored}
-                      onContact={() => openContact(contactFromItem(item))}
-                      onVisit={() => openVisit(contactFromItem(item))}
-                      onReview={() => openReview(contactFromItem(item))}
-                      onFavourite={() => toggleFavourite(item.vendorId)}
-                      onBoost={
-                        item.advertId
-                          ? () => boostAdvert(item.advertId as string)
-                          : undefined
-                      }
-                    />
-                  );
-                  if (!fadeLast) {
-                    return (
-                      <div
-                        key={item.id}
-                        className={
-                          fullWidth ? "col-span-2 lg:col-span-1" : undefined
-                        }
-                      >
-                        {card}
-                      </div>
-                    );
-                  }
-                  return (
-                    <div
-                      key={item.id}
-                      className="relative col-span-2 lg:col-span-1 overflow-hidden rounded-none lg:rounded-2xl"
-                    >
-                      <div
-                        aria-hidden
-                        className="pointer-events-none select-none blur-[2px] opacity-50 saturate-50 [mask-image:linear-gradient(to_bottom,black_0%,black_35%,transparent_100%)]"
-                      >
-                        {card}
-                      </div>
-                      <div className="absolute inset-0 flex flex-col items-center justify-end pb-6 pt-16 bg-gradient-to-t from-canvas via-canvas/90 to-transparent">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src="/hub/premium-listings.jpg"
-                          alt=""
-                          className="h-14 w-14 rounded-2xl object-cover shadow-sm ring-1 ring-black/5"
-                        />
-                        <p className="mt-3 text-sm font-bold text-ink text-center px-4">
-                          More products waiting
-                        </p>
-                        <p className="mt-1 text-xs text-gray-600 text-center px-6 max-w-sm leading-relaxed">
-                          Upgrade to Premium to browse every listing vendors put
-                          on Hub.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => navigate("/pricing?for=buyers")}
-                          className="mt-3 inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-orange-600 transition-colors shadow-sm"
-                        >
-                          Upgrade to Premium
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+            {/* Mobile Listings / Featured Vendors — ThemeToggle / TabBar shell */}
+            <div className="lg:hidden px-4">
+              <TabBar
+                fullWidth
+                tabs={[
+                  { key: "listings", label: "Listings" },
+                  { key: "vendors", label: "Featured Vendors" },
+                ]}
+                activeTab={mobilePane}
+                onChange={setMobilePane}
+              />
+            </div>
 
-        <aside className="hidden lg:block space-y-4 lg:self-stretch">
-          <FeaturedVendorsPanel {...featuredPanelProps} />
+            <div id="hub-vendors" className="scroll-mt-4">
+              <CardCarousel
+                items={[
+                  {
+                    key: "all",
+                    label: "All sectors",
+                    icon: StoreIcon,
+                    active: sector === null,
+                    onClick: () => setSector(null),
+                  },
+                  ...sectorGroups.map((row) => ({
+                    key: row.id,
+                    label: row.label,
+                    icon: sectorIcon(row.id),
+                    active: sector === row.id,
+                    onClick: () => setSector(row.id),
+                  })),
+                ]}
+                getKey={(item) => item.key}
+                slideClassName="w-auto"
+                renderItem={(item) => (
+                  <SectorChip
+                    active={item.active}
+                    icon={item.icon}
+                    label={item.label}
+                    onClick={item.onClick}
+                  />
+                )}
+              />
+            </div>
 
-          <div className="space-y-4 lg:sticky lg:top-16">
-            <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-4">
-              <h3 className="text-sm font-bold text-ink mb-3">
-                Popular Sectors
-              </h3>
-              {sectorGroups.length === 0 ? (
-                <p className="text-xs text-gray-500">
-                  Sectors appear once stores choose them.
-                </p>
+            <div className={cn("lg:hidden", !showMobileVendors && "hidden")}>
+              <FeaturedVendorsPanel {...featuredPanelProps} />
+            </div>
+
+            <div
+              className={cn(
+                "space-y-4",
+                showMobileVendors && "hidden lg:block",
+              )}
+            >
+              <CommunityPanel
+                home={home}
+                posts={posts}
+                updates={updates}
+                now={now}
+                postBody={postBody}
+                posting={posting}
+                onPostBody={setPostBody}
+                onPosted={(post) => setPosts((current) => [post, ...current])}
+                onReport={reportPost}
+                onLock={() => setLock("community")}
+                onPosting={setPosting}
+              />
+
+              <NewPostsIndicator
+                count={pendingUpdates.length}
+                onClick={handleApplyUpdates}
+              />
+
+              {feed.length === 0 ? (
+                <div className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-10 text-center">
+                  <p className="font-semibold text-ink">
+                    Nothing in this view yet
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Listings and labelled promotions show up as vendors publish
+                    them.
+                  </p>
+                </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {sectorGroups.slice(0, 6).map((row) => {
-                    const Icon = sectorIcon(row.id);
+                <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+                  {feed.map((item, index) => {
+                    const cardKey = `${item.id}-${index}`;
+                    const fadeLast =
+                      Boolean(home.hubPreview?.listingsCapped) &&
+                      index === feed.length - 1;
+                    const fullWidth = item.sponsored || fadeLast;
+                    const card = (
+                      <FeedCard
+                        item={item}
+                        now={now}
+                        premium={home.premium}
+                        favourite={favourites.has(item.vendorId)}
+                        compact={!item.sponsored}
+                        onContact={() => openContact(contactFromItem(item))}
+                        onVisit={() => openVisit(contactFromItem(item))}
+                        onReview={() => openReview(contactFromItem(item))}
+                        onFavourite={() => toggleFavourite(item.vendorId)}
+                        onBoost={
+                          item.advertId
+                            ? () => boostAdvert(item.advertId as string)
+                            : undefined
+                        }
+                      />
+                    );
+                    if (!fadeLast) {
+                      return (
+                        <div
+                          key={cardKey}
+                          className={
+                            fullWidth ? "col-span-2 lg:col-span-1" : undefined
+                          }
+                        >
+                          {card}
+                        </div>
+                      );
+                    }
                     return (
-                      <button
-                        key={row.id}
-                        type="button"
-                        onClick={() => setSector(row.id)}
-                        className={cn(
-                          "rounded-xl border px-3 py-3 text-left transition-colors",
-                          sector === row.id
-                            ? "border-orange-300 bg-orange-50"
-                            : "border-gray-200 bg-surface hover:border-orange-200",
-                        )}
+                      <div
+                        key={cardKey}
+                        className="relative col-span-2 lg:col-span-1 overflow-hidden rounded-none lg:rounded-2xl"
                       >
-                        <Icon size={16} className="text-orange-500" />
-                        <span className="mt-2 block text-xs font-semibold text-ink leading-snug">
-                          {row.label}
-                        </span>
-                        <span className="block text-[11px] text-gray-500 mt-0.5">
-                          {row.count} {row.count === 1 ? "vendor" : "vendors"}
-                        </span>
-                      </button>
+                        <div
+                          aria-hidden
+                          className="pointer-events-none select-none blur-[2px] opacity-50 saturate-50 [mask-image:linear-gradient(to_bottom,black_0%,black_35%,transparent_100%)]"
+                        >
+                          {card}
+                        </div>
+                        <div className="absolute inset-0 flex flex-col items-center justify-end pb-6 pt-16 bg-gradient-to-t from-canvas via-canvas/90 to-transparent">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src="/hub/premium-listings.jpg"
+                            alt=""
+                            className="h-14 w-14 rounded-2xl object-cover shadow-sm ring-1 ring-black/5"
+                          />
+                          <p className="mt-3 text-sm font-bold text-ink text-center px-4">
+                            More products waiting
+                          </p>
+                          <p className="mt-1 text-xs text-gray-600 text-center px-6 max-w-sm leading-relaxed">
+                            Upgrade to Premium to browse every listing vendors
+                            put on Hub.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => navigate("/pricing?for=buyers")}
+                            className="mt-3 inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-orange-600 transition-colors shadow-sm"
+                          >
+                            Upgrade to Premium
+                          </button>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
               )}
-            </section>
-
-            <section className="rounded-none lg:rounded-2xl border border-orange-100 bg-orange-50 p-4">
-              <h3 className="text-sm font-bold text-ink">
-                Support Local Business
-              </h3>
-              <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                Shop from vendors who list on Velte. A sponsored card is
-                labelled. Ratings appear only after a real review.
-              </p>
-            </section>
+            </div>
           </div>
-        </aside>
+
+          <aside className="hidden lg:block space-y-4 lg:self-stretch">
+            <FeaturedVendorsPanel {...featuredPanelProps} />
+
+            <div className="space-y-4 lg:sticky lg:top-16">
+              <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-4">
+                <h3 className="text-sm font-bold text-ink mb-3">
+                  Popular Sectors
+                </h3>
+                {sectorGroups.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    Sectors appear once stores choose them.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {sectorGroups.slice(0, 6).map((row) => {
+                      const Icon = sectorIcon(row.id);
+                      return (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => setSector(row.id)}
+                          className={cn(
+                            "rounded-xl border px-3 py-3 text-left transition-colors",
+                            sector === row.id
+                              ? "border-orange-300 bg-orange-50"
+                              : "border-gray-200 bg-surface hover:border-orange-200",
+                          )}
+                        >
+                          <Icon size={16} className="text-orange-500" />
+                          <span className="mt-2 block text-xs font-semibold text-ink leading-snug">
+                            {row.label}
+                          </span>
+                          <span className="block text-[11px] text-gray-500 mt-0.5">
+                            {row.count} {row.count === 1 ? "vendor" : "vendors"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-none lg:rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                <h3 className="text-sm font-bold text-ink">
+                  Support Local Business
+                </h3>
+                <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                  Shop from vendors who list on Velte. A sponsored card is
+                  labelled. Ratings appear only after a real review.
+                </p>
+              </section>
+            </div>
+          </aside>
+        </div>
       </div>
 
       {contact && (
@@ -1554,14 +1664,15 @@ function PremiumUpgradeBanner({
 }
 
 function SocialLinks({ social }: { social: HubSocial }) {
-  const links = (
-    [
-      ["Instagram", social.instagram],
-      ["Facebook", social.facebook],
-      ["TikTok", social.tiktok],
-      ["X", social.x],
-    ] as const
-  ).filter((entry): entry is [string, string] => Boolean(entry[1]));
+  const entries: [string, string | null | undefined][] = [
+    ["Instagram", social.instagram],
+    ["Facebook", social.facebook],
+    ["TikTok", social.tiktok],
+    ["X", social.x],
+  ];
+  const links = entries.filter((entry): entry is [string, string] =>
+    Boolean(entry[1]),
+  );
   if (links.length === 0) return null;
   return (
     <div className="mt-3 flex flex-wrap gap-2">
@@ -2112,14 +2223,19 @@ function FeedCard({
               compact ? "gap-1.5 lg:gap-2.5" : "gap-2.5",
             )}
           >
-            <Avatar
-              name={item.storeName || "Vendor"}
-              src={item.avatar}
-              className={cn(
-                "rounded-full text-xs shrink-0",
-                compact ? "h-7 w-7 lg:h-10 lg:w-10" : "h-10 w-10",
+            <div className="relative shrink-0">
+              <Avatar
+                name={item.storeName || "Vendor"}
+                src={item.avatar}
+                className={cn(
+                  "rounded-full text-xs shrink-0",
+                  compact ? "h-7 w-7 lg:h-10 lg:w-10" : "h-10 w-10",
+                )}
+              />
+              {isEnterpriseVendor(item) && (
+                <EnterpriseAvatarBadge size={compact ? "sm" : "md"} />
               )}
-            />
+            </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <p
@@ -2130,6 +2246,7 @@ function FeedCard({
                 >
                   {item.storeName || "Vendor"}
                 </p>
+                {isEnterpriseVendor(item) && <EnterpriseBadge size="sm" />}
                 {item.verified && (
                   <BadgeCheckIcon
                     size={compact ? 12 : 14}

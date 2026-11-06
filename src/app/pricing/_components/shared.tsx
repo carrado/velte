@@ -150,8 +150,8 @@ export const VENDOR_COMPARE_ROWS: {
   },
   {
     label: "AI advert poster generation",
-    basic: "2 slots",
-    enterprise: "5 slots + fast cooldown",
+    basic: "5 slots",
+    enterprise: "15 slots + fast cooldown",
   },
   {
     label: "Promo broadcasts to buyers",

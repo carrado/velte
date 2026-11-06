@@ -41,12 +41,12 @@ export function CartButton() {
     <button
       type="button"
       onClick={openDrawer}
-      className="relative inline-flex items-center justify-center rounded-xl p-2 text-gray-600 hover:bg-gray-50"
+      className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-600 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
       aria-label={count ? `Open cart, ${count} items` : "Open cart"}
     >
       <ShoppingCartIcon size={18} />
       {count > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] rounded-full bg-orange-500 px-1 text-center text-[10px] font-bold leading-4 text-white">
+        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-orange-500 px-1 text-center text-[10px] font-bold leading-4 text-white">
           {count}
         </span>
       )}

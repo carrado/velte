@@ -25,7 +25,7 @@ export function NotificationDropdown() {
           Popover trigger for the fuller explanation. */}
       <PopoverTrigger
         id="header-notifications-trigger"
-        className="relative inline-flex items-center justify-center rounded-xl p-2 text-gray-600 hover:bg-gray-50 cursor-pointer focus:outline-none"
+        className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-600 hover:bg-gray-100 dark:hover:bg-white/5 cursor-pointer focus:outline-none transition-colors"
         aria-label="Open notifications"
       >
         <BellIcon size={18} />

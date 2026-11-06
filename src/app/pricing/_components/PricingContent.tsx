@@ -16,12 +16,13 @@ export default function PricingContent({ faqs }: { faqs: PricingFaqItem[] }) {
   const buyer = useBuyerStore((s) => s.buyer);
   const signedIn = Boolean(vendor || buyer);
 
-  const initialAudience: Audience =
-    forParam === "vendors" || forParam === "buyers"
+  const initialAudience: Audience = signedIn
+    ? vendor
+      ? "vendors"
+      : "buyers"
+    : forParam === "vendors" || forParam === "buyers"
       ? forParam
-      : vendor
-        ? "vendors"
-        : "buyers";
+      : "buyers";
 
   if (signedIn) {
     return (

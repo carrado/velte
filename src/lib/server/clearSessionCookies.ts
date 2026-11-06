@@ -10,7 +10,9 @@ export function clearSessionCookies(
 ) {
   if (names.length === 0) return response;
   const isProd =
-    process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging";
+    process.env.NODE_ENV === "production" ||
+    (process.env.NODE_ENV as string) === "staging" ||
+    process.env.APP_ENV === "staging";
   for (const name of names) {
     response.cookies.set(name, "", {
       httpOnly: true,

@@ -576,7 +576,7 @@ export function searchProductsTool(
           rememberedAttributes,
         },
       );
-      if (out.results?.length) onShown?.(out.results);
+      if ("results" in out && out.results?.length) onShown?.(out.results);
       return out;
     },
   });

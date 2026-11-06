@@ -11,6 +11,10 @@ import {
   ChevronRightIcon,
   MapPinIcon,
 } from "@/components/icons";
+import {
+  EnterpriseAvatarBadge,
+  EnterpriseBadge,
+} from "@/components/EnterpriseBadge";
 
 const AUTOPLAY_MS = 4500;
 
@@ -23,6 +27,7 @@ export interface StoreHeroProps {
   sectors: string[];
   goodsCount: number;
   servicesCount: number;
+  enterprise?: boolean;
 }
 
 // Full-bleed hero: real gallery photos auto-sliding when the vendor has any,
@@ -39,6 +44,7 @@ export default function StoreHero({
   sectors,
   goodsCount,
   servicesCount,
+  enterprise = false,
 }: StoreHeroProps) {
   const hasPhotos = gallery.length > 0;
   const theme = getStoreHeroTheme(sectors);
@@ -156,21 +162,31 @@ export default function StoreHero({
       <div className="absolute inset-x-0 bottom-0 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-3 sm:pb-5">
           <div className="flex items-end gap-3">
-            <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-orange-500 ring-2 ring-white/20 shadow-lg flex items-center justify-center text-white text-lg sm:text-xl font-bold overflow-hidden shrink-0">
-              {avatar ? (
-                <ProtectedImage
-                  src={optimizedImageUrl(avatar)}
-                  alt={name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                name.charAt(0).toUpperCase()
-              )}
+            <div className="relative shrink-0">
+              <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-orange-500 ring-2 ring-white/20 shadow-lg flex items-center justify-center text-white text-lg sm:text-xl font-bold overflow-hidden">
+                {avatar ? (
+                  <ProtectedImage
+                    src={optimizedImageUrl(avatar)}
+                    alt={name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  name.charAt(0).toUpperCase()
+                )}
+              </div>
+              {enterprise && <EnterpriseAvatarBadge size="lg" />}
             </div>
             <div className="min-w-0 flex-1 pb-0.5">
-              <h1 className="text-lg sm:text-2xl font-black text-white leading-tight drop-shadow-sm truncate">
-                {name}
-              </h1>
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-lg sm:text-2xl font-black text-white leading-tight drop-shadow-sm truncate">
+                  {name}
+                </h1>
+                {enterprise && (
+                  <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-500/20 backdrop-blur-xs border border-amber-400/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200">
+                    Enterprise
+                  </span>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs sm:text-sm text-white/85">
                 {area && (
                   <span className="flex items-center gap-1">

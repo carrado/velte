@@ -7,13 +7,27 @@ import { AskVelteSearchBar } from "@/components/AskVelteSearchBar";
 import { Avatar } from "@/components/Avatar";
 import AnchoredPopover from "@/components/AnchoredPopover";
 import { CartButton } from "@/components/cart/CartDrawer";
-import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
+import LogoutModal from "@/components/LogOutModal";
 import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
 import { ThemeToggleButton } from "@/components/landing/ThemeToggleButton";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import { VelteLogo } from "@/components/VelteLogo";
 import { BellIcon } from "@/components/icons/hero";
-import { LogOutIcon, SettingsIcon, StoreIcon } from "@/components/icons";
+import {
+  BarChartIcon,
+  CreditCardIcon,
+  CrownIcon,
+  FeedIcon,
+  GiftIcon,
+  LogOutIcon,
+  SettingsIcon,
+  StoreIcon,
+} from "@/components/icons";
+import {
+  EnterpriseAvatarBadge,
+  EnterpriseBadge,
+  isEnterpriseVendor,
+} from "@/components/EnterpriseBadge";
 import { useAccountSignOut } from "@/hooks/useAccountSignOut";
 import { getInitial } from "@/lib/initials";
 import { cn } from "@/lib/utils";
@@ -35,6 +49,7 @@ export function HubHeader({
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   const chipRef = useRef<HTMLButtonElement>(null);
   const { signOut, busy: signingOut } = useAccountSignOut();
+  const isEnterprise = isEnterpriseVendor(userDetails);
 
   const vendorDashboardId = userDetails?.id ?? buyer?.linkedVendorId ?? null;
   const dashboardNeedsSignIn = !userDetails && Boolean(buyer?.linkedVendorId);
@@ -62,7 +77,7 @@ export function HubHeader({
         className={
           hideSearch
             ? "sticky top-0 z-30 flex h-16 items-center justify-between gap-4 px-4 sm:px-6 border-b border-gray-200 bg-surface"
-            : "sticky top-0 z-30 flex flex-col border-b border-gray-200 bg-surface px-4 sm:px-6 md:grid md:h-16 md:grid-cols-[auto_minmax(0,40rem)_1fr] md:items-center md:gap-16 lg:gap-32"
+            : "sticky top-0 z-30 flex flex-col border-b border-gray-200 bg-surface px-4 sm:px-6 md:grid md:h-16 md:grid-cols-[auto_minmax(0,34rem)_auto] md:items-center md:justify-between md:gap-4 lg:gap-8"
         }
       >
         <div className="flex h-16 shrink-0 items-center justify-between gap-2 md:contents">
@@ -80,18 +95,29 @@ export function HubHeader({
             </Link>
           </div>
           {!hideSearch && (
-            <div className="hidden min-w-0 md:block">
+            <div className="hidden min-w-0 md:block max-w-xl w-full">
               <AskVelteSearchBar className="w-full" />
             </div>
           )}
-          <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2.5">
             <ThemeToggleButton className="focus-visible:ring-offset-surface" />
             {account && (
               <>
-                {buyer && <CartButton />}
+                <Link
+                  href="/hub"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 h-9 w-9 md:w-auto md:px-3 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-ink/80 transition-colors whitespace-nowrap"
+                  aria-label="Vendor's Hub"
+                  title="Vendor's Hub"
+                >
+                  <FeedIcon size={18} className="text-orange-500 shrink-0" />
+                  <span className="hidden md:inline text-sm font-semibold whitespace-nowrap text-gray-800 dark:text-ink">
+                    Vendor&apos;s Hub
+                  </span>
+                </Link>
+                <CartButton />
                 <button
                   type="button"
-                  className="relative inline-flex items-center justify-center rounded-xl p-2 text-gray-600 hover:bg-gray-50 md:hidden"
+                  className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-600 hover:bg-gray-50 md:hidden transition-colors"
                   onClick={() => navigate(notificationsHref)}
                   aria-label="Notifications"
                 >
@@ -103,6 +129,10 @@ export function HubHeader({
                 <div className="hidden md:block">
                   <NotificationDropdown />
                 </div>
+              </>
+            )}
+            {account && (
+              <>
                 <button
                   ref={chipRef}
                   type="button"
@@ -111,15 +141,18 @@ export function HubHeader({
                   aria-expanded={menuOpen}
                   aria-label="Your account"
                   title={buyer?.email ?? undefined}
-                  className="flex cursor-pointer items-center gap-2 min-w-0 pl-1 pr-2 sm:pr-3 py-1 rounded-full hover:bg-gray-100 transition-colors"
+                  className="flex h-9 cursor-pointer items-center gap-2 min-w-0 pl-1.5 pr-3 rounded-full border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors shrink-0"
                 >
-                  <Avatar
-                    src={account.avatar}
-                    alt="avatar"
-                    label={getInitial(account.name || "?")}
-                    className="w-7 h-7"
-                  />
-                  <span className="hidden sm:block max-w-[160px] truncate text-sm font-medium text-gray-800">
+                  <div className="relative flex shrink-0 items-center justify-center">
+                    <Avatar
+                      src={account.avatar}
+                      alt="avatar"
+                      label={getInitial(account.name || "?")}
+                      className="w-[26px] h-[26px] shrink-0"
+                    />
+                    {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
+                  </div>
+                  <span className="hidden sm:block max-w-[140px] truncate text-xs font-semibold text-gray-800 dark:text-ink">
                     {account.name}
                   </span>
                 </button>
@@ -130,53 +163,116 @@ export function HubHeader({
                   align="right"
                   className="w-56 overflow-hidden rounded-xl border border-gray-200 bg-surface py-1 shadow-lg"
                 >
-                  {vendorDashboardId ? (
+                  {isEnterprise && (
+                    <div className="px-3 py-1.5 bg-gradient-to-r from-amber-500/15 to-orange-500/10 border-b border-amber-500/20 flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                        <CrownIcon
+                          size={12}
+                          weight="fill"
+                          className="text-amber-500"
+                        />
+                        Enterprise Plan
+                      </span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                        Active
+                      </span>
+                    </div>
+                  )}
+                  {userDetails ? (
                     <>
                       <Link
-                        href="/"
+                        href="/store"
                         onClick={() => setMenuOpen(false)}
-                        className={menuItemClass}
+                        className={cn(menuItemClass, "md:hidden")}
                       >
                         <StoreIcon
                           size={17}
-                          className="shrink-0 text-orange-500"
+                          className="shrink-0 text-gray-400"
                         />
-                        <span className="min-w-0">
-                          <span className="block">Vendor dashboard</span>
-                          {dashboardNeedsSignIn && (
-                            <span className="block text-xs font-normal text-gray-500">
-                              Sign in to continue
-                            </span>
-                          )}
-                        </span>
+                        <span>My Store</span>
                       </Link>
-                      {userDetails && (
-                        <>
-                          <Link
-                            href="/store"
-                            onClick={() => setMenuOpen(false)}
-                            className={menuItemClass}
-                          >
-                            <StoreIcon
-                              size={17}
-                              className="shrink-0 text-gray-400"
-                            />
-                            <span>My store</span>
-                          </Link>
-                          <Link
-                            href="/settings"
-                            onClick={() => setMenuOpen(false)}
-                            className={menuItemClass}
-                          >
-                            <SettingsIcon
-                              size={17}
-                              className="shrink-0 text-gray-400"
-                            />
-                            <span>Settings</span>
-                          </Link>
-                        </>
-                      )}
+                      <Link
+                        href="/pricing"
+                        onClick={() => setMenuOpen(false)}
+                        className={cn(menuItemClass, "md:hidden")}
+                      >
+                        <CreditCardIcon
+                          size={17}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span>Billing</span>
+                      </Link>
+                      <Link
+                        href="/referrals"
+                        onClick={() => setMenuOpen(false)}
+                        className={cn(menuItemClass, "md:hidden")}
+                      >
+                        <GiftIcon
+                          size={17}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span>Referrals</span>
+                      </Link>
+                      <Link
+                        href="/reports"
+                        onClick={() => setMenuOpen(false)}
+                        className={menuItemClass}
+                      >
+                        <BarChartIcon
+                          size={17}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span>Reports</span>
+                      </Link>
+                      <Link
+                        href="/settings"
+                        onClick={() => setMenuOpen(false)}
+                        className={menuItemClass}
+                      >
+                        <SettingsIcon
+                          size={17}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span>Settings</span>
+                      </Link>
                     </>
+                  ) : buyer ? (
+                    <>
+                      <Link
+                        href="/pricing"
+                        onClick={() => setMenuOpen(false)}
+                        className={cn(menuItemClass, "md:hidden")}
+                      >
+                        <CreditCardIcon
+                          size={17}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span>Billing</span>
+                      </Link>
+                      <Link
+                        href="/referrals"
+                        onClick={() => setMenuOpen(false)}
+                        className={cn(menuItemClass, "md:hidden")}
+                      >
+                        <GiftIcon
+                          size={17}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span>Referrals</span>
+                      </Link>
+                    </>
+                  ) : vendorDashboardId ? (
+                    <Link
+                      href="/auth/login"
+                      onClick={() => setMenuOpen(false)}
+                      className={menuItemClass}
+                    >
+                      <StoreIcon
+                        size={17}
+                        className="shrink-0 text-orange-500"
+                      />
+                      <span>Sign in to Vendor account</span>
+                    </Link>
                   ) : (
                     <Link
                       href="/join"
@@ -217,13 +313,12 @@ export function HubHeader({
           </div>
         )}
       </header>
-      {confirmingLogout && (
-        <LogoutConfirmModal
-          busy={signingOut}
-          onClose={() => setConfirmingLogout(false)}
-          onConfirm={signOut}
-        />
-      )}
+      <LogoutModal
+        isOpen={confirmingLogout}
+        onClose={() => setConfirmingLogout(false)}
+        onConfirm={signOut}
+        disabled={signingOut}
+      />
     </>
   );
 }

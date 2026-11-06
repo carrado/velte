@@ -28,6 +28,11 @@ export async function GET(request: Request) {
       buyerOnly ? "/hub/home?audience=buyer" : "/hub/home",
       { cookie },
     );
+    // A vendor is automatically a premium buyer across all buyer surfaces
+    const currentVendor = vendorAuth || (await getOptionalVendorAuth());
+    if (currentVendor && data && typeof data === "object") {
+      (data as { premium?: boolean }).premium = true;
+    }
     return NextResponse.json(data);
   } catch (err) {
     return fail(err, "Couldn't load the Hub.");

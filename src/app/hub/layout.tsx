@@ -14,11 +14,9 @@ export default function HubLayout({ children }: { children: React.ReactNode }) {
       <NavigationProgressProvider>
         <IdentitySessionSync />
         <HubNotificationsSync />
-        <div className="min-h-dvh bg-canvas overflow-x-clip">
+        <div className="min-h-dvh bg-canvas overflow-x-clip flex flex-col">
           <HubHeader />
-          <div className="w-full max-w-[1240px] mx-auto px-0 lg:px-6 pt-0 pb-5 lg:py-5">
-            {children}
-          </div>
+          <main className="w-full flex-1">{children}</main>
         </div>
       </NavigationProgressProvider>
     </CreditsModalProvider>

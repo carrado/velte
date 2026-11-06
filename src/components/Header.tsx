@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 import { AskVelteSearchBar } from "@/components/AskVelteSearchBar";
 import { useUserStore } from "@/store/userStore";
@@ -10,6 +11,7 @@ import { useMutation } from "@tanstack/react-query";
 import { usersApi } from "@/services/users";
 import { toast } from "sonner";
 import { getInitial } from "@/lib/initials";
+import { CartButton } from "@/components/cart/CartDrawer";
 import {
   Popover,
   PopoverContent,
@@ -27,13 +29,20 @@ import {
   SettingsIcon,
   StoreIcon,
 } from "@/components/icons/hero";
+import { CreditCardIcon, FeedIcon, GiftIcon } from "@/components/icons";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import {
+  EnterpriseAvatarBadge,
+  EnterpriseBadge,
+  isEnterpriseVendor,
+} from "@/components/EnterpriseBadge";
 
 export default function Header({
   title,
   hideSearch = false,
 }: HeaderProps & { hideSearch?: boolean }) {
   const userDetails = useUserStore((state) => state.user);
+  const isEnterprise = isEnterpriseVendor(userDetails);
   const { navigate } = useNavigation();
   const pathname = usePathname();
   const hasUnread = useNotificationsStore((s) =>
@@ -83,7 +92,7 @@ export default function Header({
       className={
         hideSearch
           ? "flex items-center justify-between gap-4 px-5 sm:px-0"
-          : "flex flex-col gap-3 px-5 sm:px-0 md:grid md:grid-cols-[auto_minmax(0,36rem)_1fr] md:items-center md:gap-16 lg:gap-32"
+          : "flex flex-col gap-3 px-5 sm:px-0 md:grid md:grid-cols-[auto_minmax(0,34rem)_auto] md:items-center md:justify-between md:gap-4 lg:gap-8"
       }
     >
       <div className="flex items-center justify-between gap-2 md:contents">
@@ -94,7 +103,7 @@ export default function Header({
         </div>
 
         {!hideSearch && (
-          <div className="hidden min-w-0 md:block">
+          <div className="hidden min-w-0 md:block max-w-xl w-full">
             <AskVelteSearchBar
               size="sm"
               className="w-full"
@@ -103,10 +112,24 @@ export default function Header({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-1.5 md:gap-3">
+        <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2.5">
+          <Link
+            href="/hub"
+            className="inline-flex shrink-0 items-center justify-center gap-2 h-9 w-9 md:w-auto md:px-3 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-ink/80 transition-colors whitespace-nowrap"
+            aria-label="Vendor's Hub"
+            title="Vendor's Hub"
+          >
+            <FeedIcon size={18} className="text-orange-500 shrink-0" />
+            <span className="hidden md:inline text-sm font-semibold whitespace-nowrap text-gray-800 dark:text-ink">
+              Vendor&apos;s Hub
+            </span>
+          </Link>
+
+          <CartButton />
+
           {/* Mobile: navigate to notifications page */}
           <button
-            className="relative inline-flex items-center justify-center rounded-xl p-2 text-gray-600 hover:bg-gray-50 md:hidden"
+            className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-600 hover:bg-gray-50 md:hidden transition-colors"
             onClick={() => navigate(`/${userId}/notifications`)}
             aria-label="Notifications"
           >
@@ -140,12 +163,15 @@ export default function Header({
               verbatim instead of generating one, so it's identical on both
               passes by construction. See NotificationDropdown's matching
               fix for the other Header popover that hit the same warning. */}
-            <PopoverTrigger
-              id="header-account-menu-trigger"
-              className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold cursor-pointer flex-shrink-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-1"
-            >
-              {avatarInner}
-            </PopoverTrigger>
+            <div className="relative shrink-0">
+              <PopoverTrigger
+                id="header-account-menu-trigger"
+                className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-body font-bold cursor-pointer flex-shrink-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-1"
+              >
+                {avatarInner}
+              </PopoverTrigger>
+              {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
+            </div>
             <PopoverContent
               align="end"
               side="bottom"
@@ -154,9 +180,12 @@ export default function Header({
               className="w-48 p-0 gap-0 rounded-xl border border-gray-200 shadow-lg overflow-hidden"
             >
               <div className="px-3 py-2.5 border-b border-gray-100">
-                <p className="text-dash-body font-semibold text-gray-900 truncate">
-                  {userDetails?.company?.name ?? userDetails?.name}
-                </p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-dash-body font-semibold text-gray-900 truncate">
+                    {userDetails?.company?.name ?? userDetails?.name}
+                  </p>
+                  {isEnterprise && <EnterpriseBadge size="sm" />}
+                </div>
                 <p className="text-dash-caption text-gray-400 truncate">
                   @{userDetails?.username}
                 </p>
@@ -171,7 +200,25 @@ export default function Header({
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   <StoreIcon size={15} className="text-gray-500" />
-                  <span>My store</span>
+                  <span>My Store</span>
+                </button>
+                <button
+                  id="billing-mobile"
+                  type="button"
+                  onClick={() => navigate("/pricing")}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <CreditCardIcon size={15} className="text-gray-500" />
+                  <span>Billing</span>
+                </button>
+                <button
+                  id="referrals-mobile"
+                  type="button"
+                  onClick={() => go("referrals")}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-dash-body text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <GiftIcon size={15} className="text-gray-500" />
+                  <span>Referrals</span>
                 </button>
                 <button
                   id="settings-mobile"

@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query-keys";
-import { fetchHubHome, hubPageQueryOptions } from "@/services/hub";
+import { fetchHubHome, hubRealtimeQueryOptions } from "@/services/hub";
 import { BuyerHub } from "./BuyerHub";
 
 export function BuyerHubScreen() {
@@ -14,7 +14,7 @@ export function BuyerHubScreen() {
   } = useQuery({
     queryKey: queryKeys.hub.home("buyer"),
     queryFn: () => fetchHubHome("buyer"),
-    ...hubPageQueryOptions,
+    ...hubRealtimeQueryOptions,
   });
 
   if (isError) {

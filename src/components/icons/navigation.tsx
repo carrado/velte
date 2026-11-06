@@ -49,6 +49,12 @@ export const ChevronUpIcon = wrapIcon(CaretUp, {
 export const ChevronDownIcon = wrapIcon(CaretDown, {
   displayName: "ChevronDownIcon",
 });
+
+// Ergonomic aliases matching Lucide naming convention
+export const ChevronRight = ChevronRightIcon;
+export const ChevronLeft = ChevronLeftIcon;
+export const ChevronUp = ChevronUpIcon;
+export const ChevronDown = ChevronDownIcon;
 export const ExternalLinkIcon = wrapIcon(ArrowSquareOut, {
   displayName: "ExternalLinkIcon",
 });

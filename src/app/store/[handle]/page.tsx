@@ -18,6 +18,7 @@ import StoreTabs from "./_components/StoreTabs";
 import SimilarVendors from "./_components/SimilarVendors";
 import { StoreWhatsAppButton } from "./_components/shared";
 import { MapPinIcon, PackageIcon, WrenchIcon } from "@/components/icons";
+import { isEnterpriseVendor } from "@/components/EnterpriseBadge";
 
 // Public storefront — server-rendered for SEO and link previews. This is the
 // page the AI hands buyers off to. A real site shell (Navbar with a "Find on
@@ -216,6 +217,7 @@ export default async function PublicStorePage({
         sectors={store.sectors}
         goodsCount={goods.length}
         servicesCount={services.length}
+        enterprise={isEnterpriseVendor(store)}
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8">

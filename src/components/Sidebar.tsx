@@ -2,10 +2,15 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { usePathname } from "next/navigation";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
 import { useUserStore } from "@/store/userStore";
 import { getInitial } from "@/lib/initials";
+import { CreditCardIcon, FeedIcon } from "@/components/icons";
+import {
+  EnterpriseAvatarBadge,
+  EnterpriseBadge,
+  isEnterpriseVendor,
+} from "@/components/EnterpriseBadge";
 import {
   badgeLabel,
   usePendingBuyerRequests,
@@ -16,7 +21,6 @@ import {
   ListIcon,
   MessageSquareIcon,
   PlusCircleIcon,
-  SendIcon,
   SettingsIcon,
   StoreIcon,
   WalletIcon,
@@ -62,6 +66,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const userDetails = useUserStore((state) => state.user);
   const pendingRequests = usePendingBuyerRequests();
+  const isEnterprise = isEnterpriseVendor(userDetails);
 
   const sections: NavSection[] = [
     {
@@ -91,6 +96,12 @@ export default function Sidebar() {
           id: "store-nav",
         },
         {
+          label: "Vendors Hub",
+          icon: <FeedIcon size={16} />,
+          href: "hub",
+          id: "hub-nav",
+        },
+        {
           label: "Buyer Requests",
           icon: <MessageSquareIcon size={16} />,
           href: "buyer-requests",
@@ -103,23 +114,17 @@ export default function Sidebar() {
           href: "orders",
           id: "orders-nav",
         },
-        {
-          label: "Vendors Hub",
-          icon: <SendIcon size={16} />,
-          href: "hub",
-          id: "hub-nav",
-        },
-        {
-          label: "Reports",
-          icon: <WalletIcon size={16} />,
-          href: "reports",
-          id: "reports-nav",
-        },
       ],
     },
     {
       title: "Account",
       items: [
+        {
+          label: "Billing",
+          icon: <CreditCardIcon size={16} />,
+          href: "pricing",
+          id: "billing-nav",
+        },
         {
           label: "Wallet",
           icon: <WalletIcon size={16} />,
@@ -144,12 +149,14 @@ export default function Sidebar() {
 
   const getFullPath = (relativePath: string) => {
     const clean = relativePath.replace(/^\//, "").replace(/\/$/, "");
+    if (clean === "pricing") return "/pricing";
     if (clean === "hub") return "/hub";
     return `/${clean}`;
   };
 
   const isNavActive = (relativePath: string) => {
     const clean = relativePath.replace(/^\//, "").replace(/\/$/, "");
+    if (clean === "pricing") return pathname === "/pricing";
     if (clean === "products/add") {
       return pathname === "/products/add";
     }
@@ -186,27 +193,29 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-3 py-3 border-t border-gray-200 dark:border-white/10">
-        <ThemeToggle size="sm" fullWidth className="justify-between" />
-      </div>
-
       <div className="px-3 py-4 border-t border-gray-200 dark:border-white/10">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-secondary font-bold flex-shrink-0 overflow-hidden">
-            {userDetails?.avatar ? (
-              <img
-                src={userDetails.avatar}
-                alt="avatar"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              getInitial(userDetails?.company?.name ?? "")
-            )}
+        <div className="flex items-center gap-2.5">
+          <div className="relative shrink-0">
+            <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-white text-dash-secondary font-bold overflow-hidden">
+              {userDetails?.avatar ? (
+                <img
+                  src={userDetails.avatar}
+                  alt="avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                getInitial(userDetails?.company?.name ?? "")
+              )}
+            </div>
+            {isEnterprise && <EnterpriseAvatarBadge size="md" />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-dash-body font-semibold text-ink leading-tight truncate">
-              {userDetails?.company?.name}
-            </p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="text-dash-body font-semibold text-ink leading-tight truncate">
+                {userDetails?.company?.name}
+              </p>
+              {isEnterprise && <EnterpriseBadge size="sm" />}
+            </div>
             <p className="text-dash-caption text-gray-400 dark:text-ink/50 truncate">
               @{userDetails?.username}
             </p>

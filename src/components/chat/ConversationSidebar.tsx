@@ -27,7 +27,6 @@ import {
   MenuIcon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
-  SendIcon,
   ShoppingCartIcon,
   TruckIcon,
   TrashIcon,
@@ -35,7 +34,7 @@ import {
 // The sign-in prompt's own illustration stays on the original duotone set,
 // per explicit request — every icon on this page moved to Heroicons except
 // this one.
-import { MessageSquareIllustration } from "@/components/icons";
+import { FeedIcon, MessageSquareIllustration } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { getInitial } from "@/lib/initials";
 import type { SearchConversationList } from "@/types/search";
@@ -454,7 +453,7 @@ export function ConversationSidebar() {
                     sign in there. */}
                 <MenuLink
                   href="/hub"
-                  icon={<SendIcon size={19} className="shrink-0" />}
+                  icon={<FeedIcon size={19} className="shrink-0" />}
                   label="Vendors Hub"
                   active={pathname === "/hub"}
                   onNavigate={closeOnMobile}

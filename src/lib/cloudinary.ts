@@ -1,6 +1,3 @@
-const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
 // Images only — video upload was removed (2026-07-31); revisit on the
 // mobile app phase.
 
@@ -43,25 +40,71 @@ function compressImage(file: File, maxPx = 1200, quality = 0.8): Promise<File> {
   });
 }
 
-export async function uploadProductMedia(
-  file: File,
-  folder = "velte/products",
-): Promise<string> {
-  if (!CLOUD_NAME || !UPLOAD_PRESET) {
+interface CloudinarySignResponse {
+  mode: "signed" | "unsigned";
+  cloudName: string;
+  apiKey?: string;
+  timestamp?: number;
+  signature?: string;
+  folder: string;
+  uploadPreset?: string;
+  error?: string;
+}
+
+async function requestUploadSignature(
+  folder: string,
+  profile: "advert" | "default",
+): Promise<CloudinarySignResponse> {
+  const res = await fetch("/api/cloudinary/sign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folder, profile }),
+  });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(
-      "Cloudinary is not configured — add NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET to your .env",
+      body.error ||
+        "Could not authorize media upload. Check your Cloudinary API key and secret in .env",
     );
   }
 
-  const uploadFile = await compressImage(file);
+  return (await res.json()) as CloudinarySignResponse;
+}
+
+async function uploadToCloudinary(
+  file: File,
+  folder: string,
+  profile: "advert" | "default",
+  maxPx = 1200,
+  quality = 0.8,
+): Promise<string> {
+  const uploadFile = await compressImage(file, maxPx, quality);
+  const auth = await requestUploadSignature(folder, profile);
 
   const form = new FormData();
   form.append("file", uploadFile);
-  form.append("upload_preset", UPLOAD_PRESET);
-  form.append("folder", folder);
+
+  if (auth.mode === "signed") {
+    if (!auth.apiKey || !auth.signature || !auth.timestamp) {
+      throw new Error("Invalid Cloudinary signature received from server.");
+    }
+    form.append("api_key", auth.apiKey);
+    form.append("timestamp", String(auth.timestamp));
+    form.append("signature", auth.signature);
+    form.append("folder", auth.folder);
+  } else {
+    if (!auth.uploadPreset) {
+      throw new Error(
+        "Cloudinary is not configured. Add CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET to your .env",
+      );
+    }
+    form.append("upload_preset", auth.uploadPreset);
+    form.append("folder", auth.folder);
+  }
 
   const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+    `https://api.cloudinary.com/v1_1/${auth.cloudName}/image/upload`,
     { method: "POST", body: form },
   );
 
@@ -75,6 +118,24 @@ export async function uploadProductMedia(
 
   const data = (await res.json()) as { secure_url: string };
   return data.secure_url;
+}
+
+export async function uploadProductMedia(
+  file: File,
+  folder = "velte/products",
+): Promise<string> {
+  return uploadToCloudinary(file, folder, "default", 1200, 0.8);
+}
+
+export async function uploadAdvertMedia(
+  file: File,
+  folder = "velte/adverts",
+): Promise<string> {
+  return uploadToCloudinary(file, folder, "advert", 1400, 0.88);
+}
+
+export async function uploadAvatarToCloudinary(file: File): Promise<string> {
+  return uploadToCloudinary(file, "velte/avatars", "default", 512, 0.85);
 }
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -102,33 +163,4 @@ export function validateImageFile(file: File): string | null {
     return "Only JPG, PNG, or WebP images are allowed";
   if (file.size > MAX_BYTES) return "That photo is too large to process";
   return null;
-}
-
-export async function uploadAvatarToCloudinary(file: File): Promise<string> {
-  if (!CLOUD_NAME || !UPLOAD_PRESET) {
-    throw new Error(
-      "Cloudinary is not configured — add NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET to your .env",
-    );
-  }
-
-  const form = new FormData();
-  form.append("file", file);
-  form.append("upload_preset", UPLOAD_PRESET);
-  form.append("folder", "velte/avatars");
-
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-    { method: "POST", body: form },
-  );
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      (body as { error?: { message?: string } }).error?.message ??
-        "Upload failed",
-    );
-  }
-
-  const data = (await res.json()) as { secure_url: string };
-  return data.secure_url;
 }

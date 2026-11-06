@@ -94,6 +94,13 @@ export const CAPABILITIES: Record<Capability, readonly Tier[]> = {
 };
 
 export function can(tier: Tier, capability: Capability): boolean {
+  // A vendor is automatically a premium buyer already, granting all buyer_premium privileges
+  if (
+    (tier === "vendor_basic" || tier === "vendor_enterprise") &&
+    CAPABILITIES[capability].includes("buyer_premium")
+  ) {
+    return true;
+  }
   return CAPABILITIES[capability].includes(tier);
 }
 

@@ -1,6 +1,6 @@
 import { BuyerHubGate } from "@/components/hub/BuyerHubGate";
 import { VendorDirectoryScreen } from "@/components/hub/VendorDirectory";
-import { getOptionalBuyerAuth } from "@/lib/server/buyerGuards";
+import { getActorAuth } from "@/lib/server/buyerGuards";
 
 export const metadata = {
   title: "Verified Vendors",
@@ -9,7 +9,7 @@ export const metadata = {
 };
 
 export default async function HubVendorsPage() {
-  const buyer = await getOptionalBuyerAuth();
-  if (!buyer) return <BuyerHubGate />;
+  const actor = await getActorAuth();
+  if (!actor) return <BuyerHubGate />;
   return <VendorDirectoryScreen />;
 }

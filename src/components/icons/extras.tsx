@@ -5,6 +5,7 @@ import {
   CellSignalFull,
   Newspaper,
   Path,
+  Rss,
 } from "@phosphor-icons/react";
 import type { IconProps } from "@/types/common";
 import { wrapIcon } from "./base";
@@ -20,6 +21,7 @@ export const NewspaperIcon = wrapIcon(Newspaper, {
   displayName: "NewspaperIcon",
 });
 export const RouteIcon = wrapIcon(Path, { displayName: "RouteIcon" });
+export const FeedIcon = wrapIcon(Rss, { displayName: "FeedIcon" });
 
 /**
  * Brand mark — Phosphor has no WhatsApp glyph, so this stays a hand SVG.
@@ -51,3 +53,8 @@ export const WhatsAppIcon = forwardRef<SVGSVGElement, IconProps>(
   },
 );
 WhatsAppIcon.displayName = "WhatsAppIcon";
+
+/**
+ * Vendor's Hub / Feed mark — universal feed icon.
+ */
+export const HubIcon = FeedIcon;

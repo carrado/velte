@@ -285,265 +285,267 @@ function VendorDirectory({ data }: { data: HubVendorsDirectory }) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="w-full">
       <VendorsHero />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_220px] gap-4 items-start">
-        <aside className="hidden lg:block space-y-4 lg:sticky lg:top-16">
-          <FilterCard title="Sector">
-            <ul className="space-y-1">
-              <FilterRow
-                label="All sectors"
-                count={data.vendors.length}
-                active={sector === null}
-                onClick={() => {
-                  setSector(null);
-                  setPage(1);
-                }}
-              />
-              {sectorGroups.map((row) => (
+      <div className="w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_220px] gap-4 items-start">
+          <aside className="hidden lg:block space-y-4 lg:sticky lg:top-16">
+            <FilterCard title="Sector">
+              <ul className="space-y-1">
                 <FilterRow
-                  key={row.id}
-                  label={row.label}
-                  count={row.count}
-                  active={sector === row.id}
+                  label="All sectors"
+                  count={data.vendors.length}
+                  active={sector === null}
                   onClick={() => {
-                    setSector(row.id);
+                    setSector(null);
                     setPage(1);
                   }}
                 />
-              ))}
-            </ul>
-          </FilterCard>
+                {sectorGroups.map((row) => (
+                  <FilterRow
+                    key={row.id}
+                    label={row.label}
+                    count={row.count}
+                    active={sector === row.id}
+                    onClick={() => {
+                      setSector(row.id);
+                      setPage(1);
+                    }}
+                  />
+                ))}
+              </ul>
+            </FilterCard>
 
-          <FilterCard title="Verification Status">
-            <label className="flex items-center gap-2 text-sm text-ink py-1.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={verifiedOnly}
-                onChange={(event) => {
-                  setVerifiedOnly(event.target.checked);
-                  setPage(1);
-                }}
-                className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-              />
-              Verified Vendor
-            </label>
-            <label className="flex items-center gap-2 text-sm text-ink py-1.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={trustedOnly}
-                onChange={(event) => {
-                  setTrustedOnly(event.target.checked);
-                  setPage(1);
-                }}
-                className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-              />
-              Trusted
-            </label>
-          </FilterCard>
-        </aside>
-
-        <section className="min-w-0 space-y-4">
-          <div className="flex w-full items-center gap-2">
-            <div className="min-w-0 flex-1 lg:hidden">
-              <Select
-                value={sector ?? "all"}
-                onValueChange={(value) => {
-                  if (!value) return;
-                  setSector(value === "all" ? null : value);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-full min-w-0 overflow-hidden h-8 text-xs font-semibold text-gray-600"
-                  aria-label="Filter by sector"
-                >
-                  <span className="min-w-0 flex-1 truncate text-left">
-                    {sector
-                      ? (sectorGroups.find((row) => row.id === sector)?.label ??
-                        "Sector")
-                      : "All sectors"}
-                  </span>
-                </SelectTrigger>
-                <SelectContent
-                  align="start"
-                  alignItemWithTrigger={false}
-                  className="min-w-[18rem] w-max max-w-[min(100vw-2rem,24rem)]"
-                >
-                  <SelectItem value="all">All sectors</SelectItem>
-                  {sectorGroups.map((row) => (
-                    <SelectItem key={row.id} value={row.id}>
-                      {row.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="min-w-0 flex-1 lg:hidden">
-              <Select
-                value={verifyFilter}
-                onValueChange={(value) => {
-                  if (!value) return;
-                  setVerifyFilter(value as VerifyFilter);
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-full min-w-0 overflow-hidden h-8 text-xs font-semibold text-gray-600"
-                  aria-label="Filter by verification"
-                >
-                  <span className="min-w-0 flex-1 truncate text-left">
-                    {VERIFY_OPTIONS.find(
-                      (option) => option.value === verifyFilter,
-                    )?.label ?? "Verified"}
-                  </span>
-                </SelectTrigger>
-                <SelectContent
-                  align="center"
-                  alignItemWithTrigger={false}
-                  className="min-w-[14rem] w-max"
-                >
-                  {VERIFY_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="min-w-0 flex-1 lg:ml-auto lg:flex-none lg:w-[9.5rem]">
-              <Select
-                value={sort}
-                onValueChange={(value) => {
-                  if (!value) return;
-                  setSort(value as VendorSort);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-full min-w-0 overflow-hidden h-8 text-xs font-semibold text-gray-600"
-                  aria-label="Sort vendors"
-                >
-                  <span className="min-w-0 flex-1 truncate text-left">
-                    {SORT_OPTIONS.find((option) => option.value === sort)
-                      ?.label ?? "Sort by"}
-                  </span>
-                </SelectTrigger>
-                <SelectContent
-                  align="end"
-                  alignItemWithTrigger={false}
-                  className="min-w-[12rem] w-max"
-                >
-                  {SORT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {pageItems.length === 0 ? (
-            <div className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-10 text-center">
-              <p className="font-semibold text-ink">No vendors match</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Try clearing a filter or browsing every sector.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              {pageItems.map((vendor) => (
-                <DirectoryCard
-                  key={vendor.vendorId}
-                  vendor={vendor}
-                  favourite={favourites.has(vendor.vendorId)}
-                  premium={data.premium}
-                  onFavourite={() => toggleFavourite(vendor.vendorId)}
-                  onContactLocked={() => setLock("contact")}
+            <FilterCard title="Verification Status">
+              <label className="flex items-center gap-2 text-sm text-ink py-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={verifiedOnly}
+                  onChange={(event) => {
+                    setVerifiedOnly(event.target.checked);
+                    setPage(1);
+                  }}
+                  className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
                 />
-              ))}
+                Verified Vendor
+              </label>
+              <label className="flex items-center gap-2 text-sm text-ink py-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={trustedOnly}
+                  onChange={(event) => {
+                    setTrustedOnly(event.target.checked);
+                    setPage(1);
+                  }}
+                  className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                />
+                Trusted
+              </label>
+            </FilterCard>
+          </aside>
+
+          <section className="min-w-0 space-y-4">
+            <div className="flex w-full items-center gap-2">
+              <div className="min-w-0 flex-1 lg:hidden">
+                <Select
+                  value={sector ?? "all"}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    setSector(value === "all" ? null : value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="w-full min-w-0 overflow-hidden h-8 text-xs font-semibold text-gray-600"
+                    aria-label="Filter by sector"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-left">
+                      {sector
+                        ? (sectorGroups.find((row) => row.id === sector)
+                            ?.label ?? "Sector")
+                        : "All sectors"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent
+                    align="start"
+                    alignItemWithTrigger={false}
+                    className="min-w-[18rem] w-max max-w-[min(100vw-2rem,24rem)]"
+                  >
+                    <SelectItem value="all">All sectors</SelectItem>
+                    {sectorGroups.map((row) => (
+                      <SelectItem key={row.id} value={row.id}>
+                        {row.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="min-w-0 flex-1 lg:hidden">
+                <Select
+                  value={verifyFilter}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    setVerifyFilter(value as VerifyFilter);
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="w-full min-w-0 overflow-hidden h-8 text-xs font-semibold text-gray-600"
+                    aria-label="Filter by verification"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-left">
+                      {VERIFY_OPTIONS.find(
+                        (option) => option.value === verifyFilter,
+                      )?.label ?? "Verified"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent
+                    align="center"
+                    alignItemWithTrigger={false}
+                    className="min-w-[14rem] w-max"
+                  >
+                    {VERIFY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="min-w-0 flex-1 lg:ml-auto lg:flex-none lg:w-[9.5rem]">
+                <Select
+                  value={sort}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    setSort(value as VendorSort);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="w-full min-w-0 overflow-hidden h-8 text-xs font-semibold text-gray-600"
+                    aria-label="Sort vendors"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-left">
+                      {SORT_OPTIONS.find((option) => option.value === sort)
+                        ?.label ?? "Sort by"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent
+                    align="end"
+                    alignItemWithTrigger={false}
+                    className="min-w-[12rem] w-max"
+                  >
+                    {SORT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          )}
 
-          {pageCount > 1 && (
-            <Pagination
-              page={safePage}
-              pageCount={pageCount}
-              onChange={setPage}
-            />
-          )}
-        </section>
+            {pageItems.length === 0 ? (
+              <div className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-10 text-center">
+                <p className="font-semibold text-ink">No vendors match</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Try clearing a filter or browsing every sector.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {pageItems.map((vendor) => (
+                  <DirectoryCard
+                    key={vendor.vendorId}
+                    vendor={vendor}
+                    favourite={favourites.has(vendor.vendorId)}
+                    premium={data.premium}
+                    onFavourite={() => toggleFavourite(vendor.vendorId)}
+                    onContactLocked={() => setLock("contact")}
+                  />
+                ))}
+              </div>
+            )}
 
-        <aside className="space-y-4 lg:sticky lg:top-16">
-          <section className="rounded-none lg:rounded-2xl border border-orange-100 bg-orange-50 p-4 overflow-hidden">
-            <h3 className="text-sm font-bold text-ink">
-              Support Local Businesses
-            </h3>
-            <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-              Shop from vendors who list on Velte. Sponsored cards are labelled.
-              Ratings appear only after a real review.
-            </p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/hub/vendors-local-promo.jpg"
-              alt=""
-              className="mt-3 h-24 w-full object-contain"
-            />
-            <button
-              type="button"
-              onClick={() => navigate("/hub")}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600"
-            >
-              Explore Hub →
-            </button>
+            {pageCount > 1 && (
+              <Pagination
+                page={safePage}
+                pageCount={pageCount}
+                onChange={setPage}
+              />
+            )}
           </section>
 
-          <section className="rounded-none lg:rounded-2xl border border-sky-100 bg-sky-50 p-4">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500 text-white">
-              <ShieldCheckIcon size={18} />
-            </span>
-            <h3 className="mt-3 text-sm font-bold text-ink">
-              Shop with Confidence
-            </h3>
-            <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-              Verified and Trusted badges only appear when the evidence is real
-              — never self-selected.
-            </p>
-          </section>
-        </aside>
+          <aside className="space-y-4 lg:sticky lg:top-16">
+            <section className="rounded-none lg:rounded-2xl border border-orange-100 bg-orange-50 p-4 overflow-hidden">
+              <h3 className="text-sm font-bold text-ink">
+                Support Local Businesses
+              </h3>
+              <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                Shop from vendors who list on Velte. Sponsored cards are
+                labelled. Ratings appear only after a real review.
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/hub/vendors-local-promo.jpg"
+                alt=""
+                className="mt-3 h-24 w-full object-contain"
+              />
+              <button
+                type="button"
+                onClick={() => navigate("/hub")}
+                className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600"
+              >
+                Explore Hub →
+              </button>
+            </section>
+
+            <section className="rounded-none lg:rounded-2xl border border-sky-100 bg-sky-50 p-4">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500 text-white">
+                <ShieldCheckIcon size={18} />
+              </span>
+              <h3 className="mt-3 text-sm font-bold text-ink">
+                Shop with Confidence
+              </h3>
+              <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                Verified and Trusted badges only appear when the evidence is
+                real — never self-selected.
+              </p>
+            </section>
+          </aside>
+        </div>
+
+        {lock && (
+          <HubLockedModal
+            variant="upgrade"
+            title={
+              lock === "favourite"
+                ? "Favourites are Premium"
+                : "Contact is Premium"
+            }
+            body={
+              lock === "favourite"
+                ? "Premium saves a vendor to your Hub."
+                : "Premium opens the vendor's own channel from a Hub card. The store page stays open either way."
+            }
+            ctaLabel="See Premium"
+            ctaHref="/pricing?for=buyers"
+            onClose={() => setLock(null)}
+          />
+        )}
       </div>
-
-      {lock && (
-        <HubLockedModal
-          variant="upgrade"
-          title={
-            lock === "favourite"
-              ? "Favourites are Premium"
-              : "Contact is Premium"
-          }
-          body={
-            lock === "favourite"
-              ? "Premium saves a vendor to your Hub."
-              : "Premium opens the vendor's own channel from a Hub card. The store page stays open either way."
-          }
-          ctaLabel="See Premium"
-          ctaHref="/pricing?for=buyers"
-          onClose={() => setLock(null)}
-        />
-      )}
     </div>
   );
 }
 
 function VendorsHero() {
   return (
-    <section className="relative overflow-hidden rounded-none lg:rounded-2xl bg-ink text-white min-h-[200px] sm:min-h-[220px]">
+    <section className="relative w-full overflow-hidden bg-ink text-white min-h-[200px] sm:min-h-[220px]">
       <div className="absolute inset-y-0 right-0 w-[48%] hidden sm:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -567,7 +569,7 @@ function VendorsHero() {
         </span>
       </div>
 
-      <div className="relative px-5 py-8 sm:px-8 sm:py-10 max-w-xl">
+      <div className="relative mx-auto w-full max-w-[1280px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-orange-400">
           Discover
         </p>

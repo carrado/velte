@@ -1,5 +1,5 @@
 import { ApiError, api } from "@/lib/api-client";
-import { uploadProductMedia } from "@/lib/cloudinary";
+import { uploadAdvertMedia } from "@/lib/cloudinary";
 import { overlayStoreLogoOnPoster } from "@/lib/overlayStoreLogo";
 import type {
   HubContext,
@@ -18,6 +18,18 @@ export const hubPageQueryOptions = {
   staleTime: Infinity,
   refetchOnMount: false,
   refetchOnWindowFocus: false,
+} as const;
+
+/**
+ * Real-time polling options for the Hub feed:
+ * Polls every 7 seconds when active window is open so newly listed products,
+ * broadcasts, adverts, and updates arrive in real time.
+ */
+export const hubRealtimeQueryOptions = {
+  staleTime: 4000,
+  refetchInterval: 7000,
+  refetchIntervalInBackground: false,
+  refetchOnWindowFocus: true,
 } as const;
 
 export async function fetchHubHome(
@@ -96,6 +108,7 @@ export async function generateAiPoster(body: {
   logoUrl?: string | null;
   /** Dominant hex colours from the logo — drives poster palette when set. */
   palette?: string[] | null;
+  onProgress?: (progress: number, stage: string) => void;
 }): Promise<AiPosterResult> {
   let res: Response;
   try {
@@ -140,13 +153,22 @@ export async function generateAiPoster(body: {
     throw new ApiError(502, "Couldn't generate an AI poster.");
   }
 
+  body.onProgress?.(84, "Compositing verified store logo & brand capsule…");
+
   try {
     const file = await overlayStoreLogoOnPoster(
       payload.imageBase64,
       payload.mimeType || "image/png",
       body.logoUrl,
+      body.storeName,
     );
-    const imageUrl = await uploadProductMedia(file, "velte/hub-ai-posters");
+
+    body.onProgress?.(92, "Finalizing high-resolution creative…");
+
+    const imageUrl = await uploadAdvertMedia(file, "velte/adverts/ai-posters");
+
+    body.onProgress?.(100, "Advert poster ready!");
+
     return {
       imageUrl,
       headlines: payload.headlines ?? [],

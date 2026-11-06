@@ -112,7 +112,7 @@ export async function POST(req: Request) {
       productName,
       palette,
     });
-    // Bytes only — the browser uploads to Cloudinary (product-photo path).
+    // Bytes only — the browser uploads to Cloudinary via the advert profile.
     return NextResponse.json({
       imageBase64: result.imageBase64,
       mimeType: result.mimeType,

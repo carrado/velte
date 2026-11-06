@@ -22,7 +22,7 @@ export function HubHero({
   action?: ReactNode;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-none lg:rounded-2xl bg-slab text-white">
+    <section className="relative w-full overflow-hidden bg-slab text-white">
       <div className="absolute inset-y-0 right-0 hidden w-[52%] md:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -32,7 +32,7 @@ export function HubHero({
         />
         <div className="absolute inset-0 bg-gradient-to-r from-slab via-slab/55 to-transparent" />
       </div>
-      <div className="relative flex items-center gap-6 px-5 py-7 sm:px-8 sm:py-9">
+      <div className="relative mx-auto flex w-full max-w-[1280px] items-center gap-6 px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
         <div className="max-w-xl">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-400">
             {eyebrow}

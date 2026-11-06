@@ -45,10 +45,8 @@ export async function POST() {
     ...(buyer.status === "fulfilled" ? buyer.value.setCookie : []),
   ];
   const res = applySetCookies(NextResponse.json({ ok: true }), setCookie);
-  // Belt and braces: if the backend's buyer logout failed, still expire the
-  // cookie here, so the browser never keeps the half this was meant to end.
-  if (buyerToken && buyer.status === "rejected") {
-    res.cookies.delete(BUYER_AUTH_COOKIE);
-  }
+  // Ensure both auth cookies are expired/deleted in the browser:
+  res.cookies.delete(AUTH_COOKIE);
+  res.cookies.delete(BUYER_AUTH_COOKIE);
   return res;
 }

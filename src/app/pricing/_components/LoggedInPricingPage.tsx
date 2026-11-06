@@ -2,8 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { CheckCircleIcon, HelpCircle } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircleIcon,
+  Headphones,
+  HelpCircle,
+  MessageSquare,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { HubHeader } from "@/components/hub/HubHeader";
@@ -15,6 +23,7 @@ import FaqAccordionItem from "@/components/landing/FaqAccordionItem";
 import {
   BuildingIcon,
   CrownIcon,
+  SparklesIcon,
   StarIcon,
   UserIcon,
 } from "@/components/icons";
@@ -59,50 +68,59 @@ export default function LoggedInPricingPage({
   const isVendorSession = Boolean(vendor);
   const isBuyerSession = Boolean(buyer && !vendor);
 
-  const defaultAudience: Audience =
-    initialAudience || (isVendorSession ? "vendors" : "buyers");
-
-  const [audience, setAudience] = useState<Audience>(defaultAudience);
+  // Strictly isolate: vendors only see vendor plans; buyers only see buyer plans
+  const audience: Audience = isVendorSession ? "vendors" : "buyers";
+  const searchParams = useSearchParams();
   const [interval, setInterval] = useState<SubscriptionInterval>("monthly");
   const [checkoutBusy, setCheckoutBusy] = useState<
     "buyer_premium" | "vendor_enterprise" | null
   >(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  const isBuyerPremium = Boolean(
-    (
-      buyer as unknown as {
-        tier?: string;
-        plan?: string;
-        isPremium?: boolean;
-        premium?: boolean;
-      }
-    )?.tier === "buyer_premium" ||
-    (
-      buyer as unknown as {
-        tier?: string;
-        plan?: string;
-        isPremium?: boolean;
-        premium?: boolean;
-      }
-    )?.plan === "buyer_premium" ||
-    (
-      buyer as unknown as {
-        tier?: string;
-        plan?: string;
-        isPremium?: boolean;
-        premium?: boolean;
-      }
-    )?.isPremium ||
-    (
-      buyer as unknown as {
-        tier?: string;
-        plan?: string;
-        isPremium?: boolean;
-        premium?: boolean;
-      }
-    )?.premium,
-  );
+  const [activationModal, setActivationModal] = useState<{
+    step: "activating" | "confirmed";
+    plan: "buyer_premium" | "vendor_enterprise";
+  } | null>(null);
+
+  // A vendor is automatically a premium buyer already
+  const isVendorAccount = Boolean(vendor || buyer?.linkedVendorId);
+
+  const isBuyerPremium =
+    isVendorAccount ||
+    Boolean(
+      (
+        buyer as unknown as {
+          tier?: string;
+          plan?: string;
+          isPremium?: boolean;
+          premium?: boolean;
+        }
+      )?.tier === "buyer_premium" ||
+      (
+        buyer as unknown as {
+          tier?: string;
+          plan?: string;
+          isPremium?: boolean;
+          premium?: boolean;
+        }
+      )?.plan === "buyer_premium" ||
+      (
+        buyer as unknown as {
+          tier?: string;
+          plan?: string;
+          isPremium?: boolean;
+          premium?: boolean;
+        }
+      )?.isPremium ||
+      (
+        buyer as unknown as {
+          tier?: string;
+          plan?: string;
+          isPremium?: boolean;
+          premium?: boolean;
+        }
+      )?.premium,
+    );
 
   const isVendorEnterprise = Boolean(
     (
@@ -139,9 +157,122 @@ export default function LoggedInPricingPage({
     )?.enterprise,
   );
 
+  const triggerActivationFlow = async (
+    plan: "buyer_premium" | "vendor_enterprise",
+    reference?: string,
+  ) => {
+    // Clean up query parameters like ?subscription=done from URL immediately
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (
+        url.searchParams.has("subscription") ||
+        url.searchParams.has("reference")
+      ) {
+        url.searchParams.delete("subscription");
+        url.searchParams.delete("reference");
+        const cleanPath = url.pathname + (url.search ? url.search : "");
+        window.history.replaceState({}, "", cleanPath);
+      }
+    }
+
+    // 1. Immediately open modal in activating step
+    setActivationModal({ step: "activating", plan });
+
+    // 2. Instantly update store so the user status reflects on the pricing page immediately
+    if (plan === "vendor_enterprise") {
+      const curVendor = useUserStore.getState().user;
+      if (curVendor) {
+        useUserStore.getState().setUser({
+          ...curVendor,
+          tier: "vendor_enterprise",
+          isEnterprise: true,
+          enterprise: true,
+          plan: "vendor_enterprise",
+        } as unknown as User);
+      }
+    } else {
+      const curBuyer = useBuyerStore.getState().buyer;
+      if (curBuyer) {
+        useBuyerStore.getState().setBuyer({
+          ...curBuyer,
+          tier: "buyer_premium",
+          isPremium: true,
+          premium: true,
+          plan: "buyer_premium",
+        } as unknown as Buyer);
+      }
+    }
+
+    // 3. Concurrently verify with backend and refresh session
+    const syncSessionPromise = (async () => {
+      if (reference) {
+        try {
+          await fetch("/api/subscriptions/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reference }),
+          });
+        } catch {
+          /* webhook fallback */
+        }
+      }
+      try {
+        const res = await fetch("/api/auth/session", {
+          credentials: "same-origin",
+        });
+        if (res.ok) {
+          const session = (await res.json()) as {
+            buyer?: Buyer | null;
+            vendor?: User | null;
+          };
+          if (session.buyer) useBuyerStore.getState().setBuyer(session.buyer);
+          if (session.vendor) useUserStore.getState().setUser(session.vendor);
+        }
+      } catch {
+        /* best effort */
+      }
+    })();
+
+    // 4. Smooth wait for activating screen before sliding to confirmation
+    await Promise.all([
+      syncSessionPromise,
+      new Promise((resolve) => setTimeout(resolve, 1800)),
+    ]);
+
+    // 5. Slide to the confirmation welcome screen
+    setActivationModal({ step: "confirmed", plan });
+  };
+
+  const handleGoBack = () => {
+    setActivationModal(null);
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = isVendorSession ? "/wallet" : "/chat";
+    }
+  };
+
   useEffect(() => {
     loadPaystackInline();
   }, []);
+
+  useEffect(() => {
+    const subDone = searchParams.get("subscription");
+    const ref = searchParams.get("reference");
+    if (subDone === "done" || (ref && !activationModal)) {
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("subscription");
+        url.searchParams.delete("reference");
+        const cleanPath = url.pathname + (url.search ? url.search : "");
+        window.history.replaceState({}, "", cleanPath);
+      }
+      const targetPlan = isVendorSession
+        ? "vendor_enterprise"
+        : "buyer_premium";
+      void triggerActivationFlow(targetPlan, ref || undefined);
+    }
+  }, [searchParams, isVendorSession]);
 
   async function startSubscriptionCheckout(
     plan: "buyer_premium" | "vendor_enterprise",
@@ -181,42 +312,9 @@ export default function LoggedInPricingPage({
       await openPaystackInline({
         accessCode,
         authorizationUrl: body.authorizationUrl,
-        onSuccess: async (trx) => {
+        onSuccess: (trx) => {
           setCheckoutBusy(null);
-          toast.success("Payment completed! Activating your subscription…");
-          try {
-            await fetch("/api/subscriptions/verify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reference: trx.reference }),
-            });
-          } catch {
-            /* Webhook will also activate */
-          }
-          try {
-            const res = await fetch("/api/auth/session", {
-              credentials: "same-origin",
-            });
-            if (res.ok) {
-              const session = (await res.json()) as {
-                buyer?: Buyer | null;
-                vendor?: User | null;
-              };
-              if (session.buyer)
-                useBuyerStore.getState().setBuyer(session.buyer);
-              if (session.vendor)
-                useUserStore.getState().setUser(session.vendor);
-            }
-          } catch {
-            /* best effort */
-          }
-
-          toast.success("Subscription active!");
-          if (plan === "buyer_premium") {
-            window.location.href = "/chat?subscription=done";
-          } else {
-            window.location.href = vendor ? "/wallet?subscription=done" : "/";
-          }
+          void triggerActivationFlow(plan, trx?.reference);
         },
         onCancel: () => {
           setCheckoutBusy(null);
@@ -235,15 +333,80 @@ export default function LoggedInPricingPage({
     }
   }
 
-  const accordionFaqs: FaqItem[] = useMemo(
-    () =>
-      faqs.map((f) => ({
-        question: f.q,
-        answer: f.a,
+  const accordionFaqs: FaqItem[] = useMemo(() => {
+    if (isVendorSession) {
+      return [
+        {
+          question: "Can I change my plan later?",
+          answer:
+            "Yes. Vendors can start on Basic (pay per lead) and upgrade to Enterprise anytime when you want lead fees waived and Hub perks included.",
+          category: "vendor" as const,
+        },
+        {
+          question: "How much does a vendor lead cost?",
+          answer:
+            "Basic vendors pay a flat ₦1,000 per matched lead delivered to their store. Enterprise vendors don’t pay that lead fee and get direct WhatsApp handoff to chat with buyers.",
+          category: "vendor" as const,
+        },
+        {
+          question: "Is there a free tier for vendors?",
+          answer:
+            "Yes! You can list your store and products on Velte completely for free without a credit card on the Basic plan.",
+          category: "vendor" as const,
+        },
+        {
+          question: "How do I pay for my subscription or wallet?",
+          answer:
+            "Subscriptions and wallet top-ups are charged securely through Paystack (card). Vendors can also fund from their Velte wallet.",
+          category: "vendor" as const,
+        },
+        {
+          question: "Do you offer refunds?",
+          answer:
+            "Lead fees and credit spends for completed work aren’t refundable. If a charge looks wrong, contact support and we’ll review it promptly.",
+          category: "vendor" as const,
+        },
+      ];
+    }
+    return [
+      {
+        question: "Can I change my plan later?",
+        answer:
+          "Yes. Buyers can upgrade to Premium or cancel anytime from your account settings.",
         category: "buyer" as const,
-      })),
-    [faqs],
-  );
+      },
+      {
+        question: "How do credits and photo search work for buyers?",
+        answer:
+          "Free registered buyers receive 20 free credits every day and 1 photo search per day. Premium buyers enjoy unlimited credits for shopping, up to 5 photo searches per day, buyer requests to vendors, and full access to Hub tools.",
+        category: "buyer" as const,
+      },
+      {
+        question: "Do vendors need to pay for Buyer Premium?",
+        answer:
+          "No! Registered Velte vendors automatically enjoy full Buyer Premium privileges across the platform when using buyer features.",
+        category: "buyer" as const,
+      },
+      {
+        question: "Is there a free trial?",
+        answer:
+          "You can start on Velte completely for free without a credit card. Buyers receive 20 free credits every day on the Free plan.",
+        category: "buyer" as const,
+      },
+      {
+        question: "How do I pay?",
+        answer:
+          "Subscriptions are charged securely through Paystack (card). Cancel anytime with no penalties.",
+        category: "buyer" as const,
+      },
+      {
+        question: "Do you offer refunds?",
+        answer:
+          "Subscription charges aren’t refundable once used. If a charge looks wrong, contact our team and we’ll review it.",
+        category: "buyer" as const,
+      },
+    ];
+  }, [isVendorSession]);
 
   const premiumMonthly = SUBSCRIPTION_PRICES_NGN.buyer_premium.monthly;
   const premiumAnnual = SUBSCRIPTION_PRICES_NGN.buyer_premium.annual;
@@ -274,9 +437,6 @@ export default function LoggedInPricingPage({
     [],
   );
 
-  const dashboardHref = vendor ? "/wallet" : "/chat";
-  const dashboardLabel = vendor ? "Go to Dashboard" : "Go to Chat";
-
   return (
     <CreditsModalProvider>
       <NavigationProgressProvider>
@@ -305,42 +465,22 @@ export default function LoggedInPricingPage({
                   className="max-w-xl"
                 >
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-400">
-                    Plans &amp; Upgrades
+                    {isVendorSession
+                      ? "Vendor Plans & Upgrades"
+                      : "Buyer Plans & Upgrades"}
                   </p>
                   <h1 className="mt-2 text-[1.75rem] font-bold leading-[1.15] tracking-tight text-balance sm:text-4xl">
-                    Manage your Velte subscription
+                    {isVendorSession
+                      ? "Manage your Vendor subscription"
+                      : "Manage your Buyer subscription"}
                   </h1>
                   <p className="mt-3 max-w-md text-sm leading-relaxed text-white/70">
-                    Upgrade anytime to unlock higher allowances, priority
-                    discovery, and dedicated tools for your account.
+                    {isVendorSession
+                      ? "Upgrade to Enterprise to waive all lead fees, unlock direct WhatsApp customer handoff, and access premium Hub tools."
+                      : "Upgrade to Premium to unlock unlimited shopping credits, priority photo searches, and exclusive buyer tools."}
                   </p>
 
-                  <div
-                    role="tablist"
-                    aria-label="Pricing audience"
-                    className="mt-4 inline-flex rounded-full border border-white/15 bg-black/35 p-1"
-                  >
-                    {(
-                      [
-                        { key: "buyers", label: "For Buyers" },
-                        { key: "vendors", label: "For Vendors" },
-                      ] as const
-                    ).map((tab) => (
-                      <button
-                        key={tab.key}
-                        type="button"
-                        role="tab"
-                        aria-selected={audience === tab.key}
-                        onClick={() => setAudience(tab.key)}
-                        className="rounded-full px-4 py-2 text-sm font-semibold transition-colors cursor-pointer text-white/80 hover:text-white data-[selected=true]:bg-orange-500 data-[selected=true]:text-white data-[selected=true]:shadow-lg data-[selected=true]:shadow-orange-500/30"
-                        data-selected={audience === tab.key}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 md:hidden">
+                  <ul className="mt-5 flex flex-wrap gap-x-4 gap-y-1.5 md:hidden">
                     {HERO_CHECKS.map((item) => (
                       <li
                         key={item}
@@ -390,7 +530,9 @@ export default function LoggedInPricingPage({
                         <p className="text-xs text-white/60">
                           {isBuyerSession
                             ? isBuyerPremium
-                              ? "All perks unlocked"
+                              ? isVendorAccount
+                                ? "Included with Vendor"
+                                : "All perks unlocked"
                               : "20 free daily credits"
                             : isVendorEnterprise
                               ? "₦0 lead fee · Priority"
@@ -476,15 +618,15 @@ export default function LoggedInPricingPage({
                         features={BUYER_PREMIUM_FEATURES}
                         currentPlan={isBuyerSession && isBuyerPremium}
                         ctaLabel={
-                          isVendorSession
-                            ? "Buyer Subscription"
-                            : isBuyerSession
-                              ? isBuyerPremium
-                                ? "Current Plan"
-                                : checkoutBusy === "buyer_premium"
-                                  ? "Redirecting to Paystack…"
-                                  : "Upgrade to Premium"
-                              : undefined
+                          isBuyerSession
+                            ? isBuyerPremium
+                              ? isVendorAccount
+                                ? "Included with Vendor Account"
+                                : "Current Plan"
+                              : checkoutBusy === "buyer_premium"
+                                ? "Redirecting to Paystack…"
+                                : "Upgrade to Premium"
+                            : undefined
                         }
                         onCtaClick={
                           isBuyerSession && !isBuyerPremium
@@ -492,7 +634,7 @@ export default function LoggedInPricingPage({
                             : undefined
                         }
                         loading={checkoutBusy === "buyer_premium"}
-                        disabled={isBuyerPremium || isVendorSession}
+                        disabled={isBuyerPremium || !isBuyerSession}
                         variant="popular"
                         badge="Most Popular"
                       />
@@ -659,27 +801,173 @@ export default function LoggedInPricingPage({
               </div>
             </section>
 
-            {/* In-app Support / Dashboard banner */}
-            <section className="rounded-none lg:rounded-2xl border border-gray-200 dark:border-white/10 bg-surface p-5 sm:p-7">
-              <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <p className="text-base font-bold text-ink sm:text-lg">
-                    Questions about your subscription?
-                  </p>
-                  <p className="mt-1 text-xs text-ink/70 sm:text-sm">
-                    Manage your wallet, track leads, or contact our team
-                    anytime.
+            {/* In-app Contact Us Callout */}
+            <section className="relative overflow-hidden rounded-none lg:rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-orange-500/[0.04] via-surface to-amber-500/[0.03] p-6 sm:p-8">
+              <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+                <div className="max-w-2xl space-y-2">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 dark:bg-orange-950/60 px-3 py-1 text-xs font-bold text-orange-700 dark:text-orange-400">
+                    <Headphones className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                    <span>Talk to Our Team</span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
+                    {vendor
+                      ? "Need a custom plan or have questions before upgrading?"
+                      : "Have questions or need help choosing the right plan?"}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-ink/70 leading-relaxed">
+                    {vendor
+                      ? "Whether you're looking for custom lead quotas, enterprise billing, or guidance on boosting your store with Velte, our team is ready to help."
+                      : "From payment guidance to choosing the tier that matches your shopping needs, our support team is here to assist you anytime."}
                   </p>
                 </div>
-                <Link
-                  href={dashboardHref}
-                  className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/25 transition-colors hover:bg-orange-600 shrink-0"
-                >
-                  {dashboardLabel}
-                  <span aria-hidden>→</span>
-                </Link>
+
+                <div className="flex shrink-0 w-full md:w-auto">
+                  <Link
+                    href="/contact"
+                    className="inline-flex w-full md:w-auto items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/25 transition-all hover:bg-orange-600 hover:shadow-orange-500/35 active:scale-[0.98]"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    <span>Contact Us</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
               </div>
             </section>
+
+            {/* Subscription Activation & Confirmation Slider Modal */}
+            <AnimatePresence>
+              {activationModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+                    aria-hidden="true"
+                  />
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="relative w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-surface shadow-2xl"
+                  >
+                    <AnimatePresence mode="wait" initial={false}>
+                      {activationModal.step === "activating" ? (
+                        <motion.div
+                          key="activating"
+                          initial={{ opacity: 0, x: 60 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -60 }}
+                          transition={{ duration: 0.35, ease: "easeInOut" }}
+                          className="p-6 sm:p-8 text-center"
+                        >
+                          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400">
+                            <SparklesIcon
+                              size={28}
+                              className="animate-spin text-orange-500"
+                            />
+                          </div>
+                          <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
+                            Activating your subscription…
+                          </h3>
+                          <p className="mt-2 text-xs sm:text-sm text-ink/70 leading-relaxed">
+                            Please wait while we confirm your payment and set up
+                            your{" "}
+                            {activationModal.plan === "vendor_enterprise"
+                              ? "Enterprise"
+                              : "Premium"}{" "}
+                            benefits.
+                          </p>
+                          <div className="mt-6 w-full h-2 rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
+                            <motion.div
+                              className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full"
+                              initial={{ width: "10%" }}
+                              animate={{ width: "95%" }}
+                              transition={{ duration: 1.8, ease: "easeInOut" }}
+                            />
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="confirmed"
+                          initial={{ opacity: 0, x: 60 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -60 }}
+                          transition={{ duration: 0.35, ease: "easeInOut" }}
+                          className="p-6 sm:p-8 text-center"
+                        >
+                          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30">
+                            <CrownIcon size={28} />
+                          </div>
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 mb-2">
+                            <CheckCircleIcon
+                              size={14}
+                              className="text-emerald-600 dark:text-emerald-400"
+                            />
+                            <span>Subscription Active</span>
+                          </div>
+                          <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
+                            {activationModal.plan === "vendor_enterprise"
+                              ? "Welcome to the Enterprise Plan!"
+                              : "Welcome to Buyer Premium!"}
+                          </h3>
+                          <p className="mt-2 text-xs sm:text-sm text-ink/75 leading-relaxed">
+                            {activationModal.plan === "vendor_enterprise"
+                              ? "Your store now has unlimited lead access with ₦0 lead fees, direct WhatsApp buyer handoff, priority placement, and full Hub tools."
+                              : "You now enjoy unlimited shopping credits, priority photo searches, direct WhatsApp contacts, and full Hub access."}
+                          </p>
+
+                          <div className="mt-5 rounded-xl border border-gray-200/80 dark:border-white/10 bg-canvas/60 p-4 text-left">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 mb-2">
+                              Active Benefits
+                            </p>
+                            <ul className="space-y-1.5 text-xs text-ink/80">
+                              {(activationModal.plan === "vendor_enterprise"
+                                ? [
+                                    "₦0 lead fees waived on all matched shoppers",
+                                    "Direct WhatsApp handoff to close buyers",
+                                    "Featured ranking & Enterprise store badge",
+                                    "Free Hub advert pins & AI poster generation",
+                                  ]
+                                : [
+                                    "Unlimited credits for AI shopping",
+                                    "Up to 5 photo searches per day",
+                                    "Direct WhatsApp contact with verified vendors",
+                                    "Create buyer requests & full Hub tools",
+                                  ]
+                              ).map((perk) => (
+                                <li
+                                  key={perk}
+                                  className="flex items-center gap-2"
+                                >
+                                  <CheckCircleIcon
+                                    size={14}
+                                    className="shrink-0 text-emerald-500"
+                                  />
+                                  <span>{perk}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="mt-6">
+                            <button
+                              type="button"
+                              onClick={handleGoBack}
+                              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/25 transition-all hover:bg-orange-600 hover:shadow-orange-500/35 active:scale-[0.98] cursor-pointer"
+                            >
+                              <span>Go Back</span>
+                              <ArrowRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
           </main>
         </div>
       </NavigationProgressProvider>

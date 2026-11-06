@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { LockIcon } from "@/components/icons";
 import { HubLockedModal } from "./HubLockedModal";
 import { api, ApiError } from "@/lib/api-client";
-import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
+import { uploadAdvertMedia, validateImageFile } from "@/lib/cloudinary";
 import { formatNaira } from "@/lib/utils";
 import type { HubContext } from "@/types/hub";
 import { cn } from "@/lib/utils";
@@ -61,7 +61,7 @@ export function HubAdvertComposer({
     }
     setUploading(true);
     try {
-      const url = await uploadProductMedia(file);
+      const url = await uploadAdvertMedia(file, "velte/adverts/artwork");
       setImageUrl(url);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
