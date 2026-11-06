@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { fail, applySetCookies } from "@/lib/server/guards";
+import { applySetCookies } from "@/lib/server/guards";
 import { backendFetchWithCookies } from "@/lib/server/backend";
+import { BUYER_AUTH_COOKIE } from "@/lib/server/buyerSession";
 
 // POST /api/buyer-auth/logout
 export async function POST() {
@@ -9,8 +10,12 @@ export async function POST() {
     const { setCookie } = await backendFetchWithCookies("/buyer-auth/logout", {
       method: "POST",
     });
-    return applySetCookies(NextResponse.json({ ok: true }), setCookie);
-  } catch (err) {
-    return fail(err, "Logout failed.");
+    const res = applySetCookies(NextResponse.json({ ok: true }), setCookie);
+    res.cookies.delete(BUYER_AUTH_COOKIE);
+    return res;
+  } catch {
+    const res = NextResponse.json({ ok: true });
+    res.cookies.delete(BUYER_AUTH_COOKIE);
+    return res;
   }
 }

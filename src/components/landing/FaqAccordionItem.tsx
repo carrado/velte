@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { ChevronDown } from "lucide-react";
 import type { FaqItem } from "@/types/common";
 import { cn } from "@/lib/utils";
-import { PlusIcon } from "@/components/icons";
 
 export default function FaqAccordionItem({
   faq,
@@ -18,9 +18,9 @@ export default function FaqAccordionItem({
   return (
     <div
       className={cn(
-        "border rounded-2xl bg-surface overflow-hidden transition-shadow duration-200",
+        "rounded-2xl border bg-surface overflow-hidden transition-all duration-200",
         open
-          ? "border-orange-200 shadow-md shadow-orange-500/[0.06]"
+          ? "border-orange-300 shadow-sm shadow-orange-500/[0.06] dark:border-orange-500/40"
           : "border-gray-200 hover:border-gray-300",
       )}
     >
@@ -28,15 +28,15 @@ export default function FaqAccordionItem({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-4 text-left px-5 py-4 cursor-pointer"
+        className="flex w-full cursor-pointer items-center justify-between gap-4 px-5 py-4 text-left select-none"
       >
-        <span className="text-ink font-semibold text-[15px]">
+        <span className="text-[15px] font-semibold text-ink">
           {faq.question}
         </span>
-        <PlusIcon
+        <ChevronDown
           className={cn(
-            "w-4 h-4 text-orange-500 shrink-0 transition-transform duration-200",
-            open && "rotate-45",
+            "h-4 w-4 shrink-0 text-orange-500 transition-transform duration-200 ease-out",
+            open && "rotate-180",
           )}
         />
       </button>
@@ -49,7 +49,7 @@ export default function FaqAccordionItem({
             transition={{ duration: 0.25, ease: "easeInOut" }}
             className="overflow-hidden"
           >
-            <p className="px-5 pb-4 text-gray-500 text-sm leading-relaxed">
+            <p className="px-5 pb-4 text-sm leading-relaxed text-ink/80">
               {faq.answer}
             </p>
           </motion.div>

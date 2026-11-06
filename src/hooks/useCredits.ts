@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { useCreditsStore, type TopUpSource } from "@/store/creditsStore";
+import type { AllowanceSummary } from "@/lib/entitlements";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
 
@@ -26,6 +27,7 @@ import { useUserStore } from "@/store/userStore";
 interface CreditsState {
   balance: number | null;
   used: number;
+  allowance: AllowanceSummary | null;
   isGuest: boolean;
   walletBalanceKobo: number | null;
   busy: boolean;
@@ -39,6 +41,7 @@ export function useCredits(active = true): CreditsState {
 
   const balance = useCreditsStore((s) => s.balance);
   const used = useCreditsStore((s) => s.used);
+  const allowance = useCreditsStore((s) => s.allowance);
   const walletBalanceKobo = useCreditsStore((s) => s.walletBalanceKobo);
   const busy = useCreditsStore((s) => s.busy);
   const topUp = useCreditsStore((s) => s.topUp);
@@ -65,6 +68,7 @@ export function useCredits(active = true): CreditsState {
   return {
     balance,
     used,
+    allowance,
     isGuest,
     walletBalanceKobo,
     busy,

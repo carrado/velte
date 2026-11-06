@@ -2,6 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { CloseIcon, MapPinIcon } from "@/components/icons/hero";
+import { modalScrimClass } from "@/lib/modalScrim";
 // Shown once per page load whenever the browser's own geolocation
 // permission is still undecided ("prompt") — explains what the location is
 // actually used for BEFORE the native browser prompt fires, instead of that
@@ -24,7 +25,10 @@ export function LocationPermissionModal({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onDismiss} />
+      <div
+        className={`absolute inset-0 ${modalScrimClass()}`}
+        onClick={onDismiss}
+      />
       <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-surface shadow-2xl">
         <button
           onClick={onDismiss}

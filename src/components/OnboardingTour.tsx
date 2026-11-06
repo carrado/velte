@@ -45,17 +45,38 @@ export default function OnboardingTour() {
   // Re-measures on mount, on every step change, and on resize/scroll (a
   // rotated phone or a resized browser window can flip which of the two
   // selectors above is the visible one, or move the target within the
-  // viewport) — same pattern AnchoredPopover uses for the same reason.
+  // viewport). Store / Settings on a phone live inside the avatar menu,
+  // which Header force-opens during the tour — those nodes aren't in the
+  // layout on the first frame, so retry until they are.
   useLayoutEffect(() => {
     if (!active) return;
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 30;
+
     const measure = () => {
+      if (cancelled) return false;
       const el = resolveTarget(step.selectors);
       setRect(el ? el.getBoundingClientRect() : null);
+      return Boolean(el);
     };
-    measure();
+
+    const retry = () => {
+      if (cancelled) return;
+      if (measure()) return;
+      if (attempts++ < MAX_ATTEMPTS) requestAnimationFrame(retry);
+    };
+
+    retry();
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
+    const observer = new MutationObserver(() => {
+      if (!cancelled) measure();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
     return () => {
+      cancelled = true;
+      observer.disconnect();
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };

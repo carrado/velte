@@ -7,6 +7,7 @@ import {
   CloseIcon,
   LoaderIcon,
 } from "@/components/icons/hero";
+import { modalScrimClass } from "@/lib/modalScrim";
 
 // "Are you sure?" before deleting a conversation from the sidebar
 // (2026-09-09) — unlike LogoutConfirmModal right next to this file (whose
@@ -35,7 +36,7 @@ export function DeleteConversationModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div
-        className="absolute inset-0 bg-black/40"
+        className={`absolute inset-0 ${modalScrimClass()}`}
         onClick={busy ? undefined : onClose}
       />
       <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-surface shadow-2xl">

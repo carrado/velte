@@ -11,7 +11,7 @@ import { StandalonePublicGuard } from "@/components/StandalonePublicGuard";
 import ReferralCapture from "@/components/ReferralCapture";
 import MetaPixel from "@/components/MetaPixel";
 import BlockedAccountModal from "@/components/BlockedAccountModal";
-import { ScrollToTopButton } from "@/components/ScrollToTopButton";
+import { CartDrawerHost } from "@/components/cart/CartDrawer";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { THEME_PRE_PAINT_SCRIPT } from "@/lib/theme";
 
@@ -301,7 +301,7 @@ export default function RootLayout({
             <StandalonePublicGuard />
             <ReferralCapture />
             <BlockedAccountModal />
-            <ScrollToTopButton />
+            <CartDrawerHost />
             {children}
             <Toaster
               position="top-right"

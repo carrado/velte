@@ -17,7 +17,11 @@ import {
 } from "@/lib/prefetch-routes";
 import type { PrefetchTask } from "@/lib/prefetch-routes";
 
-type NavigationContextValue = { navigate: (href: string) => void };
+type NavigationContextValue = {
+  navigate: (href: string) => void;
+  /** False for the default context outside a real provider. */
+  active: boolean;
+};
 
 export interface NavigationProgressConfig {
   /** Maps a target href to whatever key `getPrefetchTasks` reads. */
@@ -43,6 +47,7 @@ export interface NavigationProgressConfig {
 export function createNavigationProgress(config: NavigationProgressConfig) {
   const NavigationContext = createContext<NavigationContextValue>({
     navigate: () => {},
+    active: false,
   });
 
   function useNavigation() {
@@ -123,7 +128,7 @@ export function createNavigationProgress(config: NavigationProgressConfig) {
     );
 
     return (
-      <NavigationContext.Provider value={{ navigate }}>
+      <NavigationContext.Provider value={{ navigate, active: true }}>
         {visible && (
           <div className="fixed top-0 left-0 right-0 z-[200] h-[3px]">
             <div

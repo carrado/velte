@@ -1,3 +1,5 @@
+"use client";
+
 import { forwardRef, type ReactNode } from "react";
 import type { IconProps } from "@/types/common";
 
@@ -215,6 +217,27 @@ export const PackageIllustration = createIllustration(
       rx=".5"
       transform="rotate(45 12 13.3)"
     />
+  </>,
+);
+
+export const TruckIllustration = createIllustration(
+  "TruckIllustration",
+  <>
+    <rect fill={ORANGE_SOFT} x="2" y="6.8" width="12.4" height="8.4" rx="1.4" />
+    <path fill={ORANGE} d="M14.4 9h3.5L21 13.4v2h-6.6Z" />
+    <rect fill={WHITE} x="15.7" y="10.1" width="2.7" height="2.5" rx=".45" />
+    <rect
+      fill={ORANGE_STRONG}
+      x="3.3"
+      y="8.2"
+      width="4.2"
+      height="1.5"
+      rx=".4"
+    />
+    <circle fill={INK} cx="7" cy="16.8" r="2.2" />
+    <circle fill={WHITE} cx="7" cy="16.8" r=".9" />
+    <circle fill={INK} cx="17" cy="16.8" r="2.2" />
+    <circle fill={WHITE} cx="17" cy="16.8" r=".9" />
   </>,
 );
 

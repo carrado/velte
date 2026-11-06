@@ -38,7 +38,7 @@ const steps: {
 
 export function HowItWorksSteps() {
   return (
-    <section className="relative bg-surface border-t border-gray-100 py-12 sm:py-14">
+    <section className="relative bg-surface border-t border-gray-100 dark:border-white/10 py-12 sm:py-14">
       <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
         <motion.div
           initial="hidden"

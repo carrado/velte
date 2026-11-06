@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useNotificationsStore } from "@/store/notificationsStore";
 import { useNavigation } from "@/components/NavigationProgressContext";
@@ -92,7 +93,8 @@ function NotificationItem({
   onClose?: () => void;
 }) {
   const { markAsRead, removeNotification } = useNotificationsStore();
-  const { navigate } = useNavigation();
+  const { navigate, active: navActive } = useNavigation();
+  const router = useRouter();
   const { icon: Icon, bg, color } = TYPE_CONFIG[notification.type];
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -103,7 +105,11 @@ function NotificationItem({
       markNotificationRead(notification.id).catch(() => {}); // persist
     }
     onClose?.();
-    if (notification.href) navigate(notification.href);
+    if (!notification.href) return;
+    // Dashboard/chat providers prefetch then push. Hub (and any shell
+    // without a progress provider) falls back to a plain push.
+    if (navActive) navigate(notification.href);
+    else router.push(notification.href);
   }
 
   function handleMarkAsRead() {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { CheckIcon, CopyIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { registerCopiedImage, hashBlob } from "@/lib/copiedImageRegistry";
 
@@ -121,9 +121,9 @@ export function CopyMessageButton({
       )}
     >
       {copied ? (
-        <Check size={13} className="text-emerald-500" />
+        <CheckIcon size={13} className="text-emerald-500" />
       ) : (
-        <Copy size={13} />
+        <CopyIcon size={13} />
       )}
     </button>
   );

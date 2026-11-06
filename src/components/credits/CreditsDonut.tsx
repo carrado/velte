@@ -1,6 +1,7 @@
 "use client";
 
 import { METER_EMPTY, METER_FILL } from "@/lib/creditMeter";
+import type { AllowanceSummary } from "@/lib/entitlements";
 
 // The credit meter (2026-08-31) — replaces the "what things cost" price list
 // as the thing the panel leads with.
@@ -41,6 +42,7 @@ export function CreditsDonut({
   balance,
   used,
   isGuest,
+  allowance,
 }: {
   /** Credits remaining. Null while it is still being read. */
   balance: number | null;
@@ -48,6 +50,7 @@ export function CreditsDonut({
    *  allowance, since the browser only stores what is left. */
   used: number;
   isGuest: boolean;
+  allowance?: AllowanceSummary | null;
 }) {
   const known = balance !== null;
   const remaining = known ? Math.max(balance, 0) : 0;
@@ -136,6 +139,20 @@ export function CreditsDonut({
                 : `All ${total} used — top up to keep going`
               : `${spent} used · ${remaining} left`}
       </p>
+      {allowance?.eligible && allowance.credits > 0 && (
+        <p className="mt-2 text-sm text-gray-600">
+          {allowance.kind === "daily"
+            ? `${allowance.remaining} of ${allowance.credits} free credits left today`
+            : `${allowance.remaining} of ${allowance.credits} free credits left this window`}
+        </p>
+      )}
+      {allowance &&
+        !allowance.eligible &&
+        allowance.reason === "phone_unverified" && (
+          <p className="mt-2 text-sm text-gray-600">
+            Verify your phone to unlock {allowance.credits} free credits a day.
+          </p>
+        )}
     </div>
   );
 }

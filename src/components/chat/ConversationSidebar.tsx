@@ -28,12 +28,13 @@ import {
   MessageSquareIcon,
   MessageSquarePlusIcon,
   ShoppingCartIcon,
+  TruckIcon,
   TrashIcon,
 } from "@/components/icons/hero";
 // The sign-in prompt's own illustration stays on the original duotone set,
 // per explicit request — every icon on this page moved to Heroicons except
 // this one.
-import { MessageSquareIllustration } from "@/components/icons";
+import { FeedIcon, MessageSquareIllustration } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { getInitial } from "@/lib/initials";
 import type { SearchConversationList } from "@/types/search";
@@ -447,6 +448,25 @@ export function ConversationSidebar() {
                   badge={openOfferCount}
                   badgeNoun={openOfferCount === 1 ? "offer" : "offers"}
                 />
+                {/* Buyers only. Opens the Hub's own page, outside this sidebar,
+                    so the directory has the full width. A guest is asked to
+                    sign in there. */}
+                <MenuLink
+                  href="/hub"
+                  icon={<FeedIcon size={19} className="shrink-0" />}
+                  label="Vendors Hub"
+                  active={pathname === "/hub"}
+                  onNavigate={closeOnMobile}
+                />
+                {buyer && (
+                  <MenuLink
+                    href="/chat/orders"
+                    icon={<TruckIcon size={19} className="shrink-0" />}
+                    label="Your orders"
+                    active={pathname === "/chat/orders"}
+                    onNavigate={closeOnMobile}
+                  />
+                )}
                 {/* The credit meter briefly sat here as a third row
                     (2026-09-01), then moved to the header, then to the
                     composer — see CreditsSidebarMeter's own header comment

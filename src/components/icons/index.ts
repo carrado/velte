@@ -1,8 +1,10 @@
+"use client";
+
 /**
- * Velte's custom line-icon set — replaces lucide-react across the app.
- * Every icon shares the `createIcon` factory in `./base.tsx` (24x24 stroke
- * grid, `currentColor`, `size`/`strokeWidth` props matching lucide's own
- * API), so call sites are a 1:1 swap. See [[custom_icon_system]].
+ * Velte's icon barrel — Phosphor Icons (`@phosphor-icons/react`), default
+ * weight `duotone`. Same `*Icon` names and `IconProps` as before so call
+ * sites are unchanged. Brand empty-state illustrations stay custom (see
+ * `./illustrations`). WhatsApp stays a hand SVG (no Phosphor brand glyph).
  */
 export * from "./navigation";
 export * from "./actions";

@@ -7,6 +7,11 @@ import { storeApi } from "@/services/store";
 import { settingsApi } from "@/services/settings";
 import { useNavigation } from "@/components/NavigationProgressContext";
 import { useUserStore, EMPTY_SECTORS } from "@/store/userStore";
+import {
+  EnterpriseAvatarBadge,
+  EnterpriseBadge,
+  isEnterpriseVendor,
+} from "@/components/EnterpriseBadge";
 import { queryKeys } from "@/lib/query-keys";
 import { uploadProductMedia, validateImageFile } from "@/lib/cloudinary";
 import { cn } from "@/lib/utils";
@@ -67,8 +72,10 @@ function SectionCard({
 export default function StorePage() {
   const queryClient = useQueryClient();
   const { navigate } = useNavigation();
-  const avatar = useUserStore((state) => state.user?.avatar);
-  const sectors = useUserStore((state) => state.user?.sectors ?? EMPTY_SECTORS);
+  const currentUser = useUserStore((state) => state.user);
+  const avatar = currentUser?.avatar;
+  const sectors = currentUser?.sectors ?? EMPTY_SECTORS;
+  const isEnterprise = isEnterpriseVendor(currentUser);
 
   const { data: store, isLoading } = useQuery({
     queryKey: queryKeys.store.mine,
@@ -90,7 +97,15 @@ export default function StorePage() {
   const [seeded, setSeeded] = useState(false);
   if (store && !seeded) {
     setSeeded(true);
-    setForm(store);
+    setForm({
+      ...store,
+      social: {
+        instagram: store.social?.instagram ?? null,
+        facebook: store.social?.facebook ?? null,
+        tiktok: store.social?.tiktok ?? null,
+        x: store.social?.x ?? null,
+      },
+    });
     setSectorValues(sectors);
   }
 
@@ -237,24 +252,30 @@ export default function StorePage() {
         <div className="p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4 min-w-0">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold overflow-hidden flex-shrink-0">
-                {avatar ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={avatar}
-                    alt={form.name.trim() || "Store avatar"}
-                    className="w-full h-full object-cover"
-                  />
-                ) : form.name.trim() ? (
-                  form.name.trim().charAt(0).toUpperCase()
-                ) : (
-                  <StoreIcon size={22} />
-                )}
+              <div className="relative shrink-0">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold overflow-hidden">
+                  {avatar ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={avatar}
+                      alt={form.name.trim() || "Store avatar"}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : form.name.trim() ? (
+                    form.name.trim().charAt(0).toUpperCase()
+                  ) : (
+                    <StoreIcon size={22} />
+                  )}
+                </div>
+                {isEnterprise && <EnterpriseAvatarBadge size="lg" />}
               </div>
               <div className="min-w-0">
-                <h2 className="text-dash-title font-black text-ink truncate">
-                  {form.name.trim() || "Your store"}
-                </h2>
+                <div className="flex items-center gap-2 min-w-0">
+                  <h2 className="text-dash-title font-black text-ink truncate">
+                    {form.name.trim() || "Your store"}
+                  </h2>
+                  {isEnterprise && <EnterpriseBadge size="sm" />}
+                </div>
                 <p className="text-dash-secondary text-orange-600 truncate">
                   {publicUrl}
                 </p>
@@ -469,6 +490,39 @@ export default function StorePage() {
         <p className="text-dash-caption text-gray-400 mt-1">
           International format, without + or spaces.
         </p>
+      </SectionCard>
+
+      <SectionCard
+        icon={ExternalLinkIcon}
+        title="Other profiles"
+        hint="Optional https links. Premium buyers see them on your Hub card."
+      >
+        {(
+          [
+            ["instagram", "Instagram"],
+            ["facebook", "Facebook"],
+            ["tiktok", "TikTok"],
+            ["x", "X"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} className="block mb-2 last:mb-0">
+            <span className="text-dash-caption text-gray-500">{label}</span>
+            <input
+              value={form.social?.[key] ?? ""}
+              onChange={(e) =>
+                set("social", {
+                  instagram: form.social?.instagram ?? null,
+                  facebook: form.social?.facebook ?? null,
+                  tiktok: form.social?.tiktok ?? null,
+                  x: form.social?.x ?? null,
+                  [key]: e.target.value.trim() || null,
+                })
+              }
+              placeholder="https://"
+              className={cn(inputClass, "mt-1")}
+            />
+          </label>
+        ))}
       </SectionCard>
 
       {/* ── Photos ─────────────────────────────────────────────────────── */}

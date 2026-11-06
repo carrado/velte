@@ -15,6 +15,7 @@ import {
   affordCredits,
   chargeCredits,
   creditMessage,
+  type CreditDecision,
 } from "@/lib/server/creditLedger";
 import { isBillableTurn } from "@/lib/turnBillable";
 import type { CreditAction } from "@/lib/credits";
@@ -32,10 +33,21 @@ import {
   usableBudget,
 } from "@/lib/server/ai/searchProductsTool";
 import {
+  mergeAttributeLists,
+  extractStatedAttributes,
+} from "@/lib/server/ai/statedAttributes";
+import {
   searchStoresTool,
   searchStoresCore,
 } from "@/lib/server/ai/searchStoresTool";
 import { getVendorProductsTool } from "@/lib/server/ai/getVendorProductsTool";
+import { addToCartTool, runAddToCart } from "@/lib/server/ai/addToCartTool";
+import { parseCartIntent, replyForCartAdd } from "@/lib/server/ai/cartIntent";
+import {
+  compactStoreProduct,
+  compactVendorMatch,
+  rememberShown,
+} from "@/lib/server/ai/shownCatalog";
 import { askClarifyingQuestionTool } from "@/lib/server/ai/askClarifyingQuestionTool";
 import { createBuyerRequestTool } from "@/lib/server/ai/createBuyerRequestTool";
 import { offerBuyerRequestTool } from "@/lib/server/ai/offerBuyerRequestTool";
@@ -72,6 +84,7 @@ import {
   noVendorEvenBySectorPhrase,
   noVendorButOnlineOffersPhrase,
   isAcknowledgementReply,
+  addingToCartPhrase,
   isAskingForExplanation,
   isOfferDeclineReply,
   offerDeclinedPhrase,
@@ -121,6 +134,9 @@ import {
 } from "@/lib/server/ai/toolAlignment";
 import {
   getSectorClarifiers,
+  getGeneralClarifierFields,
+  unansweredClarifierFields,
+  isWeakProductQuery,
   looksLikeServiceTask,
   allowsNearbyBusinesses,
 } from "@/lib/server/ai/sectorClarifiers";
@@ -152,9 +168,11 @@ import type {
   SearchStreamEvent,
   ShoppingPlanSnapshot,
   StoreMatch,
+  ShownProduct,
   StoreProductItem,
   VendorMatch,
 } from "@/types/search";
+import type { CartAddOutcome } from "@/types/cart";
 
 // POST /api/search   (public — no buyer account, mirrors the public
 // /store/[handle] pattern). Velte build-order step (d): each call streams a
@@ -876,6 +894,12 @@ function isSharedLocationMessage(text: string): boolean {
     trimmed === "Search without sharing my location"
   );
 }
+// ClarificationPrompt's skip pill for the pre-search details gate — same
+// shape as the location decline: the app sends this canned line on the
+// buyer's behalf, and it names no item of its own.
+function isSkipDetailsMessage(text: string): boolean {
+  return text.trim() === "Just search with what I've already told you";
+}
 function lastSubstantiveUserMessage(
   history: SearchHistoryTurn[],
 ): string | null {
@@ -886,7 +910,11 @@ function lastSubstantiveUserMessage(
     // Skip content-free continuations themselves — "Shared my location" is
     // SearchHome.tsx's own literal stand-in text (see handleLocationShared),
     // never something with a real need of its own to check.
-    if (isAcknowledgementReply(trimmed) || isSharedLocationMessage(trimmed))
+    if (
+      isAcknowledgementReply(trimmed) ||
+      isSharedLocationMessage(trimmed) ||
+      isSkipDetailsMessage(trimmed)
+    )
       continue;
     return turn.content;
   }
@@ -1441,6 +1469,10 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
   const buyerRequestOffered = result.toolResults.some(
     (r) => r.toolName === "offerBuyerRequest",
   );
+  const cartAdd =
+    (result.toolResults.findLast((r) => r.toolName === "addToCart")?.output as
+      | CartAddOutcome
+      | undefined) ?? null;
   // Overwritten further down route.ts, deterministically (not from a tool
   // call — see that code's own comment for why this offer has to be
   // code-authored rather than left to the model's own judgment): true once
@@ -1545,6 +1577,7 @@ function extractOutcome(result: Awaited<ReturnType<typeof callLLM>>) {
     vendorProductsStore,
     buyerRequestOffer,
     buyerRequestOffered,
+    cartAdd,
     vendorSearchOffered,
     productCall,
     storeCall,
@@ -1726,11 +1759,26 @@ async function handleSearch(req: Request) {
       : imageUrl
         ? "photo"
         : "text";
-  const usage = await affordCredits({
-    actorType,
-    cookie: actorCookie,
-    action: turnAction,
-  });
+  // Adding to cart / opening checkout is not a search. Found live: both
+  // "Add the exact match to cart" and "Go to checkout" were classified as
+  // new searches, billed, and answered with invented Pay/promo copy. The
+  // short-circuit further down does the work in CODE; skip the credit
+  // gate here so an empty balance cannot block opening a cart the buyer
+  // already filled.
+  const cartIntent = !imageUrl ? parseCartIntent(message) : null;
+  const usage: CreditDecision = cartIntent
+    ? {
+        allowed: true,
+        balance: 0,
+        cost: 0,
+        action: turnAction,
+        isGuest: actorType === "guest",
+      }
+    : await affordCredits({
+        actorType,
+        cookie: actorCookie,
+        action: turnAction,
+      });
   // Set once the turn has been charged — see sendFinal. Guards against the
   // several early-exit paths billing one turn twice.
   let turnCharged = false;
@@ -1773,7 +1821,7 @@ async function handleSearch(req: Request) {
   // Placed here, same rule the credit gate above already follows: before any
   // conversation load, retrieval or LLM call, so a refused turn never spends
   // anything.
-  if (actorType === "guest") {
+  if (actorType === "guest" && !cartIntent) {
     const guestIp = guestIpFromRequest(req);
     const networkAllowed = await checkGuestNetworkAllowance(guestIp);
     if (!networkAllowed) {
@@ -2011,6 +2059,10 @@ async function handleSearch(req: Request) {
         maxBudgetNaira?: number | null;
         attributes?: string[];
       } = {};
+      // Matching details already named on this request (colour, brand,
+      // size, …). Filled after the goal-sheet locks below so a details-gate
+      // turn still persists "black", and a later search cannot drop it.
+      let carriedAttributes: string[] = [];
       // Declared HERE, beside goalUpdate, for exactly the same reason — and
       // because it was caught red-handed not being (2026-09-10). sendFinal's
       // own `goal` object reads `itemTerm`, and this used to be a `let`
@@ -2163,6 +2215,10 @@ async function handleSearch(req: Request) {
       async function sendBareFinal(
         reply: string,
         clarification: Clarification | null,
+        extra?: {
+          cartAdd?: CartAddOutcome | null;
+          openCart?: boolean;
+        },
       ) {
         await sendFinal({
           type: "final",
@@ -2196,8 +2252,50 @@ async function handleSearch(req: Request) {
           externalOffers: [],
           awaitingComparisonPurchaseReply: false,
           comparisonPickItem: null,
+          cartAdd: extra?.cartAdd ?? null,
+          openCart: extra?.openCart ?? false,
         });
         controller.close();
+      }
+
+      // Deterministic cart/checkout — do not trust the model to pick
+      // addToCart over searchProducts. Found live: "Add the exact match
+      // to cart" and "Go to checkout" both ran a fresh search, then the
+      // model invented Pay / promo-code copy. Same class of gap as the
+      // buyer-request "yes" short-circuit further down this file.
+      if (cartIntent) {
+        if (cartIntent.kind === "checkout") {
+          await sendBareFinal("Your cart is open.", null, { openCart: true });
+          return;
+        }
+        push(addingToCartPhrase());
+        // Prefer the listings the client just rendered (last result
+        // cards on screen). The conversation catalog accumulates across
+        // turns, so "the exact match" would otherwise resolve to the
+        // first item from an earlier search.
+        const catalog =
+          body?.shownCatalog && body.shownCatalog.length > 0
+            ? body.shownCatalog
+            : (storedGoal?.shownCatalog ?? []);
+        const outcome = await runAddToCart(
+          {
+            auth: buyerAuth,
+            catalog,
+            cartVendorId: body?.cartVendorId ?? null,
+            cartVendorName: body?.cartVendorName ?? null,
+            conversationId: conversation?.conversationId ?? null,
+          },
+          {
+            ordinal: cartIntent.ordinal,
+            nameHint: cartIntent.nameHint,
+            quantity: cartIntent.quantity,
+          },
+        );
+        await sendBareFinal(replyForCartAdd(outcome), null, {
+          cartAdd: outcome,
+          openCart: outcome.status === "ok",
+        });
+        return;
       }
 
       // See looksLikeGibberishInput's own comment — a free, instant
@@ -3511,6 +3609,16 @@ async function handleSearch(req: Request) {
       const rememberedBudget = sheetApplies
         ? (storedGoal?.maxBudgetNaira ?? null)
         : null;
+      carriedAttributes = mergeAttributeLists(
+        sheetApplies ? storedGoal?.attributes : undefined,
+        sheetApplies
+          ? extractStatedAttributes(
+              lastSubstantiveUserMessage(history) ?? "",
+              itemTerm,
+            )
+          : undefined,
+        extractStatedAttributes(message, itemTerm),
+      );
 
       // hasMultipleIntents overrides — the classifier alone has produced
       // false dual-intent splits (found live: photo + "where can I find
@@ -3529,6 +3637,7 @@ async function handleSearch(req: Request) {
         hasMultipleIntents = false;
       } else if (
         isSharedLocationMessage(message) ||
+        isSkipDetailsMessage(message) ||
         isAcknowledgementReply(message)
       ) {
         const priorText = lastSubstantiveUserMessage(history);
@@ -3798,6 +3907,39 @@ async function handleSearch(req: Request) {
           history.at(-1)?.awaitingVendorSearchOffer === true) &&
         !isOfferDeclineReply(message) &&
         (Boolean(body?.isContinuation) || requestRelation !== "new");
+      // NOT the raw `message` on a continuation turn (2026-09-16, found
+      // live: "MC for my wedding event" → location gate → "Shared my
+      // location" → this gate asked "what kind of service are you
+      // looking for with 'MC'?", a question that makes no sense for a
+      // term that already names the whole service). bareQueryGate.ts's
+      // model call has no access to `itemTerm`'s own surrounding
+      // conversation — its only content is whatever string lands in
+      // `message` — so a content-free continuation ("Shared my
+      // location", a bare "yes") handed it literally nothing to reason
+      // about "wedding" from, and it fell back to the vaguest possible
+      // question. Same fix the dual-intent re-derivation above uses for
+      // this exact shape: resolve back to the last SUBSTANTIVE user turn,
+      // which still has the real request in it. A reply to the Shopping
+      // Plan deadline ask ("in 3 weeks", "no rush") is the same shape
+      // again — content-free relative to the item — so it gets the same
+      // fallback (`isAnsweringDeadlineAsk`, computed above).
+      const bareQueryMessage =
+        isSharedLocationMessage(message) ||
+        isSkipDetailsMessage(message) ||
+        isAcknowledgementReply(message) ||
+        isAnsweringDeadlineAsk
+          ? (lastSubstantiveUserMessage(history) ?? message)
+          : message;
+      // Found live (2026-10-05): "I need a good black sneakers" — colour
+      // and "good" were enough for hasSpecificDetails, so this gate
+      // skipped, search ran, and the model then asked size/brand/price
+      // AFTER the cards. Those are matching filters and belong here,
+      // once, before search. A weak product query (only colour + quality
+      // adjectives beyond the item name) still needs the template even
+      // when the classifier called it "specific".
+      const weaklySpecifiedProduct =
+        seekingKind !== "get_service" &&
+        Boolean(itemTerm && isWeakProductQuery(bareQueryMessage, itemTerm));
       if (
         // Every input below comes from the scope check's own reading of the
         // request (itemTerm/seekingKind/hasSpecificDetails), not from
@@ -3805,9 +3947,10 @@ async function handleSearch(req: Request) {
         // phrase to ask about (so a lead-in sentence is never quoted back
         // at the buyer), and `hasSpecificDetails` is the model's
         // judgment — with full conversation context — of whether anything
-        // distinguishing, budget included, has been said yet.
+        // matching, budget included, has been said yet. A colour/"good"
+        // overlay (`weaklySpecifiedProduct`) can still reopen the gate.
         itemTerm &&
-        !hasSpecificDetails &&
+        (!hasSpecificDetails || weaklySpecifiedProduct) &&
         !answeringPendingOffer &&
         !imageUrl &&
         // A multi-need message must reach the dual-intent split downstream
@@ -3815,6 +3958,7 @@ async function handleSearch(req: Request) {
         // the other entirely.
         !hasMultipleIntents &&
         !alreadyAskedBudgetThisConversation &&
+        !isSkipDetailsMessage(message) &&
         // Found live (2026-09-05): "Between Infinix Hot 50i and Samsung
         // Galaxy, which one is better" — a genuine Compare-tool turn,
         // already confirmed real by toolAlignment.ts (or by classifyScope's
@@ -3830,41 +3974,38 @@ async function handleSearch(req: Request) {
         // compare turn must never be second-guessed by this gate.
         !isCompareTurn
       ) {
-        // Widened 2026-09-05, rewritten 2026-09-09 — see bareQueryGate.ts's
-        // own top comment for the full reasoning. `dynamicQuestion` is null
-        // on any failure/unusable output; either way composeBareQueryReply
-        // collapses back to the exact plain budget-only question this gate
-        // always asked, so a bad call here degrades to the known-good
-        // 2026-09-04 behavior rather than breaking the turn.
-        //
-        // NOT the raw `message` on a continuation turn (2026-09-16, found
-        // live: "MC for my wedding event" → location gate → "Shared my
-        // location" → this gate asked "what kind of service are you
-        // looking for with 'MC'?", a question that makes no sense for a
-        // term that already names the whole service). bareQueryGate.ts's
-        // model call has no access to `itemTerm`'s own surrounding
-        // conversation — its only content is whatever string lands in
-        // `message` — so a content-free continuation ("Shared my
-        // location", a bare "yes") handed it literally nothing to reason
-        // about "wedding" from, and it fell back to the vaguest possible
-        // question. Same fix the dual-intent re-derivation above uses for
-        // this exact shape: resolve back to the last SUBSTANTIVE user turn,
-        // which still has the real request in it. A reply to the Shopping
-        // Plan deadline ask ("in 3 weeks", "no rush") is the same shape
-        // again — content-free relative to the item — so it gets the same
-        // fallback (`isAnsweringDeadlineAsk`, computed above).
-        const bareQueryMessage =
-          isSharedLocationMessage(message) ||
-          isAcknowledgementReply(message) ||
-          isAnsweringDeadlineAsk
-            ? (lastSubstantiveUserMessage(history) ?? message)
-            : message;
+        // Widened 2026-09-05, rewritten 2026-09-09, templated 2026-10-05
+        // — see bareQueryGate.ts's own top comment. `dynamicQuestion` is
+        // null on any failure/unusable output; composeBareQueryReply
+        // falls back to a static question that still names the template
+        // fields, so a bad call here never skips the details round.
+        const clarifiers = getSectorClarifiers(
+          itemTerm,
+          undefined,
+          undefined,
+          seekingKind,
+        );
+        const templateFields = unansweredClarifierFields(
+          clarifiers?.fields ?? getGeneralClarifierFields(seekingKind),
+          `${bareQueryMessage} ${itemTerm}`,
+        );
         const dynamicQuestion = await buildBareQueryGate({
           itemTerm,
           seekingKind,
           message: bareQueryMessage,
+          fields: templateFields,
         });
-        const question = composeBareQueryReply(itemTerm, dynamicQuestion);
+        const question = composeBareQueryReply(
+          itemTerm,
+          dynamicQuestion,
+          templateFields,
+        );
+        goalUpdate = {
+          attributes: extractStatedAttributes(
+            `${bareQueryMessage} ${itemTerm}`,
+            itemTerm,
+          ),
+        };
         await sendBareFinal(question, {
           kind: "text",
           question,
@@ -3874,7 +4015,8 @@ async function handleSearch(req: Request) {
           // budget without demanding one (see composeBareQueryReply's own
           // comment), and treating that as "budget asked" only ever
           // prevents a redundant re-ask, never blocks a genuine one, since
-          // this whole gate never fires again once any detail is given.
+          // this whole gate never fires again once any matching detail is
+          // given.
           budgetAsked: dynamicQuestion?.asksBudget ?? true,
         });
         return;
@@ -3980,6 +4122,17 @@ async function handleSearch(req: Request) {
         // askClarifyingQuestion removed from the tool set entirely, rather
         // than just asking it again not to — see the retry's own comment for
         // why a second plain request isn't good enough here.
+        const shownCatalogRef: { current: ShownProduct[] } = {
+          // Cart resolution is about listings already shown, not about
+          // whether the goal-sheet item-term lock still matches. Gating
+          // this on sheetApplies emptied the catalog on "add to cart"
+          // (classifier often tags that as a new request) so addToCart
+          // could only fail-closed and the model searched instead.
+          current: rememberShown(
+            storedGoal?.shownCatalog ?? [],
+            body?.shownCatalog ?? [],
+          ),
+        };
         const searchTools = {
           searchProducts: searchProductsTool(
             body?.buyerLocation,
@@ -3991,6 +4144,13 @@ async function handleSearch(req: Request) {
             rememberedBudget,
             allowNearbyBusinesses,
             excludeVendorId,
+            carriedAttributes,
+            (results) => {
+              shownCatalogRef.current = rememberShown(
+                shownCatalogRef.current,
+                results.map(compactVendorMatch),
+              );
+            },
           ),
           searchStores: searchStoresTool(
             body?.buyerLocation,
@@ -3998,14 +4158,28 @@ async function handleSearch(req: Request) {
             locationLabel,
             allowNearbyBusinesses,
             excludeVendorId,
+            carriedAttributes,
           ),
-          getVendorProducts: getVendorProductsTool(push),
+          getVendorProducts: getVendorProductsTool(push, (results, store) => {
+            shownCatalogRef.current = rememberShown(
+              shownCatalogRef.current,
+              results.map((item) => compactStoreProduct(item, store)),
+            );
+          }),
           // Takes only `buyerAuth` now: the tool no longer creates the
           // request (the phone must be confirmed first, which only the
           // browser can do), so location/image/matchQuery all moved to
           // the frontend's own POST /api/buyer-requests.
           createBuyerRequest: createBuyerRequestTool(buyerRequestActor),
           offerBuyerRequest: offerBuyerRequestTool(),
+          addToCart: addToCartTool({
+            auth: buyerAuth,
+            catalogRef: shownCatalogRef,
+            cartVendorId: body?.cartVendorId ?? null,
+            cartVendorName: body?.cartVendorName ?? null,
+            conversationId: conversation?.conversationId ?? null,
+            push,
+          }),
         };
         const system = buildSystemPrompt(
           Boolean(body?.buyerLocation),
@@ -4019,6 +4193,7 @@ async function handleSearch(req: Request) {
                 maxBudgetNaira: storedGoal.maxBudgetNaira,
                 cheapestSeenNaira: storedGoal.cheapestSeenNaira,
                 shownCount: storedGoal.shownProductIds?.length ?? 0,
+                shownCatalog: storedGoal.shownCatalog,
                 // The photo turn's own captured detail (see buildSystemPrompt's
                 // goal param) — the only thing that keeps a photographed item
                 // from reaching the model as the bare word "dress".
@@ -6391,6 +6566,7 @@ async function handleSearch(req: Request) {
           vendorProductsStore,
           buyerRequestOffer,
           buyerRequestOffered,
+          cartAdd,
           productCall,
           storeCall,
         } = outcome;
@@ -6848,9 +7024,10 @@ async function handleSearch(req: Request) {
               usableBudget(input?.maxBudgetNaira) ??
               usableBudget(rememberedBudget) ??
               null,
-            attributes: Array.isArray(input?.attributes)
-              ? input.attributes
-              : undefined,
+            attributes: mergeAttributeLists(
+              Array.isArray(input?.attributes) ? input.attributes : undefined,
+              carriedAttributes,
+            ),
           };
         }
 
@@ -7184,6 +7361,7 @@ async function handleSearch(req: Request) {
           awaitingComparisonPurchaseReply: false,
           comparisonPickItem: null,
           isGuidanceReply: usedGuidanceReply,
+          cartAdd,
         });
 
         // Recruitment-lead capture: Velte had no vendor for this request AND

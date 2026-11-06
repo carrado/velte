@@ -3,6 +3,7 @@ import type {
   Store,
   UpdateStorePayload,
   PublicStore,
+  PublicProductDetail,
   MarketplacePreviewItem,
   VendorPreviewItem,
   MarketplaceBrowseItem,
@@ -28,6 +29,29 @@ export async function updateMyStore(
 export async function getPublicStore(handle: string): Promise<PublicStore> {
   return backendData<PublicStore>(
     `/store/by-handle/${encodeURIComponent(handle)}`,
+  );
+}
+
+/** Public product detail by slug — cookie optional so signed-in viewers get WhatsApp. */
+export async function getPublicProductBySlug(
+  slug: string,
+  cookie?: string,
+): Promise<PublicProductDetail> {
+  return backendData<PublicProductDetail>(
+    `/store/products/by-slug/${encodeURIComponent(slug)}`,
+    cookie ? { cookie } : undefined,
+  );
+}
+
+/** Legacy /store/:handle/:id — used to redirect to /{slug}. */
+export async function getPublicProduct(
+  handle: string,
+  productId: string,
+  cookie?: string,
+): Promise<PublicProductDetail> {
+  return backendData<PublicProductDetail>(
+    `/store/by-handle/${encodeURIComponent(handle)}/products/${encodeURIComponent(productId)}`,
+    cookie ? { cookie } : undefined,
   );
 }
 

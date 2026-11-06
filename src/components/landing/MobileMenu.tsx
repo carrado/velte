@@ -17,10 +17,14 @@ import {
   FileTextIcon,
   HelpCircleIcon,
   MailIcon,
+  NewspaperIcon,
   RouteIcon,
   ShieldIcon,
+  SparklesIcon,
   UserIcon,
 } from "@/components/icons/hero";
+import { useBuyerStore } from "@/store/buyerStore";
+import { useUserStore } from "@/store/userStore";
 
 // Rebuilt 2026-08-16 as a right-side drawer with expandable grouped
 // sections, replacing the 2026-08-14 three-item full-width dropdown
@@ -108,15 +112,19 @@ const exploreItems: {
     subtitle: "The buyer & seller flow, step by step",
     href: "/how-it-works",
   },
+  {
+    icon: NewspaperIcon,
+    title: "Blog",
+    subtitle: "Tips, stories, and product news",
+    href: "/blog",
+  },
 ];
 
-// Pricing deliberately NOT here — same call Footer.tsx already made ("not
-// ready to be a footer-level link yet on its own"; still reachable from How
-// It Works' vendor column) and it applies even more here: /pricing's own
-// FAQ says "We're finalising exact pricing as Velte rolls out," and the
-// numbers on it are vendor lead-cost info, not something the buyer majority
-// of this drawer's visitors have any use for.
-const resourceItems = [{ icon: HelpCircleIcon, title: "FAQ", href: "/faq" }];
+const resourceItems = [
+  { icon: SparklesIcon, title: "Ask Velte", href: "/chat" },
+  { icon: HelpCircleIcon, title: "FAQ", href: "/faq" },
+  { icon: FileTextIcon, title: "Pricing", href: "/pricing" },
+];
 
 // Privacy/Terms folded in here rather than a fourth accordion section for
 // just two links — same "Legal" pair Footer.tsx groups separately, but this
@@ -239,6 +247,19 @@ export function MobileMenu({
   const [exploreOpen, setExploreOpen] = useState(true);
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [companyOpen, setCompanyOpen] = useState(false);
+  const vendor = useUserStore((s) => s.user);
+  const buyer = useBuyerStore((s) => s.buyer);
+  const vendorStoreName =
+    vendor?.company?.name?.trim() ||
+    (vendor as unknown as { store?: { name?: string } })?.store?.name?.trim() ||
+    (vendor as unknown as { storeName?: string })?.storeName?.trim() ||
+    vendor?.businessName?.trim();
+  const signedInName = vendor
+    ? vendorStoreName || vendor.name?.trim() || vendor.email?.trim() || null
+    : buyer
+      ? buyer.name?.trim() || buyer.email?.trim() || null
+      : null;
+  const accountHref = vendor ? "/wallet" : "/chat";
 
   useEffect(() => {
     if (!open) return;
@@ -408,11 +429,13 @@ export function MobileMenu({
             <div className="p-5 border-t border-gray-100 shrink-0">
               <motion.div whileTap={{ scale: 0.97 }}>
                 <Link
-                  href="/auth/signup"
+                  href={signedInName ? accountHref : "/auth/signup"}
                   onClick={onClose}
                   className="h-12 flex items-center justify-center gap-1.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-[14px] font-semibold shadow-lg shadow-orange-500/20 transition-colors"
                 >
-                  Join Velte
+                  {signedInName
+                    ? `Continue as ${signedInName.split(" ")[0]}`
+                    : "Join Velte"}
                   <ArrowRightIcon size={14} />
                 </Link>
               </motion.div>

@@ -101,7 +101,7 @@ function CreditsOverlay({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const { balance, used, isGuest, walletBalanceKobo, topUp, busy } =
+  const { balance, used, allowance, isGuest, walletBalanceKobo, topUp, busy } =
     useCredits(isOpen);
   // Read here rather than threaded through useCredits: the referral link is
   // an attribute of the buyer, not of their balance, and the store already
@@ -171,6 +171,7 @@ function CreditsOverlay({
           <CreditsPanel
             balance={balance}
             used={used}
+            allowance={allowance}
             isGuest={isGuest}
             referralCode={referralCode}
             walletBalanceKobo={walletBalanceKobo}

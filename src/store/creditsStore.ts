@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 
 import { GUEST_CREDITS } from "@/lib/credits";
+import type { AllowanceSummary } from "@/lib/entitlements";
 import { guestCredits } from "@/lib/guestCredits";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
@@ -32,6 +33,8 @@ interface CreditsStore {
   balance: number | null;
   /** Credits already spent. The other half of every meter. */
   used: number;
+  /** Today's (or this window's) free allowance, when the tier has one. */
+  allowance: AllowanceSummary | null;
   /** The VENDOR's lead wallet, in kobo. Null for guests and buyers, who have
    *  no wallet — which is what the panel's funding choice branches on. */
   walletBalanceKobo: number | null;
@@ -101,6 +104,7 @@ const RECONCILE_GRACE_MS = 4000;
 export const useCreditsStore = create<CreditsStore>()((set, get) => ({
   balance: null,
   used: 0,
+  allowance: null,
   walletBalanceKobo: null,
   busy: false,
   lastSpendAt: null,
@@ -113,6 +117,7 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
       // is whatever is missing from the starting allowance. Clamped: a
       // hand-edited or stale value must not produce a negative meter.
       used: Math.max(GUEST_CREDITS - left, 0),
+      allowance: null,
       walletBalanceKobo: null,
     });
   },
@@ -131,6 +136,7 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
           // velte-backend's Credits.model.js for the full reasoning.
           spentSinceTopUp?: number;
           walletBalanceKobo?: number | null;
+          allowance?: AllowanceSummary | null;
           // True only on /api/usage's no-cookie branch. `load()` is only
           // ever called believing it ISN'T a guest (see useCredits.ts's own
           // branch) — seeing this true means the session actually expired
@@ -178,6 +184,7 @@ export const useCreditsStore = create<CreditsStore>()((set, get) => ({
           typeof data.walletBalanceKobo === "number"
             ? data.walletBalanceKobo
             : null;
+        next.allowance = data.allowance ?? null;
         set(next);
       } catch {
         // Leaves the balance as it was rather than showing zero — telling

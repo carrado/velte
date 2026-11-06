@@ -3,6 +3,7 @@
 import { createPortal } from "react-dom";
 
 import { CloseIcon, LogOutIcon, LoaderIcon } from "@/components/icons/hero";
+import { modalScrimClass } from "@/lib/modalScrim";
 
 // "Are you sure?" before a chat-surface sign-out (2026-09-05).
 //
@@ -32,7 +33,7 @@ export function LogoutConfirmModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div
-        className="absolute inset-0 bg-black/40"
+        className={`absolute inset-0 ${modalScrimClass()}`}
         onClick={busy ? undefined : onClose}
       />
       <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl bg-surface shadow-2xl">

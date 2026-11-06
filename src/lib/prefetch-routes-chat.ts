@@ -1,6 +1,17 @@
 import { fetchMyRequests } from "@/services/buyerRequests";
 import { fetchNotifications } from "@/services/notifications";
+import { cartApi } from "@/services/cart";
+import { queryKeys } from "@/lib/query-keys";
+import { categoriesApi } from "@/services/products";
+import {
+  fetchHubAdverts,
+  fetchHubBoosts,
+  fetchHubContext,
+  fetchHubHome,
+  fetchHubVendors,
+} from "@/services/hub";
 import { useBuyerStore } from "@/store/buyerStore";
+import { useUserStore } from "@/store/userStore";
 import type { PrefetchTask } from "@/lib/prefetch-routes";
 
 // The /chat tree's own instance of the vendor dashboard's "prefetch the next
@@ -15,8 +26,10 @@ import type { PrefetchTask } from "@/lib/prefetch-routes";
 export function getChatRouteKey(href: string): string {
   // "/chat/requests" → "requests", "/chat" → "". Mirrors prefetch-routes.ts's
   // own getRouteKey, just stripping the "chat" segment (this tree's shell
-  // root) instead of a userId.
+  // root) instead of a userId. /hub sits outside that shell, so its own
+  // first segment is the key.
   const segments = href.split("/").filter(Boolean);
+  if (segments[0] === "hub") return segments.join("/");
   return segments.slice(1).join("/");
 }
 
@@ -26,6 +39,48 @@ export function getChatRouteKey(href: string): string {
 // see this" state renders exactly as it does today. Checked once, here,
 // rather than in each case, since the answer is the same everywhere.
 export function getChatPrefetchTasks(routeKey: string): PrefetchTask[] {
+  // /hub shows the vendor page whenever a vendor session is signed in, so
+  // that click has to warm the vendor cache rather than the buyer directory.
+  if (routeKey === "hub/boost" && useUserStore.getState().user) {
+    return [
+      { queryKey: queryKeys.hub.context, queryFn: fetchHubContext },
+      {
+        queryKey: queryKeys.hub.home("vendor"),
+        queryFn: () => fetchHubHome("vendor"),
+      },
+      { queryKey: queryKeys.hub.boosts, queryFn: fetchHubBoosts },
+      {
+        queryKey: queryKeys.products.list({ limit: 50 }),
+        queryFn: () => categoriesApi.getProducts({ limit: 50 }),
+      },
+    ];
+  }
+
+  if (routeKey === "hub/advert" && useUserStore.getState().user) {
+    return [
+      { queryKey: queryKeys.hub.context, queryFn: fetchHubContext },
+      {
+        queryKey: queryKeys.hub.home("vendor"),
+        queryFn: () => fetchHubHome("vendor"),
+      },
+      {
+        queryKey: queryKeys.products.list({ limit: 50 }),
+        queryFn: () => categoriesApi.getProducts({ limit: 50 }),
+      },
+    ];
+  }
+
+  if (routeKey === "hub" && useUserStore.getState().user) {
+    return [
+      {
+        queryKey: queryKeys.hub.home("vendor"),
+        queryFn: () => fetchHubHome("vendor"),
+      },
+      { queryKey: queryKeys.hub.context, queryFn: fetchHubContext },
+      { queryKey: queryKeys.hub.adverts, queryFn: fetchHubAdverts },
+    ];
+  }
+
   const buyer = useBuyerStore.getState().buyer;
   if (!buyer) return [];
 
@@ -42,6 +97,27 @@ export function getChatPrefetchTasks(routeKey: string): PrefetchTask[] {
         {
           queryKey: ["notifications"],
           queryFn: fetchNotifications,
+        },
+      ];
+    case "orders":
+      return [
+        {
+          queryKey: queryKeys.cart.buyerOrders,
+          queryFn: cartApi.listOrders,
+        },
+      ];
+    case "hub":
+      return [
+        {
+          queryKey: queryKeys.hub.home("buyer"),
+          queryFn: () => fetchHubHome("buyer"),
+        },
+      ];
+    case "hub/vendors":
+      return [
+        {
+          queryKey: queryKeys.hub.vendors,
+          queryFn: fetchHubVendors,
         },
       ];
     // "" (bare /chat) and anything else this tree doesn't recognise — no

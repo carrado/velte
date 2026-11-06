@@ -824,6 +824,107 @@ export function getSectorClarifiers(
   };
 }
 
+const COLOR_WORDS = new Set([
+  "black",
+  "white",
+  "red",
+  "blue",
+  "green",
+  "brown",
+  "grey",
+  "gray",
+  "gold",
+  "silver",
+  "pink",
+  "purple",
+  "beige",
+  "navy",
+  "cream",
+  "yellow",
+  "orange",
+  "khaki",
+  "tan",
+  "olive",
+  "maroon",
+  "burgundy",
+  "ivory",
+  "nude",
+  "charcoal",
+  "multi",
+]);
+
+const WEAK_MODIFIERS = new Set([
+  ...STOPWORDS,
+  "good",
+  "nice",
+  "quality",
+  "decent",
+  "best",
+  "cheap",
+  "affordable",
+  "fine",
+  "proper",
+  "original",
+  "authentic",
+  "solid",
+  "great",
+  "excellent",
+  "cool",
+  "lovely",
+]);
+
+const SIZE_PATTERN =
+  /\b(?:size\s+)?(?:uk|us|eu)\s*\d{1,2}\b|\bsize\s+(?:\d{1,2}|xxs|xs|s|m|l|xl|xxl|xxxl|2xl|3xl|4xl)\b|\b(?:xxs|xxl|xxxl|2xl|3xl|4xl|xs|xl)\b/i;
+
+const FOOTWEAR_STYLES =
+  /\b(sneakers?|trainers?|loafers?|boots?|sandals?|heels?|oxfords?|pumps?|slip-?ons?|brogues?|mules?|espadrilles?|cleats?)\b/i;
+
+/**
+ * Drop clarifier fields the buyer's own words already answered, so the
+ * pre-search template never re-asks a colour they named or a style that's
+ * already the item ("sneakers"). Brand is dropped only when an example
+ * brand from that field actually appears in the text — we don't try to
+ * know every brand.
+ */
+export function unansweredClarifierFields(
+  fields: ClarifierField[],
+  buyerText: string,
+): ClarifierField[] {
+  const text = buyerText.toLowerCase();
+  return fields.filter((f) => {
+    const name = f.name.toLowerCase();
+    if (name.includes("color") || name.includes("colour")) {
+      return ![...COLOR_WORDS].some((c) => text.includes(c));
+    }
+    if (name.includes("size")) return !SIZE_PATTERN.test(text);
+    if (name.includes("style")) return !FOOTWEAR_STYLES.test(text);
+    if ((name.includes("brand") || name.includes("model")) && f.example) {
+      const mentioned = f.example
+        .replace(/^e\.?g\.?\s*/i, "")
+        .split(/,|\bor\b|\//)
+        .map((part) => part.trim().toLowerCase())
+        .filter((part) => part.length > 1);
+      if (mentioned.some((brand) => text.includes(brand))) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * True when the only extra words beyond the item itself are colours and
+ * vague quality adjectives — "I need a good black sneakers" is weak;
+ * "Nike black sneakers" / "size 42 sneakers" are not. Used by route.ts so
+ * the pre-search details gate still fires when classifyScope's
+ * hasSpecificDetails treats a colour as enough.
+ */
+export function isWeakProductQuery(message: string, itemTerm: string): boolean {
+  const itemTokens = new Set(tokenize(itemTerm));
+  const leftover = tokenize(message).filter(
+    (t) => !itemTokens.has(t) && !WEAK_MODIFIERS.has(t) && !COLOR_WORDS.has(t),
+  );
+  return leftover.length === 0;
+}
+
 /**
  * The SECTOR-LESS fallback pool — what to ask about when detection came up
  * empty but the buyer clearly named an item ("a power bank", "a blender",

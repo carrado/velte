@@ -1215,3 +1215,11 @@ export function buildingShoppingPlanPhrase(): string[] {
     "Setting up background monitoring for this…",
   ];
 }
+
+export function addingToCartPhrase(): string[] {
+  return [
+    "Checking that listing…",
+    "Confirming price and stock…",
+    "Adding it to your cart…",
+  ];
+}

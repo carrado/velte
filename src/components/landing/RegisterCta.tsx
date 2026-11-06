@@ -58,8 +58,8 @@ const vendorFeatures: {
 
 export function RegisterCta() {
   return (
-    <section className="py-14 sm:py-20">
-      <div className="max-w-6xl mx-auto px-5 sm:px-8">
+    <section className="py-14 sm:py-20 bg-canvas">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8">
         <motion.div
           initial="hidden"
           whileInView="show"

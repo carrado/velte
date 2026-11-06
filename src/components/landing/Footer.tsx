@@ -30,49 +30,24 @@ const socialLinks = [
   },
 ];
 
-// Grouped columns (2026-08-16, replaces the flat "essential links" list from
-// 2026-08-15 below) — the flat-list version was itself a reaction to an
-// EARLIER two-column attempt that stacked too tall on mobile (no side-by-side
-// grid there). This version fixes that instead of re-triggering it: on
-// mobile the groups sit in a 2x2-ish grid (`grid-cols-2`), not stacked full
-// height one under another, so it's barely taller than the old flat list;
-// desktop goes to one row (a justified flex, not a fixed grid-cols-N — see
-// the render below). Pricing deliberately left out (2026-08-16) — not
-// dropped for a design reason, just not ready to be a footer-level link yet
-// on its own; it's still reachable from How It Works' vendor column.
-//
-// `/updates` swapped for `/how-it-works` (2026-08-16) — Updates is a vendor-
-// account changelog ("policy and feature changes that affect your Velte
-// vendor account"), content for people who already have a store, not
-// something a first-time visitor gets value from. How It Works fills the
-// same Resources slot with a real step-by-step page instead (grounded in
-// existing Hero/VeluxShowcase/RegisterCta/pricing copy, not new claims).
-//
-// Standalone "Product" column (Marketplace + Ask Velux) folded into
-// Resources same day — it originally existed because "both already live in
-// Navbar, just not re-surfaced here"; that stopped being true once Navbar's
-// AI-agent-pivot redesign dropped its own Ask Velux button and Browse link
-// (see Navbar.tsx's own comment). "Ask Velte" kept — Footer renders on
-// every static page (About, FAQ, How It Works, ...) and FloatingAskBar/
-// Hero's composer only exist on "/", so this is genuinely the only path
-// into /chat from anywhere else. "Marketplace" dropped entirely, not just
-// de-emphasized (2026-08-16) — the product itself doesn't work that way
-// anymore: AI search is what surfaces every product/business/service now,
-// there's no separate "browse the stacked-up catalog" experience left to
-// send anyone to. The /marketplace route and its MarketplaceBrowse/
-// VendorsGrid components are UNTOUCHED by this — only the navigational
-// path to it is gone; deleting the page itself is a separate, bigger call
-// nobody's made yet.
+// Grouped columns — updated 2026-11-02:
+// Added "Product" column (Pricing, Blog) now that both pages are real and
+// complete. Pricing was deliberately left out of the footer in the original
+// August pass ("not ready to be a footer-level link yet") — that's no longer
+// true. Blog reinstated after the route was confirmed live. "For Businesses"
+// links to /pricing which is the vendor-facing entry point until a dedicated
+// vendor landing page exists.
+// Resources column now focused on help/discovery content (How It Works,
+// Ask Velte, FAQ) — product links moved to Product column.
 const footerGroups: {
   heading: string;
   links: { label: string; href: string }[];
 }[] = [
   {
-    heading: "Company",
+    heading: "Product",
     links: [
-      { label: "About", href: "/about" },
-      { label: "Careers", href: "/careers" },
-      { label: "Contact", href: "/contact" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Blog", href: "/blog" },
     ],
   },
   {
@@ -81,6 +56,14 @@ const footerGroups: {
       { label: "How It Works", href: "/how-it-works" },
       { label: "Ask Velte", href: "/chat" },
       { label: "FAQ", href: "/faq" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { label: "About", href: "/about" },
+      { label: "Careers", href: "/careers" },
+      { label: "Contact", href: "/contact" },
     ],
   },
   {
@@ -96,23 +79,16 @@ export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="bg-surface border-t border-gray-200">
-      {/* Widened 5xl → 6xl and switched brand/groups to a justified flex row
-          (2026-08-16) — the old grid-cols-6 packed everything toward the
-          left edge of a narrower container; this spreads the 4 groups across
-          the full row with real gaps between them instead of being squeezed
-          together, closer to the airy spacing on the reference site. Logo
-          also sized down (72px → 56px) — the 2026-08-14 aspect-ratio fix
-          (see Navbar's own comment) rendered every logo instance at its true
-          undistorted height, which read as noticeably larger than intended
-          here. */}
-      <div className="max-w-6xl mx-auto px-5 sm:px-8 py-9 sm:py-10">
+    <footer className="bg-surface border-t border-gray-200 dark:border-white/10">
+      {/* Container aligned with Navbar (max-w-7xl mx-auto px-5 sm:px-8) so logo,
+          columns, and copyright row line up identically with header elements. */}
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 py-9 sm:py-10">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8 mb-8">
           <div className="max-w-[260px] shrink-0">
             <Link href="/" className="flex items-center gap-2.5 mb-2.5">
               <VelteLogo width={56} height={28} priority />
             </Link>
-            <p className="text-gray-500 text-sm leading-relaxed mb-3.5">
+            <p className="text-ink/75 text-sm leading-relaxed mb-3.5">
               Describe what you need — we find the nearest real vendor who
               actually has it.
             </p>
@@ -136,10 +112,10 @@ export default function Footer() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-8 sm:flex sm:gap-10 lg:gap-16">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:flex sm:gap-10 lg:gap-14">
             {footerGroups.map((group) => (
               <div key={group.heading}>
-                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-3">
+                <p className="text-ink/60 text-xs font-semibold uppercase tracking-wide mb-3">
                   {group.heading}
                 </p>
                 <ul className="space-y-2.5">
@@ -147,7 +123,7 @@ export default function Footer() {
                     <li key={link.label}>
                       <Link
                         href={link.href}
-                        className="text-gray-500 hover:text-gray-900 text-sm transition-colors duration-150"
+                        className="text-ink/75 hover:text-ink text-sm transition-colors duration-150"
                       >
                         {link.label}
                       </Link>
@@ -159,13 +135,17 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-gray-200 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-gray-400 text-xs text-center sm:text-left">
+        <div className="border-t border-gray-200 dark:border-white/10 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-ink/65 text-xs text-center sm:text-left">
             &copy; {year} Velte Technologies. All rights reserved.
           </p>
-          <p className="text-gray-400 text-xs">
-            Matched by meaning, proximity, and trust — not keywords.
-          </p>
+          <div className="flex items-center gap-4">
+            <span className="text-ink/65 text-xs">🇳🇬 Built for Nigeria</span>
+            <span className="text-ink/40 text-xs hidden sm:inline">·</span>
+            <p className="text-ink/65 text-xs hidden sm:block">
+              Matched by meaning, proximity, and trust.
+            </p>
+          </div>
         </div>
       </div>
     </footer>

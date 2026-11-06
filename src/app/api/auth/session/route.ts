@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { BackendError, backendData } from "@/lib/server/backend";
+import { clearSessionCookies } from "@/lib/server/clearSessionCookies";
 import { AUTH_COOKIE } from "@/lib/server/session";
 import { BUYER_AUTH_COOKIE } from "@/lib/server/buyerSession";
 import type { User } from "@/types/user";
@@ -15,14 +16,16 @@ import type { Buyer } from "@/types/buyer";
 // Backed by velte-backend's own GET /auth/me — the SAME endpoint
 // src/app/api/auth/me/route.ts calls for its own strict, vendor-required
 // use, reused here rather than a separate backend route (that one always
-// 200s with `{ vendor, buyer, vendorError }`; this route just never looks
-// at `vendorError`, since a broken vendor cookie is simply "no vendor" for
-// a lenient caller, not something worth failing over). Trustworthy doing
-// so precisely BECAUSE loginAsVendor and firebaseSignIn now pair or clear
+// 200s with `{ vendor, buyer, vendorError }`). `vendorError` 403 is an
+// unverified vendor and is left alone; every other empty resolution of a
+// cookie that was actually sent is a dead session. Trustworthy doing so
+// precisely BECAUSE loginAsVendor and firebaseSignIn now pair or clear
 // the other cookie at login time (see identityLink.service.js in that
 // repo) — the two cookies in a real request are guaranteed to already
-// agree. Never 401s — a guest (`{vendor: null, buyer: null}`) is a normal
-// answer, not an error, so this never uses requireAuth()/requireBuyerAuth().
+// agree. A guest (no cookies) is `{vendor: null, buyer: null}` with 200.
+// A cookie that was sent and resolved to nobody is a dead session: 401,
+// and the cookies are cleared, so the client can leave for home instead of
+// treating it as the same answer as a guest.
 export async function GET() {
   const jar = await cookies();
   const vendorToken = jar.get(AUTH_COOKIE)?.value;
@@ -43,19 +46,33 @@ export async function GET() {
     const data = await backendData<{
       vendor: (User & { _id?: string }) | null;
       buyer: (Buyer & { _id?: string }) | null;
-      vendorError: unknown;
+      vendorError: { status?: number } | null;
     }>("/auth/me", { cookie: parts.join("; ") });
-    return NextResponse.json({
-      // Same `id ?? _id` normalisation /api/auth/me already needs — see
-      // that route's own comment: the frontend User/Buyer types depend on
-      // `id`, and a raw Mongoose doc doesn't always carry it.
-      vendor: data.vendor
-        ? { ...data.vendor, id: data.vendor.id ?? data.vendor._id }
-        : null,
-      buyer: data.buyer
-        ? { ...data.buyer, id: data.buyer.id ?? data.buyer._id }
-        : null,
-    });
+    // Same `id ?? _id` normalisation /api/auth/me already needs — see
+    // that route's own comment: the frontend User/Buyer types depend on
+    // `id`, and a raw Mongoose doc doesn't always carry it.
+    const vendor = data.vendor
+      ? { ...data.vendor, id: data.vendor.id ?? data.vendor._id }
+      : null;
+    const buyer = data.buyer
+      ? { ...data.buyer, id: data.buyer.id ?? data.buyer._id }
+      : null;
+    // Unverified vendors still hold a real cookie (403). Anything else that
+    // was sent and came back empty did not survive verification.
+    const vendorUnverified = data.vendorError?.status === 403;
+    const dead: string[] = [];
+    if (vendorToken && !vendor && !vendorUnverified) dead.push(AUTH_COOKIE);
+    if (buyerToken && !buyer) dead.push(BUYER_AUTH_COOKIE);
+    if (dead.length > 0 && !vendor && !buyer && !vendorUnverified) {
+      return clearSessionCookies(
+        NextResponse.json(
+          { vendor: null, buyer: null, code: "session_expired" },
+          { status: 401 },
+        ),
+        dead,
+      );
+    }
+    return clearSessionCookies(NextResponse.json({ vendor, buyer }), dead);
   } catch (err) {
     // A real "you are not signed in" from the backend (an expired or
     // revoked token) IS an answer — signed out, nothing to retry.

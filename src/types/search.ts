@@ -238,6 +238,15 @@ export interface SearchRequestBody {
   // changed — the server merges rather than overwrites.
   locationDeclined?: boolean;
   locationPlaceName?: string;
+  // The cart currently open in this browser (one vendor). Lets addToCart
+  // refuse a second store in CODE rather than mixing two escrow orders.
+  cartVendorId?: string;
+  cartVendorName?: string;
+  // Listings the client just rendered this request — fallback when the
+  // conversation's shownCatalog hasn't landed yet (or the buyer is a
+  // guest with no persisted conversation). Server still prefers its own
+  // stored copy when both exist.
+  shownCatalog?: ShownProduct[];
   // The composer's "+" tool badge (2026-09-06) — the buyer explicitly
   // picked one of a small set of shopping tools before typing (see
   // ComposerTool), rather than this being guessed from the words alone.
@@ -305,6 +314,9 @@ export interface VendorMatch {
   // to measure a distance against.
   distanceKm: number | null;
   score: number;
+  // True when the listing can go in a cart: fixed naira price, in stock,
+  // and the vendor has a payout recipient. WhatsApp is the CTA otherwise.
+  checkoutEligible?: boolean;
 }
 
 // Mirrors the shape searchStores() returns in staffly-ai-backend's
@@ -571,6 +583,7 @@ export interface StoreProductItem {
   currency: string;
   mainImageUrl: string | null;
   quoteOnRequest: boolean;
+  checkoutEligible?: boolean;
 }
 
 // A structured outcome from createBuyerRequestTool — the AI-agent fallback
@@ -1233,6 +1246,15 @@ export type SearchStreamEvent =
       // correct it, instead of the buyer silently getting unlimited free
       // turns for as long as the tab stays open.
       actorType: "guest" | "buyer" | "vendor";
+      // Structured result of addToCart this turn — prices/stock come from
+      // the backend, never the model's text. Optional: omitted on turns
+      // that never called the tool (and on turns persisted before it
+      // existed).
+      cartAdd?: import("./cart").CartAddOutcome | null;
+      // True when this turn should open the existing cart sidebar rather
+      // than search or invent checkout copy. Set by the deterministic
+      // "go to checkout" short-circuit (and after a successful add).
+      openCart?: boolean;
     }
   | { type: "error"; message: string };
 
@@ -1400,6 +1422,7 @@ export interface StoredSearchTurn {
   knownBudgetNaira: number | null;
   // See SearchStreamEvent's own comment on the "final" variant.
   shoppingPlan?: ShoppingPlanSnapshot | null;
+  cartAdd?: import("./cart").CartAddOutcome | null;
 }
 
 // The active shopping task's lifecycle — derived server-side (staffly-ai-
@@ -1416,6 +1439,18 @@ export type ConversationTaskStatus =
 // The structured "what is this buyer currently trying to get done" record
 // (Phase 1 keeps it thin — the raw query + counts; Phase 2's DB-backed
 // attribute schemas are what make it richly structured).
+// Compact listing the buyer has already been shown this request. Used to
+// resolve "add the second one" / "the black one" in CODE against real IDs
+// — never includes vendor-written description text (untrusted).
+export interface ShownProduct {
+  productId: string;
+  name: string;
+  vendorId: string;
+  vendorName: string;
+  checkoutEligible: boolean;
+  attributes: string[];
+}
+
 export interface ConversationTask {
   status: ConversationTaskStatus;
   // The buyer's most recent non-continuation message text.
@@ -1438,6 +1473,10 @@ export interface ConversationTask {
   maxBudgetNaira: number | null;
   attributes: string[];
   shownProductIds: string[];
+  // Compact copy of those listings — id/name/vendor/attributes only, never
+  // a vendor-written description — so "the second one" / "the black one"
+  // resolve in code against what was actually shown.
+  shownCatalog?: ShownProduct[];
   cheapestSeenNaira: number | null;
   updatedAt: string;
 }

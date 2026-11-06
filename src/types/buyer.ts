@@ -46,4 +46,9 @@ export interface Buyer {
    *  later that has to follow a person rather than a cookie needs exactly
    *  this". */
   linkedVendorId: string | null;
+  tier?: string;
+  plan?: string;
+  isPremium?: boolean;
+  premium?: boolean;
+  subscription?: unknown;
 }

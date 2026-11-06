@@ -2,10 +2,13 @@ import { create } from "zustand";
 import type { OnboardingStep } from "@/types/onboarding";
 
 // Pure click-through tour over the persistent shell chrome (Sidebar on
-// desktop, BottomNav on mobile) — every target here is mounted on every
-// dashboard page, so unlike the old action-gated tour this never needs to
-// navigate the buyer/vendor between pages or wait on a real action; it's
-// just Next/Skip walking a fixed list of spotlights.
+// desktop; BottomNav plus the avatar menu on mobile) — every target here
+// is reachable on every dashboard page, so unlike the old action-gated
+// tour this never needs to navigate the buyer/vendor between pages or
+// wait on a real action; it's just Next/Skip walking a fixed list of
+// spotlights. Store / Settings on a phone are `#store-mobile` /
+// `#settings-mobile` inside the header avatar menu, which Header keeps
+// open for the length of the tour.
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: "add-listing",

@@ -48,7 +48,7 @@ export default function ProductActionsPopover({
         <button
           onClick={() => {
             setPopoverOpen(false);
-            navigate(`/${userId}/products/${product.id}`);
+            navigate(`/products/${product.id}`);
           }}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
         >
@@ -58,7 +58,7 @@ export default function ProductActionsPopover({
         <button
           onClick={() => {
             setPopoverOpen(false);
-            navigate(`/${userId}/products/${product.id}/edit`);
+            navigate(`/products/${product.id}/edit`);
           }}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors cursor-pointer"
         >

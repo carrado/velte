@@ -13,6 +13,7 @@ import {
   LoaderIcon,
   ShieldCheckIcon,
 } from "@/components/icons/hero";
+import { modalScrimClass } from "@/lib/modalScrim";
 
 // Bank transfer (DVA) funding is part of the plan (spec's card + DVA fallback
 // model) but not surfaced right now — Paystack's Dedicated NUBAN requires the
@@ -115,7 +116,10 @@ export default function FundingMethodModal({
   // clipping bug already fixed for dropdowns via AnchoredPopover).
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        className={`absolute inset-0 ${modalScrimClass()}`}
+        onClick={onClose}
+      />
       <div className="relative bg-surface rounded-xl shadow-2xl w-full max-w-md mx-4 z-10 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-dash-heading font-semibold text-gray-900">
@@ -287,9 +291,9 @@ export default function FundingMethodModal({
       </div>
 
       {redirectOpen && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center">
+        <div className="fixed inset-0 z-[60] h-dvh w-dvw flex items-center justify-center">
           <div
-            className="absolute inset-0 bg-black/40"
+            className={`absolute inset-0 ${modalScrimClass(true)}`}
             onClick={() =>
               !checkoutMutation.isPending && setRedirectOpen(false)
             }

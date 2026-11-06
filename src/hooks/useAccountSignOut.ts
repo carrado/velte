@@ -57,6 +57,7 @@ export function useAccountSignOut(): {
     ]);
 
     clearBuyer();
+    useUserStore.getState().clearUser();
     // Their conversations and notifications are account data — they must
     // not sit in the cache for whoever uses this browser next.
     queryClient.clear();
@@ -78,10 +79,9 @@ export function useAccountSignOut(): {
     // can't be served from bfcache without hitting middleware) — the same
     // reasoning the vendor logout in Header.tsx gives.
     //
-    // /welcome inside the installed app, /chat in a browser: someone who
-    // signs out of the chat is still a buyer, and can keep searching as a
-    // guest.
-    window.location.replace(isStandalone ? "/welcome" : "/chat");
+    // /welcome inside the installed app, / (homepage) in a browser:
+    // Logging out lands on the homepage.
+    window.location.replace(isStandalone ? "/welcome" : "/");
   };
 
   return { signOut, busy };

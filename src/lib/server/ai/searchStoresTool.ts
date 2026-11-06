@@ -9,6 +9,7 @@ import {
   usableAttributes,
   usableBudget,
 } from "@/lib/server/ai/searchProductsTool";
+import { mergeAttributeLists } from "@/lib/server/ai/statedAttributes";
 import {
   searchingPhrase,
   foundCountPhrase,
@@ -43,18 +44,16 @@ const inputSchema = z.object({
     .number()
     .optional()
     .describe("Search radius in km. Defaults to 10 if not specified."),
-  // Both fields below (2026-09-17) are NEVER used to filter or narrow which
-  // vendors this call returns — searchStores matches on businessType alone,
-  // same as before. They exist purely so a real detail the buyer already
-  // gave (over this message or an earlier turn of the SAME request) reaches
-  // the vendor's own WhatsApp handoff message instead of being dropped —
-  // see StoreResultCard's own comment on why a vendor deciding whether to
-  // reply wants this even though the search itself never needed it.
+  // Both fields below (2026-09-17) also ride into the vendor's WhatsApp
+  // handoff. Since 2026-10-05 they additionally shape Exact vs Similar
+  // (a wedding decorator is not an exact match for "birthday decorator"
+  // when those words actually appear on the profile) — the candidate pool
+  // is still the bare businessType so a close vendor is never dropped.
   attributes: z
     .array(z.string())
     .optional()
     .describe(
-      "Specific details about the SERVICE/JOB the buyer wants this vendor for — timeframe, event date, quantity, a distinguishing spec, or anything else genuinely relevant to a vendor deciding whether and how to respond — but ONLY ones the buyer's own words actually gave, this message or an earlier turn of this same request. Same rule as searchProducts' own attributes: never invent or guess a plausible-sounding one, an empty/omitted list is correct far more often than a guessed one, and each entry is one short standalone trait, never a clause stitched together with 'and'/'with'/'for'.",
+      "Specific details about the SERVICE/JOB the buyer wants this vendor for — colour, brand, size, spec, fabric, timeframe, event date, quantity, or anything else genuinely relevant to matching — for ANY service, not one category. ONLY ones the buyer's own words actually gave, this message or an earlier turn of this same request. These also shape Exact vs Similar, same as searchProducts. Never invent or guess a plausible-sounding one, an empty/omitted list is correct far more often than a guessed one, and each entry is one short standalone trait, never a clause stitched together with 'and'/'with'/'for'.",
     ),
   maxBudgetNaira: z
     .number()
@@ -115,6 +114,7 @@ export async function searchStoresCore(
     locationLabel,
     excludeVendorId,
     allowNearbyBusinesses,
+    rememberedAttributes,
   }: {
     buyerLocation?: BuyerLocation;
     push?: (candidates: string[]) => void;
@@ -135,6 +135,7 @@ export async function searchStoresCore(
     // its own businessType does ("phone repair shop" yes, "electronics
     // store" no); route.ts overrides that with the scope check's intent.
     allowNearbyBusinesses?: boolean;
+    rememberedAttributes?: string[] | null;
   } = {},
 ): Promise<
   SearchStoresCoreResult | { error: "location-not-found"; message: string }
@@ -180,6 +181,10 @@ export async function searchStoresCore(
     businessType,
     allowNearbyBusinesses,
   );
+  const cleanAttributes = usableAttributes(
+    mergeAttributeLists(attributes, rememberedAttributes),
+  );
+  const attributesText = cleanAttributes?.join(", ") || undefined;
   let results: StoreMatch[],
     furtherResults: StoreMatch[],
     matchTier: MatchTier,
@@ -197,6 +202,7 @@ export async function searchStoresCore(
         method: "POST",
         body: {
           queryText: businessType,
+          attributesText,
           lat: coords?.lat,
           lng: coords?.lng,
           radiusKm: radiusKm ?? 10,
@@ -241,18 +247,18 @@ export async function searchStoresCore(
   // applies to its own attributes/budget (self-questioning/placeholder
   // filtering, a non-finite or non-positive budget dropped) rather than a
   // second copy of that logic.
-  const cleanAttributes = usableAttributes(attributes) ?? [];
+  const taggedAttributes = cleanAttributes ?? [];
   const cleanBudget = usableBudget(maxBudgetNaira) ?? null;
   results = results.map((s) => ({
     ...s,
     matchedQuery: businessType,
-    matchedAttributes: cleanAttributes,
+    matchedAttributes: taggedAttributes,
     matchedBudgetNaira: cleanBudget,
   }));
   furtherResults = furtherResults.map((s) => ({
     ...s,
     matchedQuery: businessType,
-    matchedAttributes: cleanAttributes,
+    matchedAttributes: taggedAttributes,
     matchedBudgetNaira: cleanBudget,
   }));
 
@@ -302,6 +308,7 @@ export function searchStoresTool(
   // The acting vendor's own vendorId when a vendor is browsing /chat — see
   // this core's own options comment. Never a result of their own search.
   excludeVendorId?: string | null,
+  rememberedAttributes?: string[] | null,
 ) {
   return tool({
     description:
@@ -322,6 +329,7 @@ export function searchStoresTool(
           locationLabel,
           excludeVendorId,
           allowNearbyBusinesses,
+          rememberedAttributes,
         },
       ),
   });

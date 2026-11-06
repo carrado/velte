@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { cn } from "@/lib/utils";
+import TabBar from "@/components/TabBar";
 import { buildChatLink } from "@/lib/chatLink";
 import type { PublicStoreTab, StoreTabsProps } from "@/types/store";
 import { OfferingCard } from "./shared";
@@ -17,6 +17,7 @@ export default function StoreTabs({
   goods,
   services,
   storeName,
+  storeHandle,
   whatsapp,
   vendorId,
   defaultTab,
@@ -86,22 +87,12 @@ export default function StoreTabs({
 
       <div className="min-w-0">
         {tabs.length > 0 && (
-          <div className="inline-flex p-1 mb-5 bg-gray-100 rounded-xl">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActive(tab.key)}
-                className={cn(
-                  "px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors cursor-pointer",
-                  active === tab.key
-                    ? "bg-surface text-orange-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700",
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="mb-5">
+            <TabBar
+              tabs={tabs.map((tab) => ({ key: tab.key, label: tab.label }))}
+              activeTab={active}
+              onChange={setActive}
+            />
           </div>
         )}
 
@@ -112,6 +103,7 @@ export default function StoreTabs({
                 key={product.id}
                 product={product}
                 storeName={storeName}
+                storeHandle={storeHandle}
                 whatsapp={whatsapp}
                 vendorId={vendorId}
                 isOwn={isOwn}
@@ -127,6 +119,7 @@ export default function StoreTabs({
                 key={product.id}
                 product={product}
                 storeName={storeName}
+                storeHandle={storeHandle}
                 whatsapp={whatsapp}
                 vendorId={vendorId}
                 isOwn={isOwn}

@@ -12,10 +12,16 @@ import {
   StoreIcon,
   WalletIcon,
 } from "@/components/icons/hero";
+import { CreditCardIcon, FeedIcon, GiftIcon } from "@/components/icons";
+import {
+  EnterpriseAvatarBadge,
+  isEnterpriseVendor,
+} from "@/components/EnterpriseBadge";
 import { cn } from "@/lib/utils";
 import { getInitial } from "@/lib/initials";
 import { Avatar } from "@/components/Avatar";
 import { CreditsButton } from "@/components/credits/CreditsModal";
+import { CartButton } from "@/components/cart/CartDrawer";
 import AnchoredPopover from "@/components/AnchoredPopover";
 import { useAccountSignOut } from "@/hooks/useAccountSignOut";
 import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
@@ -51,6 +57,7 @@ import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
 // Configuration kept "in case" is configuration nobody can test.
 export function ChatHeader() {
   const userDetails = useUserStore((state) => state.user);
+  const isEnterprise = isEnterpriseVendor(userDetails);
   const setSidebarOpen = useChatHistoryStore((s) => s.setOpen);
   const isSidebarCollapsed = useChatHistoryStore((s) => s.isCollapsed);
   const setSidebarCollapsed = useChatHistoryStore((s) => s.setCollapsed);
@@ -178,37 +185,81 @@ export function ChatHeader() {
       className="w-56 overflow-hidden rounded-xl border border-gray-200 bg-surface py-1 shadow-lg"
     >
       {vendorDashboardId ? (
-        <Link
-          href={`/${vendorDashboardId}/wallet`}
-          onClick={() => setMenuOpen(false)}
-          className={menuItemClass}
-        >
-          <StoreIcon size={17} className="shrink-0 text-orange-500" />
-          <span className="min-w-0">
-            <span className="block">Vendor dashboard</span>
-            {/* A linked buyer holds no vendor cookie, so this lands on
-                /auth/login?redirect=… — proxy.ts guards the dashboard,
-                correctly. Said here rather than discovered on arrival. */}
-            {dashboardNeedsSignIn && (
-              <span className="block text-xs font-normal text-gray-500">
-                Sign in to continue
-              </span>
-            )}
-          </span>
-        </Link>
+        <>
+          <Link
+            href="/store"
+            onClick={() => setMenuOpen(false)}
+            className={cn(menuItemClass, "md:hidden")}
+          >
+            <StoreIcon size={17} className="shrink-0 text-gray-400" />
+            <span>My Store</span>
+          </Link>
+          <Link
+            href="/pricing"
+            onClick={() => setMenuOpen(false)}
+            className={cn(menuItemClass, "md:hidden")}
+          >
+            <CreditCardIcon size={17} className="shrink-0 text-gray-400" />
+            <span>Billing</span>
+          </Link>
+          <Link
+            href="/referrals"
+            onClick={() => setMenuOpen(false)}
+            className={cn(menuItemClass, "md:hidden")}
+          >
+            <GiftIcon size={17} className="shrink-0 text-gray-400" />
+            <span>Referrals</span>
+          </Link>
+          <Link
+            href={`/${vendorDashboardId}/wallet`}
+            onClick={() => setMenuOpen(false)}
+            className={menuItemClass}
+          >
+            <StoreIcon size={17} className="shrink-0 text-orange-500" />
+            <span className="min-w-0">
+              <span className="block">Vendor dashboard</span>
+              {/* A linked buyer holds no vendor cookie, so this lands on
+                  /auth/login?redirect=… — proxy.ts guards the dashboard,
+                  correctly. Said here rather than discovered on arrival. */}
+              {dashboardNeedsSignIn && (
+                <span className="block text-xs font-normal text-gray-500">
+                  Sign in to continue
+                </span>
+              )}
+            </span>
+          </Link>
+        </>
       ) : (
         // A buyer with no vendor account at all. The menu still opens —
         // an identity chip that does nothing on some accounts and something
         // on others is worse than one that always explains itself — and
         // this is where selling gets offered, which is a route worth having.
-        <Link
-          href="/join"
-          onClick={() => setMenuOpen(false)}
-          className={menuItemClass}
-        >
-          <StoreIcon size={17} className="shrink-0 text-orange-500" />
-          <span>Sell on Velte</span>
-        </Link>
+        <>
+          <Link
+            href="/pricing"
+            onClick={() => setMenuOpen(false)}
+            className={cn(menuItemClass, "md:hidden")}
+          >
+            <CreditCardIcon size={17} className="shrink-0 text-gray-400" />
+            <span>Billing</span>
+          </Link>
+          <Link
+            href="/referrals"
+            onClick={() => setMenuOpen(false)}
+            className={cn(menuItemClass, "md:hidden")}
+          >
+            <GiftIcon size={17} className="shrink-0 text-gray-400" />
+            <span>Referrals</span>
+          </Link>
+          <Link
+            href="/join"
+            onClick={() => setMenuOpen(false)}
+            className={menuItemClass}
+          >
+            <StoreIcon size={17} className="shrink-0 text-orange-500" />
+            <span>Sell on Velte</span>
+          </Link>
+        </>
       )}
 
       {/* Separated by a rule, and last: it is the one item here that is
@@ -238,7 +289,7 @@ export function ChatHeader() {
   return (
     <>
       <header className="flex items-center justify-between gap-3 px-4 sm:px-8 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:py-2.5 shrink-0 bg-surface border-b border-gray-100 z-10">
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
           {/* Mobile: opens the slide-over. Desktop: only rendered while the
             sidebar is collapsed — expanded, the sidebar carries its own
             collapse control, so a second always-visible toggle here would
@@ -284,7 +335,19 @@ export function ChatHeader() {
             />
           </Link>
         </div>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+          <Link
+            href="/hub"
+            className="inline-flex shrink-0 items-center justify-center gap-2 h-9 w-9 md:w-auto md:px-3 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-ink/80 transition-colors whitespace-nowrap"
+            aria-label="Vendor's Hub"
+            title="Vendor's Hub"
+          >
+            <FeedIcon size={18} className="text-orange-500 shrink-0" />
+            <span className="hidden md:inline text-sm font-semibold whitespace-nowrap text-gray-800 dark:text-ink">
+              Vendor&apos;s Hub
+            </span>
+          </Link>
+          <CartButton />
           {userDetails ? (
             // A vendor who wandered in from their own dashboard — send them
             // back to it (their wallet, specifically) rather than showing a
@@ -308,16 +371,19 @@ export function ChatHeader() {
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 aria-label="Your account"
-                className="flex cursor-pointer items-center gap-2 min-w-0 pl-1 pr-2 sm:pr-3 py-1 rounded-full hover:bg-gray-100 transition-colors"
+                className="flex h-9 cursor-pointer items-center gap-2 min-w-0 pl-1.5 pr-3 rounded-full hover:bg-gray-100 transition-colors"
               >
-                <Avatar
-                  src={userDetails.avatar}
-                  alt="avatar"
-                  label={getInitial(
-                    userDetails.company?.name ?? userDetails.name,
-                  )}
-                  className="w-7 h-7"
-                />
+                <div className="relative flex shrink-0 items-center justify-center">
+                  <Avatar
+                    src={userDetails.avatar}
+                    alt="avatar"
+                    label={getInitial(
+                      userDetails.company?.name ?? userDetails.name,
+                    )}
+                    className="w-[26px] h-[26px] shrink-0"
+                  />
+                  {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
+                </div>
                 <span className="hidden sm:block max-w-[160px] truncate text-sm font-medium text-gray-800">
                   {userDetails.company?.name ?? userDetails.name}
                 </span>

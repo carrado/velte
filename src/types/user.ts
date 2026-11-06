@@ -44,4 +44,14 @@ export interface User {
    * Never set back to `true` client-side (the backend's PATCH /users/:id
    * only accepts the false transition). */
   onboarding?: boolean;
+  tier?: string;
+  plan?: string;
+  isEnterprise?: boolean;
+  enterprise?: boolean;
+  subscription?: {
+    plan?: string;
+    status?: string;
+    interval?: string;
+    currentPeriodEnd?: string | Date;
+  } | null;
 }

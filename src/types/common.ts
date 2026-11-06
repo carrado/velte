@@ -5,13 +5,23 @@ import type {
   SVGProps,
 } from "react";
 
+/** Phosphor icon weight. Default across the barrel is `duotone`. */
+export type IconWeight =
+  | "thin"
+  | "light"
+  | "regular"
+  | "bold"
+  | "fill"
+  | "duotone";
+
 /** Shared prop contract for every component in `src/components/icons/` —
- *  mirrors lucide-react's own icon API (`size`, `strokeWidth`, plus any
- *  native `<svg>` prop) so swapping an import is a drop-in replacement at
- *  every call site. See [[custom_icon_system]]. */
+ *  mirrors the prior lucide-compatible API (`size`, `strokeWidth`) plus
+ *  Phosphor's `weight`. `strokeWidth` is accepted but unused (Phosphor
+ *  weight replaces stroke thickness). */
 export interface IconProps extends SVGProps<SVGSVGElement> {
   size?: number | string;
   strokeWidth?: number | string;
+  weight?: IconWeight;
 }
 
 /** A component reference from `src/components/icons/` — the type for any

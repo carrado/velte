@@ -183,7 +183,8 @@ function buildSystemPrompt(
     "Rules for the verdict:",
     "- 'mismatch' ONLY when it is a different KIND of item — something the buyer would look at and say 'that isn't what I asked for at all'.",
     "- When the buyer named a specific TYPE, STYLE or PURPOSE within a broader category (a CORPORATE shoe, a GAMING laptop, a WEDDING gown, an OFFICE chair), a listing from that broad category that is plainly a different type is a 'mismatch' — the buyer named the type because the type is the point.",
-    "- 'close', NOT 'mismatch', when it is the right kind of item and only the details differ: colour, size, brand, capacity, model, condition, price. Those differences are handled elsewhere and are often fine with the buyer.",
+    "- When the buyer named a COLOUR, BRAND, SIZE or other matching spec, a listing that is the right kind of item but clearly a DIFFERENT colour/brand/size in the photo or its own words is 'close', never 'match'. 'match' here means the listing actually has those named details, not merely that it is a sneaker / a phone / a dress.",
+    "- 'close', NOT 'mismatch', when it is the right kind of item and only the details differ: colour, size, brand, capacity, model, condition, price. Those differences are handled elsewhere and are often fine with the buyer — they still see the listing, labelled as similar rather than exact.",
     "- 'close' whenever you genuinely cannot tell. Never guess a 'mismatch'.",
     "",
     `${stakes} Judge only what you can see and read — never infer stock, quality, or authenticity.`,
@@ -206,6 +207,11 @@ interface JudgeCandidate {
  * which every caller must treat as "keep everything", never as "reject
  * everything".
  */
+interface JudgeResult {
+  rejected: Map<number, string>;
+  close: Map<number, string>;
+}
+
 async function judgeCandidates(
   requestLine: string,
   candidates: JudgeCandidate[],
@@ -220,7 +226,7 @@ async function judgeCandidates(
   // slide" query — see buildSystemPrompt's own referencePhotoLines comment
   // for the live report this fixes. Optional and inert for a text turn.
   referenceImageUrl?: string | null,
-): Promise<Map<number, string> | null> {
+): Promise<JudgeResult | null> {
   // One user message: the reference photo (if any) first, then the request,
   // then the candidate list, then each candidate's photo announced by the
   // same number it carries in that list (a bare run of images is
@@ -329,21 +335,26 @@ async function judgeCandidates(
     // number outside the candidate range is discarded rather than allowed
     // to delete the wrong listing.
     const rejected = new Map<number, string>();
+    const close = new Map<number, string>();
     for (const v of verdicts) {
-      if (v?.verdict !== "mismatch") continue;
       const index = Number.parseInt(String(v.id ?? ""), 10) - 1;
       if (!Number.isInteger(index) || index < 0 || index >= candidates.length) {
         continue;
       }
       const actualItem =
         typeof v.actualItem === "string" ? v.actualItem.trim() : "";
+      if (v?.verdict === "close") {
+        close.set(index, actualItem.slice(0, 80) || "similar, not exact");
+        continue;
+      }
+      if (v?.verdict !== "mismatch") continue;
       // A mismatch with nothing behind it is exactly the shape of a
       // hallucinated rejection: the verdict has to come with what the
       // thing actually IS, or it doesn't get to delete a listing.
       if (!actualItem) continue;
       rejected.set(index, actualItem.slice(0, 80));
     }
-    return rejected;
+    return { rejected, close };
   } catch (err) {
     console.error("[search] match verification failed, keeping all:", err);
     return null;
@@ -364,6 +375,10 @@ export interface RejectedMatch {
 
 export interface MatchVerification {
   kept: VendorMatch[];
+  /** Checked listings the photo/words confirmed as the named details. */
+  matched: VendorMatch[];
+  /** Right kind of item, wrong colour/brand/size — shown as similar, never dropped. */
+  close: VendorMatch[];
   rejected: RejectedMatch[];
 }
 
@@ -404,7 +419,12 @@ export async function verifyItemMatches(params: {
     isImageQuery = false,
     imageUrl,
   } = params;
-  const unchanged: MatchVerification = { kept: candidates, rejected: [] };
+  const unchanged: MatchVerification = {
+    kept: candidates,
+    matched: candidates,
+    close: [],
+    rejected: [],
+  };
   if (!candidates.length || !product.trim()) return unchanged;
 
   const checked = candidates.slice(0, MAX_CANDIDATES);
@@ -415,7 +435,7 @@ export async function verifyItemMatches(params: {
     ? `The buyer sent a photo of what they want. It was read as: "${request}".`
     : `The buyer asked for: "${request}".`;
 
-  const rejectedIndices = await judgeCandidates(
+  const judged = await judgeCandidates(
     requestLine,
     checked.map((c) => ({
       imageUrl: c.mainImageUrl,
@@ -438,16 +458,29 @@ export async function verifyItemMatches(params: {
     "velte",
     isImageQuery ? imageUrl : null,
   );
-  if (!rejectedIndices?.size) return unchanged;
+  if (!judged) return unchanged;
 
-  const kept: VendorMatch[] = [];
+  const matched: VendorMatch[] = [];
+  const close: VendorMatch[] = [];
   const rejected: RejectedMatch[] = [];
   checked.forEach((candidate, i) => {
-    const actualItem = rejectedIndices.get(i);
-    if (actualItem) rejected.push({ match: candidate, actualItem });
-    else kept.push(candidate);
+    const rejectedAs = judged.rejected.get(i);
+    if (rejectedAs) {
+      rejected.push({ match: candidate, actualItem: rejectedAs });
+      return;
+    }
+    if (judged.close.has(i)) {
+      close.push(candidate);
+      return;
+    }
+    matched.push(candidate);
   });
-  return { kept: [...kept, ...unchecked], rejected };
+  return {
+    kept: [...matched, ...unchecked],
+    matched,
+    close,
+    rejected,
+  };
 }
 
 /**
@@ -527,7 +560,7 @@ export async function verifyOfferMatches(params: {
   const checked = offers.slice(0, MAX_CANDIDATES);
   const unchecked = offers.slice(MAX_CANDIDATES);
 
-  const rejectedIndices = await judgeCandidates(
+  const judged = await judgeCandidates(
     `The buyer asked for: "${query}".`,
     checked.map((o) => ({
       imageUrl: o.imageUrl,
@@ -545,12 +578,12 @@ export async function verifyOfferMatches(params: {
     "external",
     referenceImageUrl,
   );
-  if (!rejectedIndices?.size) return unchanged;
+  if (!judged?.rejected.size) return unchanged;
 
   const kept: ExternalOffer[] = [];
   const rejected: RejectedOffer[] = [];
   checked.forEach((offer, i) => {
-    const actualItem = rejectedIndices.get(i);
+    const actualItem = judged.rejected.get(i);
     if (actualItem) rejected.push({ offer, actualItem });
     else kept.push(offer);
   });

@@ -73,10 +73,14 @@ export async function affordCredits(params: {
   }
 
   try {
-    const data = await backendData<{ balance: number }>("/credits", { cookie });
+    const data = await backendData<{
+      balance: number;
+      available?: number;
+    }>("/credits", { cookie });
+    const available = data.available ?? data.balance;
     return {
-      allowed: data.balance >= cost,
-      balance: data.balance,
+      allowed: available >= cost,
+      balance: available,
       cost,
       action,
       isGuest: false,
@@ -131,13 +135,14 @@ export async function chargeCredits(params: {
   }
 
   try {
-    const data = await backendData<{ allowed: boolean; balance: number }>(
-      "/credits/consume",
-      { method: "POST", body: { cost, action }, cookie },
-    );
+    const data = await backendData<{
+      allowed: boolean;
+      balance: number;
+      available?: number;
+    }>("/credits/consume", { method: "POST", body: { cost, action }, cookie });
     return {
       allowed: data.allowed,
-      balance: data.balance,
+      balance: data.available ?? data.balance,
       cost,
       action,
       isGuest: false,

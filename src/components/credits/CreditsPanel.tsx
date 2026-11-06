@@ -6,6 +6,7 @@ import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { CreditsDonut } from "@/components/credits/CreditsDonut";
 import { ReferralCard } from "@/components/credits/ReferralCard";
 import { VENDOR_CATALOG_GRANTS } from "@/lib/credits";
+import type { AllowanceSummary } from "@/lib/entitlements";
 import {
   creditsForAmount,
   MIN_TOPUP_NGN,
@@ -45,6 +46,7 @@ const QUICK_AMOUNTS = [MIN_TOPUP_NGN, 5000, 10000, 20000];
 export function CreditsPanel({
   balance,
   used,
+  allowance,
   isGuest,
   referralCode,
   walletBalanceKobo,
@@ -55,6 +57,7 @@ export function CreditsPanel({
   balance: number | null;
   /** What they have already spent — the meter's other half. */
   used: number;
+  allowance?: AllowanceSummary | null;
   isGuest: boolean;
   /** The signed-in buyer's own referral code, when they have one. Null for a
    *  guest, for a vendor, and for buyers who predate referrals — ReferralCard
@@ -98,15 +101,20 @@ export function CreditsPanel({
           Only pay when you&apos;re shopping
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-pretty text-gray-600 sm:text-base">
-          No subscription. Credits don&apos;t expire — top up when you have
-          something to buy, and they&apos;re there next time you do.
+          Purchased credits don&apos;t expire. Signed-in free accounts get 10
+          more each day — top up when you need more.
         </p>
       </div>
 
       {/* The meter. One ring, one number — a buyer should never have to work
           out which of six allowances applies to what they are about to do,
           and now they can see how much of their own they have spent. */}
-      <CreditsDonut balance={balance} used={used} isGuest={isGuest} />
+      <CreditsDonut
+        balance={balance}
+        used={used}
+        isGuest={isGuest}
+        allowance={allowance}
+      />
 
       {/* Directly under the balance, because that is the number someone is
           looking at when a way to top it up for free is worth offering. */}
@@ -183,109 +191,111 @@ export function CreditsPanel({
           </p>
         </div>
       ) : (
-        <div className="mt-8 rounded-2xl border border-gray-200 bg-surface p-5">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-sm font-semibold text-ink">Top up</h2>
-            {isVendor && (
-              <p className="shrink-0 text-xs text-gray-500">
-                Wallet: {naira(Math.floor(walletBalanceKobo / 100))}
+        <>
+          <div className="mt-8 rounded-2xl border border-gray-200 bg-surface p-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-sm font-semibold text-ink">Top up</h2>
+              {isVendor && (
+                <p className="shrink-0 text-xs text-gray-500">
+                  Wallet: {naira(Math.floor(walletBalanceKobo / 100))}
+                </p>
+              )}
+            </div>
+
+            <label
+              htmlFor="topup-amount"
+              className="mt-4 block text-sm font-medium text-ink"
+            >
+              Amount (₦)
+            </label>
+            <input
+              id="topup-amount"
+              type="number"
+              inputMode="numeric"
+              min={MIN_TOPUP_NGN}
+              max={MAX_TOPUP_NGN}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={`e.g. ${MIN_TOPUP_NGN}`}
+              className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-ink focus:border-transparent focus:ring-2 focus:ring-orange-300 focus:outline-none"
+            />
+            {amount.trim() !== "" && !isValid && (
+              <p className="mt-1.5 text-xs text-red-500">
+                {numericAmount > MAX_TOPUP_NGN
+                  ? `The most you can top up at once is ${naira(MAX_TOPUP_NGN)}.`
+                  : numericAmount >= MIN_TOPUP_NGN
+                    ? "Enter a whole naira amount."
+                    : `Minimum top-up is ${naira(MIN_TOPUP_NGN)}.`}
               </p>
             )}
-          </div>
 
-          <label
-            htmlFor="topup-amount"
-            className="mt-4 block text-sm font-medium text-ink"
-          >
-            Amount (₦)
-          </label>
-          <input
-            id="topup-amount"
-            type="number"
-            inputMode="numeric"
-            min={MIN_TOPUP_NGN}
-            max={MAX_TOPUP_NGN}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder={`e.g. ${MIN_TOPUP_NGN}`}
-            className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-ink focus:border-transparent focus:ring-2 focus:ring-orange-300 focus:outline-none"
-          />
-          {amount.trim() !== "" && !isValid && (
-            <p className="mt-1.5 text-xs text-red-500">
-              {numericAmount > MAX_TOPUP_NGN
-                ? `The most you can top up at once is ${naira(MAX_TOPUP_NGN)}.`
-                : numericAmount >= MIN_TOPUP_NGN
-                  ? "Enter a whole naira amount."
-                  : `Minimum top-up is ${naira(MIN_TOPUP_NGN)}.`}
-            </p>
-          )}
-
-          {/* The estimate is the point of the field: an amount is abstract,
+            {/* The estimate is the point of the field: an amount is abstract,
               the credits it buys are what the buyer is actually paying for. */}
-          {creditsBought > 0 && (
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-orange-100 bg-orange-50 px-3.5 py-2.5">
-              <span className="text-xs text-orange-700">You&apos;ll get</span>
-              <span className="text-sm font-bold text-orange-600">
-                {creditsBought.toLocaleString("en-NG")} credits
-              </span>
+            {creditsBought > 0 && (
+              <div className="mt-3 flex items-center justify-between rounded-xl border border-orange-100 bg-orange-50 px-3.5 py-2.5">
+                <span className="text-xs text-orange-700">You&apos;ll get</span>
+                <span className="text-sm font-bold text-orange-600">
+                  {creditsBought.toLocaleString("en-NG")} credits
+                </span>
+              </div>
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {QUICK_AMOUNTS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setAmount(String(v))}
+                  className="cursor-pointer rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-orange-300 hover:text-orange-600"
+                >
+                  {naira(v)}
+                </button>
+              ))}
             </div>
-          )}
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {QUICK_AMOUNTS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setAmount(String(v))}
-                className="cursor-pointer rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-orange-300 hover:text-orange-600"
-              >
-                {naira(v)}
-              </button>
-            ))}
-          </div>
-
-          {/* A BUYER has one way to pay, so there is a single full-width
+            {/* A BUYER has one way to pay, so there is a single full-width
               button and nothing asks them to choose. A vendor gets two, and
               the wallet leads because it is the one that does not make them
               find a card. */}
-          <div className="mt-4 flex gap-2">
-            {isVendor && (
+            <div className="mt-4 flex gap-2">
+              {isVendor && (
+                <button
+                  type="button"
+                  onClick={() => onTopUp(numericAmount, "wallet")}
+                  disabled={!isValid || busy}
+                  className="flex-1 cursor-pointer rounded-full bg-orange-500 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {busy
+                    ? "Paying…"
+                    : walletCovers
+                      ? "Pay from wallet"
+                      : "Wallet (low)"}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => onTopUp(numericAmount, "wallet")}
+                onClick={() => onTopUp(numericAmount, "card")}
                 disabled={!isValid || busy}
-                className="flex-1 cursor-pointer rounded-full bg-orange-500 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className={cn(
+                  "flex-1 cursor-pointer rounded-full px-3 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                  isVendor
+                    ? "border border-gray-200 text-ink hover:bg-gray-50"
+                    : "bg-orange-500 text-white hover:bg-orange-600",
+                )}
               >
-                {busy
-                  ? "Paying…"
-                  : walletCovers
-                    ? "Pay from wallet"
-                    : "Wallet (low)"}
+                {busy && !isVendor ? "Opening…" : "Top up"}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onTopUp(numericAmount, "card")}
-              disabled={!isValid || busy}
-              className={cn(
-                "flex-1 cursor-pointer rounded-full px-3 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
-                isVendor
-                  ? "border border-gray-200 text-ink hover:bg-gray-50"
-                  : "bg-orange-500 text-white hover:bg-orange-600",
-              )}
-            >
-              {busy && !isVendor ? "Opening…" : "Top up"}
-            </button>
-          </div>
+            </div>
 
-          <p className="mt-3 text-xs text-gray-500">
-            {isVendor &&
-              "Wallet payments come out of the balance you keep for leads, and never change your cost per lead. "}
-            Pay by card or bank transfer through Paystack. Credits never expire,
-            and there is no recurring charge — nothing renews unless you buy
-            again.
-          </p>
-        </div>
+            <p className="mt-3 text-xs text-gray-500">
+              {isVendor &&
+                "Wallet payments come out of the balance you keep for leads, and never change your cost per lead. "}
+              Pay by card or bank transfer through Paystack. Credits never
+              expire, and there is no recurring charge — nothing renews unless
+              you buy again.
+            </p>
+          </div>
+        </>
       )}
     </div>
   );

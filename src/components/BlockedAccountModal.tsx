@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useBlockedStore } from "@/store/blockedStore";
 import { useUserStore } from "@/store/userStore";
 import { ShieldAlertIcon } from "@/components/icons/hero";
+import { modalScrimClass } from "@/lib/modalScrim";
 
 // Mounted once at the root layout — reads its own state, so no page needs to
 // wire this up. Fires whenever api-client.ts's request() sees a 423 from
@@ -29,7 +30,9 @@ export default function BlockedAccountModal() {
     // response can arrive while that overlay is still showing (loading, or
     // its own error state from the same failed request), and the blocked
     // message has to win regardless of what's stuck underneath it.
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div
+      className={`fixed inset-0 z-[10000] h-dvh w-dvw flex items-center justify-center ${modalScrimClass()}`}
+    >
       <div className="bg-surface rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
         <div className="px-6 py-5 flex flex-col items-center text-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">

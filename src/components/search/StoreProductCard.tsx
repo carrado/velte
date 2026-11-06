@@ -2,6 +2,7 @@ import { ProtectedImage } from "@/components/ProtectedImage";
 import { fmt } from "@/lib/product-price";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { AddToCartButton } from "@/components/cart/AddToCartButton";
 import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { useUserStore } from "@/store/userStore";
 import { buildChatLink } from "@/lib/chatLink";
@@ -70,6 +71,16 @@ export function StoreProductCard({
         )}
         {isOwn ? (
           <OwnListingBadge label="This is your listing" />
+        ) : match.checkoutEligible ? (
+          <AddToCartButton
+            productId={match.productId}
+            vendorId={vendorId}
+            vendorName={storeName}
+            name={match.name}
+            imageUrl={match.mainImageUrl}
+            unitPrice={match.price}
+            className="mt-1"
+          />
         ) : (
           chatHref && (
             <WhatsAppButton

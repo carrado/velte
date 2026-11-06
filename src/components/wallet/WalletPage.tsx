@@ -200,7 +200,7 @@ export default function WalletPage() {
           needs its own way in — placed right after the hero card (not
           after the KPI row) so it's visible without scrolling. */}
       <button
-        onClick={() => navigate(`/${userId}/referrals`)}
+        onClick={() => navigate("/referrals")}
         className="lg:hidden flex items-center gap-3 rounded-none sm:rounded-2xl bg-surface border border-gray-100 shadow-sm p-4 sm:p-5 text-left hover:bg-gray-50 transition-colors cursor-pointer"
       >
         <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">

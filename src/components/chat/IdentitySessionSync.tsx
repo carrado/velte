@@ -60,19 +60,22 @@ export function IdentitySessionSync() {
     // sidebar) stayed missing until a full reload emptied both stores. A
     // filled vendor store says nothing about whether a buyer exists; only a
     // filled buyer store means there is nothing left to learn.
-    const alreadyKnown = () => Boolean(useBuyerStore.getState().buyer);
-
     const check = async () => {
       if (settled || inFlight) return;
-      if (alreadyKnown()) {
-        settled = true;
-        return;
-      }
       inFlight = true;
       try {
         const res = await fetch("/api/auth/session", {
           credentials: "same-origin",
         });
+        // A presented cookie that no longer resolves. Not a guest, and not
+        // a blip to retry — the session is over, so leave the app.
+        if (res.status === 401) {
+          settled = true;
+          useUserStore.getState().clearUser();
+          useBuyerStore.getState().clearBuyer();
+          window.location.replace("/");
+          return;
+        }
         if (!res.ok) throw new Error(`session check ${res.status}`);
         const { vendor, buyer } = (await res.json()) as {
           vendor: User | null;

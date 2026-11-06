@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { Button } from "../ui/button";
@@ -8,6 +10,9 @@ import { MobileMenu } from "@/components/landing/MobileMenu";
 import { ThemeToggleButton } from "@/components/landing/ThemeToggleButton";
 import { VelteLogo } from "@/components/VelteLogo";
 import { CloseIcon, ListIcon } from "@/components/icons/hero";
+import { cn } from "@/lib/utils";
+import { useBuyerStore } from "@/store/buyerStore";
+import { useUserStore } from "@/store/userStore";
 
 // Simplified 2026-08-15 (full homepage redesign) to Logo … How it works |
 // Businesses | Sign in — down from Logo | Ask Velux | Sign In | Join Velte.
@@ -39,6 +44,7 @@ import { CloseIcon, ListIcon } from "@/components/icons/hero";
 // anyone who opens it.
 export default function Navbar({
   forceOpaque = false,
+  hideSearch = false,
 }: {
   // Careers is the one page whose hero sits on a full dark bg-[#023337]
   // panel from y=0 (see CareersContent's own comment) — this Navbar's
@@ -48,9 +54,14 @@ export default function Navbar({
   // Skips the transparent phase entirely there rather than teaching this
   // shared header to theme itself per-page.
   forceOpaque?: boolean;
+  /** 404 and similar dead-end pages — no Ask Velte field in the chrome. */
+  hideSearch?: boolean;
 } = {}) {
+  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const vendor = useUserStore((s) => s.user);
+  const buyer = useBuyerStore((s) => s.buyer);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 30);
@@ -58,74 +69,200 @@ export default function Navbar({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Quiet session hydrate on every public page that mounts this header.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/session", {
+          credentials: "same-origin",
+        });
+        if (cancelled) return;
+        if (res.status === 401) {
+          useUserStore.getState().clearUser();
+          useBuyerStore.getState().clearBuyer();
+          return;
+        }
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          vendor: typeof vendor;
+          buyer: typeof buyer;
+        };
+        if (data.vendor) useUserStore.getState().setUser(data.vendor);
+        if (data.buyer) useBuyerStore.getState().setBuyer(data.buyer);
+      } catch {
+        /* guest */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const opaque = forceOpaque || scrolled;
+  // For vendor accounts, display store/business name first (company.name is canonical in Velte).
+  const vendorStoreName =
+    vendor?.company?.name?.trim() ||
+    (vendor as unknown as { store?: { name?: string } })?.store?.name?.trim() ||
+    (vendor as unknown as { storeName?: string })?.storeName?.trim() ||
+    vendor?.businessName?.trim();
+
+  const displayName = vendor
+    ? vendorStoreName || vendor.name?.trim() || vendor.email?.trim() || null
+    : buyer
+      ? buyer.name?.trim() || buyer.email?.trim() || null
+      : null;
+  const avatarUrl = vendor?.avatar || buyer?.avatar || null;
+  const accountHref = vendor ? "/wallet" : "/chat";
+  const initials = (displayName || "V")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+
+  const navLinks = [
+    { href: "/how-it-works", label: "How it works" },
+    { href: "/blog", label: "Blog" },
+    { href: "/pricing", label: "Pricing" },
+  ];
 
   return (
     <motion.header
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        opaque
-          ? "bg-surface/90 backdrop-blur-xl border-b border-gray-200"
-          : "bg-transparent"
-      }`}
+      className={cn(
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
+        opaque ? "bg-surface/90 backdrop-blur-xl" : "bg-transparent",
+      )}
     >
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
-        <div className="flex items-center h-16 gap-6">
-          <Link href="/" className="flex items-center gap-2.5 group shrink-0">
+        {/* Three-column grid: Logo | Nav | Actions */}
+        <div className="grid grid-cols-[auto_1fr_auto] h-16 items-center gap-6">
+          {/* ── Col 1: Logo ── */}
+          <Link
+            href="/"
+            className="flex items-center shrink-0 group"
+            aria-label="Velte home"
+          >
             <VelteLogo
               width={72}
               height={35}
-              className="w-14 sm:w-[72px] h-auto"
+              className="w-14 sm:w-[72px] h-auto transition-opacity group-hover:opacity-80"
               priority
             />
           </Link>
 
-          {/* Mobile: logo + Sign in + hamburger — no Ask Velux/Join Velte
-              competing for the same 360-430px row (see this file's own top
-              comment). Sign in moved back into this row 2026-08-19 (was
-              "hidden sm:block" like the rest, MobileMenu.tsx carried its own
-              copy at the drawer's bottom) per explicit request to surface it
-              before the hamburger rather than behind it — the drawer's own
-              Sign in row was dropped in the same move so there's exactly one
-              place to tap it, not two. Join Velte stays hamburger-only:
-              still the drawer's primary CTA, not this row's job. */}
-          <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Light/dark switch (2026-09-17, explicit request) — visible at
-                every width, not `hidden sm:block` like "How it works": a
-                48px slider costs the tight mobile row far less than a
-                text link would, and the ability to switch shouldn't be
-                desktop-only. First in the row since 2026-09-23 (explicit
-                request), ahead of "How it works". */}
+          {/* ── Col 2: Centred nav links (desktop) ── */}
+          <nav className="hidden sm:flex items-center justify-center gap-1">
+            {navLinks.map(({ href, label }) => {
+              const active = pathname === href;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "relative px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors",
+                    active
+                      ? "text-orange-500 bg-orange-500/8"
+                      : "text-ink/75 hover:text-ink hover:bg-gray-100 dark:hover:bg-white/10",
+                  )}
+                >
+                  {label}
+                  {active && (
+                    <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500" />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* ── Col 3: Right-side actions ── */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Theme toggle */}
             <ThemeToggleButton />
+
+            {/* Divider — desktop only */}
+            <span className="hidden sm:block w-px h-5 bg-gray-200 mx-0.5" />
+
+            {/* Ask Velte CTA pill — desktop only */}
             <Link
-              href="/how-it-works"
-              className="hidden sm:block text-sm font-medium text-gray-600 hover:text-gray-900"
+              href="/chat"
+              className={cn(
+                "hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-colors",
+                pathname === "/chat"
+                  ? "bg-orange-500 text-white"
+                  : "bg-orange-50 text-orange-600 hover:bg-orange-100",
+              )}
             >
-              How it works
+              <Image
+                src="/velte_ai_assistant.png"
+                alt=""
+                width={20}
+                height={20}
+                className="h-5 w-5 rounded-full object-cover shrink-0"
+              />
+              Ask Velte
             </Link>
-            <Link href="/auth/login">
-              <Button
-                variant="ghost"
-                className="text-gray-600 cursor-pointer hover:text-gray-900 hover:bg-gray-100 text-sm px-3 sm:px-4"
+
+            {/* Thin separator before auth */}
+            <span className="hidden sm:block w-px h-5 bg-gray-200 mx-0.5" />
+
+            {displayName ? (
+              /* Signed-in avatar chip */
+              <Link
+                href={accountHref}
+                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-gray-100 max-w-[12rem] dark:hover:bg-white/10"
               >
-                Sign in
-              </Button>
-            </Link>
-            <Link href="/auth/signup" className="hidden sm:block">
-              <Button className="bg-orange-500 cursor-pointer hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 text-sm px-5">
-                Join
-              </Button>
-            </Link>
+                {avatarUrl ? (
+                  <Image
+                    src={avatarUrl}
+                    alt=""
+                    width={30}
+                    height={30}
+                    className="h-[30px] w-[30px] rounded-full object-cover ring-2 ring-orange-500/30"
+                  />
+                ) : (
+                  <span className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">
+                    {initials}
+                  </span>
+                )}
+                <span className="hidden truncate text-sm font-semibold text-ink sm:inline">
+                  {displayName}
+                </span>
+              </Link>
+            ) : (
+              /* Guest: Sign in + Join */
+              <>
+                <Link href="/auth/login">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hidden sm:inline-flex cursor-pointer text-ink/80 hover:text-ink hover:bg-gray-100 text-sm font-medium px-4 dark:hover:bg-white/10"
+                  >
+                    Sign in
+                  </Button>
+                </Link>
+                <Link href="/auth/signup">
+                  <Button
+                    size="sm"
+                    className="cursor-pointer bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 text-sm font-semibold px-4 sm:px-5 rounded-full"
+                  >
+                    Join
+                  </Button>
+                </Link>
+              </>
+            )}
+
+            {/* Hamburger — mobile only */}
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               aria-expanded={menuOpen}
-              className="sm:hidden w-10 h-10 -mr-1.5 flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              className="sm:hidden ml-0.5 w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:text-ink hover:bg-gray-100 transition-colors cursor-pointer dark:hover:bg-white/10"
             >
-              {menuOpen ? <CloseIcon size={22} /> : <ListIcon size={22} />}
+              {menuOpen ? <CloseIcon size={20} /> : <ListIcon size={20} />}
             </button>
           </div>
         </div>
