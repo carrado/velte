@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { exhaustGuestCredits } from "@/lib/guestCredits";
+import { markSessionSettled, resetSessionSync } from "@/lib/sessionSync";
 import type { Buyer } from "@/types/buyer";
 
 export type { Buyer };
@@ -19,16 +20,13 @@ export const useBuyerStore = create<BuyerStore>()((set) => ({
   buyer: null,
   setBuyer: (buyer) => {
     set({ buyer });
-    // Every call site that hands this a real buyer — a live Google sign-in,
-    // a restored session on page load, the phone-gate/OTP re-sets — is a
-    // moment this browser is KNOWN to belong to a signed-in account. See
-    // guestCredits.ts's own comment on exhaustGuestCredits for why that
-    // guest ledger must never be left standing for later: without this, a
-    // buyer could burn their real balance, log out to cash in an untouched
-    // guest allowance, log back in, and repeat — logging out is one click
-    // every signed-in buyer already sees, not a deliberate "clear my data"
-    // most people never bother with.
-    if (buyer) exhaustGuestCredits();
+    if (buyer) {
+      exhaustGuestCredits();
+      markSessionSettled();
+    }
   },
-  clearBuyer: () => set({ buyer: null }),
+  clearBuyer: () => {
+    resetSessionSync();
+    set({ buyer: null });
+  },
 }));

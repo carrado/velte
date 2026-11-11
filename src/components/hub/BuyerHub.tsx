@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import {
+  ArrowRightIcon,
   BabyIcon,
   BadgeCheckIcon,
   BellIcon,
@@ -66,7 +74,16 @@ import TabBar from "@/components/TabBar";
 import { HubLockedModal } from "./HubLockedModal";
 import { useUserStore } from "@/store/userStore";
 import { useBuyerStore } from "@/store/buyerStore";
-import { assembleHubFeed } from "@/lib/hubFeed";
+import {
+  assembleHubFeed,
+  isBoostedProduct,
+  isSponsoredAdvert,
+} from "@/lib/hubFeed";
+import {
+  subscribeToHubNewListings,
+  syncHubKnownListingIds,
+} from "@/lib/hubSync";
+import { useHubWebSocket } from "@/hooks/useHubWebSocket";
 import { NewPostsIndicator } from "./NewPostsIndicator";
 
 type ContactTarget = {
@@ -266,6 +283,18 @@ function contactFromFeatured(vendor: HubFeaturedVendor): ContactTarget {
     sentiment: vendor.sentiment,
     reviewableOrderId: vendor.reviewableOrderId,
   };
+}
+
+function isTestItem(item: HubTimelineItem): boolean {
+  if (!item) return false;
+  if (item.id?.startsWith("test_")) return true;
+  const title = (item.title || "").toLowerCase();
+  const store = (item.storeName || "").toLowerCase();
+  return (
+    title.includes("test product") ||
+    title.includes("vendor test") ||
+    store.includes("vendor test")
+  );
 }
 
 function contactFromItem(item: HubTimelineItem): ContactTarget {
@@ -468,7 +497,7 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
     | null
   >(null);
   const [displayedTimeline, setDisplayedTimeline] = useState<HubTimelineItem[]>(
-    () => home.timeline ?? [],
+    () => (home.timeline ?? []).filter((item) => !isTestItem(item)),
   );
   const [pendingUpdates, setPendingUpdates] = useState<HubTimelineItem[]>([]);
   const [posts, setPosts] = useState(home.community ?? []);
@@ -511,28 +540,63 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   const [savingVisit, setSavingVisit] = useState(false);
   const [reviewWait, setReviewWait] = useState(false);
   const visitIntent = useRef(false);
-  const now = Date.now();
 
-  useEffect(() => {
-    if (!home.timeline) return;
-    if (displayedTimeline.length === 0) {
-      setDisplayedTimeline(home.timeline);
-      return;
-    }
-    const currentIds = new Set(displayedTimeline.map((item) => item.id));
-    const newItems = home.timeline.filter((item) => !currentIds.has(item.id));
-    if (newItems.length > 0) {
+  const knownListingIds = useMemo(
+    () => displayedTimeline.map((item) => item.id),
+    [displayedTimeline],
+  );
+
+  const handleIncomingNewListings = useCallback(
+    (incomingItems: HubTimelineItem[]) => {
+      if (!incomingItems || incomingItems.length === 0) return;
       setPendingUpdates((prev) => {
-        const prevIds = new Set(prev.map((i) => i.id));
-        const trulyNew = newItems.filter((i) => !prevIds.has(i.id));
-        return trulyNew.length > 0 ? [...trulyNew, ...prev] : prev;
+        const displayedIds = new Set(displayedTimeline.map((item) => item.id));
+        const pendingIds = new Set(prev.map((item) => item.id));
+        const trulyNew = incomingItems.filter(
+          (item) =>
+            !displayedIds.has(item.id) &&
+            !pendingIds.has(item.id) &&
+            !isTestItem(item),
+        );
+        if (trulyNew.length === 0) return prev;
+        return [...trulyNew, ...prev];
       });
-    }
-  }, [home.timeline, displayedTimeline]);
+    },
+    [displayedTimeline],
+  );
+
+  // Real-time WebSocket connection: checks for new listings and ticks clock in real time
+  const { now } = useHubWebSocket({
+    knownListingIds,
+    onNewListings: handleIncomingNewListings,
+  });
+
+  // Auto pagination state
+  const PAGE_SIZE = 10;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const buyerSentinelRef = useRef<HTMLDivElement>(null);
+
+  // Initialize displayed timeline from home
+  useEffect(() => {
+    if (!home.timeline || home.timeline.length === 0) return;
+    const cleanTimeline = home.timeline.filter((item) => !isTestItem(item));
+    setDisplayedTimeline((prev) =>
+      prev.length === 0
+        ? cleanTimeline
+        : prev.filter((item) => !isTestItem(item)),
+    );
+    syncHubKnownListingIds(cleanTimeline.map((item) => item.id));
+  }, [home.timeline]);
 
   const handleApplyUpdates = () => {
     if (pendingUpdates.length === 0) return;
-    setDisplayedTimeline((prev) => [...pendingUpdates, ...prev]);
+    const cleanPending = pendingUpdates.filter((item) => !isTestItem(item));
+    setDisplayedTimeline((prev) => [
+      ...cleanPending,
+      ...prev.filter((item) => !isTestItem(item)),
+    ]);
+    setVisibleCount((prev) => prev + cleanPending.length);
     setPendingUpdates([]);
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -578,6 +642,37 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
     // with newest updates first!
     return assembleHubFeed(items);
   }, [displayedTimeline, sector]);
+
+  const visibleFeed = useMemo(
+    () => feed.slice(0, visibleCount),
+    [feed, visibleCount],
+  );
+  const hasMore = visibleCount < feed.length;
+
+  useEffect(() => {
+    const sentinel = buyerSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !isLoadingMore) {
+          setIsLoadingMore(true);
+          setTimeout(() => {
+            setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, feed.length));
+            setIsLoadingMore(false);
+          }, 150);
+        }
+      },
+      {
+        root: null,
+        rootMargin: "350px",
+        threshold: 0.1,
+      },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, feed.length]);
 
   const featured = useMemo(() => {
     let list = home.featured;
@@ -987,6 +1082,11 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
               <NewPostsIndicator
                 count={pendingUpdates.length}
                 onClick={handleApplyUpdates}
+                label={
+                  pendingUpdates.length === 1
+                    ? "1 new product"
+                    : `${pendingUpdates.length} new products`
+                }
               />
 
               {feed.length === 0 ? (
@@ -1000,79 +1100,92 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
-                  {feed.map((item, index) => {
-                    const cardKey = `${item.id}-${index}`;
-                    const fadeLast =
-                      Boolean(home.hubPreview?.listingsCapped) &&
-                      index === feed.length - 1;
-                    const fullWidth = item.sponsored || fadeLast;
-                    const card = (
-                      <FeedCard
-                        item={item}
-                        now={now}
-                        premium={home.premium}
-                        favourite={favourites.has(item.vendorId)}
-                        compact={!item.sponsored}
-                        onContact={() => openContact(contactFromItem(item))}
-                        onVisit={() => openVisit(contactFromItem(item))}
-                        onReview={() => openReview(contactFromItem(item))}
-                        onFavourite={() => toggleFavourite(item.vendorId)}
-                        onBoost={
-                          item.advertId
-                            ? () => boostAdvert(item.advertId as string)
-                            : undefined
-                        }
-                      />
-                    );
-                    if (!fadeLast) {
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+                    {visibleFeed.map((item, index) => {
+                      const cardKey = `${item.id}-${index}`;
+                      const fadeLast =
+                        Boolean(home.hubPreview?.listingsCapped) &&
+                        index === visibleFeed.length - 1;
+                      const fullWidth = item.sponsored || fadeLast;
+                      const card = (
+                        <FeedCard
+                          item={item}
+                          now={now}
+                          premium={home.premium}
+                          favourite={favourites.has(item.vendorId)}
+                          compact={!item.sponsored}
+                          onContact={() => openContact(contactFromItem(item))}
+                          onVisit={() => openVisit(contactFromItem(item))}
+                          onReview={() => openReview(contactFromItem(item))}
+                          onFavourite={() => toggleFavourite(item.vendorId)}
+                          onBoost={
+                            item.advertId
+                              ? () => boostAdvert(item.advertId as string)
+                              : undefined
+                          }
+                        />
+                      );
+                      if (!fadeLast) {
+                        return (
+                          <div
+                            key={cardKey}
+                            className={
+                              fullWidth ? "col-span-2 lg:col-span-1" : undefined
+                            }
+                          >
+                            {card}
+                          </div>
+                        );
+                      }
                       return (
                         <div
                           key={cardKey}
-                          className={
-                            fullWidth ? "col-span-2 lg:col-span-1" : undefined
-                          }
+                          className="relative col-span-2 lg:col-span-1 overflow-hidden rounded-none lg:rounded-2xl"
                         >
-                          {card}
+                          <div
+                            aria-hidden
+                            className="pointer-events-none select-none blur-[2px] opacity-50 saturate-50 [mask-image:linear-gradient(to_bottom,black_0%,black_35%,transparent_100%)]"
+                          >
+                            {card}
+                          </div>
+                          <div className="absolute inset-0 flex flex-col items-center justify-end pb-6 pt-16 bg-gradient-to-t from-canvas via-canvas/90 to-transparent">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src="/hub/premium-listings.jpg"
+                              alt=""
+                              className="h-14 w-14 rounded-2xl object-cover shadow-sm ring-1 ring-black/5"
+                            />
+                            <p className="mt-3 text-sm font-bold text-ink text-center px-4">
+                              More products waiting
+                            </p>
+                            <p className="mt-1 text-xs text-gray-600 text-center px-6 max-w-sm leading-relaxed">
+                              Upgrade to Premium to browse every listing vendors
+                              put on Hub.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => navigate("/pricing?for=buyers")}
+                              className="mt-3 inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-orange-600 transition-colors shadow-sm"
+                            >
+                              Upgrade to Premium
+                            </button>
+                          </div>
                         </div>
                       );
-                    }
-                    return (
-                      <div
-                        key={cardKey}
-                        className="relative col-span-2 lg:col-span-1 overflow-hidden rounded-none lg:rounded-2xl"
-                      >
-                        <div
-                          aria-hidden
-                          className="pointer-events-none select-none blur-[2px] opacity-50 saturate-50 [mask-image:linear-gradient(to_bottom,black_0%,black_35%,transparent_100%)]"
-                        >
-                          {card}
-                        </div>
-                        <div className="absolute inset-0 flex flex-col items-center justify-end pb-6 pt-16 bg-gradient-to-t from-canvas via-canvas/90 to-transparent">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src="/hub/premium-listings.jpg"
-                            alt=""
-                            className="h-14 w-14 rounded-2xl object-cover shadow-sm ring-1 ring-black/5"
-                          />
-                          <p className="mt-3 text-sm font-bold text-ink text-center px-4">
-                            More products waiting
-                          </p>
-                          <p className="mt-1 text-xs text-gray-600 text-center px-6 max-w-sm leading-relaxed">
-                            Upgrade to Premium to browse every listing vendors
-                            put on Hub.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => navigate("/pricing?for=buyers")}
-                            className="mt-3 inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-orange-600 transition-colors shadow-sm"
-                          >
-                            Upgrade to Premium
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                    })}
+                  </div>
+
+                  {/* Auto pagination sentinel */}
+                  {hasMore && (
+                    <div
+                      ref={buyerSentinelRef}
+                      className="py-6 flex items-center justify-center text-xs text-gray-500 gap-2"
+                    >
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+                      <span>Loading more listings…</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1959,12 +2072,21 @@ function CommunityPanel({
     <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-4">
       <div className="flex items-center justify-between gap-3 mb-3">
         <h3 className="text-sm font-bold text-ink">Community & Updates</h3>
-        {!home.premium && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500">
-            <LockIcon size={12} />
-            Posting is Premium
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {!home.premium && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500">
+              <LockIcon size={12} />
+              Posting is Premium
+            </span>
+          )}
+          <Link
+            href="/hub/community"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-400 ml-1 transition-colors"
+          >
+            <span>Open Forum</span>
+            <ArrowRightIcon size={12} />
+          </Link>
+        </div>
       </div>
       {posts.length === 0 && updates.length === 0 ? (
         <p className="text-xs text-gray-500">
@@ -2132,19 +2254,27 @@ function FeedCard({
   onBoost?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const isLongDescription = Boolean(
+    item.body && (item.body.length > 110 || item.body.includes("\n")),
+  );
   const menuRef = useRef<HTMLButtonElement>(null);
   const gallery = [...new Set((item.images ?? []).filter(Boolean))];
   const cover = item.imageUrl || gallery[0] || null;
   const extras = gallery.filter((url) => url !== cover);
   const thumbs = gallery.length > 1 ? extras.slice(0, 3) : [];
   const extra = gallery.length > 1 ? extras.length - thumbs.length : 0;
-  const badge = item.sponsored
-    ? "Sponsored"
-    : item.kind === "product" && isNewListing(item.at, now)
-      ? "New Listing"
-      : item.kind === "product"
-        ? "Listing"
-        : "Promotion";
+  const isBoosted = isBoostedProduct(item);
+  const isAdvert = !isBoosted && isSponsoredAdvert(item);
+  const badge = isAdvert
+    ? "Sponsored Ad"
+    : isBoosted || item.sponsored
+      ? "Sponsored"
+      : item.kind === "product" && isNewListing(item.at, now)
+        ? "New Listing"
+        : item.kind === "product"
+          ? "Listing"
+          : "Promotion";
   // Public product URL is always /{slug} — never /p/….
   const productHref = item.listing?.slug ? `/${item.listing.slug}` : null;
 
@@ -2208,7 +2338,7 @@ function FeedCard({
           <span
             className={cn(
               "absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md",
-              badge === "Sponsored"
+              badge === "Sponsored" || badge === "Sponsored Ad"
                 ? "bg-orange-500 text-white"
                 : "bg-surface/95 text-ink",
             )}
@@ -2307,14 +2437,30 @@ function FeedCard({
             </p>
           )}
           {item.body && item.body !== item.title && (
-            <p
-              className={cn(
-                "mt-1 text-sm text-gray-600 line-clamp-2 leading-relaxed",
-                compact && "hidden lg:block",
+            <div className={cn("mt-1", compact && "hidden lg:block")}>
+              <p
+                className={cn(
+                  "text-sm text-gray-600 leading-relaxed transition-all whitespace-pre-line",
+                  !isDescriptionExpanded && "line-clamp-2",
+                )}
+              >
+                {item.body}
+              </p>
+              {isLongDescription && (
+                <button
+                  type="button"
+                  data-card-cta
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDescriptionExpanded((prev) => !prev);
+                  }}
+                  className="relative z-10 mt-1 inline-flex items-center gap-0.5 text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+                >
+                  <span>{isDescriptionExpanded ? "See less" : "See more"}</span>
+                </button>
               )}
-            >
-              {item.body}
-            </p>
+            </div>
           )}
           {item.sentiment && (
             <p

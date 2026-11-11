@@ -197,6 +197,7 @@ export interface HubTimelineListing {
 }
 
 export interface HubTimelineItem {
+  boosted?: boolean;
   id: string;
   vendorId: string;
   kind: HubTimelineKind;
@@ -275,7 +276,7 @@ export interface HubPreview {
 
 export interface HubHome {
   role: "buyer" | "vendor";
-  store: {
+  store?: {
     name: string;
     handle: string | null;
     avatar: string | null;
@@ -285,18 +286,25 @@ export interface HubHome {
   enterprise: boolean;
   /** Buyer Premium. Social contact on a card is theirs. */
   premium: boolean;
-  /** Null/absent for Premium buyers and vendors. */
+  /** Null/absent for Premium buyers and vendors who have no preview cap. */
   hubPreview?: HubPreview | null;
   sectors: HubSectorCount[];
   performance: {
     leads: HubWindow;
     salesKobo: HubWindow;
+    ordersCount?: number;
+    isLive?: boolean;
   } | null;
   featured: HubFeaturedVendor[];
   timeline: HubTimelineItem[];
   community: HubCommunityPost[];
   buyerBroadcasts: HubBuyerBroadcast[];
   broadcastPrefs: HubBroadcastPrefs;
+  /** Consolidated vendor hub properties bundled on GET /api/hub/home for a single-shot load */
+  context?: HubContext | null;
+  adverts?: HubVendorAdvert[];
+  boosts?: HubListingBoost[];
+  activeBoosts?: HubListingBoost[];
 }
 
 export interface CreateBroadcastPayload {
@@ -348,4 +356,129 @@ export interface HubContext {
   aiPosterRemaining?: number;
   /** ISO time when a fresh allowance opens (set when the last slot was used). */
   aiPosterResetsAt?: string | null;
+}
+
+// ── Enterprise Insights & Analytics Types ──────────────────────────────────
+
+export interface HubAnalyticsTelemetry {
+  views: number;
+  clicks: number;
+  ctr: number;
+  categoryAvgCtr: number;
+  salesKobo: number;
+  ordersCount: number;
+  leadsCount: number;
+}
+
+export interface HubFunnelStage {
+  label: string;
+  count: number;
+  conversionPct: number;
+}
+
+export interface HubDailyTrend {
+  date: string;
+  views: number;
+  clicks: number;
+  ctr: number;
+  orders: number;
+  salesKobo: number;
+}
+
+export interface HubLeaderboardEntry {
+  rank: number;
+  name: string;
+  handle?: string | null;
+  avatar?: string | null;
+  salesKobo: number;
+  orders: number;
+  conversionRate: string;
+  badge?: string;
+  verified: boolean;
+  isEnterprise?: boolean;
+  isCurrentVendor: boolean;
+}
+
+export interface HubAnalyticsData {
+  period: string;
+  sector: string;
+  telemetry: HubAnalyticsTelemetry;
+  funnel: {
+    reach: HubFunnelStage;
+    clicks: HubFunnelStage;
+    leads: HubFunnelStage;
+    orders: HubFunnelStage;
+  };
+  dailyTrends: HubDailyTrend[];
+  leaderboard: HubLeaderboardEntry[];
+  myRank: number;
+}
+
+// ── Velte Community Hub (Enterprise Vendors & Premium Buyers) ─────────────
+
+export type HubCommunityCategory =
+  | "announcement"
+  | "discussion"
+  | "update"
+  | "feedback"
+  | "b2b"
+  | "gig"
+  | "request";
+
+export type HubCommunityAuthorType = "buyer" | "vendor" | "official" | "agent";
+
+export interface HubCommunityReply {
+  id: string;
+  authorId: string;
+  authorType: HubCommunityAuthorType;
+  authorName: string;
+  authorAvatar?: string | null;
+  authorRoleBadge?: string | null;
+  body: string;
+  isVendorResponse?: boolean;
+  createdAt: string;
+}
+
+export interface HubCommunityThread {
+  id: string;
+  vendorId?: string;
+  title: string;
+  body: string;
+  category: HubCommunityCategory;
+  authorId: string;
+  authorType: HubCommunityAuthorType;
+  authorName: string;
+  authorAvatar?: string | null;
+  authorRoleBadge?: string | null;
+  storeName?: string | null;
+  pinned?: boolean;
+  likesCount: number;
+  repliesCount: number;
+  replies: HubCommunityReply[];
+  resolved: boolean;
+  createdAt: string;
+}
+
+export interface HubCommunityStats {
+  enterpriseVendorsCount?: number;
+  premiumBuyersCount?: number;
+  discussionsCount: number;
+  repliesCount: number;
+  resolvedInquiriesCount: number;
+  reputationScore?: number;
+  followersCount?: number;
+}
+
+export interface HubCommunityData {
+  communityName?: string;
+  store?: { name: string; avatar?: string | null; handle?: string | null };
+  stats: HubCommunityStats;
+  posts: HubCommunityThread[];
+}
+
+export interface CreateCommunityPostPayload {
+  title?: string;
+  body: string;
+  category?: HubCommunityCategory;
+  pinned?: boolean;
 }

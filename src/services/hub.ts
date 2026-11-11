@@ -2,6 +2,11 @@ import { ApiError, api } from "@/lib/api-client";
 import { uploadAdvertMedia } from "@/lib/cloudinary";
 import { overlayStoreLogoOnPoster } from "@/lib/overlayStoreLogo";
 import type {
+  CreateCommunityPostPayload,
+  HubAnalyticsData,
+  HubCommunityData,
+  HubCommunityReply,
+  HubCommunityThread,
   HubContext,
   HubHome,
   HubListingBoost,
@@ -73,6 +78,31 @@ export async function createHubBoost(productId: string, days: number) {
 
 export async function cancelHubBoost(id: string) {
   return api.post<{ id: string }>(`/api/hub/boosts/${id}/cancel`);
+}
+
+export async function fetchHubAnalytics() {
+  return api.get<HubAnalyticsData>("/api/hub/analytics");
+}
+
+export async function fetchHubCommunity() {
+  return api.get<HubCommunityData>("/api/hub/community");
+}
+
+export async function createCommunityPost(payload: CreateCommunityPostPayload) {
+  return api.post<HubCommunityThread>("/api/hub/community", payload);
+}
+
+export async function toggleCommunityPostLike(postId: string) {
+  return api.post<{ liked: boolean; likesCount: number }>(
+    `/api/hub/community/posts/${postId}/like`,
+  );
+}
+
+export async function addCommunityPostReply(postId: string, body: string) {
+  return api.post<HubCommunityReply>(
+    `/api/hub/community/posts/${postId}/replies`,
+    { body },
+  );
 }
 
 export type AiPosterResult = {

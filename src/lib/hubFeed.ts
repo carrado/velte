@@ -6,10 +6,23 @@ import type { HubTimelineItem } from "@/types/hub";
  */
 export function isBoostedProduct(item: HubTimelineItem): boolean {
   if (!item) return false;
-  return Boolean(
+  const isExplicitBoost = Boolean(
     (item as { boosted?: boolean }).boosted ||
-    (item.sponsored && (Boolean(item.listing) || item.kind === "product")),
+    (item as { is_boosted?: boolean }).is_boosted ||
+    (item as { isBoosted?: boolean }).isBoosted ||
+    (item.listing as { boosted?: boolean } | undefined)?.boosted ||
+    (item.listing as { is_boosted?: boolean } | undefined)?.is_boosted ||
+    (item.listing as { sponsored?: boolean } | undefined)?.sponsored,
   );
+  if (isExplicitBoost) return true;
+
+  // If item is marked sponsored and is a product or not an explicit advert flyer
+  if (item.sponsored) {
+    if (Boolean(item.listing) || item.kind === "product") return true;
+    if (!item.advertId && item.kind !== "promotion") return true;
+  }
+
+  return false;
 }
 
 /**
@@ -17,11 +30,8 @@ export function isBoostedProduct(item: HubTimelineItem): boolean {
  */
 export function isSponsoredAdvert(item: HubTimelineItem): boolean {
   if (!item) return false;
-  return Boolean(
-    item.advertId ||
-    item.kind === "promotion" ||
-    (item.sponsored && !item.listing && item.kind !== "product"),
-  );
+  if (isBoostedProduct(item)) return false;
+  return Boolean(item.advertId || item.kind === "promotion" || item.sponsored);
 }
 
 /**
@@ -101,7 +111,9 @@ export function assembleHubFeed(items: HubTimelineItem[]): HubTimelineItem[] {
 }
 
 export interface AssembledFeedResult {
-  /** The top boosted product listing that begins the feed (with manual carousel) */
+  /** All boosted listings that strictly occupy ONLY the top spot (in carousel format) */
+  boostedListings: HubTimelineItem[];
+  /** Backwards compatibility alias for single leader card */
   boostedLeader: HubTimelineItem | null;
   /** The timeline feed items with sponsored adverts sandwiched every 2 or 3 listings */
   feed: HubTimelineItem[];
@@ -109,15 +121,15 @@ export interface AssembledFeedResult {
 
 /**
  * Assembles the timeline feed:
- * 1. Boosted product sponsored listing starts the listings feed.
- * 2. Sponsored adverts are sandwiched after every 2 or 3 (random) listings.
+ * 1. Boosted listings strictly occupy ONLY the top spot in a carousel format.
+ * 2. Sponsored adverts are sandwiched after every 2 or 3 listings as you scroll.
  * 3. Both boosted listings and adverts are clearly partitioned for distinct rendering.
  */
 export function assembleTimelineWithSandwichedAds(
   items: HubTimelineItem[],
 ): AssembledFeedResult {
   if (!items || items.length === 0) {
-    return { boostedLeader: null, feed: [] };
+    return { boostedListings: [], boostedLeader: null, feed: [] };
   }
 
   // 1. Separate items by role
@@ -131,40 +143,23 @@ export function assembleTimelineWithSandwichedAds(
     .filter((item) => !isBoostedProduct(item) && !isSponsoredAdvert(item))
     .sort(compareTimestampDesc);
 
-  // Top boosted product sponsored listing starts the feed
-  let boostedLeader: HubTimelineItem | null = null;
-  let remainingBoosted: HubTimelineItem[] = [];
-  let remainingOrganic = organicListings;
-  let adPool: HubTimelineItem[] = [];
+  // Boosted listings strictly occupy ONLY the top spot in a carousel format
+  const boostedListings = boostedProducts;
+  const boostedLeader = boostedProducts[0] ?? null;
 
-  if (boostedProducts.length > 0) {
-    boostedLeader = boostedProducts[0];
-    remainingBoosted = boostedProducts.slice(1);
-    adPool = sponsoredAds.length > 0 ? sponsoredAds : remainingBoosted;
-  } else if (sponsoredAds.length > 0) {
-    boostedLeader = sponsoredAds[0];
-    adPool = sponsoredAds.length > 1 ? sponsoredAds.slice(1) : sponsoredAds;
-  } else if (organicListings.length > 0) {
-    boostedLeader = {
-      ...organicListings[0],
-      sponsored: true,
-      kind: "product",
-    };
-    remainingOrganic = organicListings.slice(1);
-    adPool = [boostedLeader];
-  }
+  // Adverts that display after 2 or 3 listings as you scroll
+  const adPool = sponsoredAds;
 
   const feed: HubTimelineItem[] = [];
   let adCursor = 0;
   let organicCursor = 0;
   let listingsSinceAd = 0;
-  // Seed random gap between 2 and 3 listings
-  let nextAdGap = 2 + (Math.random() < 0.5 ? 0 : 1);
+  let gapIndex = 0;
+  // Deterministic initial gap
+  let nextAdGap = 2;
 
-  const allListings = [...remainingBoosted, ...remainingOrganic];
-
-  while (organicCursor < allListings.length) {
-    feed.push(allListings[organicCursor]);
+  while (organicCursor < organicListings.length) {
+    feed.push(organicListings[organicCursor]);
     organicCursor++;
     listingsSinceAd++;
 
@@ -172,12 +167,18 @@ export function assembleTimelineWithSandwichedAds(
       feed.push(adPool[adCursor % adPool.length]);
       adCursor++;
       listingsSinceAd = 0;
-      // Alternate / randomize between 2 and 3 listings
-      nextAdGap = Math.random() < 0.5 ? 2 : 3;
+      // Deterministically alternate between 2 and 3 listings
+      gapIndex++;
+      nextAdGap = gapIndex % 2 === 0 ? 2 : 3;
     }
   }
 
-  return { boostedLeader, feed };
+  // If there are no organic listings but there are sponsored ads, show them in feed
+  if (organicListings.length === 0 && adPool.length > 0) {
+    feed.push(...adPool);
+  }
+
+  return { boostedListings, boostedLeader, feed };
 }
 
 /**

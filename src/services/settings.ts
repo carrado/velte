@@ -100,6 +100,13 @@ export const settingsApi = {
     }>("/api/auth/profile", data);
     const user = mapRawUser(raw);
     useUserStore.getState().updateUser(user);
+    // Keep vendorStore in sync for fields that appear on Hub cards
+    if (data.avatar !== undefined || data.businessName !== undefined) {
+      useUserStore.getState().updateVendorStore({
+        ...(data.avatar !== undefined && { avatar: data.avatar }),
+        ...(data.businessName !== undefined && { name: data.businessName }),
+      });
+    }
     return { user, addressChangeBlocked, addressChangeAvailableAt };
   },
 

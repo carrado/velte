@@ -18,10 +18,12 @@ import {
   WalletIcon,
 } from "@/components/icons";
 import { HubHero } from "@/components/hub/HubHero";
+import { HubLink } from "@/components/hub/HubLink";
 import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
 import { HubSidebarFooter } from "@/components/hub/HubSidebarFooter";
 import { ApiError } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
+import { useUserStore } from "@/store/userStore";
 import { SECTOR_BY_VALUE } from "@/lib/sectors";
 import { cn, formatNaira } from "@/lib/utils";
 import {
@@ -150,9 +152,17 @@ export function HubBoostPage({ userId }: { userId: string }) {
     return product.name.toLowerCase().includes(needle);
   });
 
+  const user = useUserStore((s) => s.user);
+  const vendorStore = useUserStore((s) => s.vendorStore);
+  const storeHandle =
+    vendorStore?.handle ?? user?.username ?? home?.store?.handle;
+  const isVerified = Boolean(
+    vendorStore?.verified ?? user?.isEnterprise ?? home?.store?.verified,
+  );
+
   const ownFeatured =
     home?.featured.find(
-      (item) => home.store?.handle != null && item.handle === home.store.handle,
+      (item) => storeHandle != null && item.handle === storeHandle,
     ) ?? null;
   const walletHref = "/wallet";
 
@@ -440,9 +450,12 @@ export function HubBoostPage({ userId }: { userId: string }) {
               {!canAfford && costKobo > 0 && (
                 <p className="mt-3 text-xs text-red-500">
                   Top up your wallet to cover {formatNaira(costKobo)}.{" "}
-                  <Link href={walletHref} className="font-semibold underline">
+                  <HubLink
+                    href={walletHref}
+                    className="font-semibold underline"
+                  >
                     Go to wallet
-                  </Link>
+                  </HubLink>
                 </p>
               )}
               <button
@@ -615,7 +628,7 @@ export function HubBoostPage({ userId }: { userId: string }) {
                       </p>
                     )}
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {home?.store?.verified && (
+                      {isVerified && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
                           <CheckIcon size={11} />
                           Verified Vendor

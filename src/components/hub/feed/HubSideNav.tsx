@@ -1,9 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import Link from "next/link";
-
-import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
+import { HubLink } from "@/components/hub/HubLink";
 import { cn } from "@/lib/utils";
 
 // Timeline shortcuts rail. Vendors get manage + create destinations (anchors
@@ -12,32 +10,26 @@ import { cn } from "@/lib/utils";
 function SideLink({
   href,
   label,
-  prefetch,
 }: {
   href: string;
   label: string;
   prefetch?: boolean;
 }) {
-  const { navigate } = useNavigation();
   const className =
     "block px-3 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-ink transition-colors";
 
-  if (prefetch || href.startsWith("/hub")) {
+  if (href.startsWith("#")) {
     return (
-      <button
-        type="button"
-        onClick={() => navigate(href)}
-        className={cn(className, "w-full text-left")}
-      >
+      <a href={href} className={className}>
         {label}
-      </button>
+      </a>
     );
   }
 
   return (
-    <Link href={href} className={className}>
+    <HubLink href={href} className={cn(className, "w-full text-left")}>
       {label}
-    </Link>
+    </HubLink>
   );
 }
 
@@ -63,6 +55,7 @@ export function HubSideNav({ audience }: { audience: "vendor" | "buyer" }) {
           <SideLink href="#hub-drafts" label="Broadcast drafts" />
           <SideLink href="#hub-insights" label="Insights" />
           <div className="mx-3 my-2 border-t border-gray-200/70" />
+          <SideLink href={"/hub/community"} label="Community Hub" />
           <SideLink href={"/products/add"} label="Add a listing" />
           <SideLink href={"/store"} label="Edit contact card" />
         </>
@@ -72,6 +65,7 @@ export function HubSideNav({ audience }: { audience: "vendor" | "buyer" }) {
           <SideLink href="#hub-businesses" label="Businesses" />
           <SideLink href="/hub/vendors" label="All vendors" />
           <div className="mx-3 my-2 border-t border-gray-200/70" />
+          <SideLink href={"/hub/community"} label="Community Hub" />
           <SideLink href="/marketplace" label="Full marketplace" />
           <SideLink href="/chat" label="Ask Velte" />
         </>

@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  reactCompiler: true,
+  // React Compiler runs full AST flow analysis on every component; in dev mode on large components
+  // (1400+ lines in Hub/Products) it causes V8 heap exhaustion and freezes initial page compile.
+  // Enable only in production builds.
+  reactCompiler: process.env.NODE_ENV === "production",
+  experimental: {
+    optimizePackageImports: ["@phosphor-icons/react", "motion/react"],
+  },
   // Serves Firebase Auth's sign-in handler from velte.ng instead of
   // velte-52165.firebaseapp.com, so the Google popup shows our own domain
   // (2026-08-27). Firebase Hosting does this automatically; on Vercel the

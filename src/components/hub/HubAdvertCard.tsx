@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HubLink } from "@/components/hub/HubLink";
 
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { BadgeCheckIcon, StoreIcon } from "@/components/icons/hero";
@@ -21,8 +22,8 @@ export function HubAdvertCard({ advert }: { advert: HubAdvert }) {
           alt={advert.headline}
           className="w-full h-full object-cover"
         />
-        <span className="absolute top-2.5 left-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-surface/95 px-2 py-1 rounded-md shadow-sm">
-          Sponsored
+        <span className="absolute top-2.5 left-2.5 text-[10px] font-bold uppercase tracking-wider text-orange-600 bg-surface/95 px-2 py-1 rounded-md shadow-sm border border-orange-200/50">
+          Sponsored Ad
         </span>
       </div>
       <div className="p-4 flex flex-col flex-1">
@@ -65,9 +66,9 @@ export function HubAdvertCard({ advert }: { advert: HubAdvert }) {
   return (
     <div className="bg-surface rounded-2xl border border-orange-200/70 shadow-sm overflow-hidden flex flex-col h-full transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       {storeHref ? (
-        <Link href={storeHref} className="flex flex-col flex-1">
+        <HubLink href={storeHref} className="flex flex-col flex-1">
           {body}
-        </Link>
+        </HubLink>
       ) : (
         body
       )}

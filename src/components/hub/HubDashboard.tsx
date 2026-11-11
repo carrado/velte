@@ -1,6 +1,4 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowRight, ChevronRight } from "lucide-react";
@@ -36,14 +34,18 @@ import {
 import type { IconComponent } from "@/types/common";
 import { ApiError } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
+import { fetchHubHome, hubPageQueryOptions } from "@/services/hub";
+import { useUserStore } from "@/store/userStore";
 import {
-  fetchHubAdverts,
-  fetchHubContext,
-  fetchHubHome,
-  hubPageQueryOptions,
-  hubRealtimeQueryOptions,
-} from "@/services/hub";
-import { assembleTimelineWithSandwichedAds } from "@/lib/hubFeed";
+  assembleTimelineWithSandwichedAds,
+  isBoostedProduct,
+  isSponsoredAdvert,
+} from "@/lib/hubFeed";
+import {
+  subscribeToHubNewListings,
+  syncHubKnownListingIds,
+} from "@/lib/hubSync";
+import { useHubWebSocket } from "@/hooks/useHubWebSocket";
 import { NewPostsIndicator } from "./NewPostsIndicator";
 import { modalScrimClass } from "@/lib/modalScrim";
 import { HubLockedModal } from "./HubLockedModal";
@@ -61,9 +63,11 @@ import { CardCarousel } from "@/components/search/CardCarousel";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { buildChatLink } from "@/lib/chatLink";
 import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
+import { HubLink } from "./HubLink";
 import { HubHero } from "./HubHero";
 import { HubBroadcastComposer } from "./HubBroadcastComposer";
 import { TimelineFeedCard } from "./TimelineFeedCard";
+import { BoostedListingsCarousel } from "./BoostedListingsCarousel";
 import { FeaturedVendorsSidebarCard } from "./FeaturedVendorsSidebarCard";
 
 type Sheet =
@@ -213,6 +217,18 @@ function Avatar({
   );
 }
 
+function isTestItem(item: HubTimelineItem): boolean {
+  if (!item) return false;
+  if (item.id?.startsWith("test_")) return true;
+  const title = (item.title || "").toLowerCase();
+  const store = (item.storeName || "").toLowerCase();
+  return (
+    title.includes("test product") ||
+    title.includes("vendor test") ||
+    store.includes("vendor test")
+  );
+}
+
 export function HubDashboard({
   scope,
   userId: userIdProp,
@@ -234,31 +250,58 @@ export function HubDashboard({
   const homeQuery = useQuery({
     queryKey: queryKeys.hub.home(vendorScope ? "vendor" : "open"),
     queryFn: () => fetchHubHome(scope),
-    ...hubRealtimeQueryOptions,
+    ...hubPageQueryOptions,
     retry: (failureCount, error) =>
       !(error instanceof ApiError && error.status === 401) && failureCount < 1,
   });
-  const contextQuery = useQuery({
-    queryKey: queryKeys.hub.context,
-    queryFn: fetchHubContext,
-    enabled: vendorScope,
-    ...hubRealtimeQueryOptions,
-  });
-  const advertsQuery = useQuery({
-    queryKey: queryKeys.hub.adverts,
-    queryFn: fetchHubAdverts,
-    enabled: vendorScope,
-    ...hubRealtimeQueryOptions,
-  });
   const home = homeQuery.data ?? null;
-  const context = contextQuery.data ?? null;
-  const adverts = advertsQuery.data ?? [];
-  const loading =
-    homeQuery.isPending ||
-    (vendorScope && (contextQuery.isPending || advertsQuery.isPending));
+
+  const user = useUserStore((s) => s.user);
+  const vendorStore = useUserStore((s) => s.vendorStore);
+  const store = useMemo(() => {
+    if (vendorStore) return vendorStore;
+    if (!user) return null;
+    return {
+      name:
+        user.company?.name?.trim() ||
+        user.businessName?.trim() ||
+        user.name?.trim() ||
+        "Your Business",
+      handle: user.username || null,
+      avatar: user.avatar || null,
+      verified: Boolean(user.isEnterprise || user.enterprise),
+      description: user.description || null,
+    };
+  }, [vendorStore, user]);
+
+  const context = home?.context ?? null;
+  const adverts = home?.adverts ?? [];
+  const activeBoosts = useMemo(
+    () =>
+      home?.activeBoosts ??
+      (home?.boosts ?? []).filter((b) => b.status === "active"),
+    [home?.activeBoosts, home?.boosts],
+  );
+  const activeBoostProductIds = useMemo(
+    () => new Set(activeBoosts.map((b) => b.productId).filter(Boolean)),
+    [activeBoosts],
+  );
+
+  const livePerformance = useMemo(
+    () =>
+      home?.performance ?? {
+        leads: { current: 0, previous: 0 },
+        salesKobo: { current: 0, previous: 0 },
+        ordersCount: 0,
+        isLive: false,
+      },
+    [home?.performance],
+  );
+
+  const loading = homeQuery.isPending;
   const locked =
     homeQuery.error instanceof ApiError && homeQuery.error.status === 401;
-  const failed = (homeQuery.isError && !locked) || contextQuery.isError;
+  const failed = homeQuery.isError && !locked;
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: ["hub"] });
   };
@@ -273,53 +316,269 @@ export function HubDashboard({
     [],
   );
   const [pendingUpdates, setPendingUpdates] = useState<HubTimelineItem[]>([]);
-  const now = Date.now();
 
-  useEffect(() => {
-    if (!home?.timeline) return;
-    if (displayedTimeline.length === 0) {
-      setDisplayedTimeline(home.timeline);
-      return;
-    }
-    const currentIds = new Set(displayedTimeline.map((item) => item.id));
-    const newItems = home.timeline.filter((item) => !currentIds.has(item.id));
-    if (newItems.length > 0) {
+  const knownListingIds = useMemo(
+    () => displayedTimeline.map((item) => item.id),
+    [displayedTimeline],
+  );
+
+  const handleIncomingNewListings = useCallback(
+    (incomingItems: HubTimelineItem[]) => {
+      if (!incomingItems || incomingItems.length === 0) return;
       setPendingUpdates((prev) => {
-        const prevIds = new Set(prev.map((i) => i.id));
-        const trulyNew = newItems.filter((i) => !prevIds.has(i.id));
-        return trulyNew.length > 0 ? [...trulyNew, ...prev] : prev;
+        const displayedIds = new Set(displayedTimeline.map((item) => item.id));
+        const pendingIds = new Set(prev.map((item) => item.id));
+        const trulyNew = incomingItems.filter(
+          (item) =>
+            !displayedIds.has(item.id) &&
+            !pendingIds.has(item.id) &&
+            !isTestItem(item),
+        );
+        if (trulyNew.length === 0) return prev;
+        return [...trulyNew, ...prev];
       });
-    }
-  }, [home?.timeline, displayedTimeline]);
+    },
+    [displayedTimeline],
+  );
+
+  // Real-time WebSocket connection: checks for new listings and ticks clock in real time
+  const { now } = useHubWebSocket({
+    knownListingIds,
+    onNewListings: handleIncomingNewListings,
+  });
+
+  // Auto pagination state
+  const PAGE_SIZE = 10;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const observerTargetRef = useRef<HTMLDivElement>(null);
+
+  // Reset pagination count on filter change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [filter]);
+
+  // Initialize displayed timeline from home on initial data arrival
+  useEffect(() => {
+    if (!home?.timeline || home.timeline.length === 0) return;
+    const cleanTimeline = home.timeline.filter((item) => !isTestItem(item));
+    setDisplayedTimeline((prev) =>
+      prev.length === 0
+        ? cleanTimeline
+        : prev.filter((item) => !isTestItem(item)),
+    );
+    syncHubKnownListingIds(cleanTimeline.map((item) => item.id));
+  }, [home?.timeline]);
 
   const handleApplyUpdates = () => {
     if (pendingUpdates.length === 0) return;
-    setDisplayedTimeline((prev) => [...pendingUpdates, ...prev]);
+    const cleanPending = pendingUpdates.filter((item) => !isTestItem(item));
+    setDisplayedTimeline((prev) => [
+      ...cleanPending,
+      ...prev.filter((item) => !isTestItem(item)),
+    ]);
+    setVisibleCount((prev) => prev + cleanPending.length);
     setPendingUpdates([]);
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
-  const { boostedLeader, feed: assembledFeed } = useMemo(() => {
-    const rawItems =
-      displayedTimeline.length > 0 ? displayedTimeline : (home?.timeline ?? []);
-    let items = rawItems;
+  /**
+   * Enriches timeline items with active boost states from the vendor's active boosts,
+   * guaranteeing that boosted products reliably show the Sponsored label and appear
+   * in the boosted showcase.
+   */
+  const enrichedTimeline = useMemo(() => {
+    const rawItems = (
+      displayedTimeline.length > 0 ? displayedTimeline : (home?.timeline ?? [])
+    ).filter((item) => !isTestItem(item));
+
+    const matchedProductIds = new Set<string>();
+    const enriched = rawItems.map((item) => {
+      const prodId = item.listing?.productId || item.id;
+      const isBoosted =
+        isBoostedProduct(item) ||
+        Boolean(prodId && activeBoostProductIds.has(prodId));
+
+      if (isBoosted) {
+        if (prodId) matchedProductIds.add(prodId);
+        return {
+          ...item,
+          boosted: true,
+          sponsored: true,
+        };
+      }
+      return item;
+    });
+
+    // If active boosts exist that are not yet in the timeline stream, synthesize them
+    const missingBoosts = activeBoosts.filter(
+      (b) => !matchedProductIds.has(b.productId),
+    );
+
+    const synthesizedItems: HubTimelineItem[] = missingBoosts.map((boost) => ({
+      id: `boost-${boost.id}`,
+      vendorId: store?.handle ?? "vendor",
+      kind: "product" as const,
+      at: boost.startsAt || new Date().toISOString(),
+      title: boost.productName,
+      body: store?.name
+        ? `Featured product from ${store.name}`
+        : "Sponsored product listing",
+      imageUrl: boost.productImage,
+      storeName: store?.name ?? "Vendor",
+      storeHandle: store?.handle ?? null,
+      avatar: store?.avatar ?? null,
+      verified: Boolean(store?.verified),
+      sponsored: true,
+      boosted: true,
+      sectors: [],
+      place: null,
+      images: boost.productImage ? [boost.productImage] : [],
+      ratingAvg: null,
+      ratingCount: 0,
+      whatsapp: null,
+      social: null,
+      fastDelivery: false,
+      favourite: false,
+      trusted: false,
+      sentiment: null,
+      reviewableOrderId: null,
+      listing: {
+        productId: boost.productId,
+        name: boost.productName,
+        kind: "product" as const,
+        quoteOnRequest: false,
+        price: boost.productPrice ?? boost.costKobo ?? 0,
+        priceMax: null,
+        currency: "NGN",
+        description: null,
+        images: boost.productImage ? [boost.productImage] : [],
+        attributes: [],
+        checkoutEligible: true,
+      },
+    }));
+
+    return [...synthesizedItems, ...enriched];
+  }, [
+    displayedTimeline,
+    home?.timeline,
+    store,
+    activeBoosts,
+    activeBoostProductIds,
+  ]);
+
+  const {
+    boostedListings,
+    boostedLeader,
+    feed: assembledFeed,
+  } = useMemo(() => {
+    const items = enrichedTimeline;
+
+    if (filter === "all") {
+      return assembleTimelineWithSandwichedAds(items);
+    }
+
     if (filter === "product") {
-      items = rawItems.filter(
-        (item) => item.kind === "product" && isNewListing(item.at, now),
+      // "New Products": Show product listings, sorted newest first
+      const productItems = items
+        .filter((item) => item.kind === "product" || Boolean(item.listing))
+        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+      const boosted = productItems.filter(isBoostedProduct);
+      const regularProducts = productItems.filter(
+        (item) => !isBoostedProduct(item),
       );
-    } else if (filter === "promotion") {
-      items = rawItems.filter((item) => item.kind === "promotion");
-    } else if (filter === "update") {
-      items = rawItems.filter((item) => item.kind === "update");
-    } else if (filter === "recent") {
-      items = [...rawItems].sort(
+
+      return {
+        boostedListings: boosted,
+        boostedLeader: boosted[0] ?? null,
+        feed: regularProducts.length > 0 ? regularProducts : productItems,
+      };
+    }
+
+    if (filter === "promotion") {
+      // "Promotions": Show sponsored ads, flyers, campaigns, and promotional broadcasts
+      const promoItems = items
+        .filter(
+          (item) =>
+            item.kind === "promotion" ||
+            isSponsoredAdvert(item) ||
+            Boolean(item.advertId),
+        )
+        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+      return {
+        boostedListings: [],
+        boostedLeader: null,
+        feed: promoItems,
+      };
+    }
+
+    if (filter === "update") {
+      // "Updates": Show vendor updates and broadcast notices
+      const updateItems = items
+        .filter((item) => item.kind === "update")
+        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+      return {
+        boostedListings: [],
+        boostedLeader: null,
+        feed: updateItems,
+      };
+    }
+
+    if (filter === "recent") {
+      // "Recent": All items strictly sorted chronologically newest first without interleaving
+      const recentItems = [...items].sort(
         (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
       );
+
+      return {
+        boostedListings: [],
+        boostedLeader: null,
+        feed: recentItems,
+      };
     }
+
     return assembleTimelineWithSandwichedAds(items);
-  }, [displayedTimeline, home?.timeline, filter, now]);
+  }, [enrichedTimeline, filter]);
+
+  const visibleFeed = useMemo(
+    () => assembledFeed.slice(0, visibleCount),
+    [assembledFeed, visibleCount],
+  );
+  const hasMore = visibleCount < assembledFeed.length;
+
+  // Auto paginate on scroll near bottom of the feed
+  useEffect(() => {
+    const sentinel = observerTargetRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first?.isIntersecting && hasMore && !isLoadingMore) {
+          setIsLoadingMore(true);
+          setTimeout(() => {
+            setVisibleCount((prev) =>
+              Math.min(prev + PAGE_SIZE, assembledFeed.length),
+            );
+            setIsLoadingMore(false);
+          }, 150);
+        }
+      },
+      {
+        root: null,
+        rootMargin: "350px",
+        threshold: 0.1,
+      },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, assembledFeed.length]);
 
   if (loading) {
     return (
@@ -377,15 +636,17 @@ export function HubDashboard({
       navigate("/hub/advert");
       return;
     }
+    if (next === "analytics") {
+      navigate("/hub/analytics");
+      return;
+    }
+    if (next === "community") {
+      navigate("/hub/community");
+      return;
+    }
     const action = ACTIONS.find((item) => item.sheet === next);
     if (action?.enterpriseOnly && !home.enterprise) {
-      if (next === "community") {
-        setUpgradeLock(ENTERPRISE_LOCKS.community);
-      } else if (next === "analytics") {
-        setUpgradeLock(ENTERPRISE_LOCKS.analytics);
-      } else {
-        setUpgradeLock(ENTERPRISE_LOCKS.advert);
-      }
+      setUpgradeLock(ENTERPRISE_LOCKS.advert);
       return;
     }
     setSheet(next);
@@ -414,60 +675,91 @@ export function HubDashboard({
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  {ACTIONS.map((action) => (
-                    <button
-                      key={action.sheet}
-                      type="button"
-                      onClick={() => openSheet(action.sheet)}
-                      className="w-full group flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 dark:border-white/5 hover:border-orange-300 dark:hover:border-orange-500/30 hover:bg-orange-50/50 dark:hover:bg-orange-500/5 transition-all text-left cursor-pointer"
-                    >
-                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400 group-hover:bg-orange-500 group-hover:text-white transition-colors">
-                        <action.icon size={17} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-bold text-ink group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
-                            {action.label}
-                          </span>
-                          {action.badge === "sponsored" && (
-                            <span className="rounded-full bg-orange-500 px-1.5 py-0.2 text-[9px] font-bold text-white leading-tight">
-                              Sponsored
+                  {ACTIONS.map((action) => {
+                    const actionHref =
+                      action.sheet === "boost"
+                        ? "/hub/boost"
+                        : action.sheet === "advert"
+                          ? "/hub/advert"
+                          : action.sheet === "analytics"
+                            ? "/hub/analytics"
+                            : action.sheet === "community"
+                              ? "/hub/community"
+                              : null;
+
+                    const content = (
+                      <>
+                        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400 group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                          <action.icon size={17} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-ink group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+                              {action.label}
                             </span>
-                          )}
-                          {action.badge === "special" && (
-                            <span className="rounded-full bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.2 text-[9px] font-bold text-sky-700 dark:text-sky-300 leading-tight">
-                              Special
-                            </span>
-                          )}
+                            {action.badge === "sponsored" && (
+                              <span className="rounded-full bg-orange-500 px-1.5 py-0.2 text-[9px] font-bold text-white leading-tight">
+                                Sponsored
+                              </span>
+                            )}
+                            {action.badge === "special" && (
+                              <span className="rounded-full bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.2 text-[9px] font-bold text-sky-700 dark:text-sky-300 leading-tight">
+                                Special
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-gray-500 dark:text-ink/60 truncate mt-0.5">
+                            {action.hint}
+                          </p>
                         </div>
-                        <p className="text-[11px] text-gray-500 dark:text-ink/60 truncate mt-0.5">
-                          {action.hint}
-                        </p>
-                      </div>
-                      {action.enterpriseOnly && !home.enterprise ? (
-                        <LockIcon
-                          size={14}
-                          className="shrink-0 text-gray-400"
-                        />
-                      ) : (
-                        <ChevronRight
-                          size={15}
-                          className="shrink-0 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all"
-                        />
-                      )}
-                    </button>
-                  ))}
+                        {action.enterpriseOnly && !home.enterprise ? (
+                          <LockIcon
+                            size={14}
+                            className="shrink-0 text-gray-400"
+                          />
+                        ) : (
+                          <ChevronRight
+                            size={15}
+                            className="shrink-0 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all"
+                          />
+                        )}
+                      </>
+                    );
+
+                    if (actionHref) {
+                      return (
+                        <HubLink
+                          key={action.sheet}
+                          href={actionHref}
+                          className="w-full group flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 dark:border-white/5 hover:border-orange-300 dark:hover:border-orange-500/30 hover:bg-orange-50/50 dark:hover:bg-orange-500/5 transition-all text-left cursor-pointer"
+                        >
+                          {content}
+                        </HubLink>
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={action.sheet}
+                        type="button"
+                        onClick={() => openSheet(action.sheet)}
+                        className="w-full group flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 dark:border-white/5 hover:border-orange-300 dark:hover:border-orange-500/30 hover:bg-orange-50/50 dark:hover:bg-orange-500/5 transition-all text-left cursor-pointer"
+                      >
+                        {content}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Account / Billing */}
                 <div className="mt-4 pt-3 border-t border-gray-100 dark:border-white/5 space-y-1">
-                  <Link
+                  <HubLink
                     href="/pricing?for=vendors"
                     className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold text-gray-700 dark:text-ink/80 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
                   >
                     <CrownIcon size={15} className="text-amber-500 shrink-0" />
                     <span>Billing & Plans</span>
-                  </Link>
+                  </HubLink>
                 </div>
               </div>
             )}
@@ -514,20 +806,36 @@ export function HubDashboard({
             <NewPostsIndicator
               count={pendingUpdates.length}
               onClick={handleApplyUpdates}
+              label={
+                pendingUpdates.length === 1
+                  ? "1 new product"
+                  : `${pendingUpdates.length} new products`
+              }
             />
 
             {/* Timeline Stream */}
-            {!boostedLeader && assembledFeed.length === 0 ? (
+            {boostedListings.length === 0 && assembledFeed.length === 0 ? (
               <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-surface p-12 text-center shadow-xs">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 dark:bg-orange-950/40">
                   <FeedIcon size={28} />
                 </div>
                 <h3 className="mt-4 text-base font-bold text-ink">
-                  No feed posts yet
+                  {filter === "promotion"
+                    ? "No promotions yet"
+                    : filter === "product"
+                      ? "No products found"
+                      : filter === "update"
+                        ? "No updates yet"
+                        : "No feed posts yet"}
                 </h3>
                 <p className="mt-1 text-xs text-gray-500 dark:text-ink/60 max-w-sm mx-auto">
-                  Product listings, boosted showcases, and vendor adverts will
-                  appear right here on the timeline.
+                  {filter === "promotion"
+                    ? "Sponsored vendor flyers, advert campaigns, and promotional broadcasts will appear here."
+                    : filter === "product"
+                      ? "Vendor product uploads and showcased listings will appear here."
+                      : filter === "update"
+                        ? "Store status updates, announcements, and vendor broadcasts will appear here."
+                        : "Product listings, boosted showcases, and vendor adverts will appear right here on the timeline."}
                 </p>
                 {vendor && (
                   <div className="mt-5 flex items-center justify-center gap-3">
@@ -552,19 +860,18 @@ export function HubDashboard({
               </div>
             ) : (
               <div className="space-y-4">
-                {/* 1. Boosted Product Leader (starts the feed with manual swipeable carousel) */}
-                {boostedLeader && (
-                  <TimelineFeedCard
-                    item={boostedLeader}
+                {/* 1. Boosted Product Listings (occupies ONLY the top spot in carousel format) */}
+                {boostedListings.length > 0 && (
+                  <BoostedListingsCarousel
+                    items={boostedListings}
                     now={now}
                     viewerId={userId}
                     onOpenListing={setOpenUpdate}
-                    isLeader
                   />
                 )}
 
                 {/* 2. Assembled Feed (Listings with sandwiched sponsored adverts every 2 or 3 items) */}
-                {assembledFeed.map((item, index) => (
+                {visibleFeed.map((item, index) => (
                   <TimelineFeedCard
                     key={`${item.id}-${index}`}
                     item={item}
@@ -573,14 +880,25 @@ export function HubDashboard({
                     onOpenListing={setOpenUpdate}
                   />
                 ))}
+
+                {/* Auto pagination sentinel */}
+                {hasMore && (
+                  <div
+                    ref={observerTargetRef}
+                    className="py-6 flex items-center justify-center text-xs text-gray-500 dark:text-ink/60 gap-2"
+                  >
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+                    <span>Loading more listings…</span>
+                  </div>
+                )}
               </div>
             )}
           </main>
 
           {/* ── RIGHT COLUMN: Store Performance & Featured Vendors ── */}
-          <aside className="space-y-4 lg:col-span-2 xl:col-span-1 xl:sticky xl:top-20 xl:self-start">
+          <aside className="space-y-4 lg:col-span-2 xl:col-span-1 xl:self-stretch">
             {/* Store Performance */}
-            {vendor && home.performance && (
+            {vendor && (
               <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-surface p-4 shadow-xs">
                 <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-white/5">
                   <div>
@@ -588,12 +906,16 @@ export function HubDashboard({
                       Business Performance
                     </h3>
                     <p className="text-[11px] text-gray-500 dark:text-ink/60">
-                      Your business reach & stats
+                      Live reach &amp; conversion stats
                     </p>
                   </div>
-                  <span className="rounded-lg border border-gray-200 dark:border-white/10 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
-                    Last 30 days
-                  </span>
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 px-2.5 py-1 rounded-full">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                    <span>Live · 30d</span>
+                  </div>
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-3">
@@ -605,9 +927,9 @@ export function HubDashboard({
                       Leads Received
                     </p>
                     <p className="text-xl font-bold tracking-tight text-ink mt-0.5">
-                      {home.performance.leads.current.toLocaleString("en-NG")}
+                      {livePerformance.leads.current.toLocaleString("en-NG")}
                     </p>
-                    <Delta window={home.performance.leads} />
+                    <Delta window={livePerformance.leads} />
                   </div>
 
                   <div className="rounded-xl border border-gray-100 dark:border-white/5 bg-canvas p-3">
@@ -617,73 +939,92 @@ export function HubDashboard({
                     <p className="mt-2 text-[11px] text-gray-500 dark:text-ink/60">
                       Total Sales
                     </p>
-                    <p className="text-xl font-bold tracking-tight text-ink mt-0.5">
-                      {formatNaira(home.performance.salesKobo.current)}
+                    <p className="text-xl font-bold tracking-tight text-ink mt-0.5 truncate">
+                      {formatNaira(livePerformance.salesKobo.current)}
                     </p>
-                    <Delta window={home.performance.salesKobo} />
+                    <Delta window={livePerformance.salesKobo} />
                   </div>
                 </div>
+
+                {(livePerformance.ordersCount ?? 0) > 0 && (
+                  <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/50 dark:bg-emerald-950/20 px-3 py-2 text-xs">
+                    <span className="text-gray-600 dark:text-ink/70 text-[11px]">
+                      Completed Orders:
+                    </span>
+                    <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                      {livePerformance.ordersCount}{" "}
+                      {livePerformance.ordersCount === 1 ? "order" : "orders"}
+                    </span>
+                  </div>
+                )}
 
                 <p className="mt-3 flex items-start gap-2 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 p-2.5 text-[11px] leading-relaxed text-sky-800 dark:text-sky-300">
                   <InfoIcon size={14} className="mt-0.5 shrink-0" />
                   <span>
-                    Direct leads and conversion data update in real time.
+                    Direct leads, order revenues, and conversion stats update in
+                    real time.
                   </span>
                 </p>
               </section>
             )}
 
-            {/* Featured Vendors */}
-            <FeaturedVendorsSidebarCard vendors={home.featured} />
+            {/* Sticky secondary container: becomes sticky once Business Performance leaves the viewport */}
+            <div className="space-y-4 xl:sticky xl:top-20">
+              {/* Featured Vendors (displays 4 vendors + View all linking to /hub/vendors) */}
+              <FeaturedVendorsSidebarCard
+                vendors={home.featured}
+                maxCount={4}
+              />
 
-            {/* Enterprise Upgrade CTA for Basic Vendors */}
-            {vendor && !home.enterprise && (
-              <section className="rounded-2xl border border-orange-200 dark:border-orange-500/20 bg-gradient-to-b from-orange-50 to-orange-50/30 dark:from-orange-950/20 dark:to-transparent p-4 shadow-xs">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-orange-500 text-white shadow-xs">
-                    <CrownIcon size={16} weight="fill" />
-                  </span>
-                  <div>
-                    <h4 className="text-xs font-bold text-ink">
-                      Grow with Enterprise
-                    </h4>
-                    <p className="text-[10px] text-gray-500 dark:text-ink/60">
-                      Subsidised adverts & top placement
-                    </p>
+              {/* Enterprise Upgrade CTA for Basic Vendors */}
+              {vendor && !home.enterprise && (
+                <section className="rounded-2xl border border-orange-200 dark:border-orange-500/20 bg-gradient-to-b from-orange-50 to-orange-50/30 dark:from-orange-950/20 dark:to-transparent p-4 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-orange-500 text-white shadow-xs">
+                      <CrownIcon size={16} weight="fill" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-bold text-ink">
+                        Grow with Enterprise
+                      </h4>
+                      <p className="text-[10px] text-gray-500 dark:text-ink/60">
+                        Subsidised adverts & top placement
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <ul className="mt-3 space-y-1.5 text-xs text-ink/80">
-                  {[
-                    "Advert pins included & subsidised",
-                    "Priority placement in timeline",
-                    "Verified Enterprise profile badge",
-                  ].map((item) => (
-                    <li
-                      key={item}
-                      className="flex items-center gap-2 text-[11px]"
-                    >
-                      <CheckIcon
-                        size={12}
-                        className="shrink-0 text-orange-500"
-                      />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
+                  <ul className="mt-3 space-y-1.5 text-xs text-ink/80">
+                    {[
+                      "Advert pins included & subsidised",
+                      "Priority placement in timeline",
+                      "Verified Enterprise profile badge",
+                    ].map((item) => (
+                      <li
+                        key={item}
+                        className="flex items-center gap-2 text-[11px]"
+                      >
+                        <CheckIcon
+                          size={12}
+                          className="shrink-0 text-orange-500"
+                        />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
 
-                <button
-                  type="button"
-                  onClick={() => navigate("/pricing?for=vendors")}
-                  className="mt-3.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ink text-canvas py-2 text-xs font-bold transition-opacity hover:opacity-90 cursor-pointer"
-                >
-                  <span>Upgrade Plan</span>
-                  <ArrowRight size={13} aria-hidden />
-                </button>
-              </section>
-            )}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/pricing?for=vendors")}
+                    className="mt-3.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ink text-canvas py-2 text-xs font-bold transition-opacity hover:opacity-90 cursor-pointer"
+                  >
+                    <span>Upgrade Plan</span>
+                    <ArrowRight size={13} aria-hidden />
+                  </button>
+                </section>
+              )}
 
-            <HubSidebarFooter />
+              <HubSidebarFooter />
+            </div>
           </aside>
         </div>
       </div>
@@ -761,17 +1102,6 @@ export function HubDashboard({
                   setUpgradeLock(lock);
                 }}
               />
-            ) : sheet === "analytics" ? (
-              <HubAnalyticsSheet
-                home={home}
-                adverts={adverts}
-                onUpgrade={() => {
-                  setSheet(null);
-                  setUpgradeLock(ENTERPRISE_LOCKS.analytics);
-                }}
-              />
-            ) : sheet === "community" ? (
-              <HubCommunitySheet home={home} onClose={() => setSheet(null)} />
             ) : null}
           </div>
         </div>
@@ -1161,7 +1491,9 @@ function HubContactCardSheet({
   ) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const store = home.store;
+  // Read from Zustand so contact card always reflects the latest profile save
+  const storeProfile = useUserStore((s) => s.vendorStore);
+  const store = storeProfile ?? home.store;
   const storeName = store?.name || "Your Business";
   const handle = store?.handle || "";
   const avatar = store?.avatar;
@@ -1380,13 +1712,13 @@ function HubContactCardSheet({
             View Public Storefront
           </Link>
         )}
-        <Link
+        <HubLink
           href="/settings"
           onClick={onClose}
           className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-surface px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
         >
           Edit Profile & Contact Details
-        </Link>
+        </HubLink>
       </div>
     </div>
   );
@@ -1395,15 +1727,26 @@ function HubContactCardSheet({
 function HubAnalyticsSheet({
   home,
   adverts,
+  performance,
   onUpgrade,
 }: {
   home: HubHome;
   adverts: HubVendorAdvert[] | null;
+  performance?: {
+    leads: HubWindow;
+    salesKobo: HubWindow;
+    ordersCount?: number;
+  };
   onUpgrade: () => void;
 }) {
   const isEnterprise = Boolean(home.enterprise);
-  const leads = home.performance?.leads.current ?? 16;
-  const salesKobo = home.performance?.salesKobo.current ?? 28500000;
+  const storeProfile = useUserStore((s) => s.vendorStore);
+  const leads =
+    performance?.leads.current ?? home.performance?.leads.current ?? 16;
+  const salesKobo =
+    performance?.salesKobo.current ??
+    home.performance?.salesKobo.current ??
+    28500000;
 
   // Compute live views and clicks from active adverts
   const activeAdverts = adverts ?? [];
@@ -1484,8 +1827,10 @@ function HubAnalyticsSheet({
             <span className="text-2xl font-black text-ink tracking-tight">
               {leads}
             </span>
-            {home.performance?.leads ? (
-              <Delta window={home.performance.leads} />
+            {performance?.leads || home.performance?.leads ? (
+              <Delta
+                window={(performance?.leads || home.performance?.leads)!}
+              />
             ) : (
               <span className="text-xs font-semibold text-orange-600">New</span>
             )}
@@ -1504,8 +1849,12 @@ function HubAnalyticsSheet({
             <span className="text-xl sm:text-2xl font-black text-ink tracking-tight truncate">
               {formatNaira(salesKobo)}
             </span>
-            {home.performance?.salesKobo && (
-              <Delta window={home.performance.salesKobo} />
+            {(performance?.salesKobo || home.performance?.salesKobo) && (
+              <Delta
+                window={
+                  (performance?.salesKobo || home.performance?.salesKobo)!
+                }
+              />
             )}
           </div>
           <p className="mt-1 text-[11px] text-gray-400 dark:text-ink/50">
@@ -1608,7 +1957,7 @@ function HubAnalyticsSheet({
               },
               {
                 rank: 3,
-                name: home.store?.name || "Your Store",
+                name: storeProfile?.name ?? home.store?.name ?? "Your Store",
                 sales: formatNaira(salesKobo),
                 badge: "You (Rank #3)",
               },
@@ -1708,7 +2057,8 @@ function HubCommunitySheet({
   home: HubHome;
   onClose: () => void;
 }) {
-  const storeName = home.store?.name || "Your Business";
+  const storeProfile = useUserStore((s) => s.vendorStore);
+  const storeName = storeProfile?.name ?? home.store?.name ?? "Your Business";
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-200 dark:border-orange-500/20">

@@ -87,7 +87,22 @@ export default function DashboardRootLayout({
   useNotificationsSync(userId);
 
   useEffect(() => {
-    mainRef.current?.scrollTo({ top: 0 });
+    const scrollToTop = () => {
+      if (mainRef.current) {
+        mainRef.current.scrollTop = 0;
+        mainRef.current.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    };
+
+    scrollToTop();
+    const raf = requestAnimationFrame(scrollToTop);
+    const timer = setTimeout(scrollToTop, 60);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
   }, [pathname]);
 
   useEffect(() => {

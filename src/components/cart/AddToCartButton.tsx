@@ -8,6 +8,7 @@ import { useBuyerStore } from "@/store/buyerStore";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { ShoppingCartIcon } from "@/components/icons/hero";
 import { cn } from "@/lib/utils";
+import { isSessionSettled, syncSession } from "@/lib/sessionSync";
 import type { Buyer } from "@/types/buyer";
 
 export function AddToCartButton({
@@ -36,27 +37,14 @@ export function AddToCartButton({
   const [checking, setChecking] = useState(!buyer);
 
   useEffect(() => {
-    if (buyer) {
+    if (buyer || isSessionSettled()) {
       setChecking(false);
       return;
     }
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/session", {
-          credentials: "same-origin",
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { buyer?: Buyer | null };
-        if (!cancelled && data.buyer) {
-          useBuyerStore.getState().setBuyer(data.buyer);
-        }
-      } catch {
-        /* stay signed out */
-      } finally {
-        if (!cancelled) setChecking(false);
-      }
-    })();
+    void syncSession().finally(() => {
+      if (!cancelled) setChecking(false);
+    });
     return () => {
       cancelled = true;
     };

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { HubLink } from "@/components/hub/HubLink";
 import { usePathname } from "next/navigation";
 
 import { CloseIcon } from "@/components/icons/hero";
@@ -123,18 +124,20 @@ export function HubCreateMenu({
             )}
 
             <div className="flex flex-wrap gap-2 mt-4">
-              <Link
+              <HubLink
                 href={"/products/add"}
+                onClick={() => setOpen(false)}
                 className="text-xs font-semibold text-gray-500 hover:text-orange-600 transition-colors"
               >
                 Add a listing instead →
-              </Link>
-              <Link
+              </HubLink>
+              <HubLink
                 href={"/store"}
+                onClick={() => setOpen(false)}
                 className="text-xs font-semibold text-gray-500 hover:text-orange-600 transition-colors"
               >
                 Edit contact card →
-              </Link>
+              </HubLink>
             </div>
           </div>
         </div>

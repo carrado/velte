@@ -350,7 +350,6 @@
     @apply bg-background text-foreground;
   }
   html {
-    scroll-behavior: smooth;
     @apply font-sans;
   }
 }
@@ -382,6 +381,50 @@
   background-color: #ea580c;
 }
 .dark .velte-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #f97316;
+}
+
+/* Custom scrollbar that only shows on hover */
+.hover-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s ease;
+}
+.hover-scrollbar:hover,
+.group:hover .hover-scrollbar {
+  scrollbar-color: #fdba74 transparent;
+}
+.hover-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.hover-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 4px;
+}
+.hover-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+.hover-scrollbar:hover::-webkit-scrollbar-thumb,
+.group:hover .hover-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #fdba74;
+}
+.hover-scrollbar:hover::-webkit-scrollbar-thumb:hover,
+.group:hover .hover-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #fb923c;
+}
+.dark .hover-scrollbar:hover,
+.dark .group:hover .hover-scrollbar {
+  scrollbar-color: #ea580c transparent;
+}
+.dark .hover-scrollbar:hover::-webkit-scrollbar-thumb,
+.dark .group:hover .hover-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #ea580c;
+}
+.dark .hover-scrollbar:hover::-webkit-scrollbar-thumb:hover,
+.dark .group:hover .hover-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #f97316;
 }
 

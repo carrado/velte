@@ -8,6 +8,7 @@ import { Avatar } from "@/components/Avatar";
 import AnchoredPopover from "@/components/AnchoredPopover";
 import { CartButton } from "@/components/cart/CartDrawer";
 import LogoutModal from "@/components/LogOutModal";
+import { HubLink } from "@/components/hub/HubLink";
 import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
 import { ThemeToggleButton } from "@/components/landing/ThemeToggleButton";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
@@ -22,6 +23,7 @@ import {
   LogOutIcon,
   SettingsIcon,
   StoreIcon,
+  UsersIcon,
 } from "@/components/icons";
 import {
   EnterpriseAvatarBadge,
@@ -69,21 +71,21 @@ export function HubHeader({
       : null;
 
   const menuItemClass =
-    "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-ink transition-colors hover:bg-gray-50";
+    "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-ink transition-colors hover:bg-gray-100 dark:hover:bg-white/10";
 
   return (
     <>
       <header
         className={
           hideSearch
-            ? "sticky top-0 z-30 flex h-16 items-center justify-between gap-4 px-4 sm:px-6 border-b border-gray-200 bg-surface"
-            : "sticky top-0 z-30 flex flex-col border-b border-gray-200 bg-surface px-4 sm:px-6 md:grid md:h-16 md:grid-cols-[auto_minmax(0,34rem)_auto] md:items-center md:justify-between md:gap-4 lg:gap-8"
+            ? "sticky top-0 z-30 flex h-16 items-center justify-between gap-4 px-3.5 sm:px-6 border-b border-gray-200 dark:border-white/10 bg-surface/95 dark:bg-surface/95 backdrop-blur-md"
+            : "sticky top-0 z-30 flex flex-col border-b border-gray-200 dark:border-white/10 bg-surface/95 dark:bg-surface/95 backdrop-blur-md px-3.5 sm:px-6 md:grid md:h-16 md:grid-cols-[auto_minmax(0,34rem)_auto] md:items-center md:justify-between md:gap-4 lg:gap-8"
         }
       >
-        <div className="flex h-16 shrink-0 items-center justify-between gap-2 md:contents">
-          <div className="flex min-w-0 items-center">
-            <Link
-              href={buyer && !userDetails ? "/chat" : "/"}
+        <div className="flex h-16 shrink-0 items-center justify-between gap-2 w-full md:w-auto md:contents">
+          <div className="flex shrink-0 items-center">
+            <HubLink
+              href={userDetails ? "/wallet" : buyer ? "/chat" : "/"}
               className="shrink-0"
             >
               <VelteLogo
@@ -92,32 +94,49 @@ export function HubHeader({
                 className="w-14 sm:w-[72px] h-auto"
                 priority
               />
-            </Link>
+            </HubLink>
           </div>
           {!hideSearch && (
             <div className="hidden min-w-0 md:block max-w-xl w-full">
               <AskVelteSearchBar className="w-full" />
             </div>
           )}
-          <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2.5">
-            <ThemeToggleButton className="focus-visible:ring-offset-surface" />
-            {account && (
+          <div
+            className={cn(
+              "flex items-center",
+              account
+                ? "flex-1 justify-between ml-6 sm:ml-0 sm:flex-initial sm:justify-end sm:gap-2.5"
+                : "shrink-0 justify-end gap-1.5 sm:gap-2.5",
+            )}
+          >
+            {account ? (
               <>
-                <Link
+                <HubLink
+                  href="/store"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 h-9 w-9 md:w-auto md:px-3 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-ink/80 transition-colors whitespace-nowrap active:scale-95"
+                  aria-label="My Store"
+                  title="My Store"
+                >
+                  <StoreIcon size={18} className="shrink-0" />
+                  <span className="hidden md:inline text-sm font-semibold whitespace-nowrap text-gray-800 dark:text-ink">
+                    My Store
+                  </span>
+                </HubLink>
+                <HubLink
                   href="/hub"
-                  className="inline-flex shrink-0 items-center justify-center gap-2 h-9 w-9 md:w-auto md:px-3 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-ink/80 transition-colors whitespace-nowrap"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 h-9 w-9 md:w-auto md:px-3 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-ink/80 transition-colors whitespace-nowrap active:scale-95"
                   aria-label="Vendor's Hub"
                   title="Vendor's Hub"
                 >
-                  <FeedIcon size={18} className="text-orange-500 shrink-0" />
+                  <FeedIcon size={18} className="shrink-0" />
                   <span className="hidden md:inline text-sm font-semibold whitespace-nowrap text-gray-800 dark:text-ink">
                     Vendor&apos;s Hub
                   </span>
-                </Link>
+                </HubLink>
                 <CartButton />
                 <button
                   type="button"
-                  className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-600 hover:bg-gray-50 md:hidden transition-colors"
+                  className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-700 dark:text-ink/80 hover:bg-gray-100 dark:hover:bg-white/10 md:hidden transition-colors active:scale-95 cursor-pointer"
                   onClick={() => navigate(notificationsHref)}
                   aria-label="Notifications"
                 >
@@ -130,6 +149,8 @@ export function HubHeader({
                   <NotificationDropdown />
                 </div>
               </>
+            ) : (
+              <ThemeToggleButton className="focus-visible:ring-offset-surface" />
             )}
             {account && (
               <>
@@ -141,14 +162,14 @@ export function HubHeader({
                   aria-expanded={menuOpen}
                   aria-label="Your account"
                   title={buyer?.email ?? undefined}
-                  className="flex h-9 cursor-pointer items-center gap-2 min-w-0 pl-1.5 pr-3 rounded-full border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors shrink-0"
+                  className="flex h-9 w-9 sm:w-auto cursor-pointer items-center justify-center gap-2 min-w-0 p-0 sm:pl-1.5 sm:pr-3 rounded-full border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shrink-0 active:scale-95"
                 >
                   <div className="relative flex shrink-0 items-center justify-center">
                     <Avatar
                       src={account.avatar}
                       alt="avatar"
                       label={getInitial(account.name || "?")}
-                      className="w-[26px] h-[26px] shrink-0"
+                      className="w-[28px] h-[28px] shrink-0"
                     />
                     {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
                   </div>
@@ -161,7 +182,7 @@ export function HubHeader({
                   onClose={() => setMenuOpen(false)}
                   anchorRef={chipRef}
                   align="right"
-                  className="w-56 overflow-hidden rounded-xl border border-gray-200 bg-surface py-1 shadow-lg"
+                  className="w-56 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-surface py-1 shadow-lg dark:shadow-black/50"
                 >
                   {isEnterprise && (
                     <div className="px-3 py-1.5 bg-gradient-to-r from-amber-500/15 to-orange-500/10 border-b border-amber-500/20 flex items-center justify-between">
@@ -180,7 +201,7 @@ export function HubHeader({
                   )}
                   {userDetails ? (
                     <>
-                      <Link
+                      <HubLink
                         href="/store"
                         onClick={() => setMenuOpen(false)}
                         className={cn(menuItemClass, "md:hidden")}
@@ -190,8 +211,8 @@ export function HubHeader({
                           className="shrink-0 text-gray-400"
                         />
                         <span>My Store</span>
-                      </Link>
-                      <Link
+                      </HubLink>
+                      <HubLink
                         href="/pricing"
                         onClick={() => setMenuOpen(false)}
                         className={cn(menuItemClass, "md:hidden")}
@@ -201,8 +222,8 @@ export function HubHeader({
                           className="shrink-0 text-gray-400"
                         />
                         <span>Billing</span>
-                      </Link>
-                      <Link
+                      </HubLink>
+                      <HubLink
                         href="/referrals"
                         onClick={() => setMenuOpen(false)}
                         className={cn(menuItemClass, "md:hidden")}
@@ -212,8 +233,19 @@ export function HubHeader({
                           className="shrink-0 text-gray-400"
                         />
                         <span>Referrals</span>
-                      </Link>
-                      <Link
+                      </HubLink>
+                      <HubLink
+                        href="/hub/community"
+                        onClick={() => setMenuOpen(false)}
+                        className={menuItemClass}
+                      >
+                        <UsersIcon
+                          size={17}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span>Community Hub</span>
+                      </HubLink>
+                      <HubLink
                         href="/reports"
                         onClick={() => setMenuOpen(false)}
                         className={menuItemClass}
@@ -223,8 +255,8 @@ export function HubHeader({
                           className="shrink-0 text-gray-400"
                         />
                         <span>Reports</span>
-                      </Link>
-                      <Link
+                      </HubLink>
+                      <HubLink
                         href="/settings"
                         onClick={() => setMenuOpen(false)}
                         className={menuItemClass}
@@ -234,11 +266,22 @@ export function HubHeader({
                           className="shrink-0 text-gray-400"
                         />
                         <span>Settings</span>
-                      </Link>
+                      </HubLink>
+                      <HubLink
+                        href="/hub/community"
+                        onClick={() => setMenuOpen(false)}
+                        className={menuItemClass}
+                      >
+                        <UsersIcon
+                          size={17}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span>Community Hub</span>
+                      </HubLink>
                     </>
                   ) : buyer ? (
                     <>
-                      <Link
+                      <HubLink
                         href="/pricing"
                         onClick={() => setMenuOpen(false)}
                         className={cn(menuItemClass, "md:hidden")}
@@ -248,8 +291,8 @@ export function HubHeader({
                           className="shrink-0 text-gray-400"
                         />
                         <span>Billing</span>
-                      </Link>
-                      <Link
+                      </HubLink>
+                      <HubLink
                         href="/referrals"
                         onClick={() => setMenuOpen(false)}
                         className={cn(menuItemClass, "md:hidden")}
@@ -259,10 +302,21 @@ export function HubHeader({
                           className="shrink-0 text-gray-400"
                         />
                         <span>Referrals</span>
-                      </Link>
+                      </HubLink>
+                      <HubLink
+                        href="/hub/community"
+                        onClick={() => setMenuOpen(false)}
+                        className={menuItemClass}
+                      >
+                        <UsersIcon
+                          size={17}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span>Community Hub</span>
+                      </HubLink>
                     </>
                   ) : vendorDashboardId ? (
-                    <Link
+                    <HubLink
                       href="/auth/login"
                       onClick={() => setMenuOpen(false)}
                       className={menuItemClass}
@@ -272,9 +326,9 @@ export function HubHeader({
                         className="shrink-0 text-orange-500"
                       />
                       <span>Sign in to Vendor account</span>
-                    </Link>
+                    </HubLink>
                   ) : (
-                    <Link
+                    <HubLink
                       href="/join"
                       onClick={() => setMenuOpen(false)}
                       className={menuItemClass}
@@ -284,9 +338,16 @@ export function HubHeader({
                         className="shrink-0 text-orange-500"
                       />
                       <span>Sell on Velte</span>
-                    </Link>
+                    </HubLink>
                   )}
-                  <div className="my-1 border-t border-gray-100" />
+                  <div className="my-1 border-t border-gray-100 dark:border-white/10" />
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-xs font-semibold text-gray-700 dark:text-ink/80">
+                      Theme
+                    </span>
+                    <ThemeToggleButton />
+                  </div>
+                  <div className="my-1 border-t border-gray-100 dark:border-white/10" />
                   <button
                     type="button"
                     onClick={() => {
@@ -295,10 +356,13 @@ export function HubHeader({
                     }}
                     className={cn(
                       menuItemClass,
-                      "cursor-pointer text-gray-600",
+                      "cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10",
                     )}
                   >
-                    <LogOutIcon size={17} className="shrink-0 text-gray-400" />
+                    <LogOutIcon
+                      size={17}
+                      className="shrink-0 text-red-500 dark:text-red-400"
+                    />
                     <span>Log out</span>
                   </button>
                 </AnchoredPopover>

@@ -37,3 +37,49 @@ export function isEnterpriseVendor(vendor: unknown): boolean {
     v.store?.enterprise === true,
   );
 }
+
+/**
+ * Checks whether a buyer or user profile is on the Premium plan.
+ */
+export function isPremiumBuyer(buyer: unknown): boolean {
+  if (!buyer || typeof buyer !== "object") return false;
+  const b = buyer as {
+    tier?: string;
+    plan?: string;
+    isPremium?: boolean;
+    premium?: boolean;
+    role?: string;
+    subscription?: { plan?: string; status?: string };
+  };
+  const subStatus = b.subscription?.status;
+  const isSubActive =
+    b.subscription?.plan === "buyer_premium" &&
+    (subStatus === "active" ||
+      subStatus === "trialing" ||
+      subStatus === "past_due" ||
+      subStatus === "cancelled");
+
+  return Boolean(
+    b.tier === "buyer_premium" ||
+    b.plan === "buyer_premium" ||
+    b.isPremium === true ||
+    b.premium === true ||
+    isSubActive,
+  );
+}
+
+/**
+ * Checks whether a user (Enterprise Vendor or Premium Buyer) is eligible to access
+ * the Velte Community Hub.
+ */
+export function isCommunityEligible(
+  user: unknown,
+  context?: { enterprise?: boolean; premium?: boolean } | null,
+): boolean {
+  return (
+    isEnterpriseVendor(user) ||
+    isPremiumBuyer(user) ||
+    context?.enterprise === true ||
+    context?.premium === true
+  );
+}

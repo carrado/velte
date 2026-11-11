@@ -6,6 +6,7 @@ import {
   badgeLabel,
   usePendingBuyerRequests,
 } from "@/hooks/usePendingBuyerRequests";
+import { useUserStore } from "@/store/userStore";
 import {
   LayoutGridIcon,
   MessageSquareIcon,
@@ -18,6 +19,9 @@ export default function BottomNav() {
   const pathname = usePathname();
   const { navigate } = useNavigation();
   const pendingRequests = usePendingBuyerRequests();
+  const user = useUserStore((s) => s.user);
+
+  if (!user) return null;
 
   const items = [
     {
@@ -61,7 +65,7 @@ export default function BottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-gray-200 dark:border-white/10 shadow-lg z-10 md:hidden pb-[env(safe-area-inset-bottom)]">
+    <div className="fixed bottom-0 left-0 right-0 bg-surface/95 dark:bg-surface/95 backdrop-blur-md border-t border-gray-200 dark:border-white/10 shadow-lg z-30 md:hidden pb-[env(safe-area-inset-bottom)]">
       <div className="flex justify-around items-center px-2 py-2">
         {items.map((item) => (
           <button

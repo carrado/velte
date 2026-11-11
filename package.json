@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 4001",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 4001",
     "lint": "eslint",
     "prettier-fix": "prettier --write .",
     "prettier-check": "prettier --check .",
@@ -32,6 +32,7 @@
     "@tanstack/react-db": "^0.1.77",
     "@tanstack/react-form": "^1.28.4",
     "@tanstack/react-query": "^5.90.21",
+    "@types/ws": "^8.18.2",
     "ai": "^7.0.15",
     "chrono-node": "^2.10.1",
     "class-variance-authority": "^0.7.1",
@@ -49,6 +50,7 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "web-push": "^3.6.7",
+    "ws": "^8.22.2",
     "zod": "4.3.6",
     "zustand": "^5.0.12"
   },

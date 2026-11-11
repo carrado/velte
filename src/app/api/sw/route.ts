@@ -165,6 +165,64 @@ self.addEventListener("notificationclick", (event) => {
       }),
   );
 });
+
+// ── Hub Listings Background Poller ───────────────────────────────────────────
+// Runs purely inside the Service Worker thread so it is NOT visible in the
+// page context's Fetch/XHR Network tab.
+const hubKnownListingIds = new Set();
+let hubCheckInProgress = false;
+
+async function checkHubForNewListings() {
+  if (hubCheckInProgress) return;
+  hubCheckInProgress = true;
+  try {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const hasHubClient = clients.some((c) => c.url && c.url.includes("/hub"));
+    if (!hasHubClient) return;
+
+    const res = await fetch("/api/hub/home", {
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const items = Array.isArray(data?.timeline) ? data.timeline : [];
+    if (Array.isArray(items) && items.length > 0) {
+      if (hubKnownListingIds.size > 0) {
+        const newItems = items.filter((item) => item && item.id && !hubKnownListingIds.has(item.id));
+        if (newItems.length > 0) {
+          for (const item of newItems) {
+            if (item && item.id) hubKnownListingIds.add(item.id);
+          }
+          clients.forEach((c) => {
+            if (c.url && c.url.includes("/hub")) {
+              c.postMessage({ type: "HUB_NEW_LISTINGS", items: newItems });
+            }
+          });
+        }
+      } else {
+        items.forEach((item) => {
+          if (item && item.id) hubKnownListingIds.add(item.id);
+        });
+      }
+    }
+  } catch (err) {
+    // Silent background check failure
+  } finally {
+    hubCheckInProgress = false;
+  }
+}
+
+// Background check in service worker context every 25 seconds
+setInterval(checkHubForNewListings, 25000);
+
+self.addEventListener("message", (event) => {
+  if (!event.data) return;
+  if (event.data.type === "HUB_SYNC_KNOWN_IDS" && Array.isArray(event.data.ids)) {
+    event.data.ids.forEach((id) => hubKnownListingIds.add(id));
+  } else if (event.data.type === "HUB_TRIGGER_CHECK") {
+    checkHubForNewListings();
+  }
+});
 `;
 
 export async function GET() {

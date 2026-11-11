@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getOptionalVendorAuth } from "@/lib/server/guards";
 import HomePageContent from "./_components/HomePageContent";
@@ -13,5 +14,8 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const vendor = await getOptionalVendorAuth();
-  return <HomePageContent initialIsVendor={Boolean(vendor)} />;
+  if (vendor) {
+    redirect("/wallet");
+  }
+  return <HomePageContent initialIsVendor={false} />;
 }

@@ -240,7 +240,7 @@ export async function proxy(request: NextRequest) {
     )
   ) {
     if (userId) {
-      return pass(NextResponse.redirect(new URL("/products", request.url)));
+      return pass(NextResponse.redirect(new URL("/wallet", request.url)));
     }
     return pass(NextResponse.next());
   }
@@ -259,11 +259,8 @@ export async function proxy(request: NextRequest) {
       }
       return pass(NextResponse.next());
     }
-    // Logged-in vendor visits "/" -> allow through to render the dashboard at "/"!
-    if (request.nextUrl.searchParams.get("source") === "pwa") {
-      return pass(NextResponse.redirect(new URL("/wallet", request.url)));
-    }
-    return pass(NextResponse.next());
+    // Logged-in vendor visits "/" -> default route is /wallet
+    return pass(NextResponse.redirect(new URL("/wallet", request.url)));
   }
 
   // Break path into segments

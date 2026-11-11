@@ -57,6 +57,8 @@ export const queryKeys = {
     context: ["hub", "context", 2] as const,
     adverts: ["hub", "adverts"] as const,
     boosts: ["hub", "boosts"] as const,
+    analytics: ["hub", "analytics", 1] as const,
+    community: ["hub", "community", 1] as const,
   },
   vendorBuyerRequests: {
     list: ["vendor-buyer-requests"] as const,

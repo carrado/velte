@@ -1,4 +1,8 @@
 import { api } from "@/lib/api-client";
+import {
+  broadcastHubNewListing,
+  productToHubTimelineItem,
+} from "@/lib/hubSync";
 import type {
   Category,
   CategoryProduct,
@@ -66,10 +70,18 @@ export const categoriesApi = {
   createProduct: async (
     payload: CreateProductPayload,
   ): Promise<{ product: CategoryProduct; bonus: ProductBonus | null }> => {
-    return api.post<{ product: CategoryProduct; bonus: ProductBonus | null }>(
-      "/api/products",
-      payload,
-    );
+    const res = await api.post<{
+      product: CategoryProduct;
+      bonus: ProductBonus | null;
+    }>("/api/products", payload);
+    if (res?.product) {
+      try {
+        broadcastHubNewListing(productToHubTimelineItem(res.product));
+      } catch {
+        // sync best-effort
+      }
+    }
+    return res;
   },
 
   updateProduct: async (

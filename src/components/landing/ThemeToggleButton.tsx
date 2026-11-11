@@ -18,7 +18,7 @@ export function ThemeToggleButton({ className }: { className?: string }) {
       aria-label={label}
       title={label}
       className={cn(
-        "relative inline-flex h-6 w-12 shrink-0 cursor-pointer items-center rounded-full p-[2px] transition-colors duration-200 select-none border border-gray-200 bg-gray-100 hover:bg-gray-200/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+        "relative inline-flex h-6 w-12 shrink-0 cursor-pointer items-center rounded-full p-[2px] transition-colors duration-200 select-none border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-white/10 hover:bg-gray-200/60 dark:hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
         className,
       )}
     >
@@ -31,7 +31,7 @@ export function ThemeToggleButton({ className }: { className?: string }) {
           <Sun
             className={cn(
               "h-3 w-3 transition-colors duration-200",
-              isDark ? "text-gray-500" : "text-amber-500/30",
+              isDark ? "text-gray-400 dark:text-ink/40" : "text-amber-500/30",
             )}
           />
         </span>
@@ -39,7 +39,7 @@ export function ThemeToggleButton({ className }: { className?: string }) {
           <Moon
             className={cn(
               "h-3 w-3 transition-colors duration-200",
-              isDark ? "text-amber-400/30" : "text-gray-400",
+              isDark ? "text-amber-400/40" : "text-gray-400 dark:text-ink/40",
             )}
           />
         </span>
@@ -49,7 +49,7 @@ export function ThemeToggleButton({ className }: { className?: string }) {
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute top-[2px] left-[2px] flex h-5 w-5 items-center justify-center rounded-full bg-surface shadow-xs border border-gray-200/60 transition-transform duration-200 ease-out",
+          "pointer-events-none absolute top-[2px] left-[2px] flex h-5 w-5 items-center justify-center rounded-full bg-surface shadow-xs border border-gray-200/60 dark:border-white/20 transition-transform duration-200 ease-out",
           isDark
             ? "translate-x-6 text-amber-400"
             : "translate-x-0 text-amber-500",

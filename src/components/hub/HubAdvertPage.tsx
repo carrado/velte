@@ -28,6 +28,7 @@ import {
   ProtectedPosterPreview,
 } from "@/components/hub/ProtectedPosterPreview";
 import { ApiError, api } from "@/lib/api-client";
+import { useUserStore } from "@/store/userStore";
 import { uploadAdvertMedia, validateImageFile } from "@/lib/cloudinary";
 import { extractLogoPalette } from "@/lib/extractLogoPalette";
 import { queryKeys } from "@/lib/query-keys";
@@ -59,6 +60,17 @@ function formatAiPosterResetAt(resetAt: Date): string {
     month: "short",
   }).format(resetAt);
   return `${time} · ${day}`;
+}
+
+function getCampaignEndDate(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return new Intl.DateTimeFormat("en-NG", {
+    timeZone: "Africa/Lagos",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(d);
 }
 
 const REFINEMENT_CHIPS: { label: string; icon: string }[] = [
@@ -124,9 +136,8 @@ function AiGenerationProgressBar({
         />
       </div>
 
-      <div className="flex items-center justify-between text-[11px] text-gray-500">
+      <div className="flex items-center text-[11px] text-gray-500">
         <span>Designing creative & drafting copy</span>
-        <span>~15–25s</span>
       </div>
     </div>
   );
@@ -161,6 +172,7 @@ export function HubAdvertPage({ userId }: { userId: string }) {
   const [aiProgress, setAiProgress] = useState(0);
   const [aiProgressStage, setAiProgressStage] = useState("");
   const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [selectedDays, setSelectedDays] = useState<number>(7);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const contextQuery = useQuery({
@@ -183,6 +195,22 @@ export function HubAdvertPage({ userId }: { userId: string }) {
   );
   const costKobo = context?.advertCostKobo ?? 0;
   const enterprise = Boolean(context?.enterprise);
+
+  useEffect(() => {
+    if (enterprise) {
+      if (selectedDays > 30) {
+        setSelectedDays(30);
+      }
+    } else {
+      const maxDays = 7;
+      const defaultDays = context?.advertDays
+        ? Math.min(maxDays, context.advertDays)
+        : 7;
+      setSelectedDays((prev) =>
+        prev > maxDays ? maxDays : prev || defaultDays,
+      );
+    }
+  }, [context?.advertDays, enterprise, selectedDays]);
   const canAfford =
     context != null && (enterprise || context.walletBalanceKobo >= costKobo);
   const canPlace =
@@ -271,10 +299,18 @@ export function HubAdvertPage({ userId }: { userId: string }) {
     }, 200);
 
     try {
-      const logoUrl = home?.store?.avatar ?? null;
+      const user = useUserStore.getState().user;
+      const vendorStore = useUserStore.getState().vendorStore;
+      const logoUrl =
+        vendorStore?.avatar ?? user?.avatar ?? home?.store?.avatar ?? null;
       const palette = await extractLogoPalette(logoUrl);
       const result = await generateAiPoster({
-        storeName: home?.store?.name ?? "Your store",
+        storeName:
+          vendorStore?.name ??
+          user?.company?.name ??
+          user?.businessName ??
+          home?.store?.name ??
+          "Your store",
         prompt,
         instructions: customInstructions?.trim() || null,
         logoUrl,
@@ -408,6 +444,7 @@ export function HubAdvertPage({ userId }: { userId: string }) {
         templateId: null,
         productId: null,
         boosted: false,
+        days: selectedDays,
       });
       toast.success("Advert pinned to the Hub.");
       setHeadline("");
@@ -466,7 +503,7 @@ export function HubAdvertPage({ userId }: { userId: string }) {
   }
 
   const previewHeadline = headline.trim() || "Your headline will appear here";
-  const days = context.advertDays;
+  const days = selectedDays;
   const isStep2VisibleOnMobile = hasChosenOnMobile || Boolean(imageUrl);
 
   const scrollToStep2 = () => {
@@ -1134,7 +1171,7 @@ export function HubAdvertPage({ userId }: { userId: string }) {
             {/* Step 3 or 4: Duration & Budget */}
             <section
               className={cn(
-                "rounded-none lg:rounded-2xl border border-gray-200 bg-surface p-4 sm:p-5",
+                "rounded-none lg:rounded-2xl border border-gray-200 dark:border-white/10 bg-surface p-4 sm:p-5",
                 !isStep2VisibleOnMobile && "hidden lg:block",
               )}
             >
@@ -1146,54 +1183,229 @@ export function HubAdvertPage({ userId }: { userId: string }) {
                   <h2 className="text-base font-bold text-ink">
                     Set Duration &amp; Budget
                   </h2>
-                  <p className="mt-0.5 text-xs text-gray-600">
+                  <p className="mt-0.5 text-xs text-gray-600 dark:text-ink/60">
                     Confirm how long the pin stays live and how you pay.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-xs font-semibold text-gray-600">
-                    Duration
-                  </span>
-                  <select
-                    className="mt-1 w-full rounded-xl border border-gray-200 bg-surface px-3.5 py-2.5 text-sm font-semibold text-ink outline-none focus:ring-2 focus:ring-orange-500/40"
-                    value={days}
-                    disabled
-                  >
-                    <option value={days}>{days} days</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-gray-600">
-                    Payment Method
-                  </span>
-                  <div className="mt-1 flex items-center justify-between rounded-xl border border-gray-200 bg-surface px-3.5 py-2.5 text-sm">
-                    <span className="font-semibold text-ink">
-                      Wallet Balance
-                    </span>
-                    <span className="text-xs text-gray-600">
-                      {formatNaira(context.walletBalanceKobo)} available
-                    </span>
+              {/* Duration and Payment Selection */}
+              {enterprise ? (
+                <div className="mt-4 space-y-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-ink/60">
+                          Select Campaign Duration
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">
+                          <CrownIcon
+                            size={11}
+                            className="fill-current text-amber-500"
+                          />
+                          <span>100% Covered by Enterprise</span>
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-gray-600 dark:text-ink/70">
+                        Choose how long your advert creative stays pinned at the
+                        top of the Hub.
+                      </p>
+                    </div>
                   </div>
-                </label>
-              </div>
 
-              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-                <p className="font-bold text-ink">Advert Pricing</p>
-                <p className="mt-1 text-amber-800">
-                  {enterprise
-                    ? "Free with Enterprise — your subscription covers this pin."
-                    : `${formatNaira(costKobo)} / ${days} days for Basic. Subsidised (free) for Enterprise.`}
-                </p>
-                <p className="mt-1 text-amber-700">
-                  Buyer Premium can also place an advert for your store at no
-                  charge to you.
-                </p>
-              </div>
+                  {/* 3 Interactive Cards for 7, 14, 30 Days */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      {
+                        days: 7,
+                        title: "7 Days",
+                        subtitle: "1 Week Flash",
+                        badge: "Quick Spike",
+                        reach: "15K – 25K Est. Reach",
+                        tag: null,
+                      },
+                      {
+                        days: 14,
+                        title: "14 Days",
+                        subtitle: "2 Weeks Sustained",
+                        badge: "Steady Growth",
+                        reach: "35K – 60K Est. Reach",
+                        tag: null,
+                      },
+                      {
+                        days: 30,
+                        title: "30 Days",
+                        subtitle: "1 Month Impact",
+                        badge: "Maximum Run",
+                        reach: "80K – 130K Est. Reach",
+                        tag: "👑 Max Exposure",
+                      },
+                    ].map((tier) => {
+                      const isSelected = selectedDays === tier.days;
+                      return (
+                        <button
+                          key={tier.days}
+                          type="button"
+                          onClick={() => setSelectedDays(tier.days)}
+                          className={cn(
+                            "relative flex flex-col justify-between rounded-2xl p-4 text-left transition-all cursor-pointer border group",
+                            isSelected
+                              ? "bg-orange-50/50 dark:bg-orange-500/[0.08] border-orange-500 dark:border-orange-500 ring-2 ring-orange-500/20 dark:ring-orange-500/30 shadow-xs"
+                              : "bg-canvas/50 dark:bg-white/[0.02] border-gray-200 dark:border-white/10 hover:border-orange-400/60 dark:hover:border-orange-500/40 hover:bg-surface dark:hover:bg-white/[0.05]",
+                          )}
+                        >
+                          {tier.tag && (
+                            <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-gradient-to-r from-amber-500 to-[#FF6B00] text-white shadow-xs">
+                              {tier.tag}
+                            </span>
+                          )}
 
-              {needTopup && (
+                          <div>
+                            <div className="flex items-center justify-between mb-2.5">
+                              <span
+                                className={cn(
+                                  "inline-flex h-5 w-5 items-center justify-center rounded-full border transition-colors",
+                                  isSelected
+                                    ? "border-orange-500 bg-[#FF6B00] text-white shadow-xs"
+                                    : "border-gray-300 dark:border-white/20 bg-surface dark:bg-white/5 group-hover:border-orange-400",
+                                )}
+                              >
+                                {isSelected && <CheckIcon size={12} />}
+                              </span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-ink/80 bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-md">
+                                {tier.badge}
+                              </span>
+                            </div>
+
+                            <div className="text-xl font-extrabold text-ink tracking-tight">
+                              {tier.title}
+                            </div>
+                            <div className="text-xs font-semibold text-gray-700 dark:text-ink/80 mt-0.5">
+                              {tier.subtitle}
+                            </div>
+                            <div className="text-[11px] font-medium text-gray-500 dark:text-ink/60 mt-1.5 flex items-center gap-1.5">
+                              <EyeIcon
+                                size={12}
+                                className="shrink-0 text-orange-500 dark:text-orange-400"
+                              />
+                              <span>{tier.reach}</span>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-white/10 flex items-center justify-between">
+                            <span className="text-xs font-extrabold text-ink">
+                              ₦0.00
+                            </span>
+                            <span className="text-[10px] font-extrabold uppercase tracking-wide text-orange-600 dark:text-orange-400 bg-orange-500/10 dark:bg-orange-500/15 border border-orange-500/20 dark:border-orange-500/30 px-2 py-0.5 rounded-md">
+                              Included Free
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Schedule & Wallet Summary Bar */}
+                  <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.03] p-3 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                    <div>
+                      <span className="font-bold text-ink">Schedule: </span>
+                      <span className="text-gray-600 dark:text-ink/70">
+                        Starts immediately upon posting · Runs until{" "}
+                        <strong className="text-orange-600 dark:text-orange-400 font-extrabold">
+                          {getCampaignEndDate(selectedDays)}
+                        </strong>{" "}
+                        ({selectedDays} days active)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 sm:ml-auto">
+                      <span className="text-[11px] text-gray-500 dark:text-ink/60">
+                        Debit Amount:
+                      </span>
+                      <span className="font-extrabold text-orange-600 dark:text-orange-400 bg-orange-500/10 dark:bg-orange-500/15 px-2.5 py-0.5 rounded-full border border-orange-500/20 dark:border-orange-500/30">
+                        ₦0 (Enterprise Benefit)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-xs font-semibold text-gray-700 dark:text-ink/80">
+                      Duration
+                    </span>
+                    <select
+                      className="mt-1.5 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-surface px-3.5 py-2.5 text-sm font-semibold text-ink outline-none focus:ring-2 focus:ring-orange-500/40 cursor-pointer"
+                      value={selectedDays}
+                      onChange={(e) => setSelectedDays(Number(e.target.value))}
+                    >
+                      <option value={3}>3 days (Quick campaign)</option>
+                      <option value={7}>
+                        {context.advertDays && context.advertDays <= 7
+                          ? `${context.advertDays} days (Standard — Maximum for Basic)`
+                          : "7 days (1 week — Maximum for Basic)"}
+                      </option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold text-gray-700 dark:text-ink/80">
+                      Payment Method
+                    </span>
+                    <div className="mt-1.5 flex items-center justify-between rounded-xl border border-gray-200 dark:border-white/10 bg-surface px-3.5 py-2.5 text-sm">
+                      <span className="font-semibold text-ink">
+                        Wallet Balance
+                      </span>
+                      <span className="text-xs text-gray-600 dark:text-ink/60">
+                        {formatNaira(context.walletBalanceKobo)} available
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {/* Advert Pricing / Info Alert */}
+              {enterprise ? (
+                <div className="mt-3.5 flex items-center gap-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.03] px-3.5 py-2.5 text-xs text-gray-700 dark:text-ink/80 shadow-xs">
+                  <InfoIcon size={16} className="shrink-0 text-[#FF6B00]" />
+                  <span className="leading-relaxed">
+                    Buyer Premium can also place an advert for your store at no
+                    charge to you.
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-3.5 rounded-2xl border border-amber-200 dark:border-amber-500/20 bg-amber-50/70 dark:bg-amber-950/20 p-4 shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-xs">
+                      <SparklesIcon size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                          Advert Pricing
+                        </span>
+                        <span className="text-xs font-extrabold text-ink bg-white dark:bg-white/10 px-2.5 py-0.5 rounded-lg border border-amber-200 dark:border-white/10">
+                          {formatNaira(costKobo)} / {selectedDays} days
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+                        Standard fee for Basic plan (up to 7 days). Upgrade to
+                        Enterprise for up to 1 month campaigns.
+                      </p>
+                      <div className="mt-2.5 pt-2 border-t border-amber-200/60 dark:border-white/5 flex items-center gap-1.5 text-[11px] text-amber-800 dark:text-ink/60">
+                        <InfoIcon
+                          size={13}
+                          className="text-amber-600 shrink-0"
+                        />
+                        <span>
+                          Buyer Premium can also place an advert for your store
+                          at no charge to you.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {needTopup && !enterprise && (
                 <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
                   <p className="min-w-40 flex-1 text-xs text-ink">
                     Wallet balance ({formatNaira(context.walletBalanceKobo)})

@@ -324,7 +324,7 @@ export function ChatHeader() {
             redirect to land where they already are is a round trip for
             nothing. */}
           <Link
-            href={buyer && !userDetails ? "/chat" : "/"}
+            href={userDetails ? "/wallet" : buyer ? "/chat" : "/"}
             className="shrink-0"
           >
             <VelteLogo

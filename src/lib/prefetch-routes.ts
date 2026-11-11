@@ -5,6 +5,7 @@ import { walletApi } from "@/services/wallet";
 import { fetchMyReferrals } from "@/services/referrals";
 import { storeApi } from "@/services/store";
 import { vendorOrdersApi } from "@/services/cart";
+import { fetchNotifications } from "@/services/notifications";
 import {
   fetchVendorBuyerRequest,
   fetchVendorBuyerRequests,
@@ -12,12 +13,16 @@ import {
 import { queryKeys } from "@/lib/query-keys";
 import {
   fetchHubAdverts,
+  fetchHubAnalytics,
   fetchHubBoosts,
+  fetchHubCommunity,
   fetchHubContext,
   fetchHubHome,
   fetchHubVendors,
 } from "@/services/hub";
 import { getErrorMessage } from "@/lib/error-message";
+import { useBuyerStore } from "@/store/buyerStore";
+import { useUserStore } from "@/store/userStore";
 
 export type PrefetchTask = {
   queryKey: readonly unknown[];
@@ -145,21 +150,34 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
           queryFn: () => vendorOrdersApi.list(),
         },
       ];
-    case "hub":
+    case "notifications":
       return [
         {
-          queryKey: queryKeys.hub.home("vendor"),
-          queryFn: () => fetchHubHome("vendor"),
-        },
-        {
-          queryKey: queryKeys.hub.context,
-          queryFn: fetchHubContext,
-        },
-        {
-          queryKey: queryKeys.hub.adverts,
-          queryFn: fetchHubAdverts,
+          queryKey: ["notifications"],
+          queryFn: fetchNotifications,
         },
       ];
+    case "hub": {
+      const isVendor = Boolean(useUserStore.getState().user);
+      const isBuyer = Boolean(useBuyerStore.getState().buyer);
+      if (isVendor) {
+        return [
+          {
+            queryKey: queryKeys.hub.home("vendor"),
+            queryFn: () => fetchHubHome("vendor"),
+          },
+        ];
+      }
+      if (isBuyer) {
+        return [
+          {
+            queryKey: queryKeys.hub.home("buyer"),
+            queryFn: () => fetchHubHome("buyer"),
+          },
+        ];
+      }
+      return [];
+    }
     case "hub/boost":
       return [
         {
@@ -184,6 +202,28 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
         {
           queryKey: queryKeys.hub.context,
           queryFn: fetchHubContext,
+        },
+        {
+          queryKey: queryKeys.hub.home("vendor"),
+          queryFn: () => fetchHubHome("vendor"),
+        },
+      ];
+    case "hub/analytics":
+      return [
+        {
+          queryKey: queryKeys.hub.analytics,
+          queryFn: fetchHubAnalytics,
+        },
+        {
+          queryKey: queryKeys.hub.home("vendor"),
+          queryFn: () => fetchHubHome("vendor"),
+        },
+      ];
+    case "hub/community":
+      return [
+        {
+          queryKey: queryKeys.hub.community,
+          queryFn: fetchHubCommunity,
         },
         {
           queryKey: queryKeys.hub.home("vendor"),
@@ -256,30 +296,22 @@ export function getPrefetchFailureMessage(error: unknown): string {
   return getErrorMessage(error, "Failed to load page data");
 }
 
-export function normalizeDashboardHref(href: string, pathname: string): string {
-  if (href.startsWith("http://") || href.startsWith("https://")) {
-    return href;
-  }
-
-  // The vendor Hub is the shared /hub page, not a /{userId}/hub dashboard
-  // screen. Leave it unprefixed so the click lands on the hub shell.
-  const clean = href.replace(/^\//, "").replace(/\/$/, "");
-  if (clean === "hub" || clean.startsWith("hub/")) return `/${clean}`;
-
-  if (href.startsWith("/")) {
-    const segments = href.split("/").filter(Boolean);
-    const userId = pathname.split("/").filter(Boolean)[0];
-    if (userId && segments.length === 1) {
-      return `/${userId}/${segments[0]}`;
-    }
-    return href;
-  }
-
-  const userId = pathname.split("/").filter(Boolean)[0];
-  return userId ? `/${userId}/${clean}` : `/${clean}`;
+export function normalizeDashboardHref(
+  href: string,
+  _pathname?: string,
+): string {
+  return resolveRouteHref(href);
 }
-export function resolveRouteHref(href: string, _pathname: string): string {
-  if (href.startsWith("http://") || href.startsWith("https://")) return href;
+export function resolveRouteHref(href: string, _pathname?: string): string {
+  if (
+    href.startsWith("http://") ||
+    href.startsWith("https://") ||
+    href.startsWith("#") ||
+    href.startsWith("mailto:") ||
+    href.startsWith("tel:")
+  ) {
+    return href;
+  }
   const clean = href.replace(/^\//, "");
   return `/${clean}`;
 }

@@ -3,13 +3,18 @@ import { queryKeys } from "@/lib/query-keys";
 import { isPublicProductSlug } from "@/lib/publicProductSlug";
 import {
   fetchHubAdverts,
+  fetchHubAnalytics,
   fetchHubBoosts,
+  fetchHubCommunity,
   fetchHubContext,
   fetchHubHome,
   fetchHubVendors,
 } from "@/services/hub";
 import { storeApi } from "@/services/store";
-import type { PrefetchTask } from "@/lib/prefetch-routes";
+import { getPrefetchTasks, type PrefetchTask } from "@/lib/prefetch-routes";
+import { fetchNotifications } from "@/services/notifications";
+import { fetchMyRequests } from "@/services/buyerRequests";
+import { cartApi } from "@/services/cart";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
 
@@ -18,13 +23,22 @@ import { useUserStore } from "@/store/userStore";
 // before router.push, so Hub screens land from cache instead of a skeleton.
 
 export function getHubRouteKey(href: string): string {
-  const segments = href.split("/").filter(Boolean);
-  if (segments[0] !== "hub") return segments.join("/");
-  return segments.join("/");
+  const clean = href.split("?")[0].replace(/^\//, "").replace(/\/$/, "");
+  return clean;
 }
 
 export function normalizeHubHref(href: string): string {
-  return href;
+  if (
+    href.startsWith("http://") ||
+    href.startsWith("https://") ||
+    href.startsWith("#") ||
+    href.startsWith("mailto:") ||
+    href.startsWith("tel:")
+  ) {
+    return href;
+  }
+  const clean = href.replace(/^\//, "");
+  return `/${clean}`;
 }
 
 export function getHubPrefetchTasks(routeKey: string): PrefetchTask[] {
@@ -49,8 +63,6 @@ export function getHubPrefetchTasks(routeKey: string): PrefetchTask[] {
             queryKey: queryKeys.hub.home("vendor"),
             queryFn: () => fetchHubHome("vendor"),
           },
-          { queryKey: queryKeys.hub.context, queryFn: fetchHubContext },
-          { queryKey: queryKeys.hub.adverts, queryFn: fetchHubAdverts },
         ];
       }
       if (isBuyer) {
@@ -97,7 +109,54 @@ export function getHubPrefetchTasks(routeKey: string): PrefetchTask[] {
         },
       ];
 
+    case "hub/analytics":
+      if (!isVendor) return [];
+      return [
+        { queryKey: queryKeys.hub.analytics, queryFn: fetchHubAnalytics },
+        {
+          queryKey: queryKeys.hub.home("vendor"),
+          queryFn: () => fetchHubHome("vendor"),
+        },
+      ];
+
+    case "hub/community":
+      if (!isVendor) return [];
+      return [
+        { queryKey: queryKeys.hub.community, queryFn: fetchHubCommunity },
+        {
+          queryKey: queryKeys.hub.home("vendor"),
+          queryFn: () => fetchHubHome("vendor"),
+        },
+      ];
+
+    case "chat/requests":
+    case "requests":
+      if (!isBuyer) return [];
+      return [
+        {
+          queryKey: ["buyer", "requests"],
+          queryFn: fetchMyRequests,
+        },
+      ];
+
+    case "chat/notifications":
+      return [
+        {
+          queryKey: ["notifications"],
+          queryFn: fetchNotifications,
+        },
+      ];
+
+    case "chat/orders":
+      if (!isBuyer) return [];
+      return [
+        {
+          queryKey: queryKeys.cart.buyerOrders,
+          queryFn: cartApi.listOrders,
+        },
+      ];
+
     default:
-      return [];
+      return getPrefetchTasks(routeKey);
   }
 }

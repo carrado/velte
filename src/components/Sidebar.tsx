@@ -162,9 +162,7 @@ export default function Sidebar() {
     }
     if (clean === "products") {
       return (
-        (pathname === "/" ||
-          pathname === "/products" ||
-          pathname.startsWith("/products/")) &&
+        (pathname === "/products" || pathname.startsWith("/products/")) &&
         pathname !== "/products/add"
       );
     }

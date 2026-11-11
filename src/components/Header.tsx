@@ -129,7 +129,7 @@ export default function Header({
 
           {/* Mobile: navigate to notifications page */}
           <button
-            className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-600 hover:bg-gray-50 md:hidden transition-colors"
+            className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-700 dark:text-ink/80 hover:bg-gray-100 dark:hover:bg-white/10 md:hidden transition-colors cursor-pointer active:scale-95"
             onClick={() => navigate(`/${userId}/notifications`)}
             aria-label="Notifications"
           >
@@ -177,7 +177,7 @@ export default function Header({
               side="bottom"
               sideOffset={8}
               initialFocus={!forceMenuOpen}
-              className="w-48 p-0 gap-0 rounded-xl border border-gray-200 shadow-lg overflow-hidden"
+              className="w-48 p-0 gap-0 rounded-xl border border-gray-200 dark:border-white/10 bg-surface shadow-lg overflow-hidden"
             >
               <div className="px-3 py-2.5 border-b border-gray-100">
                 <div className="flex items-center gap-1.5 min-w-0">

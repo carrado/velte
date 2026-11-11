@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { HubLink } from "@/components/hub/HubLink";
 import { CheckIcon, ChevronRightIcon, StarIcon } from "@/components/icons";
 import {
   EnterpriseAvatarBadge,
@@ -19,7 +20,8 @@ export function FeaturedVendorsSidebarCard({
   maxCount = 4,
 }: FeaturedVendorsSidebarCardProps) {
   if (!vendors || vendors.length === 0) return null;
-  const list = vendors.slice(0, maxCount);
+  // Strictly display only 4 vendors
+  const list = vendors.slice(0, 4);
 
   return (
     <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-surface p-4 shadow-xs">
@@ -30,26 +32,31 @@ export function FeaturedVendorsSidebarCard({
             Top businesses on Velte
           </p>
         </div>
-        {vendors.length > maxCount && (
-          <Link
-            href="/hub/vendors"
-            className="inline-flex items-center gap-0.5 text-xs font-semibold text-orange-600 hover:text-orange-700"
-          >
-            <span>View all</span>
-            <ChevronRightIcon size={13} />
-          </Link>
-        )}
+        <HubLink
+          href="/hub/vendors"
+          className="inline-flex items-center gap-0.5 text-xs font-semibold text-orange-600 hover:text-orange-700 transition-colors"
+        >
+          <span>View all</span>
+          <ChevronRightIcon size={13} />
+        </HubLink>
       </div>
 
       <div className="mt-3 divide-y divide-gray-100 dark:divide-white/5">
         {list.map((vendor) => {
           const isEnterprise = isEnterpriseVendor(vendor);
+          const vendorHref = vendor.handle
+            ? `/store/${vendor.handle}`
+            : "/hub/vendors";
+
           return (
             <div
               key={vendor.vendorId}
               className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3 group"
             >
-              <div className="flex items-center gap-2.5 min-w-0">
+              <HubLink
+                href={vendorHref}
+                className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-95"
+              >
                 <div className="relative shrink-0 flex items-center justify-center">
                   <div className="h-9 w-9 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-xs overflow-hidden ring-1 ring-surface">
                     {vendor.avatar ? (
@@ -68,7 +75,7 @@ export function FeaturedVendorsSidebarCard({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1 min-w-0">
-                    <span className="text-xs font-bold text-ink truncate">
+                    <span className="text-xs font-bold text-ink group-hover:text-orange-600 transition-colors truncate">
                       {vendor.name}
                     </span>
                     {isEnterprise && <EnterpriseBadge size="sm" />}
@@ -98,10 +105,20 @@ export function FeaturedVendorsSidebarCard({
                     )}
                   </div>
                 </div>
-              </div>
+              </HubLink>
             </div>
           );
         })}
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
+        <HubLink
+          href="/hub/vendors"
+          className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:border-orange-300 dark:hover:border-orange-500/30 hover:bg-orange-50/50 dark:hover:bg-orange-950/20 py-2 text-xs font-bold text-ink hover:text-orange-600 transition-all text-center"
+        >
+          <span>View all vendors</span>
+          <ChevronRightIcon size={13} />
+        </HubLink>
       </div>
     </section>
   );

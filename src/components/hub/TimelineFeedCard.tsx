@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { HubLink } from "@/components/hub/HubLink";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
   CheckIcon,
   CrownIcon,
   EyeIcon,
+  MegaphoneIcon,
   MessageSquareIcon,
-  ShareIcon,
   ShoppingCartIcon,
   SparklesIcon,
   ZapIcon,
@@ -57,6 +58,10 @@ export function TimelineFeedCard({
   const isOwn = Boolean(viewerId) && item.vendorId === viewerId;
 
   const [addingToCart, setAddingToCart] = useState(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const isLongDescription = Boolean(
+    item.body && (item.body.length > 120 || item.body.includes("\n")),
+  );
 
   // Price formatting
   const listingPrice = item.listing?.price
@@ -83,31 +88,6 @@ export function TimelineFeedCard({
       toast.success(`Added "${item.listing.name}" to cart`);
     }
     setAddingToCart(false);
-  };
-
-  const handleShare = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const url = typeof window !== "undefined" ? window.location.href : "/hub";
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: item.title,
-          text: `Check out ${item.title} by ${storeName} on Velte!`,
-          url,
-        });
-        return;
-      } catch {
-        /* fallback to clipboard */
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Link copied to clipboard!");
-    } catch {
-      toast.error("Couldn't copy link");
-    }
   };
 
   const chatHref =
@@ -173,11 +153,17 @@ export function TimelineFeedCard({
           </div>
         </div>
 
-        {/* ── Normal Sponsored Label (same styling, no different background) ── */}
+        {/* ── Badge: Sponsored Ad for adverts, Sponsored for boosted listings & sponsored items, or New ── */}
         <div className="shrink-0">
-          {isBoosted || isAdvert || item.sponsored ? (
+          {isAdvert ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-2xs">
-              Sponsored
+              <MegaphoneIcon size={12} className="shrink-0" />
+              <span>Sponsored Ad</span>
+            </span>
+          ) : isBoosted || item.sponsored ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-2xs">
+              <ZapIcon size={12} className="shrink-0 fill-current" />
+              <span>Sponsored</span>
             </span>
           ) : item.kind === "product" && isNewListing(item.at, now) ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 dark:bg-sky-900/40 px-2.5 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
@@ -193,35 +179,68 @@ export function TimelineFeedCard({
           {item.title}
         </h4>
         {item.body && item.body !== item.title && (
-          <p className="mt-1.5 text-sm text-gray-600 dark:text-ink/80 line-clamp-3 leading-relaxed">
-            {item.body}
-          </p>
+          <div className="mt-1.5">
+            <p
+              className={cn(
+                "text-sm text-gray-600 dark:text-ink/80 leading-relaxed transition-all whitespace-pre-line",
+                !isDescriptionExpanded && "line-clamp-3",
+              )}
+            >
+              {item.body}
+            </p>
+            {isLongDescription && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDescriptionExpanded((prev) => !prev);
+                }}
+                className="mt-1 inline-flex items-center gap-0.5 text-xs font-bold text-[#FF6B00] hover:text-orange-700 hover:underline cursor-pointer transition-colors"
+              >
+                <span>{isDescriptionExpanded ? "See less" : "See more"}</span>
+              </button>
+            )}
+          </div>
         )}
 
-        {/* Price & Tag Strip */}
-        <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
-          {listingPrice && (
+        {/* Price Strip */}
+        {listingPrice && (
+          <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
             <div className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500/10 dark:bg-orange-500/15 px-3 py-1 text-sm font-extrabold text-orange-600 dark:text-orange-400 border border-orange-500/20">
               <span>{listingPrice}</span>
             </div>
-          )}
-          {item.sectors?.[0] && (
-            <span className="text-xs font-medium text-gray-500 dark:text-ink/60 bg-gray-100 dark:bg-white/5 rounded-lg px-2 py-0.5">
-              #{item.sectors[0].replace(/_/g, " ")}
-            </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ── Media Gallery: Manual Swipeable Carousel (Not Automatic) ── */}
       {gallery.length > 0 && (
-        <div className="px-4 sm:px-5 pb-3">
+        <div className="px-4 sm:px-5 pb-3 relative">
           <ManualProductCarousel
             images={gallery}
             altTitle={item.title}
-            aspectRatio={isBoosted ? "video" : "video"}
+            aspectRatio="video"
             onImageClick={() => item.listing && onOpenListing?.(item)}
           />
+          {(isBoosted || item.sponsored) && !isAdvert && (
+            <div className="absolute top-2 left-7 z-10 pointer-events-none">
+              <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                <ZapIcon
+                  size={11}
+                  className="shrink-0 fill-orange-400 text-orange-400"
+                />
+                <span>Sponsored</span>
+              </span>
+            </div>
+          )}
+          {isAdvert && (
+            <div className="absolute top-2 left-7 z-10 pointer-events-none">
+              <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                <MegaphoneIcon size={11} className="shrink-0 text-orange-400" />
+                <span>Sponsored Ad</span>
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -241,13 +260,13 @@ export function TimelineFeedCard({
           )}
 
           {chatHref && (
-            <Link
+            <HubLink
               href={chatHref}
               className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-95 text-gray-700 dark:text-ink px-3 py-1.5 text-xs font-semibold transition-all"
             >
               <MessageSquareIcon size={14} />
               <span className="hidden sm:inline">Message</span>
-            </Link>
+            </HubLink>
           )}
 
           {item.listing && (
@@ -260,17 +279,6 @@ export function TimelineFeedCard({
               <span className="hidden sm:inline">Details</span>
             </button>
           )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleShare}
-            aria-label="Share listing"
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-          >
-            <ShareIcon size={14} />
-          </button>
         </div>
       </div>
     </article>
