@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { backendData } from "@/lib/server/backend";
 import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
+import { broadcastHubEvent } from "@/server/hubWsServer";
 
 export async function GET() {
   const vendorAuth = await getOptionalVendorAuth();
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
       body: body ?? {},
       cookie: vendorAuth.cookie,
     });
+    broadcastHubEvent({ type: "HUB_DATA_CHANGED", scope: "all" });
     return NextResponse.json(data, { status: 201 });
   } catch (err) {
     return fail(err, "Couldn't save this broadcast.");

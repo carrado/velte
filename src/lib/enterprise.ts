@@ -1,21 +1,13 @@
 /**
- * Checks whether a vendor or user profile is on the Enterprise plan.
+ * Checks whether a vendor or user profile is on the Enterprise tier.
  * Pure TypeScript helper function safe for both Server and Client Components.
  */
 export function isEnterpriseVendor(vendor: unknown): boolean {
   if (!vendor || typeof vendor !== "object") return false;
   const v = vendor as {
     tier?: string;
-    plan?: string;
-    isEnterprise?: boolean;
-    enterprise?: boolean;
     subscription?: { plan?: string; status?: string };
-    store?: {
-      tier?: string;
-      plan?: string;
-      isEnterprise?: boolean;
-      enterprise?: boolean;
-    };
+    store?: { tier?: string };
   };
   const subStatus = v.subscription?.status;
   const isSubActive =
@@ -27,28 +19,18 @@ export function isEnterpriseVendor(vendor: unknown): boolean {
 
   return Boolean(
     v.tier === "vendor_enterprise" ||
-    v.plan === "vendor_enterprise" ||
-    v.isEnterprise === true ||
-    v.enterprise === true ||
     isSubActive ||
-    v.store?.tier === "vendor_enterprise" ||
-    v.store?.plan === "vendor_enterprise" ||
-    v.store?.isEnterprise === true ||
-    v.store?.enterprise === true,
+    v.store?.tier === "vendor_enterprise",
   );
 }
 
 /**
- * Checks whether a buyer or user profile is on the Premium plan.
+ * Checks whether a buyer or user profile is on the Premium tier.
  */
 export function isPremiumBuyer(buyer: unknown): boolean {
   if (!buyer || typeof buyer !== "object") return false;
   const b = buyer as {
     tier?: string;
-    plan?: string;
-    isPremium?: boolean;
-    premium?: boolean;
-    role?: string;
     subscription?: { plan?: string; status?: string };
   };
   const subStatus = b.subscription?.status;
@@ -59,13 +41,7 @@ export function isPremiumBuyer(buyer: unknown): boolean {
       subStatus === "past_due" ||
       subStatus === "cancelled");
 
-  return Boolean(
-    b.tier === "buyer_premium" ||
-    b.plan === "buyer_premium" ||
-    b.isPremium === true ||
-    b.premium === true ||
-    isSubActive,
-  );
+  return Boolean(b.tier === "buyer_premium" || isSubActive);
 }
 
 /**

@@ -83,6 +83,7 @@ export interface PublicStoreProductProps {
   // in this file is suppressed then (no chatting yourself, no billing
   // yourself a lead), see OwnListingBadge.
   isOwn: boolean;
+  isEnterprise?: boolean;
 }
 
 export interface StoreTabsProps {
@@ -95,6 +96,7 @@ export interface StoreTabsProps {
   defaultTab: PublicStoreTab;
   sidebar: ReactNode;
   isOwn: boolean;
+  isEnterprise?: boolean;
 }
 
 export interface IntroCardProps {
@@ -135,6 +137,9 @@ export interface MarketplacePreviewItem {
   storeAvatar: string | null;
   whatsapp: string | null;
   checkoutEligible?: boolean;
+  tier?: string;
+  isEnterprise?: boolean;
+  enterprise?: boolean;
 }
 
 /** One card in the "/" homepage's Vendors section — a Twitter-profile-style
@@ -149,6 +154,9 @@ export interface VendorPreviewItem {
   whatsapp: string | null;
   gallery: string[];
   avatar: string | null;
+  tier?: string;
+  isEnterprise?: boolean;
+  enterprise?: boolean;
 }
 
 /** One card in the /marketplace browse page — the full catalog, not a

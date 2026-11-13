@@ -82,20 +82,44 @@ type TimelineFilter = "all" | HubTimelineKind | "recent";
 
 const ENTERPRISE_LOCKS = {
   advert: {
-    title: "Place Advert is on Enterprise",
-    body: "An advert stays at the top of the Hub, and it is labelled as sponsored. Enterprise places one at a subsidised rate.",
+    title: "Unlock Place Advert",
+    body: "Guaranteed priority placement at the top of the Hub feed with custom poster upload and instant WhatsApp routing.",
+    benefits: [
+      "Guaranteed top-of-feed placement seen by active buyers",
+      "Subsidised monthly advert placement credits",
+      "Custom banner upload with click-through WhatsApp routing",
+      "Impression & CTR telemetry on every pinned campaign",
+    ],
   },
   analytics: {
-    title: "Business Insights & Leaderboard are on Enterprise",
-    body: "Your storefront counts stay on this page. Hub reach, advert CTR conversion, and category vendor leaderboards are unlocked on Enterprise.",
+    title: "Unlock Insights & Analytics",
+    body: "Comprehensive store telemetry, 30-day conversion funnels, and live category performance benchmarking are exclusive to Enterprise Vendors.",
+    benefits: [
+      "Live advert & catalog impression and click-through tracking",
+      "4-Stage buyer conversion funnel with drop-off analytics",
+      "Category Performance Leaderboard comparing against top market peers",
+      "₦0 lead fees on all buyer inquiries with direct WhatsApp handoff",
+    ],
   },
   community: {
-    title: "Community & Forum is on Enterprise",
-    body: "High-rated Enterprise vendors can create customer communities and host buyer discussions. Upgrade to unlock community tools.",
+    title: "Unlock Community & Forum",
+    body: "The unified commerce forum connecting verified Enterprise Vendors, Premium Buyers, gig agents, and trusted service providers across Nigeria.",
+    benefits: [
+      "Host and moderate customer & buyer communities",
+      "Direct forum discussions with verified founder badge",
+      "Publish storefront announcements to community members",
+      "Priority visibility across marketplace discussion threads",
+    ],
   },
   whatsapp: {
-    title: "Direct WhatsApp Contact is on Enterprise",
+    title: "Unlock Direct WhatsApp Channel",
     body: "Enterprise vendors can route buyers directly to their WhatsApp contact from their Hub contact card. Upgrade to unlock direct customer messaging.",
+    benefits: [
+      "Direct 1-click WhatsApp handoff with prefilled product inquiry",
+      "₦0 lead referral fees on buyer conversions",
+      "Verified business badge on public contact card",
+      "Priority contact routing on search and store catalog",
+    ],
   },
 } as const;
 
@@ -269,7 +293,7 @@ export function HubDashboard({
         "Your Business",
       handle: user.username || null,
       avatar: user.avatar || null,
-      verified: Boolean(user.isEnterprise || user.enterprise),
+      verified: isEnterpriseVendor(user),
       description: user.description || null,
     };
   }, [vendorStore, user]);
@@ -341,10 +365,41 @@ export function HubDashboard({
     [displayedTimeline],
   );
 
-  // Real-time WebSocket connection: checks for new listings and ticks clock in real time
+  const handleListingUpdated = useCallback(
+    (productId: string, patch: Partial<HubTimelineItem>) => {
+      setDisplayedTimeline((prev) =>
+        prev.map((item) => {
+          const itemProdId = item.listing?.productId || item.id;
+          if (item.id === productId || itemProdId === productId) {
+            return { ...item, ...patch };
+          }
+          return item;
+        }),
+      );
+    },
+    [],
+  );
+
+  const handleListingRemoved = useCallback((productId: string) => {
+    setDisplayedTimeline((prev) =>
+      prev.filter((item) => {
+        const itemProdId = item.listing?.productId || item.id;
+        return item.id !== productId && itemProdId !== productId;
+      }),
+    );
+  }, []);
+
+  const handleHubDataChanged = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["hub"] });
+  }, [queryClient]);
+
+  // Real-time WebSocket connection: receives new listings, in-place UI edits, and clock ticks
   const { now } = useHubWebSocket({
     knownListingIds,
     onNewListings: handleIncomingNewListings,
+    onListingUpdated: handleListingUpdated,
+    onListingRemoved: handleListingRemoved,
+    onHubDataChanged: handleHubDataChanged,
   });
 
   // Auto pagination state
@@ -419,6 +474,7 @@ export function HubDashboard({
 
     const synthesizedItems: HubTimelineItem[] = missingBoosts.map((boost) => ({
       id: `boost-${boost.id}`,
+      tier: home?.enterprise ? "enterprise" : "basic",
       vendorId: store?.handle ?? "vendor",
       kind: "product" as const,
       at: boost.startsAt || new Date().toISOString(),
@@ -637,10 +693,18 @@ export function HubDashboard({
       return;
     }
     if (next === "analytics") {
+      if (!home.enterprise) {
+        setUpgradeLock(ENTERPRISE_LOCKS.analytics);
+        return;
+      }
       navigate("/hub/analytics");
       return;
     }
     if (next === "community") {
+      if (!home.enterprise) {
+        setUpgradeLock(ENTERPRISE_LOCKS.community);
+        return;
+      }
       navigate("/hub/community");
       return;
     }
@@ -676,8 +740,12 @@ export function HubDashboard({
 
                 <div className="mt-3 space-y-2">
                   {ACTIONS.map((action) => {
-                    const actionHref =
-                      action.sheet === "boost"
+                    const isLocked = Boolean(
+                      action.enterpriseOnly && !home.enterprise,
+                    );
+                    const actionHref = isLocked
+                      ? null
+                      : action.sheet === "boost"
                         ? "/hub/boost"
                         : action.sheet === "advert"
                           ? "/hub/advert"
@@ -1038,8 +1106,12 @@ export function HubDashboard({
       {upgradeLock && (
         <HubLockedModal
           variant="upgrade"
+          badge="Enterprise Exclusive"
           title={upgradeLock.title}
           body={upgradeLock.body}
+          benefits={
+            "benefits" in upgradeLock ? upgradeLock.benefits : undefined
+          }
           ctaLabel="Upgrade to Enterprise"
           ctaHref="/pricing?for=vendors"
           onClose={() => setUpgradeLock(null)}
@@ -1282,8 +1354,9 @@ function UpdateListingSheet({
   const listing = item.listing;
   const storeName = item.storeName || "Vendor";
   const isOwn = Boolean(viewerId) && item.vendorId === viewerId;
+  const isEnterprise = isEnterpriseVendor(item);
   const chatHref =
-    !isOwn && item.vendorId
+    !isOwn && item.vendorId && isEnterprise
       ? buildChatLink({
           vendorId: item.vendorId,
           productId: listing.productId,
@@ -1294,7 +1367,6 @@ function UpdateListingSheet({
               : `Hi ${storeName}! Is "${listing.name}" still available? I found you on Velte.`,
         })
       : null;
-  const place = placeParts(item.place);
 
   return (
     <ListingDetailModal
@@ -1315,8 +1387,8 @@ function UpdateListingSheet({
       vendor={{
         name: storeName,
         handle: item.storeHandle,
-        area: place.area,
-        state: place.state,
+        area: item.place,
+        state: null,
         avatar: item.avatar,
       }}
       chatHref={chatHref}

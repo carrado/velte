@@ -23,15 +23,18 @@ export default function StoreTabs({
   defaultTab,
   sidebar,
   isOwn,
+  isEnterprise = false,
 }: StoreTabsProps) {
   const [active, setActive] = useState<PublicStoreTab>(defaultTab);
   const isEmpty = goods.length === 0 && services.length === 0;
 
-  const whatsappHref = buildChatLink({
-    vendorId,
-    source: "browse",
-    message: `Hi ${storeName}! I found your store on Velte.`,
-  });
+  const whatsappHref = isEnterprise
+    ? buildChatLink({
+        vendorId,
+        source: "browse",
+        message: `Hi ${storeName}! I found your store on Velte.`,
+      })
+    : null;
 
   if (isEmpty) {
     return (
@@ -107,6 +110,7 @@ export default function StoreTabs({
                 whatsapp={whatsapp}
                 vendorId={vendorId}
                 isOwn={isOwn}
+                isEnterprise={isEnterprise}
               />
             ))}
           </div>
@@ -123,6 +127,7 @@ export default function StoreTabs({
                 whatsapp={whatsapp}
                 vendorId={vendorId}
                 isOwn={isOwn}
+                isEnterprise={isEnterprise}
               />
             ))}
           </div>

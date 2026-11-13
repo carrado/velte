@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { ArrowRightIcon, MapPinBrokenIllustration } from "@/components/icons";
 
@@ -31,8 +30,7 @@ const fadeUp = {
 export default function NotFound() {
   return (
     <>
-      <Navbar hideSearch />
-      <main className="relative bg-canvas min-h-screen pt-28 pb-24 overflow-hidden">
+      <main className="relative bg-canvas min-h-screen flex items-center justify-center py-20 overflow-hidden">
         <div className="pointer-events-none absolute -top-16 -left-24 w-72 h-72 bg-orange-500/[0.08] rounded-full blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 -right-20 w-80 h-80 bg-orange-500/[0.07] rounded-full blur-3xl" />
 

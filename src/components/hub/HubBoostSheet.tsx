@@ -26,10 +26,10 @@ function listingPrice(product: CategoryProduct): string | null {
  *  This is not Place Advert: no new headline, poster, or pin. */
 export function HubBoostSheet({
   context,
-  onSponsored,
+  onSponsoredAction,
 }: {
   context: HubContext;
-  onSponsored: () => void;
+  onSponsoredAction?: () => void;
 }) {
   const [listings, setListings] = useState<CategoryProduct[] | null>(null);
   const [active, setActive] = useState<ActiveBoost[]>([]);
@@ -79,7 +79,7 @@ export function HubBoostSheet({
           ? "That listing is already sponsored."
           : "Listing sponsored.",
       );
-      onSponsored();
+      onSponsoredAction?.();
     } catch (err) {
       toast.error(
         err instanceof ApiError
@@ -142,8 +142,8 @@ export function HubBoostSheet({
                     />
                   ) : null}
                   {live && (
-                    <span className="absolute top-2 left-2 rounded-md bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                      Sponsored
+                    <span className="absolute top-2 left-2 rounded-full bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:text-sky-300">
+                      Boosted
                     </span>
                   )}
                   {selected && (
@@ -179,8 +179,8 @@ export function HubBoostSheet({
           : atCap
             ? `Limit reached (${context.maxActiveAdverts} live)`
             : selectedIsLive
-              ? "Already sponsored"
-              : "Sponsor this listing"}
+              ? "Already boosted"
+              : "Boost this listing"}
       </button>
     </div>
   );

@@ -14,6 +14,7 @@ import { ImageLightbox } from "@/components/ImageLightbox";
 import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
 import { buildChatLink } from "@/lib/chatLink";
+import { isEnterpriseVendor } from "@/lib/enterprise";
 import type { VendorMatch } from "@/types/search";
 import {
   ChevronLeftIcon,
@@ -66,12 +67,16 @@ export function VendorResultCard({
   // server-side — the number is never in this page (2026-08-27, see
   // chatLink.ts). Billing moved with it, so there's no onClick beacon any
   // more: following the link IS the billable event.
-  const chatHref = buildChatLink({
-    vendorId: match.vendorId,
-    productId: match.mainImageUrl ? match.productId : undefined,
-    source: "search",
-    message: `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
-  });
+  const isEnterprise = isEnterpriseVendor(match);
+  const chatHref =
+    isEnterprise && showChatButton
+      ? buildChatLink({
+          vendorId: match.vendorId,
+          productId: match.mainImageUrl ? match.productId : undefined,
+          source: "search",
+          message: `Hi ${match.vendorName}! I'm interested in your "${match.name}" — I found you on Velte.`,
+        })
+      : null;
 
   // Main image first, then whatever else the vendor uploaded — a buyer
   // shouldn't be stuck with just whichever single photo was set as "main"

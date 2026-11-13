@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuth, fail, jsonError } from "@/lib/server/guards";
 import { listProducts, createProduct } from "@/lib/server/products";
+import { productToHubTimelineItem } from "@/lib/hubSync";
+import { broadcastListingToWsClients } from "@/server/hubWsServer";
 import type { CreateProductPayload } from "@/types/product";
 
 // GET /api/products?page=&limit=&category_id=&tab=&search=&sort_by=&sort_order=
@@ -28,6 +30,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const { product, bonus } = await createProduct(payload, gate.cookie);
+    if (product) {
+      broadcastListingToWsClients(
+        productToHubTimelineItem(product, { vendorId: gate.userId }),
+      );
+    }
     return NextResponse.json({ product, bonus }, { status: 201 });
   } catch (err) {
     return fail(err, "Failed to create listing.");

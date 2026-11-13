@@ -130,12 +130,15 @@ export function OfferingCard({
   storeHandle,
   vendorId,
   isOwn,
+  isEnterprise = false,
 }: PublicStoreProductProps) {
   const isService = product.kind === "service";
   const KindIcon = isService ? WrenchIcon : PackageIcon;
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
-  const enquireHref = enquireHrefFor(product, storeName, vendorId);
+  const enquireHref = isEnterprise
+    ? enquireHrefFor(product, storeName, vendorId)
+    : null;
   const images = resolveGalleryImages(
     product.mainImageUrl,
     product.thumbnailUrls,

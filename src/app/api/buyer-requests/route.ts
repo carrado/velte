@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { fail, jsonError } from "@/lib/server/guards";
 import { getActorAuth } from "@/lib/server/buyerGuards";
 import { backendData } from "@/lib/server/backend";
+import { triggerImmediateUserSync } from "@/server/hubWsServer";
 import type { BuyerRequest } from "@/types/buyerRequest";
 
 // POST /api/buyer-requests
@@ -43,6 +44,12 @@ export async function POST(req: Request) {
       body,
       cookie: auth.cookie,
     });
+    if (created) {
+      void triggerImmediateUserSync({
+        checkNotifications: true,
+        checkRequests: true,
+      });
+    }
     return NextResponse.json(
       { created, request: request ?? null },
       { status: created ? 201 : 200 },

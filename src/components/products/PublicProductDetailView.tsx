@@ -33,6 +33,8 @@ import { getInitial } from "@/lib/initials";
 import { resolveGalleryImages } from "@/lib/media";
 import { fmt } from "@/lib/product-price";
 import { cn } from "@/lib/utils";
+import { isEnterpriseVendor } from "@/lib/enterprise";
+import { toast } from "sonner";
 import type { PublicProductDetail, ReviewSummary } from "@/types/store";
 
 type DetailTab = "details" | "reviews" | "vendor";
@@ -157,7 +159,13 @@ export function PublicProductDetailView({
     setIndex(target);
   };
 
+  const isEnterprise = isEnterpriseVendor(store);
+
   const askContact = () => {
+    if (!isEnterprise) {
+      toast.error("Messaging is only available for Enterprise vendors.");
+      return;
+    }
     if (!viewer.signedIn) {
       setLock("auth");
       return;
@@ -434,19 +442,25 @@ export function PublicProductDetailView({
             )}
 
             <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
-              <button
-                type="button"
-                onClick={askContact}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
-              >
-                <WhatsAppIcon size={18} className="text-white" />
-                Contact vendor
-              </button>
+              {isEnterprise && (
+                <button
+                  type="button"
+                  onClick={askContact}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+                >
+                  <WhatsAppIcon size={18} className="text-white" />
+                  Contact vendor
+                </button>
+              )}
               {!contactOnly && (
                 <button
                   type="button"
                   onClick={askRequest}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-orange-500 bg-surface px-4 py-3 text-sm font-semibold text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors"
+                  className={cn(
+                    "inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-orange-500 bg-surface px-4 py-3 text-sm font-semibold text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors",
+                    !isEnterprise &&
+                      "w-full bg-orange-500 text-white border-transparent hover:bg-orange-600 hover:text-white",
+                  )}
                 >
                   <HandbagIcon size={18} />
                   Add to cart

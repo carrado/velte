@@ -8,6 +8,7 @@ import { ProtectedImage } from "@/components/ProtectedImage";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { buildChatLink } from "@/lib/chatLink";
+import { isEnterpriseVendor } from "@/lib/enterprise";
 import type { VendorPreviewItem } from "@/types/store";
 import {
   ArrowRightIcon,
@@ -103,11 +104,14 @@ export function VendorCard({
   item: VendorPreviewItem;
   verified?: boolean;
 }) {
-  const chatHref = buildChatLink({
-    vendorId: item.vendorId,
-    source: "browse",
-    message: `Hi ${item.name}! I found your store on Velte.`,
-  });
+  const isEnterprise = isEnterpriseVendor(item);
+  const chatHref = isEnterprise
+    ? buildChatLink({
+        vendorId: item.vendorId,
+        source: "browse",
+        message: `Hi ${item.name}! I found your store on Velte.`,
+      })
+    : null;
   // "+N more" is a real toggle, not a static label — clicking it reveals
   // the rest of the vendor's sectors in place rather than sending the
   // buyer anywhere else. Once expanded, extraSectors is 0 so the button

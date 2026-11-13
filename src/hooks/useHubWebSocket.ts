@@ -3,23 +3,24 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { HubTimelineItem } from "@/types/hub";
 import { subscribeToHubNewListings } from "@/lib/hubSync";
+import { sharedWsClient, type HubWsClientMessage } from "@/lib/wsClient";
 
-export interface HubWsMessage {
-  type:
-    | "TIME_TICK"
-    | "NEW_LISTINGS"
-    | "INIT"
-    | "CHECK_NEW_LISTINGS"
-    | "PONG"
-    | "UP_TO_DATE";
-  now?: number;
-  items?: HubTimelineItem[];
-  knownListingIds?: string[];
-}
+export type HubDataChangeScope =
+  | "adverts"
+  | "boosts"
+  | "community"
+  | "performance"
+  | "all";
 
 interface UseHubWebSocketOptions {
   knownListingIds?: string[];
   onNewListings?: (items: HubTimelineItem[]) => void;
+  onListingUpdated?: (
+    productId: string,
+    patch: Partial<HubTimelineItem>,
+  ) => void;
+  onListingRemoved?: (productId: string) => void;
+  onHubDataChanged?: (scope: HubDataChangeScope) => void;
   enabled?: boolean;
 }
 
@@ -42,80 +43,69 @@ function isTestItem(item: HubTimelineItem): boolean {
   );
 }
 
-const DEFAULT_WS_PORT = 4002;
-
-function getWebSocketUrl(): string {
-  if (typeof window === "undefined") return "";
-
-  if (process.env.NEXT_PUBLIC_WS_URL) {
-    return process.env.NEXT_PUBLIC_WS_URL;
-  }
-
-  const port = process.env.NEXT_PUBLIC_WS_PORT || DEFAULT_WS_PORT;
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const hostname = window.location.hostname || "localhost";
-  return `${protocol}//${hostname}:${port}`;
-}
-
 export function useHubWebSocket({
   knownListingIds = [],
   onNewListings,
+  onListingUpdated,
+  onListingRemoved,
+  onHubDataChanged,
   enabled = true,
 }: UseHubWebSocketOptions = {}): UseHubWebSocketReturn {
-  const [now, setNow] = useState<number>(() => Date.now());
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [status, setStatus] = useState<{ isConnected: boolean; now: number }>(
+    () => sharedWsClient.getStatus(),
+  );
 
-  const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectAttemptsRef = useRef<number>(0);
   const knownIdsRef = useRef<string[]>(knownListingIds);
   const onNewListingsRef = useRef(onNewListings);
+  const onListingUpdatedRef = useRef(onListingUpdated);
+  const onListingRemovedRef = useRef(onListingRemoved);
+  const onHubDataChangedRef = useRef(onHubDataChanged);
 
-  // Keep refs up-to-date
   useEffect(() => {
     knownIdsRef.current = knownListingIds;
-  }, [knownListingIds]);
+    if (enabled && knownListingIds.length > 0) {
+      sharedWsClient.registerHubInit(knownListingIds);
+    }
+  }, [knownListingIds, enabled]);
 
   useEffect(() => {
     onNewListingsRef.current = onNewListings;
   }, [onNewListings]);
 
-  // Check for new listings manually or on trigger
+  useEffect(() => {
+    onListingUpdatedRef.current = onListingUpdated;
+  }, [onListingUpdated]);
+
+  useEffect(() => {
+    onListingRemovedRef.current = onListingRemoved;
+  }, [onListingRemoved]);
+
+  useEffect(() => {
+    onHubDataChangedRef.current = onHubDataChanged;
+  }, [onHubDataChanged]);
+
   const checkForNewListings = useCallback(() => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const payload: HubWsMessage = {
-        type: "CHECK_NEW_LISTINGS",
-        knownListingIds: knownIdsRef.current,
-      };
-      socketRef.current.send(JSON.stringify(payload));
-    }
+    sharedWsClient.send({
+      type: "CHECK_NEW_LISTINGS",
+      knownListingIds: knownIdsRef.current,
+    });
   }, []);
 
-  // Broadcast newly created listing to other clients
   const broadcastListing = useCallback(
     (items: HubTimelineItem | HubTimelineItem[]) => {
       const list = Array.isArray(items) ? items : [items];
       if (list.length === 0) return;
 
-      if (
-        socketRef.current &&
-        socketRef.current.readyState === WebSocket.OPEN
-      ) {
-        const payload: HubWsMessage = {
-          type: "NEW_LISTINGS",
-          items: list,
-        };
-        socketRef.current.send(JSON.stringify(payload));
-      }
+      sharedWsClient.send({
+        type: "NEW_LISTINGS",
+        items: list,
+      });
 
-      // Also notify via API endpoint so other processes/tabs know
       fetch("/api/hub/ws", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: list }),
-      }).catch(() => {
-        // Best-effort
-      });
+      }).catch(() => {});
     },
     [],
   );
@@ -123,131 +113,55 @@ export function useHubWebSocket({
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
 
-    let unmounted = false;
+    sharedWsClient.registerHubInit(knownIdsRef.current);
 
-    // Wake up / ensure the backend WebSocket server is active
-    fetch("/api/hub/ws").catch(() => {});
+    const unsubscribeStatus = sharedWsClient.subscribeStatus(
+      (isConnected, now) => {
+        setStatus({ isConnected, now });
+      },
+    );
 
-    function connect() {
-      if (unmounted) return;
-
-      const wsUrl = getWebSocketUrl();
-      if (!wsUrl) return;
-
-      try {
-        const ws = new WebSocket(wsUrl);
-        socketRef.current = ws;
-
-        ws.onopen = () => {
-          if (unmounted) {
-            ws.close();
-            return;
+    const unsubscribeMsg = sharedWsClient.subscribe(
+      (data: HubWsClientMessage) => {
+        if (
+          data.type === "NEW_LISTINGS" &&
+          Array.isArray(data.items) &&
+          data.items.length > 0
+        ) {
+          const validItems = data.items.filter((item) => !isTestItem(item));
+          if (validItems.length > 0) {
+            onNewListingsRef.current?.(validItems);
           }
-          setIsConnected(true);
-          reconnectAttemptsRef.current = 0;
-
-          // Send INIT with current known IDs to immediately check for newer listings
-          const initPayload: HubWsMessage = {
-            type: "INIT",
-            knownListingIds: knownIdsRef.current,
-          };
-          ws.send(JSON.stringify(initPayload));
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data) as HubWsMessage;
-
-            // 1. Clock tick from WebSocket server -> triggers live relative timestamp updates across feed
-            if (data.type === "TIME_TICK" && typeof data.now === "number") {
-              setNow(data.now);
-            }
-
-            // 2. New listings pushed from WebSocket server -> notify consumer
-            if (
-              data.type === "NEW_LISTINGS" &&
-              Array.isArray(data.items) &&
-              data.items.length > 0
-            ) {
-              if (typeof data.now === "number") {
-                setNow(data.now);
-              }
-              const validItems = data.items.filter((item) => !isTestItem(item));
-              if (validItems.length > 0) {
-                onNewListingsRef.current?.(validItems);
-              }
-            }
-          } catch {
-            // Ignore parse errors
-          }
-        };
-
-        ws.onclose = () => {
-          setIsConnected(false);
-          socketRef.current = null;
-
-          if (!unmounted) {
-            // Reconnect with backoff capped at 8 seconds
-            const delay = Math.min(
-              1000 * Math.pow(1.5, reconnectAttemptsRef.current),
-              8000,
-            );
-            reconnectAttemptsRef.current += 1;
-            reconnectTimeoutRef.current = setTimeout(connect, delay);
-          }
-        };
-
-        ws.onerror = () => {
-          // Socket will fire onclose after onerror, which handles reconnection
-          try {
-            ws.close();
-          } catch {
-            // ignore
-          }
-        };
-      } catch {
-        // Fallback retry
-        if (!unmounted) {
-          reconnectTimeoutRef.current = setTimeout(connect, 3000);
+        } else if (
+          data.type === "LISTING_UPDATED" &&
+          data.productId &&
+          data.patch
+        ) {
+          onListingUpdatedRef.current?.(data.productId, data.patch);
+        } else if (data.type === "LISTING_REMOVED" && data.productId) {
+          onListingRemovedRef.current?.(data.productId);
+        } else if (data.type === "HUB_DATA_CHANGED") {
+          onHubDataChangedRef.current?.(data.scope ?? "all");
         }
-      }
-    }
+      },
+    );
 
-    connect();
-
-    // Local interval ticker fallback (ensures time never freezes if WS is momentarily disconnected)
-    const localTickInterval = setInterval(() => {
-      setNow(Date.now());
-    }, 15000);
-
-    // Also hook into tab-to-tab BroadcastChannel & ServiceWorker sync
     const unsubscribeSync = subscribeToHubNewListings((incomingItems) => {
-      if (!unmounted && incomingItems && incomingItems.length > 0) {
+      if (incomingItems && incomingItems.length > 0) {
         onNewListingsRef.current?.(incomingItems);
       }
     });
 
     return () => {
-      unmounted = true;
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      clearInterval(localTickInterval);
+      unsubscribeStatus();
+      unsubscribeMsg();
       unsubscribeSync();
-      if (socketRef.current) {
-        try {
-          socketRef.current.close();
-        } catch {
-          // ignore
-        }
-        socketRef.current = null;
-      }
     };
   }, [enabled]);
 
   return {
-    now,
-    isConnected,
+    now: status.now,
+    isConnected: status.isConnected,
     checkForNewListings,
     broadcastListing,
   };

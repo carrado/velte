@@ -1558,6 +1558,9 @@ function ConversationTurnView({
                                   match={item}
                                   storeName={turn.vendorProductsStore!.name}
                                   vendorId={turn.vendorProductsStore!.vendorId}
+                                  isEnterprise={isEnterpriseVendor(
+                                    turn.vendorProductsStore,
+                                  )}
                                 />
                               )}
                             />

@@ -1,30 +1,70 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { fetchVendorBuyerRequests } from "@/services/vendorBuyerRequests";
 import { vendorRequestOutcome } from "@/lib/vendorRequestOutcome";
+import { useUserStore } from "@/store/userStore";
+import { sharedWsClient, type HubWsClientMessage } from "@/lib/wsClient";
 
-/** Refetch cadence for the nav badge. A buyer request's whole window is 48h
- *  and the vendor also gets a push and an SMS, so a minute of lag on a
- *  number in the nav is nothing — this just keeps an open dashboard tab from
- *  showing a stale count all afternoon. */
+/** Refetch fallback cadence when WebSocket is disconnected. */
 const REFRESH_MS = 60_000;
 
 /**
  * How many buyer requests are waiting on this vendor — matched to them,
  * still open, and neither accepted nor declined yet. Drives the count bubble
- * on the "Buyer Requests" nav item (Sidebar + BottomNav, 2026-09-24).
+ * on the "Buyer Requests" nav item (Sidebar + BottomNav).
  *
- * Same queryKey and fetch as the Buyer Requests page and the Products page's
- * OpportunitiesBanner, so all three share one cache entry: the detail page's
- * accept/decline already invalidates ["vendor-buyer-requests"], which is
- * what makes the badge drop the moment the vendor answers. Since 2026-09-24
- * the list also carries the vendor's answered history, so "pending" is read
- * through vendorRequestOutcome (open AND unanswered), which also covers a
- * lapsed request the backend's hourly sweep hasn't flipped yet.
+ * Connected to the shared WebSocket for instant detection (`NEW_BUYER_REQUESTS`,
+ * `BUYER_REQUEST_DECIDED`) and automatically updates the shared React Query cache.
  */
 export function usePendingBuyerRequests(): number {
+  const queryClient = useQueryClient();
+  const userId = useUserStore((s) => s.user?.id);
+  const [wsConnected, setWsConnected] = useState(
+    () => sharedWsClient.getStatus().isConnected,
+  );
+
+  useEffect(() => {
+    const unsubStatus = sharedWsClient.subscribeStatus((connected) => {
+      setWsConnected(connected);
+    });
+
+    if (userId) {
+      sharedWsClient.registerUserSubscription({
+        userId,
+        role: "vendor",
+      });
+    }
+
+    const unsubMsg = sharedWsClient.subscribe((msg: HubWsClientMessage) => {
+      if (msg.type === "NEW_BUYER_REQUESTS") {
+        if (Array.isArray(msg.requests)) {
+          queryClient.setQueryData(queryKeys.vendorBuyerRequests.list, {
+            requests: msg.requests,
+          });
+        } else {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.vendorBuyerRequests.list,
+          });
+        }
+      } else if (
+        msg.type === "NEW_BUYER_REQUEST" ||
+        msg.type === "BUYER_REQUEST_DECIDED"
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.vendorBuyerRequests.list,
+        });
+      }
+    });
+
+    return () => {
+      unsubStatus();
+      unsubMsg();
+    };
+  }, [userId, queryClient]);
+
   const { data } = useQuery({
     queryKey: queryKeys.vendorBuyerRequests.list,
     queryFn: fetchVendorBuyerRequests,
@@ -35,8 +75,23 @@ export function usePendingBuyerRequests(): number {
       return requests.filter((r) => vendorRequestOutcome(r, now) === "new")
         .length;
     },
-    refetchInterval: REFRESH_MS,
+    refetchInterval: wsConnected ? false : REFRESH_MS,
   });
+
+  // Sync known request IDs with WebSocket server when cache populates
+  const listData = queryClient.getQueryData<{ requests: { id: string }[] }>(
+    queryKeys.vendorBuyerRequests.list,
+  );
+  useEffect(() => {
+    if (userId && listData?.requests) {
+      sharedWsClient.registerUserSubscription({
+        userId,
+        role: "vendor",
+        knownRequestIds: listData.requests.map((r) => r.id),
+      });
+    }
+  }, [userId, listData]);
+
   return data ?? 0;
 }
 

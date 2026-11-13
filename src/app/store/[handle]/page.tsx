@@ -181,11 +181,14 @@ export default async function PublicStorePage({
   const currentUserId = await getOptionalUserId();
   const isOwn = currentUserId != null && currentUserId === store.vendorId;
 
-  const whatsappHref = buildChatLink({
-    vendorId: store.vendorId,
-    source: "browse",
-    message: `Hi ${store.name}! I found your store on Velte.`,
-  });
+  const isEnterprise = isEnterpriseVendor(store);
+  const whatsappHref = isEnterprise
+    ? buildChatLink({
+        vendorId: store.vendorId,
+        source: "browse",
+        message: `Hi ${store.name}! I found your store on Velte.`,
+      })
+    : null;
 
   const goods = store.products.filter((p) => p.kind === "product");
   const services = store.products.filter((p) => p.kind === "service");
@@ -231,6 +234,7 @@ export default async function PublicStorePage({
           vendorId={store.vendorId}
           defaultTab={defaultTab}
           isOwn={isOwn}
+          isEnterprise={isEnterprise}
           sidebar={
             <IntroCard
               store={store}

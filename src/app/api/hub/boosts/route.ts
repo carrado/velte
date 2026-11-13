@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { backendData } from "@/lib/server/backend";
 import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
+import { broadcastHubEvent } from "@/server/hubWsServer";
 
 export async function GET() {
   const vendorAuth = await getOptionalVendorAuth();
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
       body: { productId: body?.productId, days: body?.days },
       cookie: vendorAuth.cookie,
     });
+    broadcastHubEvent({ type: "HUB_DATA_CHANGED", scope: "boosts" });
     return NextResponse.json(data);
   } catch (err) {
     return fail(err, "Couldn't sponsor that listing.");

@@ -163,6 +163,7 @@ export async function GET(request: Request) {
       const synthesizedItems: HubTimelineItem[] = missingBoosts.map(
         (boost) => ({
           id: `boost-${boost.id}`,
+          tier: homeData?.enterprise ? "enterprise" : "basic",
           vendorId: homeData?.store?.handle ?? "vendor",
           kind: "product" as const,
           at: boost.startsAt || new Date().toISOString(),

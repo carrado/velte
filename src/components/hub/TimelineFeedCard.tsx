@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { HubLink } from "@/components/hub/HubLink";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   CheckIcon,
@@ -12,6 +12,7 @@ import {
   MessageSquareIcon,
   ShoppingCartIcon,
   SparklesIcon,
+  StoreIcon,
   ZapIcon,
 } from "@/components/icons";
 import {
@@ -24,6 +25,8 @@ import { useCartStore } from "@/store/cartStore";
 import { buildChatLink } from "@/lib/chatLink";
 import { cn, formatNaira, isNewListing, timeAgo } from "@/lib/utils";
 import { isBoostedProduct, isSponsoredAdvert } from "@/lib/hubFeed";
+import { trackHubAdvert } from "@/lib/advertTracker";
+import { PosterPreviewLightbox } from "@/components/hub/ProtectedPosterPreview";
 import type { HubTimelineItem } from "@/types/hub";
 
 interface TimelineFeedCardProps {
@@ -56,9 +59,39 @@ export function TimelineFeedCard({
   const isBoosted = isLeader || isBoostedProduct(item);
   const isAdvert = !isBoosted && isSponsoredAdvert(item);
   const isOwn = Boolean(viewerId) && item.vendorId === viewerId;
+  const advertId = isAdvert ? item.advertId || item.id : null;
+  const storeHref = item.storeHandle ? `/store/${item.storeHandle}` : null;
+
+  const cardRef = useRef<HTMLElement>(null);
+  const trackedViewRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAdvert || !advertId || trackedViewRef.current) return;
+    const node = cardRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      trackHubAdvert(advertId, "view");
+      trackedViewRef.current = true;
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !trackedViewRef.current) {
+          trackedViewRef.current = true;
+          trackHubAdvert(advertId, "view");
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isAdvert, advertId]);
 
   const [addingToCart, setAddingToCart] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const isLongDescription = Boolean(
     item.body && (item.body.length > 120 || item.body.includes("\n")),
   );
@@ -90,68 +123,109 @@ export function TimelineFeedCard({
     setAddingToCart(false);
   };
 
-  const chatHref =
-    !isOwn && item.vendorId
-      ? buildChatLink({
-          vendorId: item.vendorId,
-          productId: item.listing?.productId,
-          source: "browse",
-          message:
-            item.listing?.kind === "service"
-              ? `Hi ${storeName}! I'm interested in your "${item.title}" service. I found you on Velte Hub.`
-              : `Hi ${storeName}! Is "${item.title}" still available? I found you on Velte Hub.`,
-        })
-      : null;
+  const canMessage = !isOwn && Boolean(item.vendorId) && isEnterprise;
+  const chatHref = canMessage
+    ? buildChatLink({
+        vendorId: item.vendorId,
+        productId: item.listing?.productId,
+        source: "browse",
+        message:
+          item.listing?.kind === "service"
+            ? `Hi ${storeName}! I'm interested in your "${item.title}" service. I found you on Velte Hub.`
+            : `Hi ${storeName}! Is "${item.title}" still available? I found you on Velte Hub.`,
+      })
+    : null;
 
   return (
-    <article className="relative rounded-2xl border border-gray-200 dark:border-white/10 bg-surface transition-all duration-200 overflow-hidden shadow-xs hover:border-gray-300 dark:hover:border-white/20">
+    <article
+      ref={cardRef}
+      className="relative rounded-2xl border border-gray-200 dark:border-white/10 bg-surface transition-all duration-200 overflow-hidden shadow-xs hover:border-gray-300 dark:hover:border-white/20"
+    >
       {/* ── Top Header: Vendor Identity & Classification Badge ── */}
       <div className="p-4 sm:p-5 pb-3 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="relative flex shrink-0 items-center justify-center">
-            <div className="h-10 w-10 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-xs overflow-hidden ring-2 ring-surface">
-              {item.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.avatar}
-                  alt={storeName}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span>{storeName.charAt(0).toUpperCase()}</span>
-              )}
+        {storeHref ? (
+          <HubLink
+            href={storeHref}
+            onClick={() => {
+              if (isAdvert && advertId) trackHubAdvert(advertId, "click");
+            }}
+            className="flex items-center gap-3 min-w-0 group hover:opacity-90 transition-opacity"
+          >
+            <div className="relative flex shrink-0 items-center justify-center">
+              <div className="h-10 w-10 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-xs overflow-hidden ring-2 ring-surface">
+                {item.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.avatar}
+                    alt={storeName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span>{storeName.charAt(0).toUpperCase()}</span>
+                )}
+              </div>
+              {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
             </div>
-            {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
-          </div>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-bold text-sm text-ink truncate">
-                {storeName}
-              </span>
-              {isEnterprise && <EnterpriseBadge size="sm" />}
-              {item.verified && (
-                <span
-                  title="Verified Vendor"
-                  className="inline-flex shrink-0 items-center"
-                >
-                  <CheckIcon size={13} className="text-orange-500 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-sm text-ink truncate group-hover:text-orange-600 transition-colors">
+                  {storeName}
                 </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-ink/60 mt-0.5">
-              <span>{timeAgo(item.at, now)}</span>
-              {item.place && (
-                <>
-                  <span>·</span>
-                  <span className="truncate max-w-[120px] sm:max-w-[180px]">
-                    {item.place}
+                {isEnterprise && <EnterpriseBadge size="sm" />}
+                {item.verified && (
+                  <span
+                    title="Verified Vendor"
+                    className="inline-flex shrink-0 items-center"
+                  >
+                    <CheckIcon size={13} className="text-orange-500 shrink-0" />
                   </span>
-                </>
-              )}
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-ink/60 mt-0.5">
+                <span>{timeAgo(item.at, now)}</span>
+              </div>
+            </div>
+          </HubLink>
+        ) : (
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative flex shrink-0 items-center justify-center">
+              <div className="h-10 w-10 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-xs overflow-hidden ring-2 ring-surface">
+                {item.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.avatar}
+                    alt={storeName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span>{storeName.charAt(0).toUpperCase()}</span>
+                )}
+              </div>
+              {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-sm text-ink truncate">
+                  {storeName}
+                </span>
+                {isEnterprise && <EnterpriseBadge size="sm" />}
+                {item.verified && (
+                  <span
+                    title="Verified Vendor"
+                    className="inline-flex shrink-0 items-center"
+                  >
+                    <CheckIcon size={13} className="text-orange-500 shrink-0" />
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-ink/60 mt-0.5">
+                <span>{timeAgo(item.at, now)}</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ── Badge: Sponsored Ad for adverts, Sponsored for boosted listings & sponsored items, or New ── */}
         <div className="shrink-0">
@@ -161,9 +235,9 @@ export function TimelineFeedCard({
               <span>Sponsored Ad</span>
             </span>
           ) : isBoosted || item.sponsored ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-2xs">
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 dark:bg-sky-900/40 px-2.5 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">
               <ZapIcon size={12} className="shrink-0 fill-current" />
-              <span>Sponsored</span>
+              <span>Boosted</span>
             </span>
           ) : item.kind === "product" && isNewListing(item.at, now) ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 dark:bg-sky-900/40 px-2.5 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
@@ -175,9 +249,34 @@ export function TimelineFeedCard({
 
       {/* ── Post Content / Title & Description ── */}
       <div className="px-4 sm:px-5 pb-3">
-        <h4 className="text-base font-bold text-ink leading-snug">
-          {item.title}
-        </h4>
+        {item.listing ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (!isOwn) onOpenListing?.(item);
+            }}
+            className={cn(
+              "text-left text-base font-bold text-ink leading-snug transition-colors block",
+              !isOwn && "hover:text-orange-600 cursor-pointer",
+            )}
+          >
+            {item.title}
+          </button>
+        ) : isAdvert && storeHref ? (
+          <HubLink
+            href={storeHref}
+            onClick={() => {
+              if (advertId) trackHubAdvert(advertId, "click");
+            }}
+            className="block text-base font-bold text-ink leading-snug hover:text-orange-600 hover:underline transition-colors cursor-pointer"
+          >
+            {item.title}
+          </HubLink>
+        ) : (
+          <h4 className="text-base font-bold text-ink leading-snug">
+            {item.title}
+          </h4>
+        )}
         {item.body && item.body !== item.title && (
           <div className="mt-1.5">
             <p
@@ -220,7 +319,14 @@ export function TimelineFeedCard({
             images={gallery}
             altTitle={item.title}
             aspectRatio="video"
-            onImageClick={() => item.listing && onOpenListing?.(item)}
+            onImageClick={(index) => {
+              if (isAdvert) {
+                const img = gallery[index] || gallery[0];
+                if (img) setLightboxSrc(img);
+              } else if (item.listing && !isOwn) {
+                onOpenListing?.(item);
+              }
+            }}
           />
           {(isBoosted || item.sponsored) && !isAdvert && (
             <div className="absolute top-2 left-7 z-10 pointer-events-none">
@@ -229,7 +335,7 @@ export function TimelineFeedCard({
                   size={11}
                   className="shrink-0 fill-orange-400 text-orange-400"
                 />
-                <span>Sponsored</span>
+                <span>Boosted</span>
               </span>
             </div>
           )}
@@ -246,8 +352,8 @@ export function TimelineFeedCard({
 
       {/* ── Bottom Interactive Action Bar (Facebook / X style) ── */}
       <div className="px-4 sm:px-5 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 bg-gray-50/50 dark:bg-white/2">
-        <div className="flex items-center gap-2">
-          {item.listing && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {item.listing && !isOwn && (
             <button
               type="button"
               onClick={handleAddToCart}
@@ -259,9 +365,28 @@ export function TimelineFeedCard({
             </button>
           )}
 
+          {/* Advert: Visit Store CTA button */}
+          {isAdvert && storeHref && (
+            <HubLink
+              href={storeHref}
+              onClick={() => {
+                if (advertId) trackHubAdvert(advertId, "click");
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-xs"
+            >
+              <StoreIcon size={14} />
+              <span>{isOwn ? "Visit Store (Preview)" : "Visit Store"}</span>
+            </HubLink>
+          )}
+
           {chatHref && (
             <HubLink
               href={chatHref}
+              onClick={() => {
+                if (isAdvert && advertId) {
+                  trackHubAdvert(advertId, "click");
+                }
+              }}
               className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-95 text-gray-700 dark:text-ink px-3 py-1.5 text-xs font-semibold transition-all"
             >
               <MessageSquareIcon size={14} />
@@ -269,7 +394,7 @@ export function TimelineFeedCard({
             </HubLink>
           )}
 
-          {item.listing && (
+          {item.listing && !isOwn && (
             <button
               type="button"
               onClick={() => onOpenListing?.(item)}
@@ -280,7 +405,25 @@ export function TimelineFeedCard({
             </button>
           )}
         </div>
+
+        {isOwn && isAdvert && (
+          <span className="text-[11px] font-medium text-gray-500 dark:text-ink/60 italic hidden sm:inline">
+            Your campaign
+          </span>
+        )}
+        {isOwn && item.listing && (
+          <span className="text-[11px] font-medium text-gray-500 dark:text-ink/60 italic hidden sm:inline">
+            Your listing
+          </span>
+        )}
       </div>
+
+      {lightboxSrc && (
+        <PosterPreviewLightbox
+          src={lightboxSrc}
+          onClose={() => setLightboxSrc(null)}
+        />
+      )}
     </article>
   );
 }

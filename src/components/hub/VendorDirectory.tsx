@@ -523,17 +523,33 @@ function VendorDirectory({ data }: { data: HubVendorsDirectory }) {
         {lock && (
           <HubLockedModal
             variant="upgrade"
+            badge="Premium Exclusive"
             title={
               lock === "favourite"
-                ? "Favourites are Premium"
-                : "Contact is Premium"
+                ? "Saving Favourites is on Premium"
+                : "Direct Vendor Contact is on Premium"
             }
             body={
               lock === "favourite"
-                ? "Premium saves a vendor to your Hub."
-                : "Premium opens the vendor's own channel from a Hub card. The store page stays open either way."
+                ? "Save your go-to vendors to your shortlist for fast re-orders and updates. Upgrade to unlock vendor favourites."
+                : "Access verified vendor contact details, phone, and direct WhatsApp handoff. Upgrade to connect directly."
             }
-            ctaLabel="See Premium"
+            benefits={
+              lock === "favourite"
+                ? [
+                    "Save unlimited go-to vendors to your shortlist",
+                    "Instant notifications when saved vendors post deals or broadcasts",
+                    "Quick re-orders and price drop tracking",
+                    "Sync saved items across web and mobile",
+                  ]
+                : [
+                    "Access verified merchant phone numbers and direct WhatsApp links",
+                    "Fast-track response from top-rated sellers",
+                    "Verified buyer badge on all inquiries",
+                    "Zero lead booking fees",
+                  ]
+            }
+            ctaLabel="Upgrade to Premium"
             ctaHref="/pricing?for=buyers"
             onClose={() => setLock(null)}
           />

@@ -45,13 +45,11 @@ export interface User {
    * only accepts the false transition). */
   onboarding?: boolean;
   tier?: string;
-  plan?: string;
-  isEnterprise?: boolean;
-  enterprise?: boolean;
   subscription?: {
     plan?: string;
     status?: string;
     interval?: string;
     currentPeriodEnd?: string | Date;
+    trialEndsAt?: string | Date | null;
   } | null;
 }

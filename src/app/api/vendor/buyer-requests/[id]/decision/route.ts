@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 
 import { requireAuth, fail, jsonError } from "@/lib/server/guards";
 import { backendData } from "@/lib/server/backend";
+import {
+  broadcastToUser,
+  triggerImmediateUserSync,
+} from "@/server/hubWsServer";
 import type { BuyerRequestDecision } from "@/types/buyerRequest";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -52,6 +56,15 @@ export async function POST(req: Request, { params }: Ctx) {
     // Accepting no longer unlocks anything to hand back: it records the
     // vendor's price and puts it in front of the buyer, who decides whether
     // to message them. The lead is charged at that click, not this one.
+    broadcastToUser(gate.userId, {
+      type: "BUYER_REQUEST_DECIDED",
+      requestId: id,
+      decision: data.decision,
+    });
+    void triggerImmediateUserSync({
+      checkNotifications: true,
+      checkRequests: true,
+    });
     return NextResponse.json({ decision: data.decision }, { status: 201 });
   } catch (err) {
     return fail(err, "Failed to record your decision.");

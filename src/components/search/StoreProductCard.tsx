@@ -18,10 +18,12 @@ export function StoreProductCard({
   match,
   storeName,
   vendorId,
+  isEnterprise = false,
 }: {
   match: StoreProductItem;
   storeName: string;
   vendorId: string;
+  isEnterprise?: boolean;
 }) {
   const symbol = match.currency === "USD" ? "$" : "₦";
   const isRange = match.priceMax != null && match.priceMax > match.price;
@@ -30,12 +32,14 @@ export function StoreProductCard({
   const currentUserId = useUserStore((s) => s.user?.id);
   const isOwn = currentUserId != null && currentUserId === vendorId;
 
-  const chatHref = buildChatLink({
-    vendorId,
-    productId: match.mainImageUrl ? match.productId : undefined,
-    source: "search",
-    message: `Hi ${storeName}! I'm interested in your "${match.name}" — I found you on Velte.`,
-  });
+  const chatHref = isEnterprise
+    ? buildChatLink({
+        vendorId,
+        productId: match.mainImageUrl ? match.productId : undefined,
+        source: "search",
+        message: `Hi ${storeName}! I'm interested in your "${match.name}" — I found you on Velte.`,
+      })
+    : null;
 
   return (
     <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">

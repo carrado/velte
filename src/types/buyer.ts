@@ -47,8 +47,11 @@ export interface Buyer {
    *  this". */
   linkedVendorId: string | null;
   tier?: string;
-  plan?: string;
-  isPremium?: boolean;
-  premium?: boolean;
-  subscription?: unknown;
+  subscription?: {
+    plan?: string;
+    status?: string;
+    interval?: string;
+    currentPeriodEnd?: string | Date;
+    trialEndsAt?: string | Date | null;
+  } | null;
 }

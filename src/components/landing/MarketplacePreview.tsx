@@ -12,6 +12,7 @@ import { AddToCartButton } from "@/components/cart/AddToCartButton";
 import { ListingDetailModal } from "@/components/ListingDetailModal";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { buildChatLink } from "@/lib/chatLink";
+import { isEnterpriseVendor } from "@/lib/enterprise";
 import { MARKETPLACE_SCROLL_FLAG } from "@/lib/scrollToMarketplace";
 import type { MarketplacePreviewItem } from "@/types/store";
 import {
@@ -68,14 +69,17 @@ export function MarketplaceCard({
   const isService = item.kind === "service";
   const KindIcon = isService ? WrenchIcon : PackageIcon;
 
-  const chatHref = buildChatLink({
-    vendorId: item.vendorId,
-    productId: item.mainImageUrl ? item.id : undefined,
-    source: "browse",
-    message: isService
-      ? `Hi ${item.storeName}! I'm interested in your "${item.name}" service. I found you on Velte.`
-      : `Hi ${item.storeName}! Is "${item.name}" still available? I found you on Velte.`,
-  });
+  const isEnterprise = isEnterpriseVendor(item);
+  const chatHref = isEnterprise
+    ? buildChatLink({
+        vendorId: item.vendorId,
+        productId: item.mainImageUrl ? item.id : undefined,
+        source: "browse",
+        message: isService
+          ? `Hi ${item.storeName}! I'm interested in your "${item.name}" service. I found you on Velte.`
+          : `Hi ${item.storeName}! Is "${item.name}" still available? I found you on Velte.`,
+      })
+    : null;
 
   const images = resolveGalleryImages(item.mainImageUrl, item.thumbnailUrls);
   const [detailOpen, setDetailOpen] = useState(false);

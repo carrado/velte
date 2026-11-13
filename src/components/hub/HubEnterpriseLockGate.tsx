@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeftIcon, CrownIcon, LockIcon } from "@/components/icons";
+import { CrownIcon, LockIcon } from "@/components/icons";
 
 interface HubEnterpriseLockGateProps {
   featureName: string;
@@ -22,18 +22,6 @@ export function HubEnterpriseLockGate({
   return (
     <div className="min-h-screen bg-canvas pb-20 pt-6 text-ink">
       <div className="mx-auto max-w-4xl px-4 sm:px-6">
-        {/* Navigation / Breadcrumb */}
-        <div className="mb-8">
-          <Link
-            href="/hub"
-            prefetch={true}
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-ink dark:text-ink/60 dark:hover:text-ink transition-colors"
-          >
-            <ArrowLeftIcon size={16} />
-            <span>Back to Hub</span>
-          </Link>
-        </div>
-
         {/* Lock Hero Card */}
         <div className="relative overflow-hidden rounded-3xl border border-amber-500/20 bg-surface p-8 sm:p-12 shadow-xl">
           {/* Background Ambient Glow */}
@@ -92,13 +80,6 @@ export function HubEnterpriseLockGate({
               >
                 <CrownIcon size={18} weight="fill" />
                 <span>Upgrade to Enterprise</span>
-              </Link>
-              <Link
-                href="/hub"
-                prefetch={true}
-                className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-surface px-6 py-3.5 text-sm font-medium text-ink transition hover:bg-gray-50 dark:hover:bg-white/5"
-              >
-                Back to Hub
               </Link>
             </div>
           </div>

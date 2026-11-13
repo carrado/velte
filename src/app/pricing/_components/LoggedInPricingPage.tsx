@@ -31,6 +31,7 @@ import {
   SUBSCRIPTION_PRICES_NGN,
   type SubscriptionInterval,
 } from "@/lib/subscriptions";
+import { isEnterpriseVendor, isPremiumBuyer } from "@/lib/enterprise";
 import { formatNaira } from "@/lib/utils";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
@@ -85,77 +86,9 @@ export default function LoggedInPricingPage({
   // A vendor is automatically a premium buyer already
   const isVendorAccount = Boolean(vendor || buyer?.linkedVendorId);
 
-  const isBuyerPremium =
-    isVendorAccount ||
-    Boolean(
-      (
-        buyer as unknown as {
-          tier?: string;
-          plan?: string;
-          isPremium?: boolean;
-          premium?: boolean;
-        }
-      )?.tier === "buyer_premium" ||
-      (
-        buyer as unknown as {
-          tier?: string;
-          plan?: string;
-          isPremium?: boolean;
-          premium?: boolean;
-        }
-      )?.plan === "buyer_premium" ||
-      (
-        buyer as unknown as {
-          tier?: string;
-          plan?: string;
-          isPremium?: boolean;
-          premium?: boolean;
-        }
-      )?.isPremium ||
-      (
-        buyer as unknown as {
-          tier?: string;
-          plan?: string;
-          isPremium?: boolean;
-          premium?: boolean;
-        }
-      )?.premium,
-    );
+  const isBuyerPremium = isVendorAccount || isPremiumBuyer(buyer);
 
-  const isVendorEnterprise = Boolean(
-    (
-      vendor as unknown as {
-        tier?: string;
-        plan?: string;
-        isEnterprise?: boolean;
-        enterprise?: boolean;
-      }
-    )?.tier === "vendor_enterprise" ||
-    (
-      vendor as unknown as {
-        tier?: string;
-        plan?: string;
-        isEnterprise?: boolean;
-        enterprise?: boolean;
-      }
-    )?.plan === "vendor_enterprise" ||
-    (
-      vendor as unknown as {
-        tier?: string;
-        plan?: string;
-        isEnterprise?: boolean;
-        enterprise?: boolean;
-      }
-    )?.isEnterprise ||
-    (
-      vendor as unknown as {
-        tier?: string;
-        plan?: string;
-        isEnterprise?: boolean;
-        enterprise?: boolean;
-      }
-    )?.enterprise,
-  );
+  const isVendorEnterprise = isEnterpriseVendor(vendor);
 
   const triggerActivationFlow = async (
     plan: "buyer_premium" | "vendor_enterprise",

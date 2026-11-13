@@ -14,7 +14,7 @@ export default function StoreNavbar() {
   const homeHref = vendor ? "/wallet" : buyer ? "/chat" : "/";
 
   return (
-    <header className="bg-surface/85 dark:bg-gray-950/85 backdrop-blur-xl border-b border-gray-200/80 dark:border-gray-800/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] sticky top-0 z-40">
+    <header className="bg-surface/85 backdrop-blur-xl border-b border-gray-200/80 dark:border-white/10 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.4)] sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         <Link
           href={homeHref}

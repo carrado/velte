@@ -22,10 +22,12 @@ import { HubLink } from "@/components/hub/HubLink";
 import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
 import { HubSidebarFooter } from "@/components/hub/HubSidebarFooter";
 import { ApiError } from "@/lib/api-client";
+import { isEnterpriseVendor } from "@/lib/enterprise";
 import { queryKeys } from "@/lib/query-keys";
 import { useUserStore } from "@/store/userStore";
 import { SECTOR_BY_VALUE } from "@/lib/sectors";
 import { cn, formatNaira } from "@/lib/utils";
+import AnchoredPopover from "@/components/AnchoredPopover";
 import {
   cancelHubBoost,
   createHubBoost,
@@ -45,11 +47,10 @@ const DURATION_COPY: Record<number, { label: string; hint: string }> = {
 
 function listingPrice(product: CategoryProduct): string | null {
   if (product.quoteOnRequest) return "Contact for quote";
-  const format = (amount: number) => `₦${amount.toLocaleString("en-NG")}`;
   if (product.priceMax && product.priceMax > product.price) {
-    return `${format(product.price)} – ${format(product.priceMax)}`;
+    return `${formatNaira(product.price)} – ${formatNaira(product.priceMax)}`;
   }
-  if (product.price > 0) return format(product.price);
+  if (product.price > 0) return formatNaira(product.price);
   return null;
 }
 
@@ -81,6 +82,41 @@ function formatBoostDate(iso: string) {
   });
 }
 
+function BoostRowActions({ onStop }: { onStop: () => void }) {
+  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => setAnchorEl((prev) => (prev ? null : e.currentTarget))}
+        className="px-2 text-lg leading-none text-gray-400 hover:text-ink transition-colors cursor-pointer"
+        aria-label="Boost actions"
+      >
+        ···
+      </button>
+      <AnchoredPopover
+        open={Boolean(anchorEl)}
+        onClose={() => setAnchorEl(null)}
+        anchorEl={anchorEl}
+        align="right"
+        className="w-36 rounded-xl border border-gray-200 bg-surface py-1 shadow-lg z-50"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setAnchorEl(null);
+            onStop();
+          }}
+          className="block w-full px-3 py-2 text-left text-sm text-ink hover:bg-gray-50 cursor-pointer"
+        >
+          Stop boost
+        </button>
+      </AnchoredPopover>
+    </>
+  );
+}
+
 export function HubBoostPage({ userId }: { userId: string }) {
   const { navigate } = useNavigation();
   const queryClient = useQueryClient();
@@ -88,7 +124,6 @@ export function HubBoostPage({ userId }: { userId: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [days, setDays] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [menuId, setMenuId] = useState<string | null>(null);
 
   const contextQuery = useQuery({
     queryKey: queryKeys.hub.context,
@@ -157,7 +192,7 @@ export function HubBoostPage({ userId }: { userId: string }) {
   const storeHandle =
     vendorStore?.handle ?? user?.username ?? home?.store?.handle;
   const isVerified = Boolean(
-    vendorStore?.verified ?? user?.isEnterprise ?? home?.store?.verified,
+    vendorStore?.verified || isEnterpriseVendor(user) || home?.store?.verified,
   );
 
   const ownFeatured =
@@ -317,7 +352,7 @@ export function HubBoostPage({ userId }: { userId: string }) {
                             </span>
                           )}
                           {live && (
-                            <span className="absolute top-2 left-2 rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            <span className="absolute top-2 left-2 rounded-full bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:text-sky-300">
                               Boosted
                             </span>
                           )}
@@ -519,8 +554,7 @@ export function HubBoostPage({ userId }: { userId: string }) {
                                 {row.productPrice != null &&
                                   row.productPrice > 0 && (
                                     <span className="block text-xs text-gray-500">
-                                      ₦
-                                      {row.productPrice.toLocaleString("en-NG")}
+                                      {formatNaira(row.productPrice)}
                                     </span>
                                   )}
                               </span>
@@ -555,33 +589,11 @@ export function HubBoostPage({ userId }: { userId: string }) {
                           <td className="py-3 text-gray-600">
                             {formatReach(row.reachMin, row.reachMax)}
                           </td>
-                          <td className="relative py-3">
+                          <td className="py-3">
                             {row.status === "active" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setMenuId((current) =>
-                                      current === row.id ? null : row.id,
-                                    )
-                                  }
-                                  className="px-2 text-lg leading-none text-gray-400"
-                                  aria-label="Boost actions"
-                                >
-                                  ···
-                                </button>
-                                {menuId === row.id && (
-                                  <div className="absolute right-0 z-10 mt-1 w-36 rounded-xl border border-gray-200 bg-surface py-1 shadow-lg">
-                                    <button
-                                      type="button"
-                                      onClick={() => void stopBoost(row.id)}
-                                      className="block w-full px-3 py-2 text-left text-sm text-ink hover:bg-gray-50"
-                                    >
-                                      Stop boost
-                                    </button>
-                                  </div>
-                                )}
-                              </>
+                              <BoostRowActions
+                                onStop={() => void stopBoost(row.id)}
+                              />
                             ) : (
                               <span className="text-gray-300">—</span>
                             )}
@@ -609,7 +621,7 @@ export function HubBoostPage({ userId }: { userId: string }) {
                         className="h-full w-full object-cover"
                       />
                     ) : null}
-                    <span className="absolute top-2 right-2 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                    <span className="absolute top-2 right-2 rounded-full bg-sky-100 dark:bg-sky-900/40 px-2 py-0.5 text-[10px] font-bold text-sky-700 dark:text-sky-300">
                       Boosted
                     </span>
                   </div>
@@ -733,4 +745,11 @@ export function HubBoostPage({ userId }: { userId: string }) {
       </div>
     </div>
   );
+}
+function useRef<T>(arg0: null) {
+  throw new Error("Function not implemented.");
+}
+
+function setMenuId(arg0: null) {
+  throw new Error("Function not implemented.");
 }

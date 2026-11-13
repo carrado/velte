@@ -72,6 +72,7 @@ import type {
 } from "@/types/hub";
 import TabBar from "@/components/TabBar";
 import { HubLockedModal } from "./HubLockedModal";
+import { PosterPreviewLightbox } from "@/components/hub/ProtectedPosterPreview";
 import { useUserStore } from "@/store/userStore";
 import { useBuyerStore } from "@/store/buyerStore";
 import {
@@ -83,8 +84,10 @@ import {
   subscribeToHubNewListings,
   syncHubKnownListingIds,
 } from "@/lib/hubSync";
+import { trackHubAdvert } from "@/lib/advertTracker";
 import { useHubWebSocket } from "@/hooks/useHubWebSocket";
 import { NewPostsIndicator } from "./NewPostsIndicator";
+import { toast } from "sonner";
 
 type ContactTarget = {
   vendorId: string;
@@ -96,6 +99,9 @@ type ContactTarget = {
   sectors: string[];
   place: string | null;
   verified: boolean;
+  tier?: string;
+  isEnterprise?: boolean;
+  enterprise?: boolean;
   ratingAvg: number | null;
   ratingCount: number;
   whatsapp: string | null;
@@ -274,6 +280,9 @@ function contactFromFeatured(vendor: HubFeaturedVendor): ContactTarget {
     sectors: vendor.sectors,
     place: vendor.place,
     verified: vendor.verified,
+    tier: vendor.tier,
+    isEnterprise: isEnterpriseVendor(vendor),
+    enterprise: isEnterpriseVendor(vendor),
     ratingAvg: vendor.ratingAvg,
     ratingCount: vendor.ratingCount,
     whatsapp: vendor.whatsapp,
@@ -308,6 +317,9 @@ function contactFromItem(item: HubTimelineItem): ContactTarget {
     sectors: item.sectors,
     place: item.place,
     verified: item.verified,
+    tier: item.tier,
+    isEnterprise: isEnterpriseVendor(item),
+    enterprise: isEnterpriseVendor(item),
     ratingAvg: item.ratingAvg,
     ratingCount: item.ratingCount,
     whatsapp: item.whatsapp,
@@ -484,6 +496,9 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   );
   const [sector, setSector] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<MobilePane>("listings");
+  const [advertLightboxSrc, setAdvertLightboxSrc] = useState<string | null>(
+    null,
+  );
   const [contact, setContact] = useState<ContactTarget | null>(null);
   const [lock, setLock] = useState<
     | "contact"
@@ -565,10 +580,36 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
     [displayedTimeline],
   );
 
-  // Real-time WebSocket connection: checks for new listings and ticks clock in real time
+  const handleListingUpdated = useCallback(
+    (productId: string, patch: Partial<HubTimelineItem>) => {
+      setDisplayedTimeline((prev) =>
+        prev.map((item) => {
+          const itemProdId = item.listing?.productId || item.id;
+          if (item.id === productId || itemProdId === productId) {
+            return { ...item, ...patch };
+          }
+          return item;
+        }),
+      );
+    },
+    [],
+  );
+
+  const handleListingRemoved = useCallback((productId: string) => {
+    setDisplayedTimeline((prev) =>
+      prev.filter((item) => {
+        const itemProdId = item.listing?.productId || item.id;
+        return item.id !== productId && itemProdId !== productId;
+      }),
+    );
+  }, []);
+
+  // Real-time WebSocket connection: receives new listings, in-place UI edits, and clock ticks
   const { now } = useHubWebSocket({
     knownListingIds,
     onNewListings: handleIncomingNewListings,
+    onListingUpdated: handleListingUpdated,
+    onListingRemoved: handleListingRemoved,
   });
 
   // Auto pagination state
@@ -727,6 +768,10 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
     advertVendors.find((vendor) => vendor.vendorId === placeVendorId) ?? null;
 
   const openContact = (target: ContactTarget) => {
+    if (!isEnterpriseVendor(target)) {
+      toast.error("Messaging is only available for Enterprise vendors.");
+      return;
+    }
     if (!home.premium) {
       setLock("contact");
       return;
@@ -753,6 +798,10 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
 
   const askContact = () => {
     if (!contact) return;
+    if (!isEnterpriseVendor(contact)) {
+      toast.error("Messaging is only available for Enterprise vendors.");
+      return;
+    }
     if (!home.premium) {
       setLock("contact");
       return;
@@ -880,6 +929,7 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
         trusted: true,
         sentiment: null,
         reviewableOrderId: null,
+        tier: undefined,
       };
       setDisplayedTimeline((prev) => [newAdvertItem, ...prev]);
     } finally {
@@ -1124,6 +1174,7 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
                               ? () => boostAdvert(item.advertId as string)
                               : undefined
                           }
+                          onOpenAdvertImage={setAdvertLightboxSrc}
                         />
                       );
                       if (!fadeLast) {
@@ -1286,12 +1337,6 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
                   </p>
                 )}
                 <Stars avg={contact.ratingAvg} count={contact.ratingCount} />
-                {contact.place && (
-                  <p className="mt-1 flex items-center gap-1 text-xs text-gray-500">
-                    <MapPinIcon size={12} />
-                    {contact.place}
-                  </p>
-                )}
               </div>
             </div>
             {contact.imageUrl && (
@@ -1327,13 +1372,17 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
               </p>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={askContact}
-                className="inline-flex flex-1 items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
-              >
-                {home.premium ? "Message on WhatsApp" : "Contact this business"}
-              </button>
+              {isEnterpriseVendor(contact) && (
+                <button
+                  type="button"
+                  onClick={askContact}
+                  className="inline-flex flex-1 items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
+                >
+                  {home.premium
+                    ? "Message on WhatsApp"
+                    : "Contact this business"}
+                </button>
+              )}
               {contact.handle && (
                 <Link
                   href={`/store/${contact.handle}`}
@@ -1671,43 +1720,80 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
         <HubLockedModal
           stacked={contact !== null}
           variant="upgrade"
+          badge="Premium Exclusive"
           title={
             lock === "visit"
-              ? "A visit check is on Premium"
+              ? "Storefront Visits are on Premium"
               : lock === "community"
-                ? "Community posts are on Premium"
+                ? "Buyer Community is on Premium"
                 : lock === "place"
-                  ? "Placing an advert is on Premium"
+                  ? "Place Advert is on Premium"
                   : lock === "boost"
-                    ? "Boosting is on Premium"
+                    ? "Listing Boost is on Premium"
                     : lock === "broadcast"
-                      ? "Messaging contacts is on Premium"
+                      ? "Broadcast is on Premium"
                       : lock === "sectors"
-                        ? "Choosing sectors is on Premium"
+                        ? "Sector Filtering is on Premium"
                         : lock === "favourite"
-                          ? "Favourites are on Premium"
-                          : "Contact is on Premium"
+                          ? "Saving Favourites is on Premium"
+                          : "Direct Vendor Contact is on Premium"
           }
           body={
             lock === "visit"
-              ? "Premium records whether you visited, saw the stock, and the address matched."
+              ? "Browse verified vendor storefronts directly from the Hub feed. Upgrade to unlock direct storefront visits."
               : lock === "community"
-                ? "Reading updates stays open. Posting is part of Premium."
+                ? "Join commerce discussions with fellow buyers and verified vendors. Upgrade to unlock community tools."
                 : lock === "place"
-                  ? "Premium places a labelled advert for a vendor, using a photo already on that store."
+                  ? "Place adverts to reach buyers across the platform. Upgrade to unlock advertising."
                   : lock === "boost"
-                    ? "Premium queues a boost. It is not marked sent, and it does not charge the vendor."
+                    ? "Boost your listings to appear at the top of the feed. Upgrade to unlock boosting."
                     : lock === "broadcast"
-                      ? "Premium sends a note to the Premium buyers you referred."
+                      ? "Broadcast your updates to active buyers online. Upgrade to unlock broadcasts."
                       : lock === "sectors"
-                        ? "Alerts cover every sector. Premium is what lets you pick."
+                        ? "Filter listings and adverts by industry sector. Upgrade to unlock all sectors."
                         : lock === "favourite"
-                          ? "Premium saves a vendor to your Hub."
-                          : "Premium opens the vendor's own channel from a Hub card. The store page stays open either way."
+                          ? "Bookmark vendors and listings to revisit later. Upgrade to save favourites."
+                          : "Reach vendors directly with verified phone and direct WhatsApp handoff."
           }
-          ctaLabel="See Premium"
+          benefits={
+            lock === "visit"
+              ? [
+                  "Browse verified merchant storefronts directly from feed",
+                  "Direct WhatsApp handoff with verified merchant contacts",
+                  "Exclusive discounts and wholesale pricing access",
+                  "Zero platform intermediary fees on orders",
+                ]
+              : lock === "community"
+                ? [
+                    "Connect directly with verified vendors & fellow buyers across Nigeria",
+                    "Access exclusive group deals and bulk procurement discounts",
+                    "Participate in buyer-vendor Q&A and trusted reviews",
+                    "Priority customer support and deal arbitration",
+                  ]
+                : lock === "favourite"
+                  ? [
+                      "Save unlimited go-to vendors and listings to your shortlist",
+                      "Instant notifications when saved vendors post deals or broadcasts",
+                      "Quick re-orders and price drop tracking",
+                      "Sync saved items across web and mobile",
+                    ]
+                  : [
+                      "Access verified merchant phone numbers and direct WhatsApp links",
+                      "Fast-track response from top-rated sellers",
+                      "Verified buyer badge on all inquiries",
+                      "Zero lead booking fees",
+                    ]
+          }
+          ctaLabel="Upgrade to Premium"
           ctaHref="/pricing?for=buyers"
           onClose={() => setLock(null)}
+        />
+      )}
+
+      {advertLightboxSrc && (
+        <PosterPreviewLightbox
+          src={advertLightboxSrc}
+          onClose={() => setAdvertLightboxSrc(null)}
         />
       )}
     </div>
@@ -2240,6 +2326,7 @@ function FeedCard({
   onReview,
   onFavourite,
   onBoost,
+  onOpenAdvertImage,
 }: {
   item: HubTimelineItem;
   now: number;
@@ -2252,6 +2339,7 @@ function FeedCard({
   onReview: () => void;
   onFavourite: () => void;
   onBoost?: () => void;
+  onOpenAdvertImage?: (src: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
@@ -2266,10 +2354,38 @@ function FeedCard({
   const extra = gallery.length > 1 ? extras.length - thumbs.length : 0;
   const isBoosted = isBoostedProduct(item);
   const isAdvert = !isBoosted && isSponsoredAdvert(item);
+  const advertId = isAdvert ? item.advertId || item.id : null;
+  const cardRef = useRef<HTMLElement>(null);
+  const trackedViewRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAdvert || !advertId || trackedViewRef.current) return;
+    const node = cardRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      trackHubAdvert(advertId, "view");
+      trackedViewRef.current = true;
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !trackedViewRef.current) {
+          trackedViewRef.current = true;
+          trackHubAdvert(advertId, "view");
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isAdvert, advertId]);
+
   const badge = isAdvert
     ? "Sponsored Ad"
     : isBoosted || item.sponsored
-      ? "Sponsored"
+      ? "Boosted"
       : item.kind === "product" && isNewListing(item.at, now)
         ? "New Listing"
         : item.kind === "product"
@@ -2277,6 +2393,7 @@ function FeedCard({
           : "Promotion";
   // Public product URL is always /{slug} — never /p/….
   const productHref = item.listing?.slug ? `/${item.listing.slug}` : null;
+  const storeHref = item.storeHandle ? `/store/${item.storeHandle}` : null;
 
   const runMenuAction = (action: () => void) => {
     setMenuOpen(false);
@@ -2292,22 +2409,32 @@ function FeedCard({
 
   return (
     <article
+      ref={cardRef}
       className={cn(
         "relative bg-surface border border-gray-200 rounded-none lg:rounded-2xl h-full",
         compact ? "p-2 lg:p-4" : "p-3 sm:p-4",
         // Laptop: title turns orange+underlined on card hover, but not while over CTAs.
-        productHref &&
+        (productHref || (isAdvert && storeHref)) &&
           "lg:[&:hover:not(:has([data-card-cta]:hover))_[data-card-title]]:text-orange-600 lg:[&:hover:not(:has([data-card-cta]:hover))_[data-card-title]]:underline lg:[&:hover:not(:has([data-card-cta]:hover))_[data-card-title]]:underline-offset-2",
       )}
     >
       {/* Whole card → product page (prefetch + progress bar); CTAs sit above via z-10. */}
-      {productHref && (
+      {productHref ? (
         <HubLink
           href={productHref}
           className="absolute inset-0 z-0 rounded-none lg:rounded-2xl"
           aria-label={`View ${item.title}`}
         />
-      )}
+      ) : isAdvert && storeHref ? (
+        <HubLink
+          href={storeHref}
+          onClick={() => {
+            if (advertId) trackHubAdvert(advertId, "click");
+          }}
+          className="absolute inset-0 z-0 rounded-none lg:rounded-2xl"
+          aria-label={`Visit ${item.storeName || "store"}`}
+        />
+      ) : null}
       <div
         className={cn(
           "relative flex h-full pointer-events-none",
@@ -2323,8 +2450,25 @@ function FeedCard({
           )}
         >
           {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={cover} alt="" className={coverClass} />
+            isAdvert ? (
+              <button
+                type="button"
+                data-card-cta
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onOpenAdvertImage?.(cover);
+                }}
+                className="relative block w-full pointer-events-auto cursor-pointer focus:outline-hidden group"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={cover} alt="" className={coverClass} />
+                <span className="sr-only">View advert image in full</span>
+              </button>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={cover} alt="" className={coverClass} />
+            )
           ) : (
             <div
               className={cn(
@@ -2338,9 +2482,11 @@ function FeedCard({
           <span
             className={cn(
               "absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md",
-              badge === "Sponsored" || badge === "Sponsored Ad"
+              badge === "Sponsored Ad"
                 ? "bg-orange-500 text-white"
-                : "bg-surface/95 text-ink",
+                : badge === "Boosted"
+                  ? "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300"
+                  : "bg-surface/95 text-ink",
             )}
           >
             {badge}
@@ -2396,12 +2542,6 @@ function FeedCard({
                 )}
               >
                 <Stars avg={item.ratingAvg} count={item.ratingCount} />
-                {item.place && (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
-                    <MapPinIcon size={11} />
-                    {item.place}
-                  </span>
-                )}
               </div>
             </div>
             <span
@@ -2419,7 +2559,7 @@ function FeedCard({
             className={cn(
               "font-bold leading-snug line-clamp-2",
               compact ? "mt-2 text-sm lg:mt-3 lg:text-base" : "mt-3 text-base",
-              productHref
+              productHref || (isAdvert && storeHref)
                 ? "text-orange-600 underline underline-offset-2 lg:text-ink lg:no-underline"
                 : "text-ink",
             )}
@@ -2535,19 +2675,26 @@ function FeedCard({
               compact ? "pt-2 lg:pt-3" : "pt-3",
             )}
           >
-            <button
-              type="button"
-              onClick={onContact}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 font-semibold text-orange-600 hover:bg-orange-100 transition-colors",
-                compact
-                  ? "flex-1 justify-center px-2 py-1.5 text-[11px] lg:flex-none lg:px-3.5 lg:py-2 lg:text-xs"
-                  : "px-3.5 py-2 text-xs",
-              )}
-            >
-              {!premium && <LockIcon size={12} />}
-              Contact
-            </button>
+            {isEnterpriseVendor(item) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isAdvert && advertId) {
+                    trackHubAdvert(advertId, "click");
+                  }
+                  onContact();
+                }}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 font-semibold text-orange-600 hover:bg-orange-100 transition-colors",
+                  compact
+                    ? "flex-1 justify-center px-2 py-1.5 text-[11px] lg:flex-none lg:px-3.5 lg:py-2 lg:text-xs"
+                    : "px-3.5 py-2 text-xs",
+                )}
+              >
+                {!premium && <LockIcon size={12} />}
+                Contact
+              </button>
+            )}
             <button
               type="button"
               onClick={onVisit}

@@ -79,7 +79,7 @@ function mapRawUser(u: Record<string, unknown>): User {
 export const settingsApi = {
   fetchProfile: async (): Promise<User> => {
     const { user: raw } = await api.get<{ user: Record<string, unknown> }>(
-      "/api/auth/me",
+      "/api/auth/session?strict=vendor",
     );
     const user = mapRawUser(raw);
     useUserStore.getState().setUser(user);

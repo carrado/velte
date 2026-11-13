@@ -69,6 +69,9 @@ export interface BuyerRequestResponder {
   storeHandle: string | null;
   area: string | null;
   state: string | null;
+  tier?: string;
+  isEnterprise?: boolean;
+  enterprise?: boolean;
   respondedAt: string;
 
   // ── The quote (2026-09-03) ────────────────────────────────────────────

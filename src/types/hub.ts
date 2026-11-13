@@ -123,6 +123,7 @@ export interface HubWindow {
 }
 
 export interface HubFeaturedVendor {
+  tier?: string | undefined;
   vendorId: string;
   name: string;
   handle: string;
@@ -197,6 +198,7 @@ export interface HubTimelineListing {
 }
 
 export interface HubTimelineItem {
+  tier?: string | undefined;
   boosted?: boolean;
   id: string;
   vendorId: string;

@@ -1,19 +1,52 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { HubLink } from "@/components/hub/HubLink";
 
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { BadgeCheckIcon, StoreIcon } from "@/components/icons/hero";
 import { optimizedImageUrl } from "@/lib/cloudinary";
+import { trackHubAdvert } from "@/lib/advertTracker";
 import type { HubAdvert } from "@/types/hub";
 
 // One paid slot on the Hub — always labelled. The "Sponsored" tag is part of
 // the card, not the page around it, so the label can never be separated from
-// the creative it describes (platform plan Phase 2.4: payment buys position,
-// never relevance). Links to the vendor's storefront — click counting with
-// per-actor dedup arrives in the analytics slice, so this links honestly
-// without claiming to measure.
+// the creative it describes. Links to the vendor's storefront with impression
+// and click tracking per the platform spec.
 export function HubAdvertCard({ advert }: { advert: HubAdvert }) {
   const storeHref = advert.storeHandle ? `/store/${advert.storeHandle}` : null;
+  const cardRef = useRef<HTMLDivElement>(null);
+  const trackedViewRef = useRef(false);
+
+  // Track impressions when the advert card scrolls into view
+  useEffect(() => {
+    if (trackedViewRef.current || !advert.id) return;
+    const node = cardRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      trackHubAdvert(advert.id, "view");
+      trackedViewRef.current = true;
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !trackedViewRef.current) {
+          trackedViewRef.current = true;
+          trackHubAdvert(advert.id, "view");
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [advert.id]);
+
+  const handleClick = () => {
+    trackHubAdvert(advert.id, "click");
+  };
   const body = (
     <>
       <div className="relative aspect-[16/9] bg-gray-100 shrink-0">
@@ -64,9 +97,16 @@ export function HubAdvertCard({ advert }: { advert: HubAdvert }) {
   );
 
   return (
-    <div className="bg-surface rounded-2xl border border-orange-200/70 shadow-sm overflow-hidden flex flex-col h-full transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
+    <div
+      ref={cardRef}
+      className="bg-surface rounded-2xl border border-orange-200/70 shadow-sm overflow-hidden flex flex-col h-full transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
+    >
       {storeHref ? (
-        <HubLink href={storeHref} className="flex flex-col flex-1">
+        <HubLink
+          href={storeHref}
+          onClick={handleClick}
+          className="flex flex-col flex-1"
+        >
           {body}
         </HubLink>
       ) : (

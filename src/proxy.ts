@@ -147,6 +147,52 @@ async function readSessions(request: NextRequest) {
   return { userId, buyerId, dead };
 }
 
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const CSRF_EXEMPT_PREFIXES = ["/api/whatsapp/webhook", "/api/internal"];
+
+function isAllowedApiOrigin(request: NextRequest): boolean {
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  if (secFetchSite === "cross-site") {
+    return false;
+  }
+
+  const host = (
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    request.nextUrl.host
+  )
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+
+  const origin = request.headers.get("origin");
+  if (origin) {
+    try {
+      const originHost = new URL(origin).host.toLowerCase();
+      return originHost === host;
+    } catch {
+      return false;
+    }
+  }
+
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      const refererHost = new URL(referer).host.toLowerCase();
+      return refererHost === host;
+    } catch {
+      return false;
+    }
+  }
+
+  // Allow non-browser / server-to-server calls without Origin/Referer when no
+  // browser session cookie is attached (e.g. internal health checks/webhooks).
+  const hasSessionCookie =
+    Boolean(request.cookies.get(VENDOR_COOKIE)?.value) ||
+    Boolean(request.cookies.get(BUYER_COOKIE)?.value);
+  return !hasSessionCookie;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -172,6 +218,21 @@ export async function proxy(request: NextRequest) {
         headers: { "content-type": "text/plain" },
       });
     }
+
+    // 🛡️ CSRF protection: verify same-origin on state-changing API requests.
+    if (
+      MUTATING_METHODS.has(request.method.toUpperCase()) &&
+      !CSRF_EXEMPT_PREFIXES.some((prefix) =>
+        matchesRoutePrefix(pathname, prefix),
+      ) &&
+      !isAllowedApiOrigin(request)
+    ) {
+      return NextResponse.json(
+        { error: "Cross-origin request blocked." },
+        { status: 403 },
+      );
+    }
+
     // Leave the cookie alone on fetch(). A page navigation is what notices
     // an expired session and sends the person home; clearing it here first
     // would make the next click look like a guest and leave them on the page.

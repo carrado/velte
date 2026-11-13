@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
@@ -34,8 +34,10 @@ import { useBuyerStore } from "@/store/buyerStore";
 import { cn, formatNaira, timeAgo } from "@/lib/utils";
 import { compareQuotes, leadTimeLabel } from "@/lib/quoteCompare";
 import { buildChatLink } from "@/lib/chatLink";
+import { isEnterpriseVendor } from "@/lib/enterprise";
 import { timeLeft, windowElapsed } from "@/lib/requestWindow";
 import { useNow } from "@/hooks/useNow";
+import { sharedWsClient } from "@/lib/wsClient";
 import type {
   BuyerRequestResponder,
   BuyerRequestSectionId,
@@ -383,14 +385,17 @@ function OfferCard({
   const where = place(responder.area, responder.state);
   const lead = leadTimeLabel(responder.leadTimeDays);
   const delta = budgetDelta(responder.priceKobo, request.budgetKobo);
-  const chatHref = buildChatLink({
-    vendorId: responder.vendorId,
-    source: "buyer_request",
-    // Keys the lead to THIS request, so the backend bills once per
-    // (request, vendor) rather than once per click.
-    requestId: request.id,
-    message: contactMessage(responder, request.description),
-  });
+  const isEnterprise = isEnterpriseVendor(responder);
+  const chatHref = isEnterprise
+    ? buildChatLink({
+        vendorId: responder.vendorId,
+        source: "buyer_request",
+        // Keys the lead to THIS request, so the backend bills once per
+        // (request, vendor) rather than once per click.
+        requestId: request.id,
+        message: contactMessage(responder, request.description),
+      })
+    : null;
 
   return (
     <li
@@ -825,6 +830,22 @@ export function RequestsPage() {
     enabled: Boolean(buyer),
     staleTime: 30_000,
   });
+
+  useEffect(() => {
+    if (!buyer?.id) return;
+    sharedWsClient.registerUserSubscription({
+      userId: buyer.id,
+      role: "buyer",
+    });
+    return sharedWsClient.subscribe((msg) => {
+      if (
+        msg.type === "BUYER_REQUEST_UPDATED" ||
+        msg.type === "BUYER_REQUEST_DECIDED"
+      ) {
+        void refetch();
+      }
+    });
+  }, [buyer?.id, refetch]);
 
   const requests = useMemo(() => data?.requests ?? [], [data]);
 

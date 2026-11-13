@@ -79,8 +79,8 @@ export default function Navbar({
       className={cn(
         "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
         opaque
-          ? "bg-surface/85 dark:bg-gray-950/85 backdrop-blur-xl border-b border-gray-200/80 dark:border-gray-800/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)]"
-          : "bg-surface/40 dark:bg-gray-950/40 backdrop-blur-md border-b border-gray-200/30 dark:border-gray-800/30",
+          ? "bg-surface/85 backdrop-blur-xl border-b border-gray-200/80 dark:border-white/10 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.4)]"
+          : "bg-surface/65 backdrop-blur-md border-b border-gray-200/40 dark:border-white/[0.08]",
       )}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -100,7 +100,7 @@ export default function Navbar({
           </Link>
 
           {/* ── Desktop Segmented Pill Nav ── */}
-          <nav className="hidden md:flex items-center gap-1 bg-gray-100/80 dark:bg-gray-800/70 p-1 rounded-full border border-gray-200/60 dark:border-gray-700/60 backdrop-blur-md shadow-2xs">
+          <nav className="hidden md:flex items-center gap-1 bg-gray-100/80 dark:bg-white/[0.05] p-1 rounded-full border border-gray-200/60 dark:border-white/10 backdrop-blur-md shadow-2xs">
             {navLinks.map(({ href, label }) => {
               const active =
                 pathname === href ||
@@ -112,8 +112,8 @@ export default function Navbar({
                   className={cn(
                     "relative px-4 py-1.5 rounded-full text-[13px] font-medium transition-all duration-200",
                     active
-                      ? "text-orange-600 dark:text-orange-400 bg-surface shadow-xs font-semibold"
-                      : "text-ink/75 hover:text-ink hover:bg-surface/60",
+                      ? "text-orange-600 dark:text-orange-400 bg-surface dark:bg-white/10 shadow-xs font-semibold"
+                      : "text-ink/75 hover:text-ink hover:bg-surface/60 dark:hover:bg-white/[0.06]",
                   )}
                 >
                   {label}
@@ -157,13 +157,13 @@ export default function Navbar({
             <ThemeToggleButton />
 
             {/* Divider (desktop) */}
-            <span className="hidden sm:block w-px h-5 bg-gray-200/80 dark:bg-gray-800 mx-0.5" />
+            <span className="hidden sm:block w-px h-5 bg-gray-200/80 dark:bg-white/15 mx-0.5" />
 
             {/* User State */}
             {displayName ? (
               <Link
                 href={accountHref}
-                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-all hover:bg-gray-100/80 dark:hover:bg-white/10 border border-transparent hover:border-gray-200/60 dark:hover:border-gray-700/60 max-w-[13rem] group"
+                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-all hover:bg-gray-100/80 dark:hover:bg-white/10 border border-transparent hover:border-gray-200/60 dark:hover:border-white/15 max-w-[13rem] group"
               >
                 <div className="relative shrink-0">
                   {avatarUrl ? (

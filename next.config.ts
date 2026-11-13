@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   // (1400+ lines in Hub/Products) it causes V8 heap exhaustion and freezes initial page compile.
   // Enable only in production builds.
   reactCompiler: process.env.NODE_ENV === "production",
+  serverExternalPackages: ["ws"],
   experimental: {
     optimizePackageImports: ["@phosphor-icons/react", "motion/react"],
   },

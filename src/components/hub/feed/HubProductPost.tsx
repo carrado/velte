@@ -6,6 +6,7 @@ import { BadgeCheckIcon, StoreIcon } from "@/components/icons/hero";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import { buildChatLink } from "@/lib/chatLink";
 import { formatNaira } from "@/lib/utils";
+import { isEnterpriseVendor } from "@/lib/enterprise";
 import type { HubProduct } from "@/types/hub";
 
 // One vendor upload on the Hub timeline. Price renders from the listing's own
@@ -23,8 +24,9 @@ export function HubProductPost({
   const storeHref = product.storeHandle
     ? `/store/${product.storeHandle}`
     : null;
+  const isEnterprise = isEnterpriseVendor(product);
   const chatHref =
-    !isOwn && product.vendorId
+    !isOwn && product.vendorId && isEnterprise
       ? buildChatLink({
           vendorId: product.vendorId,
           source: "browse",

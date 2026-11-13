@@ -7,6 +7,7 @@ import { OwnListingBadge } from "@/components/search/OwnListingBadge";
 import { VendorDetailModal } from "@/components/VendorDetailModal";
 import { useUserStore } from "@/store/userStore";
 import { buildChatLink } from "@/lib/chatLink";
+import { isEnterpriseVendor } from "@/lib/enterprise";
 import { fmt } from "@/lib/product-price";
 import type { StoreMatch } from "@/types/search";
 import { MapPinIcon, StoreIcon, WrenchIcon } from "@/components/icons/hero";
@@ -79,13 +80,16 @@ export function StoreResultCard({
     match.matchedAttributes,
     match.matchedBudgetNaira,
   );
-  const chatHref = buildChatLink({
-    vendorId: match.vendorId,
-    source: "search",
-    message: query
-      ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(query)}, are you able to help?${detailsLine}`
-      : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.${detailsLine}`,
-  });
+  const isEnterprise = isEnterpriseVendor(match);
+  const chatHref = isEnterprise
+    ? buildChatLink({
+        vendorId: match.vendorId,
+        source: "search",
+        message: query
+          ? `Hi ${match.name}! I found you on Velte — I'm looking for ${withArticle(query)}, are you able to help?${detailsLine}`
+          : `Hi ${match.name}! I found you on Velte and I'm interested in what you offer.${detailsLine}`,
+      })
+    : null;
   // A logged-in vendor can match their own storefront — no WhatsApp CTA to
   // themselves (which would also bill them a lead), just say so.
   const currentUserId = useUserStore((s) => s.user?.id);

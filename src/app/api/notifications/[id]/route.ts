@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { fail, jsonError } from "@/lib/server/guards";
 import { notificationSession } from "@/lib/server/notificationSession";
 import { deleteNotification } from "@/lib/server/notifications";
+import { triggerImmediateUserSync } from "@/server/hubWsServer";
 
 // DELETE /api/notifications/:id — delete a single notification.
 export async function DELETE(
@@ -15,6 +16,10 @@ export async function DELETE(
   const { id } = await params;
   try {
     await deleteNotification(id, session.cookie);
+    void triggerImmediateUserSync({
+      checkNotifications: true,
+      checkRequests: false,
+    });
     return NextResponse.json({ success: true });
   } catch (err) {
     return fail(err, "Failed to delete notification.");

@@ -76,7 +76,9 @@ export const usersApi = {
   },
 
   getMe: async () => {
-    const { user } = await api.get<{ user: User }>("/api/auth/me");
+    const { user } = await api.get<{ user: User }>(
+      "/api/auth/session?strict=vendor",
+    );
     useUserStore.getState().setUser(user);
     return user;
   },
@@ -87,10 +89,13 @@ export const usersApi = {
   // /auth/login, which would hijack anonymous visitors off the homepage.
   getMeSilent: async (): Promise<User | null> => {
     try {
-      const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+      const res = await fetch("/api/auth/session", {
+        credentials: "same-origin",
+      });
       if (!res.ok) return null;
-      const { user } = (await res.json()) as { user: User };
-      useUserStore.getState().setUser(user);
+      const data = (await res.json()) as { user?: User; vendor?: User };
+      const user = data.user ?? data.vendor ?? null;
+      if (user) useUserStore.getState().setUser(user);
       return user;
     } catch {
       return null;
