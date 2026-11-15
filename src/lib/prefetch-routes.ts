@@ -159,7 +159,6 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
       ];
     case "hub": {
       const isVendor = Boolean(useUserStore.getState().user);
-      const isBuyer = Boolean(useBuyerStore.getState().buyer);
       if (isVendor) {
         return [
           {
@@ -168,17 +167,15 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
           },
         ];
       }
-      if (isBuyer) {
-        return [
-          {
-            queryKey: queryKeys.hub.home("buyer"),
-            queryFn: () => fetchHubHome("buyer"),
-          },
-        ];
-      }
-      return [];
+      return [
+        {
+          queryKey: queryKeys.hub.home("buyer"),
+          queryFn: () => fetchHubHome("buyer"),
+        },
+      ];
     }
-    case "hub/boost":
+    case "hub/boost": {
+      if (!useUserStore.getState().user) return [];
       return [
         {
           queryKey: queryKeys.hub.context,
@@ -197,7 +194,9 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
           queryFn: () => categoriesApi.getProducts({ limit: 50 }),
         },
       ];
-    case "hub/advert":
+    }
+    case "hub/advert": {
+      if (!useUserStore.getState().user) return [];
       return [
         {
           queryKey: queryKeys.hub.context,
@@ -208,7 +207,9 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
           queryFn: () => fetchHubHome("vendor"),
         },
       ];
-    case "hub/analytics":
+    }
+    case "hub/analytics": {
+      if (!useUserStore.getState().user) return [];
       return [
         {
           queryKey: queryKeys.hub.analytics,
@@ -219,6 +220,7 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
           queryFn: () => fetchHubHome("vendor"),
         },
       ];
+    }
     case "hub/community":
       return [
         {
@@ -226,8 +228,11 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
           queryFn: fetchHubCommunity,
         },
         {
-          queryKey: queryKeys.hub.home("vendor"),
-          queryFn: () => fetchHubHome("vendor"),
+          queryKey: queryKeys.hub.home(
+            useUserStore.getState().user ? "vendor" : "buyer",
+          ),
+          queryFn: () =>
+            fetchHubHome(useUserStore.getState().user ? "vendor" : "buyer"),
         },
       ];
     case "hub/vendors":

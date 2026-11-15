@@ -692,6 +692,10 @@ export function HubDashboard({
       navigate("/hub/advert");
       return;
     }
+    if (next === "broadcast") {
+      navigate("/hub/broadcast");
+      return;
+    }
     if (next === "analytics") {
       if (!home.enterprise) {
         setUpgradeLock(ENTERPRISE_LOCKS.analytics);
@@ -749,11 +753,13 @@ export function HubDashboard({
                         ? "/hub/boost"
                         : action.sheet === "advert"
                           ? "/hub/advert"
-                          : action.sheet === "analytics"
-                            ? "/hub/analytics"
-                            : action.sheet === "community"
-                              ? "/hub/community"
-                              : null;
+                          : action.sheet === "broadcast"
+                            ? "/hub/broadcast"
+                            : action.sheet === "analytics"
+                              ? "/hub/analytics"
+                              : action.sheet === "community"
+                                ? "/hub/community"
+                                : null;
 
                     const content = (
                       <>

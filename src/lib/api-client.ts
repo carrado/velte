@@ -20,16 +20,30 @@ export class ApiError extends Error {
 function handleUnauthenticated() {
   useUserStore.getState().clearUser();
   if (typeof window !== "undefined") {
-    const isAuthPage = window.location.pathname.startsWith("/auth");
-    // .replace(), not .href= — a plain assignment pushes a new history
-    // entry on top of whatever the user was doing when their session
-    // turned out to be stale (e.g. a transient 401 right after returning
-    // from an external redirect like Paystack's checkout). With .href=,
-    // that leaves the pre-401 page one back-press away, and pressing back
-    // from THIS forced login screen would just re-trigger the same 401 and
-    // bounce right back here — .replace() drops that entry entirely so
-    // back-navigation from the app behaves sanely afterward.
-    if (!isAuthPage) window.location.replace("/auth/login");
+    const path = window.location.pathname;
+    const isAuthPage = path.startsWith("/auth");
+    if (isAuthPage) return;
+
+    // Only redirect to /auth/login if the user was on an exclusively vendor-protected dashboard route.
+    // On shared, buyer, or public routes (/hub, /chat, /marketplace, /p, /, etc.),
+    // an ambient 401 must NOT boot the user out of the app.
+    const vendorDashboardRoutes = [
+      "/products",
+      "/wallet",
+      "/orders",
+      "/settings",
+      "/reports",
+      "/referrals",
+      "/buyer-requests",
+    ];
+    const isVendorDashboard =
+      vendorDashboardRoutes.some(
+        (route) => path === route || path.startsWith(`${route}/`),
+      ) || /^\/[a-f0-9]{24}(\/|$)/i.test(path);
+
+    if (isVendorDashboard) {
+      window.location.replace("/auth/login");
+    }
   }
 }
 

@@ -319,6 +319,7 @@ export function TimelineFeedCard({
             images={gallery}
             altTitle={item.title}
             aspectRatio="video"
+            isProtected={isAdvert}
             onImageClick={(index) => {
               if (isAdvert) {
                 const img = gallery[index] || gallery[0];

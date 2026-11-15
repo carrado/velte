@@ -70,14 +70,20 @@ export function getChatPrefetchTasks(routeKey: string): PrefetchTask[] {
     ];
   }
 
-  if (routeKey === "hub" && useUserStore.getState().user) {
+  if (routeKey === "hub") {
+    if (useUserStore.getState().user) {
+      return [
+        {
+          queryKey: queryKeys.hub.home("vendor"),
+          queryFn: () => fetchHubHome("vendor"),
+        },
+      ];
+    }
     return [
       {
-        queryKey: queryKeys.hub.home("vendor"),
-        queryFn: () => fetchHubHome("vendor"),
+        queryKey: queryKeys.hub.home("buyer"),
+        queryFn: () => fetchHubHome("buyer"),
       },
-      { queryKey: queryKeys.hub.context, queryFn: fetchHubContext },
-      { queryKey: queryKeys.hub.adverts, queryFn: fetchHubAdverts },
     ];
   }
 

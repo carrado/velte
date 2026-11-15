@@ -65,15 +65,21 @@ export function getHubPrefetchTasks(routeKey: string): PrefetchTask[] {
           },
         ];
       }
-      if (isBuyer) {
-        return [
-          {
-            queryKey: queryKeys.hub.home("buyer"),
-            queryFn: () => fetchHubHome("buyer"),
-          },
-        ];
-      }
-      return [];
+      return [
+        {
+          queryKey: queryKeys.hub.home("buyer"),
+          queryFn: () => fetchHubHome("buyer"),
+        },
+      ];
+
+    case "store":
+      if (!isVendor) return [];
+      return [
+        {
+          queryKey: queryKeys.store.mine,
+          queryFn: storeApi.getMyStore,
+        },
+      ];
 
     case "hub/vendors":
       if (!isBuyer && !isVendor) return [];

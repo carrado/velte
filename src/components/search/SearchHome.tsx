@@ -18,6 +18,7 @@ import { generateUUID } from "@/lib/uuid";
 import { buildProductTerm } from "@/lib/productTerm";
 import { runSearchStream } from "@/lib/searchStream";
 import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import { isEnterpriseVendor } from "@/components/EnterpriseBadge";
 import { dedupeFinalEventStores } from "@/lib/searchTurnSnapshot";
 import {
   clearRefusedSearch,

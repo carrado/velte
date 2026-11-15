@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, type TouchEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ProtectedPosterPreview } from "./ProtectedPosterPreview";
 import { cn } from "@/lib/utils";
 
 interface ManualProductCarouselProps {
@@ -12,6 +13,7 @@ interface ManualProductCarouselProps {
   autoSlide?: boolean;
   autoSlideInterval?: number;
   onImageClick?: (index: number) => void;
+  isProtected?: boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export function ManualProductCarousel({
   autoSlide = true,
   autoSlideInterval = 3500,
   onImageClick,
+  isProtected = false,
 }: ManualProductCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -128,14 +131,23 @@ export function ManualProductCarousel({
             className="relative h-full w-full shrink-0 cursor-pointer overflow-hidden bg-gray-950 flex items-center justify-center"
             onClick={() => onImageClick?.(idx)}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={src}
-              alt={`${altTitle} - ${idx + 1}`}
-              className="h-full w-full object-cover"
-              loading={idx === 0 ? "eager" : "lazy"}
-              draggable={false}
-            />
+            {isProtected ? (
+              <ProtectedPosterPreview
+                src={src}
+                fit="cover"
+                className="h-full w-full"
+                onClick={() => onImageClick?.(idx)}
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={src}
+                alt={`${altTitle} - ${idx + 1}`}
+                className="h-full w-full object-cover"
+                loading={idx === 0 ? "eager" : "lazy"}
+                draggable={false}
+              />
+            )}
           </div>
         ))}
       </div>

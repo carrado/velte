@@ -5,6 +5,7 @@ import { backendData } from "@/lib/server/backend";
 import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
 import { listVendorOrders } from "@/lib/server/cart";
 import { getWalletStats } from "@/lib/server/wallet";
+import { posterProxyUrl } from "@/lib/server/posterProxy";
 import type {
   HubContext,
   HubHome,
@@ -13,6 +14,56 @@ import type {
   HubVendorAdvert,
 } from "@/types/hub";
 import type { BuyerRequest } from "@/types/buyerRequest";
+
+/** True if the URL is a Cloudinary-hosted asset we need to proxy. */
+function isCloudinaryUrl(url?: string | null): boolean {
+  if (!url) return false;
+  try {
+    const { hostname } = new URL(url);
+    return (
+      hostname.endsWith(".cloudinary.com") || hostname === "cloudinary.com"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Replace all advert imageUrl fields in a HubHome payload with signed
+ * poster-proxy URLs so the raw Cloudinary URL never reaches the browser.
+ *
+ * We only proxy advert images (not regular product thumbnails) because:
+ *  • Advert posters are AI-generated assets the vendor paid to produce.
+ *  • Regular product images are publicly listed on the marketplace anyway.
+ */
+function proxyAdvertImages(home: HubHome): HubHome {
+  // 1. Top-level adverts array (HubAdvert[])
+  const adverts = (home.adverts ?? []).map((ad) => ({
+    ...ad,
+    imageUrl: isCloudinaryUrl(ad.imageUrl)
+      ? posterProxyUrl(ad.imageUrl)
+      : ad.imageUrl,
+  }));
+
+  // 2. Timeline items that are adverts (have advertId set or kind === "promotion")
+  const timeline = (home.timeline ?? []).map((item) => {
+    const isAdvert = Boolean(item.advertId) || item.kind === "promotion";
+    if (!isAdvert) return item;
+    const rawImageUrl = item.imageUrl;
+    return {
+      ...item,
+      imageUrl:
+        rawImageUrl && isCloudinaryUrl(rawImageUrl)
+          ? posterProxyUrl(rawImageUrl)
+          : rawImageUrl,
+      images: (item.images ?? []).map((img) =>
+        isCloudinaryUrl(img) ? posterProxyUrl(img) : img,
+      ),
+    };
+  });
+
+  return { ...home, adverts, timeline };
+}
 
 // GET /api/hub/home
 // Consolidated single endpoint for the Hub.
@@ -239,7 +290,7 @@ export async function GET(request: Request) {
         },
       };
 
-      return NextResponse.json(consolidatedPayload);
+      return NextResponse.json(proxyAdvertImages(consolidatedPayload));
     } catch (err) {
       return fail(err, "Couldn't load the Hub.");
     }
@@ -251,7 +302,7 @@ export async function GET(request: Request) {
       const data = await backendData<HubHome>("/hub/home?audience=buyer", {
         cookie: buyerAuth.cookie,
       });
-      return NextResponse.json(data);
+      return NextResponse.json(proxyAdvertImages(data));
     } catch (err) {
       return fail(err, "Couldn't load the Hub.");
     }

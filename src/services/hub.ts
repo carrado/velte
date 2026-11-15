@@ -2,8 +2,10 @@ import { ApiError, api } from "@/lib/api-client";
 import { uploadAdvertMedia } from "@/lib/cloudinary";
 import { overlayStoreLogoOnPoster } from "@/lib/overlayStoreLogo";
 import type {
+  CreateBroadcastPayload,
   CreateCommunityPostPayload,
   HubAnalyticsData,
+  HubBroadcastStatus,
   HubCommunityData,
   HubCommunityReply,
   HubCommunityThread,
@@ -11,6 +13,7 @@ import type {
   HubHome,
   HubListingBoost,
   HubVendorAdvert,
+  HubVendorBroadcast,
   HubVendorsDirectory,
 } from "@/types/hub";
 
@@ -18,10 +21,10 @@ import type {
 // so a click on Vendors Hub lands with the data already in cache.
 //
 // Same contract as the products list: the prefetch is the fetch. Arrival
-// reads the cache and does not ask again.
+// reads the cache and refetches if stale or invalidated.
 export const hubPageQueryOptions = {
-  staleTime: Infinity,
-  refetchOnMount: false,
+  staleTime: 15_000,
+  refetchOnMount: true,
   refetchOnWindowFocus: false,
 } as const;
 
@@ -78,6 +81,38 @@ export async function createHubBoost(productId: string, days: number) {
 
 export async function cancelHubBoost(id: string) {
   return api.post<{ id: string }>(`/api/hub/boosts/${id}/cancel`);
+}
+
+export async function fetchHubBroadcasts() {
+  try {
+    return await api.get<HubVendorBroadcast[]>("/api/hub/broadcasts");
+  } catch {
+    return [] as HubVendorBroadcast[];
+  }
+}
+
+export async function createHubBroadcast(payload: CreateBroadcastPayload) {
+  return api.post<{
+    id: string;
+    status: HubBroadcastStatus;
+    audienceCount?: number | null;
+    sentAt?: string | null;
+  }>("/api/hub/broadcasts", payload);
+}
+
+export async function sendHubBroadcast(id: string) {
+  return api.post<{
+    id: string;
+    status: HubBroadcastStatus;
+    audienceCount?: number | null;
+    sentAt?: string | null;
+  }>(`/api/hub/broadcasts/${encodeURIComponent(id)}/send`);
+}
+
+export async function cancelHubBroadcast(id: string) {
+  return api.post<{ id: string }>(
+    `/api/hub/broadcasts/${encodeURIComponent(id)}/cancel`,
+  );
 }
 
 export async function fetchHubAnalytics() {

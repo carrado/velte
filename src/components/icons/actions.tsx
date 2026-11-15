@@ -13,6 +13,7 @@ import {
   PencilSimple,
   Plus,
   PlusCircle,
+  Repeat,
   ShareNetwork,
   SignOut,
   PaperPlaneTilt,
@@ -66,4 +67,7 @@ export const LogOutIcon = wrapIcon(SignOut, { displayName: "LogOutIcon" });
 export const SquareIcon = wrapIcon(Square, {
   weight: "fill",
   displayName: "SquareIcon",
+});
+export const RepeatIcon = wrapIcon(Repeat, {
+  displayName: "RepeatIcon",
 });

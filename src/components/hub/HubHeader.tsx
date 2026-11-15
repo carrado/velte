@@ -111,17 +111,19 @@ export function HubHeader({
           >
             {account ? (
               <>
-                <HubLink
-                  href="/store"
-                  className="inline-flex shrink-0 items-center justify-center gap-2 h-9 w-9 md:w-auto md:px-3 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-ink/80 transition-colors whitespace-nowrap active:scale-95"
-                  aria-label="My Store"
-                  title="My Store"
-                >
-                  <StoreIcon size={18} className="shrink-0" />
-                  <span className="hidden md:inline text-sm font-semibold whitespace-nowrap text-gray-800 dark:text-ink">
-                    My Store
-                  </span>
-                </HubLink>
+                {userDetails && (
+                  <HubLink
+                    href="/store"
+                    className="inline-flex shrink-0 items-center justify-center gap-2 h-9 w-9 md:w-auto md:px-3 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-ink/80 transition-colors whitespace-nowrap active:scale-95"
+                    aria-label="My Store"
+                    title="My Store"
+                  >
+                    <StoreIcon size={18} className="shrink-0" />
+                    <span className="hidden md:inline text-sm font-semibold whitespace-nowrap text-gray-800 dark:text-ink">
+                      My Store
+                    </span>
+                  </HubLink>
+                )}
                 <HubLink
                   href="/hub"
                   className="inline-flex shrink-0 items-center justify-center gap-2 h-9 w-9 md:w-auto md:px-3 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-ink/80 transition-colors whitespace-nowrap active:scale-95"
@@ -267,17 +269,6 @@ export function HubHeader({
                         />
                         <span>Settings</span>
                       </HubLink>
-                      <HubLink
-                        href="/hub/community"
-                        onClick={() => setMenuOpen(false)}
-                        className={menuItemClass}
-                      >
-                        <UsersIcon
-                          size={17}
-                          className="shrink-0 text-gray-400"
-                        />
-                        <span>Community Hub</span>
-                      </HubLink>
                     </>
                   ) : buyer ? (
                     <>
@@ -302,17 +293,6 @@ export function HubHeader({
                           className="shrink-0 text-gray-400"
                         />
                         <span>Referrals</span>
-                      </HubLink>
-                      <HubLink
-                        href="/hub/community"
-                        onClick={() => setMenuOpen(false)}
-                        className={menuItemClass}
-                      >
-                        <UsersIcon
-                          size={17}
-                          className="shrink-0 text-gray-400"
-                        />
-                        <span>Community Hub</span>
                       </HubLink>
                     </>
                   ) : vendorDashboardId ? (

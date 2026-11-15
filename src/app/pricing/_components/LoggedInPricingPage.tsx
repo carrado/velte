@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowRight,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/subscriptions";
 import { isEnterpriseVendor, isPremiumBuyer } from "@/lib/enterprise";
 import { formatNaira } from "@/lib/utils";
+import { resetSessionSync, syncSession } from "@/lib/sessionSync";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
 import type { Buyer } from "@/types/buyer";
@@ -82,6 +84,8 @@ export default function LoggedInPricingPage({
     step: "activating" | "confirmed";
     plan: "buyer_premium" | "vendor_enterprise";
   } | null>(null);
+
+  const queryClient = useQueryClient();
 
   // A vendor is automatically a premium buyer already
   const isVendorAccount = Boolean(vendor || buyer?.linkedVendorId);
@@ -136,6 +140,11 @@ export default function LoggedInPricingPage({
       }
     }
 
+    // Invalidate Hub cache so returning to the Hub reflects premium immediately
+    queryClient.removeQueries({ queryKey: ["hub"] });
+    queryClient.invalidateQueries({ queryKey: ["hub"] });
+    resetSessionSync();
+
     // 3. Concurrently verify with backend and refresh session
     const syncSessionPromise = (async () => {
       if (reference) {
@@ -150,6 +159,7 @@ export default function LoggedInPricingPage({
         }
       }
       try {
+        await syncSession({ force: true });
         const res = await fetch("/api/auth/session", {
           credentials: "same-origin",
         });
@@ -164,6 +174,8 @@ export default function LoggedInPricingPage({
       } catch {
         /* best effort */
       }
+      queryClient.removeQueries({ queryKey: ["hub"] });
+      queryClient.invalidateQueries({ queryKey: ["hub"] });
     })();
 
     // 4. Smooth wait for activating screen before sliding to confirmation
@@ -177,6 +189,8 @@ export default function LoggedInPricingPage({
   };
 
   const handleGoBack = () => {
+    queryClient.removeQueries({ queryKey: ["hub"] });
+    queryClient.invalidateQueries({ queryKey: ["hub"] });
     setActivationModal(null);
     if (typeof window !== "undefined" && window.history.length > 1) {
       window.history.back();

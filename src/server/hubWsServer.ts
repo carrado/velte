@@ -24,13 +24,17 @@ export interface HubWsMessage {
     | "BUYER_REQUEST_UPDATED"
     | "LISTING_UPDATED"
     | "LISTING_REMOVED"
-    | "HUB_DATA_CHANGED";
+    | "HUB_DATA_CHANGED"
+    | "TRACK_ADVERT";
   now?: number;
+  clientCount?: number;
   items?: HubTimelineItem[];
   knownListingIds?: string[];
   productId?: string;
   patch?: Partial<HubTimelineItem>;
   scope?: "adverts" | "boosts" | "community" | "performance" | "all";
+  advertId?: string;
+  kind?: "view" | "click";
   // User / notification / buyer-request fields
   userId?: string;
   role?: "vendor" | "buyer";
@@ -406,11 +410,15 @@ function handleConnection(ws: WebSocket, req: IncomingMessage): void {
   };
   clientMetas.set(ws, meta);
 
-  // Immediately send current timestamp to sync feed clock
-  safeSend(ws, {
-    type: "TIME_TICK",
-    now: Date.now(),
-  });
+  // Broadcast active online clients count to all connected users
+  const currentCount = clients.size;
+  for (const client of clients) {
+    safeSend(client, {
+      type: "TIME_TICK",
+      now: Date.now(),
+      clientCount: currentCount,
+    });
+  }
 
   ws.on("message", (raw: string | Buffer) => {
     try {
@@ -517,21 +525,39 @@ function handleConnection(ws: WebSocket, req: IncomingMessage): void {
             checkRequests: true,
           });
         }
+      } else if (msg.type === "TRACK_ADVERT") {
+        if (msg.advertId && typeof msg.advertId === "string") {
+          const advertId = msg.advertId.trim();
+          const kind = msg.kind === "click" ? "click" : "view";
+          backendData(`/hub/adverts/${encodeURIComponent(advertId)}/track`, {
+            method: "POST",
+            body: { kind },
+            cookie: meta.cookie || undefined,
+          }).catch(() => {
+            // Analytics tracking is non-blocking / best-effort
+          });
+        }
       }
     } catch {
       // Ignore invalid client message
     }
   });
 
-  ws.on("close", () => {
+  const notifyDisconnect = () => {
     clients.delete(ws);
     clientMetas.delete(ws);
-  });
+    const remaining = clients.size;
+    for (const client of clients) {
+      safeSend(client, {
+        type: "TIME_TICK",
+        now: Date.now(),
+        clientCount: remaining,
+      });
+    }
+  };
 
-  ws.on("error", () => {
-    clients.delete(ws);
-    clientMetas.delete(ws);
-  });
+  ws.on("close", notifyDisconnect);
+  ws.on("error", notifyDisconnect);
 }
 
 export function startHubWsServer(): {
@@ -599,6 +625,7 @@ export function startHubWsServer(): {
       const tickPayload: HubWsMessage = {
         type: "TIME_TICK",
         now: Date.now(),
+        clientCount: instance.clients.size,
       };
       for (const client of instance.clients) {
         safeSend(client, tickPayload);

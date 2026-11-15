@@ -17,7 +17,12 @@ import {
   BriefcaseIcon,
   BuildingIcon,
   CameraIcon,
+  CheckIcon,
   ChefHatIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  CrownIcon,
   FileTextIcon,
   FlameIcon,
   GiftIcon,
@@ -25,10 +30,14 @@ import {
   LeafIcon,
   LockIcon,
   MapPinIcon,
+  MegaphoneIcon,
+  MessageSquareIcon,
   MonitorIcon,
   PartyPopperIcon,
   PhoneIcon,
+  RepeatIcon,
   ScaleIcon,
+  SearchIcon,
   SendIcon,
   ShieldIcon,
   ShirtIcon,
@@ -43,10 +52,9 @@ import {
   ZapIcon,
 } from "@/components/icons";
 import type { IconComponent } from "@/types/common";
-import AnchoredPopover from "@/components/AnchoredPopover";
-import { Ellipsis } from "lucide-react";
 import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
 import { HubLink } from "@/components/hub/HubLink";
+import { HubSidebarFooter } from "@/components/hub/HubSidebarFooter";
 import { CardCarousel } from "@/components/search/CardCarousel";
 import { HubHero } from "@/components/hub/HubHero";
 import {
@@ -54,13 +62,11 @@ import {
   SECTOR_CATEGORY_BY_LABEL,
   SECTOR_TAXONOMY,
 } from "@/lib/sectors";
-import {
-  EnterpriseAvatarBadge,
-  EnterpriseBadge,
-  isEnterpriseVendor,
-} from "@/components/EnterpriseBadge";
+import { NIGERIA_STATES, normalizeNigeriaState } from "@/lib/states";
+import { isEnterpriseVendor } from "@/components/EnterpriseBadge";
+import { isPremiumBuyer } from "@/lib/enterprise";
 import { modalScrimClass } from "@/lib/modalScrim";
-import { cn, isNewListing, timeAgo } from "@/lib/utils";
+import { cn, formatNaira, isNewListing, timeAgo } from "@/lib/utils";
 import type {
   HubBroadcastPrefs,
   HubBuyerBroadcast,
@@ -72,11 +78,19 @@ import type {
 } from "@/types/hub";
 import TabBar from "@/components/TabBar";
 import { HubLockedModal } from "./HubLockedModal";
-import { PosterPreviewLightbox } from "@/components/hub/ProtectedPosterPreview";
+import {
+  PosterPreviewLightbox,
+  ProtectedPosterPreview,
+} from "@/components/hub/ProtectedPosterPreview";
+import { BoostedListingsCarousel } from "@/components/hub/BoostedListingsCarousel";
+import { ManualProductCarousel } from "@/components/hub/ManualProductCarousel";
 import { useUserStore } from "@/store/userStore";
 import { useBuyerStore } from "@/store/buyerStore";
+import { useCartStore } from "@/store/cartStore";
+import { buildChatLink } from "@/lib/chatLink";
 import {
   assembleHubFeed,
+  assembleTimelineWithSandwichedAds,
   isBoostedProduct,
   isSponsoredAdvert,
 } from "@/lib/hubFeed";
@@ -123,14 +137,19 @@ const CATEGORY_ICON: Record<string, IconComponent> = {
   fashion_apparel: ShirtIcon,
   electronics_technology: MonitorIcon,
   beauty_personal_care: SparklesIcon,
+  beauty_wellness: SparklesIcon,
   home_living: BuildingIcon,
   building_construction: WrenchIcon,
   automotive: TruckIcon,
+  auto_transport: TruckIcon,
   repairs_technical: WrenchIcon,
   professional_business_services: BriefcaseIcon,
+  professional_services: BriefcaseIcon,
   education_training: FileTextIcon,
   transportation_logistics: TruckIcon,
   arts_media_entertainment: CameraIcon,
+  media_creative: CameraIcon,
+  health_pharmacy: HeartIcon,
   home_services_domestic: SparklesIcon,
 };
 
@@ -179,12 +198,20 @@ function sectorSlug(value: string) {
   return SLUG_BY_LABEL[raw.toLowerCase()] ?? null;
 }
 
+const TAXONOMY_GROUP_IDS = new Set(SECTOR_TAXONOMY.map((c) => c.id));
+
 /** Parent taxonomy group for a store sector value (slug or display label). */
 function sectorGroupId(value: string): string | null {
-  const byLabel = SECTOR_CATEGORY_BY_LABEL[value];
+  if (!value) return null;
+  const clean = value.trim();
+  if (TAXONOMY_GROUP_IDS.has(clean)) return clean;
+  if (clean === "fashion") return "fashion_apparel";
+  if (clean === "energy" || clean === "solar") return "electronics_technology";
+  const byLabel = SECTOR_CATEGORY_BY_LABEL[clean];
   if (byLabel) return byLabel;
-  const slug = sectorSlug(value);
+  const slug = sectorSlug(clean);
   if (!slug) return null;
+  if (TAXONOMY_GROUP_IDS.has(slug)) return slug;
   return CATEGORY_BY_SECTOR[slug] ?? null;
 }
 
@@ -333,6 +360,74 @@ function contactFromItem(item: HubTimelineItem): ContactTarget {
 
 type MobilePane = "listings" | "vendors";
 
+const CITY_TO_STATE: Record<string, string> = {
+  ikeja: "Lagos",
+  lekki: "Lagos",
+  yaba: "Lagos",
+  "victoria island": "Lagos",
+  surulere: "Lagos",
+  ikoyi: "Lagos",
+  epe: "Lagos",
+  badagry: "Lagos",
+  owerri: "Imo",
+  orlu: "Imo",
+  okigwe: "Imo",
+  awka: "Anambra",
+  onitsha: "Anambra",
+  nnewi: "Anambra",
+  ifite: "Anambra",
+  nsukka: "Enugu",
+  "independence layout": "Enugu",
+  "port harcourt": "Rivers",
+  "obio akpor": "Rivers",
+  ibadan: "Oyo",
+  "benin city": "Edo",
+  benin: "Edo",
+  calabar: "Cross River",
+  warri: "Delta",
+  asaba: "Delta",
+  abeokuta: "Ogun",
+  ilorin: "Kwara",
+  jos: "Plateau",
+  kaduna: "Kaduna",
+  kano: "Kano",
+  maiduguri: "Borno",
+  uyo: "Akwa Ibom",
+  aba: "Abia",
+  umuahia: "Abia",
+};
+
+function getVendorState(vendor: HubFeaturedVendor): string | null {
+  const raw = vendor.state || vendor.place;
+  if (!raw) return null;
+
+  const direct = normalizeNigeriaState(raw);
+  if (direct) return direct;
+
+  const segments = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const fromSegment = normalizeNigeriaState(segments[i]);
+    if (fromSegment) return fromSegment;
+  }
+
+  if (/\b(abuja|fct)\b/i.test(raw)) return "Abuja";
+
+  for (const s of NIGERIA_STATES) {
+    const reg = new RegExp(`\\b${s}\\b`, "i");
+    if (reg.test(raw)) return s;
+  }
+
+  const rawLower = raw.toLowerCase();
+  for (const [city, state] of Object.entries(CITY_TO_STATE)) {
+    if (rawLower.includes(city)) return state;
+  }
+
+  return raw;
+}
+
 function FeaturedVendorsPanel({
   vendors,
   vendorCap,
@@ -355,120 +450,139 @@ function FeaturedVendorsPanel({
   onUpgrade: () => void;
 }) {
   return (
-    <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-4">
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <h3 className="text-sm font-bold text-ink">Featured Vendors</h3>
+    <section className="bg-surface border border-gray-200 dark:border-white/10 rounded-2xl p-4 shadow-xs">
+      <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-white/5">
+        <div>
+          <h3 className="text-sm font-bold text-ink">Featured Vendors</h3>
+          <p className="text-[11px] text-gray-500 dark:text-ink/60">
+            Top businesses on Velte
+          </p>
+        </div>
         {vendors.length > 0 && (
           <button
             type="button"
             onClick={onViewAll}
-            className="text-xs font-semibold text-orange-600 hover:text-orange-700"
+            className="inline-flex items-center gap-0.5 text-xs font-semibold text-orange-600 hover:text-orange-700 transition-colors cursor-pointer"
           >
-            View all →
+            <span>View all</span>
+            <ChevronRightIcon size={13} />
           </button>
         )}
       </div>
       {vendors.length === 0 ? (
-        <p className="text-xs text-gray-500 py-4 text-center">
+        <p className="text-xs text-gray-500 dark:text-ink/60 py-4 text-center">
           Vendors show up here as they publish a store.
         </p>
       ) : (
-        <ul className="divide-y divide-gray-100">
-          {vendors.slice(0, vendorCap).map((vendor) => (
-            <li key={vendor.vendorId}>
-              <div className="w-full flex items-center gap-3 py-2.5 text-left">
-                <div className="relative shrink-0">
-                  <Avatar
-                    name={vendor.name}
-                    src={vendor.avatar}
-                    className="h-10 w-10 rounded-full text-xs shrink-0"
-                  />
-                  {isEnterpriseVendor(vendor) && (
-                    <EnterpriseAvatarBadge size="sm" />
-                  )}
+        <ul className="divide-y divide-gray-100 dark:divide-white/5">
+          {vendors.slice(0, vendorCap).map((vendor) => {
+            const vendorState = getVendorState(vendor);
+            return (
+              <li key={vendor.vendorId}>
+                <div className="w-full flex items-start gap-3 py-3 text-left">
+                  <div className="relative shrink-0 mt-0.5">
+                    <Avatar
+                      name={vendor.name}
+                      src={vendor.avatar}
+                      className="h-10 w-10 rounded-full text-xs shrink-0"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm font-semibold text-ink truncate">
+                        {vendor.name}
+                      </span>
+                      {vendor.verified && (
+                        <BadgeCheckIcon
+                          size={14}
+                          className="text-sky-500 shrink-0"
+                        />
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-ink/60">
+                      <Stars
+                        avg={vendor.ratingAvg}
+                        count={vendor.ratingCount}
+                      />
+                    </div>
+
+                    {vendor.sentiment && (
+                      <span className="block text-[11px] text-gray-600 dark:text-ink/60 line-clamp-2">
+                        {vendor.sentiment.rating}/5 · {vendor.sentiment.text}
+                      </span>
+                    )}
+                    {vendor.trusted && (
+                      <span className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                        Trusted check
+                      </span>
+                    )}
+                    {vendor.fastDelivery && (
+                      <span className="block text-[11px] font-semibold text-sky-700 dark:text-sky-400">
+                        Fast delivery
+                      </span>
+                    )}
+
+                    {vendorState && (
+                      <div className="flex items-center gap-1 text-[11px] text-gray-500 dark:text-ink/60">
+                        <MapPinIcon
+                          size={11}
+                          className="shrink-0 text-gray-400"
+                        />
+                        <span className="truncate">{vendorState}</span>
+                      </div>
+                    )}
+
+                    <div className="pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => onContact(vendor)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:text-orange-700 dark:text-orange-400 hover:underline transition-colors cursor-pointer"
+                      >
+                        <span>Contact card</span>
+                        <ChevronRightIcon size={11} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      aria-label={
+                        favourites.has(vendor.vendorId)
+                          ? "Remove favourite"
+                          : "Favourite"
+                      }
+                      onClick={() => onFavourite(vendor.vendorId)}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 text-gray-500 dark:text-ink/60 hover:border-orange-300 hover:text-orange-600 transition-colors cursor-pointer"
+                    >
+                      {!premium ? (
+                        <LockIcon size={12} />
+                      ) : (
+                        <HeartIcon
+                          size={13}
+                          className={cn(
+                            favourites.has(vendor.vendorId) &&
+                              "text-orange-600 fill-orange-500",
+                          )}
+                        />
+                      )}
+                    </button>
+                    <span
+                      className={cn(
+                        "text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md",
+                        vendor.sponsored
+                          ? "text-orange-600 bg-orange-50 dark:bg-orange-950/40 dark:text-orange-400"
+                          : "text-gray-500 bg-gray-100 dark:bg-white/10 dark:text-ink/60",
+                      )}
+                    >
+                      {vendor.sponsored ? "Sponsored" : "Featured"}
+                    </span>
+                  </div>
                 </div>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold text-ink truncate">
-                      {vendor.name}
-                    </span>
-                    {isEnterpriseVendor(vendor) && (
-                      <EnterpriseBadge size="sm" />
-                    )}
-                    {vendor.verified && (
-                      <BadgeCheckIcon
-                        size={14}
-                        className="text-sky-500 shrink-0"
-                      />
-                    )}
-                  </span>
-                  <Stars avg={vendor.ratingAvg} count={vendor.ratingCount} />
-                  {vendor.sentiment && (
-                    <span className="block text-[11px] text-gray-600 line-clamp-2 mt-0.5">
-                      {vendor.sentiment.rating}/5 · {vendor.sentiment.text}
-                    </span>
-                  )}
-                  {vendor.trusted && (
-                    <span className="text-[11px] font-semibold text-emerald-700">
-                      Trusted check
-                    </span>
-                  )}
-                  {vendor.fastDelivery && (
-                    <span className="text-[11px] font-semibold text-sky-700">
-                      Fast delivery
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onContact(vendor)}
-                    className="mt-1 text-[11px] font-semibold text-orange-600 hover:text-orange-700"
-                  >
-                    Contact card
-                  </button>
-                  {vendor.place && (
-                    <span className="flex items-center gap-1 text-[11px] text-gray-500 mt-0.5">
-                      <MapPinIcon size={11} />
-                      <span className="truncate">{vendor.place}</span>
-                    </span>
-                  )}
-                </span>
-                <span className="flex flex-col items-end gap-1 shrink-0">
-                  <button
-                    type="button"
-                    aria-label={
-                      favourites.has(vendor.vendorId)
-                        ? "Remove favourite"
-                        : "Favourite"
-                    }
-                    onClick={() => onFavourite(vendor.vendorId)}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:border-orange-300 hover:text-orange-600"
-                  >
-                    {!premium ? (
-                      <LockIcon size={12} />
-                    ) : (
-                      <HeartIcon
-                        size={13}
-                        className={cn(
-                          favourites.has(vendor.vendorId) &&
-                            "text-orange-600 fill-orange-500",
-                        )}
-                      />
-                    )}
-                  </button>
-                  <span
-                    className={cn(
-                      "text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md",
-                      vendor.sponsored
-                        ? "text-orange-600 bg-orange-50"
-                        : "text-gray-500 bg-gray-100",
-                    )}
-                  >
-                    {vendor.sponsored ? "Sponsored" : "Featured"}
-                  </span>
-                </span>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
       {vendorsCapped && (
@@ -490,9 +604,24 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   const vendor = useUserStore((s) => s.user);
   const buyer = useBuyerStore((s) => s.buyer);
   const isVendorAccount = Boolean(vendor || buyer?.linkedVendorId);
+  const isBuyerPremium = Boolean(
+    isVendorAccount ||
+    isPremiumBuyer(buyer) ||
+    buyer?.tier === "buyer_premium" ||
+    (buyer as { isPremium?: boolean })?.isPremium ||
+    (buyer as { plan?: string })?.plan === "buyer_premium",
+  );
+  const isPremium = Boolean(initialHome.premium || isBuyerPremium);
   const home = useMemo(
-    () => (isVendorAccount ? { ...initialHome, premium: true } : initialHome),
-    [initialHome, isVendorAccount],
+    () =>
+      isPremium
+        ? {
+            ...initialHome,
+            premium: true,
+            hubPreview: null,
+          }
+        : initialHome,
+    [initialHome, isPremium],
   );
   const [sector, setSector] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<MobilePane>("listings");
@@ -511,6 +640,7 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
     | "favourite"
     | null
   >(null);
+  const [chooseSectorsOpen, setChooseSectorsOpen] = useState(false);
   const [displayedTimeline, setDisplayedTimeline] = useState<HubTimelineItem[]>(
     () => (home.timeline ?? []).filter((item) => !isTestItem(item)),
   );
@@ -530,14 +660,8 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   const [buyerBroadcasts, setBuyerBroadcasts] = useState<HubBuyerBroadcast[]>(
     home.buyerBroadcasts ?? [],
   );
-  const [broadcastBody, setBroadcastBody] = useState("");
   const [broadcasting, setBroadcasting] = useState(false);
-  const [placeOpen, setPlaceOpen] = useState(false);
-  const [placeVendorId, setPlaceVendorId] = useState("");
-  const [placeHeadline, setPlaceHeadline] = useState("");
-  const [placeBlurb, setPlaceBlurb] = useState("");
-  const [placeImage, setPlaceImage] = useState("");
-  const [placing, setPlacing] = useState(false);
+  const [messageContactsOpen, setMessageContactsOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [postBody, setPostBody] = useState("");
   const [posting, setPosting] = useState(false);
@@ -653,35 +777,59 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   }, [contact?.vendorId, home.premium]);
 
   const sectorGroups = useMemo(() => {
-    const counts = new Map<string, number>();
-    const bump = (values: string[] | undefined) => {
+    const vendorCounts = new Map<string, number>();
+    const listingCounts = new Map<string, number>();
+
+    for (const vendor of home.featured) {
       const groups = new Set(
-        (values ?? [])
+        (vendor.sectors ?? [])
           .map((value) => sectorGroupId(value))
           .filter((id): id is string => Boolean(id)),
       );
       for (const groupId of groups) {
-        counts.set(groupId, (counts.get(groupId) || 0) + 1);
+        vendorCounts.set(groupId, (vendorCounts.get(groupId) || 0) + 1);
       }
-    };
-    for (const vendor of home.featured) bump(vendor.sectors);
-    for (const item of displayedTimeline) bump(item.sectors);
-    return SECTOR_TAXONOMY.map((category) => ({
-      id: category.id,
-      label: category.label,
-      count: counts.get(category.id) || 0,
-    }))
+    }
+
+    for (const item of displayedTimeline) {
+      if (item.kind === "update") continue;
+      const groups = new Set(
+        (item.sectors ?? [])
+          .map((value) => sectorGroupId(value))
+          .filter((id): id is string => Boolean(id)),
+      );
+      for (const groupId of groups) {
+        listingCounts.set(groupId, (listingCounts.get(groupId) || 0) + 1);
+      }
+    }
+
+    return SECTOR_TAXONOMY.map((category) => {
+      const vCount = vendorCounts.get(category.id) || 0;
+      const lCount = listingCounts.get(category.id) || 0;
+      return {
+        id: category.id,
+        label: category.label,
+        vendorCount: vCount,
+        listingCount: lCount,
+        count: vCount + lCount,
+      };
+    })
       .filter((row) => row.count > 0)
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   }, [home.featured, displayedTimeline]);
 
-  const feed = useMemo(() => {
+  const { boostedListings, feed } = useMemo(() => {
     let items = displayedTimeline.filter((item) => item.kind !== "update");
     if (sector)
       items = items.filter((item) => inSectorGroup(item.sectors, sector));
-    // Assembles feed so sponsored listings/ads come first and appear more frequently,
-    // with newest updates first!
-    return assembleHubFeed(items);
+    const res = assembleTimelineWithSandwichedAds(items);
+    if (res.feed.length === 0 && res.boostedListings.length > 0) {
+      return {
+        boostedListings: res.boostedListings,
+        feed: res.boostedListings,
+      };
+    }
+    return { boostedListings: res.boostedListings, feed: res.feed };
   }, [displayedTimeline, sector]);
 
   const visibleFeed = useMemo(
@@ -721,12 +869,14 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
       list = home.featured.filter((vendor) =>
         inSectorGroup(vendor.sectors, sector),
       );
-    // Sponsored listings appear first
-    return [...list].sort((a, b) => {
-      if (a.sponsored && !b.sponsored) return -1;
-      if (!a.sponsored && b.sponsored) return 1;
-      return 0;
-    });
+    // Sponsored listings appear first, capped at 6 top performing vendors
+    return [...list]
+      .sort((a, b) => {
+        if (a.sponsored && !b.sponsored) return -1;
+        if (!a.sponsored && b.sponsored) return 1;
+        return 0;
+      })
+      .slice(0, 6);
   }, [home.featured, sector]);
 
   const updates = useMemo(
@@ -734,38 +884,6 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
       displayedTimeline.filter((item) => item.kind === "update").slice(0, 3),
     [displayedTimeline],
   );
-
-  const advertVendors = useMemo(() => {
-    const byId = new Map<
-      string,
-      { vendorId: string; name: string; images: string[] }
-    >();
-    const add = (
-      vendorId: string,
-      name: string,
-      urls: Array<string | null | undefined>,
-    ) => {
-      if (!vendorId) return;
-      const current = byId.get(vendorId) ?? { vendorId, name, images: [] };
-      if (!current.name && name) current.name = name;
-      for (const url of urls) {
-        if (url && !current.images.includes(url)) current.images.push(url);
-      }
-      byId.set(vendorId, current);
-    };
-    for (const vendor of home.featured)
-      add(vendor.vendorId, vendor.name, [vendor.imageUrl]);
-    for (const item of displayedTimeline) {
-      add(item.vendorId, item.storeName || "Vendor", [
-        item.imageUrl,
-        ...(item.images ?? []),
-      ]);
-    }
-    return [...byId.values()].filter((vendor) => vendor.images.length > 0);
-  }, [home.featured, displayedTimeline]);
-
-  const chosenVendor =
-    advertVendors.find((vendor) => vendor.vendorId === placeVendorId) ?? null;
 
   const openContact = (target: ContactTarget) => {
     if (!isEnterpriseVendor(target)) {
@@ -860,86 +978,12 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
       setLock("place");
       return;
     }
-    const first = advertVendors[0];
-    setPlaceVendorId(first?.vendorId ?? "");
-    setPlaceImage(first?.images[0] ?? "");
-    setPlaceHeadline("");
-    setPlaceBlurb("");
-    setPlaceOpen(true);
+    navigate("/hub/advert");
   };
 
-  const submitPlace = async () => {
-    if (
-      !placeVendorId ||
-      !placeImage ||
-      placeHeadline.trim().length < 2 ||
-      placing
-    )
-      return;
-    setPlacing(true);
-    try {
-      const res = await fetch("/api/hub/buyer-adverts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vendorId: placeVendorId,
-          imageUrl: placeImage,
-          headline: placeHeadline.trim(),
-          blurb: placeBlurb.trim(),
-        }),
-      });
-      if (res.status === 403) {
-        setPlaceOpen(false);
-        setLock("place");
-        return;
-      }
-      if (!res.ok) return;
-      const advertData = (await res.json().catch(() => null)) as {
-        advert?: { id: string };
-      } | null;
-      setPlaceOpen(false);
-      setNotice("Advert placed");
-      const chosen = chosenVendor;
-      const newAdvertItem: HubTimelineItem = {
-        id: advertData?.advert?.id || `advert-${Date.now()}`,
-        vendorId: placeVendorId,
-        kind: "promotion",
-        at: new Date().toISOString(),
-        title: placeHeadline.trim(),
-        body: placeBlurb.trim() || null,
-        imageUrl: placeImage,
-        storeName: chosen?.name || "Vendor",
-        storeHandle: chosen?.name
-          ? chosen.name.toLowerCase().replace(/\s+/g, "")
-          : null,
-        avatar: chosen?.images?.[0] || null,
-        verified: true,
-        sponsored: true,
-        sectors: [],
-        place: null,
-        images: [placeImage],
-        ratingAvg: null,
-        ratingCount: 0,
-        whatsapp: null,
-        social: null,
-        advertId: advertData?.advert?.id || `ad-${Date.now()}`,
-        placedByBuyer: true,
-        fastDelivery: false,
-        favourite: false,
-        trusted: true,
-        sentiment: null,
-        reviewableOrderId: null,
-        tier: undefined,
-      };
-      setDisplayedTimeline((prev) => [newAdvertItem, ...prev]);
-    } finally {
-      setPlacing(false);
-    }
-  };
-
-  const submitBroadcast = async () => {
-    const message = broadcastBody.trim();
-    if (message.length < 2 || broadcasting) return;
+  const submitBroadcast = async (message: string) => {
+    const trimmed = message.trim();
+    if (trimmed.length < 2 || broadcasting) return;
     if (!home.premium) {
       setLock("broadcast");
       return;
@@ -949,13 +993,16 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
       const res = await fetch("/api/hub/buyer-broadcasts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message: trimmed }),
       });
       if (res.status === 403) {
         setLock("broadcast");
         return;
       }
-      if (!res.ok) return;
+      if (!res.ok) {
+        toast.error("Failed to broadcast message");
+        return;
+      }
       const data = (await res.json()) as {
         id?: string;
         audienceCount?: number;
@@ -963,20 +1010,27 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
       };
       setBuyerBroadcasts((current) => [
         {
-          id: data.id ?? message,
-          body: message,
+          id: data.id ?? trimmed,
+          body: trimmed,
           at: new Date().toISOString(),
           audienceCount: data.audienceCount ?? 0,
           status: "queued",
         },
         ...current,
       ]);
-      setBroadcastBody("");
       setNotice(
         `Queued · ${data.audienceCount ?? 0} ${
           (data.audienceCount ?? 0) === 1 ? "contact" : "contacts"
         }`,
       );
+      toast.success(
+        `Broadcast queued for ${data.audienceCount ?? 0} ${
+          (data.audienceCount ?? 0) === 1 ? "vendor" : "vendors"
+        }!`,
+      );
+      setMessageContactsOpen(false);
+    } catch {
+      toast.error("Network error sending broadcast");
     } finally {
       setBroadcasting(false);
     }
@@ -1013,8 +1067,9 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   };
 
   const showMobileVendors = mobilePane === "vendors";
-  const vendorCap = home.hubPreview?.vendorCap ?? 6;
-  const vendorsCapped = Boolean(home.hubPreview?.vendorsCapped);
+  const vendorCap = home.premium ? 6 : (home.hubPreview?.vendorCap ?? 6);
+  const vendorsCapped =
+    !home.premium && Boolean(home.hubPreview?.vendorsCapped);
 
   const featuredPanelProps = {
     vendors: featured,
@@ -1045,22 +1100,25 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
       />
 
       <div className="w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-5">
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4 items-start">
-          <div className="min-w-0 space-y-4">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_330px]">
+          {/* ── LEFT COLUMN: Your Tools (Fixed / Sticky sidebar) ── */}
+          <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
             <BuyerTools
               home={home}
               prefs={prefs}
               broadcasts={buyerBroadcasts}
-              body={broadcastBody}
-              sending={broadcasting}
               notice={notice}
-              onBody={setBroadcastBody}
-              onSend={submitBroadcast}
               onPlace={openPlace}
               onPrefs={savePrefs}
               onLock={(kind) => setLock(kind)}
+              onOpenChooseSectors={() => setChooseSectorsOpen(true)}
+              onOpenMessageContacts={() => setMessageContactsOpen(true)}
             />
+            <HubSidebarFooter />
+          </aside>
 
+          {/* ── MIDDLE COLUMN: Social Timeline Feed ── */}
+          <main className="min-w-0 space-y-4">
             {/* Mobile Listings / Featured Vendors — ThemeToggle / TabBar shell */}
             <div className="lg:hidden px-4">
               <TabBar
@@ -1082,14 +1140,20 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
                     label: "All sectors",
                     icon: StoreIcon,
                     active: sector === null,
-                    onClick: () => setSector(null),
+                    onClick: () => {
+                      setSector(null);
+                      setMobilePane("listings");
+                    },
                   },
                   ...sectorGroups.map((row) => ({
                     key: row.id,
                     label: row.label,
                     icon: sectorIcon(row.id),
                     active: sector === row.id,
-                    onClick: () => setSector(row.id),
+                    onClick: () => {
+                      setSector(row.id);
+                      setMobilePane("listings");
+                    },
                   })),
                 ]}
                 getKey={(item) => item.key}
@@ -1110,25 +1174,12 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
             </div>
 
             <div
+              id="hub-feed"
               className={cn(
-                "space-y-4",
+                "space-y-4 scroll-mt-20",
                 showMobileVendors && "hidden lg:block",
               )}
             >
-              <CommunityPanel
-                home={home}
-                posts={posts}
-                updates={updates}
-                now={now}
-                postBody={postBody}
-                posting={posting}
-                onPostBody={setPostBody}
-                onPosted={(post) => setPosts((current) => [post, ...current])}
-                onReport={reportPost}
-                onLock={() => setLock("community")}
-                onPosting={setPosting}
-              />
-
               <NewPostsIndicator
                 count={pendingUpdates.length}
                 onClick={handleApplyUpdates}
@@ -1139,93 +1190,113 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
                 }
               />
 
-              {feed.length === 0 ? (
-                <div className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-10 text-center">
+              {boostedListings.length === 0 && feed.length === 0 ? (
+                <div className="bg-surface border border-gray-200 dark:border-white/10 rounded-2xl p-10 text-center shadow-xs">
                   <p className="font-semibold text-ink">
-                    Nothing in this view yet
+                    {sector
+                      ? `No listings in ${sectorLabel(sector)} yet`
+                      : "Nothing in this view yet"}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Listings and labelled promotions show up as vendors publish
-                    them.
+                  <p className="text-sm text-gray-500 dark:text-ink/60 mt-1">
+                    {sector ? (
+                      <>
+                        No products or adverts have been published in this
+                        sector yet.
+                        <button
+                          type="button"
+                          onClick={() => setSector(null)}
+                          className="block mx-auto mt-3 text-xs font-semibold text-orange-600 hover:underline"
+                        >
+                          View all sectors
+                        </button>
+                      </>
+                    ) : (
+                      "Listings and labelled promotions show up as vendors publish them."
+                    )}
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
-                    {visibleFeed.map((item, index) => {
-                      const cardKey = `${item.id}-${index}`;
-                      const fadeLast =
-                        Boolean(home.hubPreview?.listingsCapped) &&
-                        index === visibleFeed.length - 1;
-                      const fullWidth = item.sponsored || fadeLast;
-                      const card = (
-                        <FeedCard
-                          item={item}
-                          now={now}
-                          premium={home.premium}
-                          favourite={favourites.has(item.vendorId)}
-                          compact={!item.sponsored}
-                          onContact={() => openContact(contactFromItem(item))}
-                          onVisit={() => openVisit(contactFromItem(item))}
-                          onReview={() => openReview(contactFromItem(item))}
-                          onFavourite={() => toggleFavourite(item.vendorId)}
-                          onBoost={
-                            item.advertId
-                              ? () => boostAdvert(item.advertId as string)
-                              : undefined
-                          }
-                          onOpenAdvertImage={setAdvertLightboxSrc}
-                        />
-                      );
-                      if (!fadeLast) {
-                        return (
-                          <div
-                            key={cardKey}
-                            className={
-                              fullWidth ? "col-span-2 lg:col-span-1" : undefined
-                            }
-                          >
-                            {card}
-                          </div>
-                        );
-                      }
-                      return (
+                  {/* Boosted Product Listings Carousel */}
+                  {boostedListings.length > 0 && (
+                    <BoostedListingsCarousel
+                      items={boostedListings}
+                      now={now}
+                      onOpenListing={(item) => {
+                        if (item.listing?.slug) {
+                          navigate(`/${item.listing.slug}`);
+                        } else {
+                          openContact(contactFromItem(item));
+                        }
+                      }}
+                    />
+                  )}
+
+                  {/* Listings Feed Stream */}
+                  {visibleFeed.map((item, index) => {
+                    const cardKey = `${item.id}-${index}`;
+                    const fadeLast =
+                      !home.premium &&
+                      Boolean(home.hubPreview?.listingsCapped) &&
+                      index === visibleFeed.length - 1;
+                    const card = (
+                      <FeedCard
+                        item={item}
+                        now={now}
+                        premium={home.premium}
+                        favourite={favourites.has(item.vendorId)}
+                        featuredVendors={home.featured}
+                        onContact={() => openContact(contactFromItem(item))}
+                        onVisit={() => openVisit(contactFromItem(item))}
+                        onReview={() => openReview(contactFromItem(item))}
+                        onFavourite={() => toggleFavourite(item.vendorId)}
+                        onBoost={
+                          item.advertId
+                            ? () => boostAdvert(item.advertId as string)
+                            : undefined
+                        }
+                        onOpenAdvertImage={setAdvertLightboxSrc}
+                      />
+                    );
+                    if (!fadeLast) {
+                      return <div key={cardKey}>{card}</div>;
+                    }
+                    return (
+                      <div
+                        key={cardKey}
+                        className="relative overflow-hidden rounded-2xl"
+                      >
                         <div
-                          key={cardKey}
-                          className="relative col-span-2 lg:col-span-1 overflow-hidden rounded-none lg:rounded-2xl"
+                          aria-hidden
+                          className="pointer-events-none select-none blur-[2px] opacity-50 saturate-50 [mask-image:linear-gradient(to_bottom,black_0%,black_35%,transparent_100%)]"
                         >
-                          <div
-                            aria-hidden
-                            className="pointer-events-none select-none blur-[2px] opacity-50 saturate-50 [mask-image:linear-gradient(to_bottom,black_0%,black_35%,transparent_100%)]"
-                          >
-                            {card}
-                          </div>
-                          <div className="absolute inset-0 flex flex-col items-center justify-end pb-6 pt-16 bg-gradient-to-t from-canvas via-canvas/90 to-transparent">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src="/hub/premium-listings.jpg"
-                              alt=""
-                              className="h-14 w-14 rounded-2xl object-cover shadow-sm ring-1 ring-black/5"
-                            />
-                            <p className="mt-3 text-sm font-bold text-ink text-center px-4">
-                              More products waiting
-                            </p>
-                            <p className="mt-1 text-xs text-gray-600 text-center px-6 max-w-sm leading-relaxed">
-                              Upgrade to Premium to browse every listing vendors
-                              put on Hub.
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => navigate("/pricing?for=buyers")}
-                              className="mt-3 inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-orange-600 transition-colors shadow-sm"
-                            >
-                              Upgrade to Premium
-                            </button>
-                          </div>
+                          {card}
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="absolute inset-0 flex flex-col items-center justify-end pb-6 pt-16 bg-gradient-to-t from-canvas via-canvas/90 to-transparent">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src="/hub/premium-listings.jpg"
+                            alt=""
+                            className="h-14 w-14 rounded-2xl object-cover shadow-sm ring-1 ring-black/5"
+                          />
+                          <p className="mt-3 text-sm font-bold text-ink text-center px-4">
+                            More products waiting
+                          </p>
+                          <p className="mt-1 text-xs text-gray-600 text-center px-6 max-w-sm leading-relaxed">
+                            Upgrade to Premium to browse every listing vendors
+                            put on Hub.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => navigate("/pricing?for=buyers")}
+                            className="mt-3 inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-orange-600 transition-colors shadow-sm"
+                          >
+                            Upgrade to Premium
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
 
                   {/* Auto pagination sentinel */}
                   {hasMore && (
@@ -1240,60 +1311,67 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
                 </div>
               )}
             </div>
-          </div>
+          </main>
 
-          <aside className="hidden lg:block space-y-4 lg:self-stretch">
+          {/* ── RIGHT COLUMN: Featured Vendors / Sidebar ── */}
+          <aside
+            className={cn(
+              "space-y-4 lg:col-span-2 xl:col-span-1",
+              home.premium
+                ? "xl:sticky xl:top-20 xl:self-start"
+                : "xl:self-stretch",
+            )}
+          >
             <FeaturedVendorsPanel {...featuredPanelProps} />
 
-            <div className="space-y-4 lg:sticky lg:top-16">
-              <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-4">
-                <h3 className="text-sm font-bold text-ink mb-3">
-                  Popular Sectors
-                </h3>
-                {sectorGroups.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    Sectors appear once stores choose them.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {sectorGroups.slice(0, 6).map((row) => {
-                      const Icon = sectorIcon(row.id);
-                      return (
-                        <button
-                          key={row.id}
-                          type="button"
-                          onClick={() => setSector(row.id)}
-                          className={cn(
-                            "rounded-xl border px-3 py-3 text-left transition-colors",
-                            sector === row.id
-                              ? "border-orange-300 bg-orange-50"
-                              : "border-gray-200 bg-surface hover:border-orange-200",
-                          )}
-                        >
-                          <Icon size={16} className="text-orange-500" />
-                          <span className="mt-2 block text-xs font-semibold text-ink leading-snug">
-                            {row.label}
-                          </span>
-                          <span className="block text-[11px] text-gray-500 mt-0.5">
-                            {row.count} {row.count === 1 ? "vendor" : "vendors"}
-                          </span>
-                        </button>
-                      );
-                    })}
+            {/* Upgrade to Premium for buyers if !home.premium */}
+            {!home.premium && (
+              <div className="space-y-4 xl:sticky xl:top-20">
+                <section className="rounded-2xl border border-orange-200 dark:border-orange-500/20 bg-gradient-to-b from-orange-50 to-orange-50/30 dark:from-orange-950/20 dark:to-transparent p-4 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-orange-500 text-white shadow-xs">
+                      <CrownIcon size={16} weight="fill" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-bold text-ink">
+                        Upgrade to Premium
+                      </h4>
+                      <p className="text-[10px] text-gray-500 dark:text-ink/60">
+                        Browse uncapped listings & perks
+                      </p>
+                    </div>
                   </div>
-                )}
-              </section>
 
-              <section className="rounded-none lg:rounded-2xl border border-orange-100 bg-orange-50 p-4">
-                <h3 className="text-sm font-bold text-ink">
-                  Support Local Business
-                </h3>
-                <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                  Shop from vendors who list on Velte. A sponsored card is
-                  labelled. Ratings appear only after a real review.
-                </p>
-              </section>
-            </div>
+                  <ul className="mt-3 space-y-1.5 text-xs text-ink/80">
+                    {[
+                      "Uncapped access to every listing",
+                      "Priority seller response channels",
+                      "Verified Buyer community badge",
+                    ].map((item) => (
+                      <li
+                        key={item}
+                        className="flex items-center gap-2 text-[11px]"
+                      >
+                        <CheckIcon
+                          size={12}
+                          className="shrink-0 text-orange-500"
+                        />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate("/pricing?for=buyers")}
+                    className="mt-3.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ink text-canvas py-2 text-xs font-bold transition-opacity hover:opacity-90 cursor-pointer"
+                  >
+                    <span>Upgrade to Premium</span>
+                    <ArrowRightIcon size={13} aria-hidden />
+                  </button>
+                </section>
+              </div>
+            )}
           </aside>
         </div>
       </div>
@@ -1340,11 +1418,10 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
               </div>
             </div>
             {contact.imageUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <ProtectedPosterPreview
                 src={contact.imageUrl}
-                alt=""
-                className="mt-4 h-40 w-full object-cover rounded-xl bg-gray-100"
+                fit="cover"
+                className="mt-4 h-40 w-full rounded-xl bg-gray-100"
               />
             )}
             {contact.description && (
@@ -1571,121 +1648,6 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
         </div>
       )}
 
-      {placeOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Place an advert"
-          className={cn(
-            "fixed inset-0 z-[70] h-dvh w-dvw flex items-end sm:items-center justify-center p-4",
-            modalScrimClass(contact !== null),
-          )}
-          onClick={() => setPlaceOpen(false)}
-        >
-          <div
-            className="bg-surface w-full sm:max-w-md rounded-2xl border border-gray-200 p-5"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h3 className="text-base font-bold text-ink">Place an advert</h3>
-            <p className="mt-1 text-xs text-gray-500 leading-relaxed">
-              It stays at the top, labelled sponsored, and marked placed by a
-              buyer. The commission amount is not set, so no naira figure is
-              shown.
-            </p>
-            {advertVendors.length === 0 ? (
-              <p className="mt-4 text-sm text-gray-600">
-                No vendor on this page has a photo yet. An advert uses a photo
-                already on that store.
-              </p>
-            ) : (
-              <div className="mt-4 space-y-3">
-                <label className="block text-xs font-semibold text-ink">
-                  Vendor
-                  <select
-                    value={placeVendorId}
-                    onChange={(event) => {
-                      const next = advertVendors.find(
-                        (vendor) => vendor.vendorId === event.target.value,
-                      );
-                      setPlaceVendorId(event.target.value);
-                      setPlaceImage(next?.images[0] ?? "");
-                    }}
-                    className="mt-1 w-full rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-ink"
-                  >
-                    {advertVendors.map((vendor) => (
-                      <option key={vendor.vendorId} value={vendor.vendorId}>
-                        {vendor.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {chosenVendor && (
-                  <div className="flex gap-2 overflow-x-auto">
-                    {chosenVendor.images.map((url) => (
-                      <button
-                        key={url}
-                        type="button"
-                        onClick={() => setPlaceImage(url)}
-                        className={cn(
-                          "shrink-0 rounded-lg border p-0.5",
-                          placeImage === url
-                            ? "border-orange-500"
-                            : "border-gray-200",
-                        )}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={url}
-                          alt=""
-                          className="h-16 w-16 rounded-md object-cover"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <input
-                  value={placeHeadline}
-                  onChange={(event) => setPlaceHeadline(event.target.value)}
-                  maxLength={80}
-                  placeholder="Headline"
-                  className="w-full rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-ink"
-                />
-                <textarea
-                  value={placeBlurb}
-                  onChange={(event) => setPlaceBlurb(event.target.value)}
-                  maxLength={280}
-                  rows={3}
-                  placeholder="Short blurb"
-                  className="w-full rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-ink"
-                />
-              </div>
-            )}
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPlaceOpen(false)}
-                className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-ink"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={
-                  placing ||
-                  !placeVendorId ||
-                  !placeImage ||
-                  placeHeadline.trim().length < 2
-                }
-                onClick={submitPlace}
-                className="flex-1 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
-              >
-                {placing ? "Placing…" : "Place advert"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {reviewWait && (
         <div
           role="dialog"
@@ -1715,6 +1677,23 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
           </div>
         </div>
       )}
+
+      <ChooseSectorsModal
+        open={chooseSectorsOpen}
+        initialSectors={prefs.promoSectors}
+        onClose={() => setChooseSectorsOpen(false)}
+        onSave={(selected) => {
+          savePrefs({ ...prefs, promoSectors: selected }, true);
+        }}
+      />
+
+      <MessageContactsModal
+        open={messageContactsOpen}
+        onClose={() => setMessageContactsOpen(false)}
+        onSend={submitBroadcast}
+        sending={broadcasting}
+        broadcasts={buyerBroadcasts}
+      />
 
       {lock && (
         <HubLockedModal
@@ -1890,162 +1869,640 @@ function SocialLinks({ social }: { social: HubSocial }) {
   );
 }
 
-function BuyerTools({
-  home,
-  prefs,
-  broadcasts,
-  body,
-  sending,
-  notice,
-  onBody,
-  onSend,
-  onPlace,
-  onPrefs,
-  onLock,
+function ChooseSectorsModal({
+  open,
+  initialSectors,
+  onClose,
+  onSave,
 }: {
-  home: HubHome;
-  prefs: HubBroadcastPrefs;
-  broadcasts: HubBuyerBroadcast[];
-  body: string;
-  sending: boolean;
-  notice: string | null;
-  onBody: (value: string) => void;
-  onSend: () => void;
-  onPlace: () => void;
-  onPrefs: (next: HubBroadcastPrefs, includeSectors?: boolean) => void;
-  onLock: (kind: "broadcast" | "sectors") => void;
+  open: boolean;
+  initialSectors: string[];
+  onClose: () => void;
+  onSave: (selected: string[]) => void;
 }) {
-  const allSectors = prefs.promoSectors.length === 0;
+  const [selected, setSelected] = useState<string[]>(initialSectors);
+  const [query, setQuery] = useState("");
 
-  const toggleSector = (value: string) => {
-    const has = prefs.promoSectors.includes(value);
-    onPrefs(
-      {
-        ...prefs,
-        promoSectors: has
-          ? prefs.promoSectors.filter((sector) => sector !== value)
-          : [...prefs.promoSectors, value],
-      },
-      true,
+  useEffect(() => {
+    if (open) {
+      setSelected(initialSectors);
+      setQuery("");
+    }
+  }, [open, initialSectors]);
+
+  if (!open) return null;
+
+  const isChecked = (catId: string) =>
+    selected.some((s) => s === catId || sectorGroupId(s) === catId);
+
+  const toggle = (catId: string) => {
+    setSelected((prev) => {
+      const has = prev.some((s) => s === catId || sectorGroupId(s) === catId);
+      if (has) {
+        return prev.filter((s) => s !== catId && sectorGroupId(s) !== catId);
+      }
+      return [...prev, catId];
+    });
+  };
+
+  const handleSelectAll = () => {
+    setSelected(SECTOR_TAXONOMY.map((c) => c.id));
+  };
+
+  const handleClear = () => {
+    setSelected([]);
+  };
+
+  const handleSave = () => {
+    onSave(selected);
+    onClose();
+  };
+
+  const filteredCategories = SECTOR_TAXONOMY.filter((category) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      category.label.toLowerCase().includes(q) ||
+      (category.sectors ?? []).some((s) => s.label.toLowerCase().includes(q))
     );
+  });
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Choose sectors"
+      className={cn(
+        "fixed inset-0 z-50 h-dvh w-dvw flex items-end sm:items-center justify-center p-4",
+        modalScrimClass(),
+      )}
+      onClick={onClose}
+    >
+      <div
+        className="bg-surface w-full sm:max-w-lg rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-2xl flex flex-col max-h-[85dvh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-white/5">
+          <div>
+            <h3 className="text-base font-bold text-ink">Choose Sectors</h3>
+            <p className="text-xs text-gray-500 dark:text-ink/60 mt-0.5">
+              Select sectors for vendor alerts &amp; deals
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:text-ink hover:bg-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            <CloseIcon size={16} />
+          </button>
+        </div>
+
+        {/* Search input */}
+        <div className="pt-3 pb-1">
+          <div className="relative">
+            <SearchIcon
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+            />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search platform sectors or specialties…"
+              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 pl-9 pr-3 py-2 text-xs text-ink placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Quick Actions (Select all / Clear) */}
+        <div className="flex items-center justify-between pt-2 pb-2 text-xs">
+          <span className="text-gray-500 dark:text-ink/60 font-medium text-[11px]">
+            {selected.length === 0
+              ? "All sectors active (default)"
+              : `${selected.length} of ${SECTOR_TAXONOMY.length} selected`}
+          </span>
+          <div className="flex items-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              className="text-orange-600 dark:text-orange-400 font-semibold hover:underline cursor-pointer"
+            >
+              Select all
+            </button>
+            <span className="text-gray-300 dark:text-white/20">·</span>
+            <button
+              type="button"
+              onClick={handleClear}
+              className="text-gray-500 dark:text-ink/60 hover:text-ink font-semibold hover:underline cursor-pointer"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        {/* Sectors List with checkboxes aligned to the right */}
+        <div className="flex-1 overflow-y-auto space-y-1 pr-1 divide-y divide-gray-100 dark:divide-white/5">
+          {filteredCategories.length === 0 ? (
+            <p className="text-center py-8 text-xs text-gray-400">
+              No sectors matching &quot;{query}&quot;
+            </p>
+          ) : (
+            filteredCategories.map((category) => {
+              const checked = isChecked(category.id);
+              const Icon = sectorIcon(category.id);
+              return (
+                <label
+                  key={category.id}
+                  htmlFor={`sector-cb-${category.id}`}
+                  className="flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-orange-50/50 dark:hover:bg-white/5 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
+                      <Icon size={16} />
+                    </span>
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold text-ink block truncate">
+                        {category.label}
+                      </span>
+                      <span className="text-[10px] text-gray-400 dark:text-ink/40 block truncate max-w-xs">
+                        {(category.sectors ?? [])
+                          .slice(0, 3)
+                          .map((s) => s.label)
+                          .join(", ")}
+                        {(category.sectors ?? []).length > 3 ? "…" : ""}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="shrink-0 flex items-center justify-center pl-2">
+                    <input
+                      type="checkbox"
+                      id={`sector-cb-${category.id}`}
+                      checked={checked}
+                      onChange={() => toggle(category.id)}
+                      className="h-4 w-4 rounded border-gray-300 dark:border-white/20 text-orange-600 focus:ring-orange-500 cursor-pointer accent-orange-600"
+                    />
+                  </div>
+                </label>
+              );
+            })
+          )}
+        </div>
+
+        {/* Modal Actions */}
+        <div className="pt-4 mt-3 border-t border-gray-100 dark:border-white/5 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-gray-200 dark:border-white/10 px-4 py-2.5 text-xs font-semibold text-ink hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            className="flex-1 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-bold text-white hover:bg-orange-600 transition-colors shadow-sm cursor-pointer"
+          >
+            Save preferences
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MessageContactsModal({
+  open,
+  onClose,
+  onSend,
+  sending,
+  broadcasts,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSend: (message: string) => Promise<void> | void;
+  sending: boolean;
+  broadcasts: HubBuyerBroadcast[];
+}) {
+  const [activeTab, setActiveTab] = useState<"compose" | "history">("compose");
+  const [body, setBody] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setBody("");
+      setActiveTab("compose");
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const quickStarters = [
+    "Bulk order quotation request",
+    "Availability & fastest delivery time",
+    "Looking for vendor partnership",
+    "Custom specification inquiry",
+  ];
+
+  const canSend = body.trim().length >= 5 && !sending;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSend) return;
+    onSend(body.trim());
   };
 
   return (
-    <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl px-4">
-      {notice && (
-        <p className="pt-3 text-xs font-semibold text-orange-600">{notice}</p>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Message contacts"
+      className={cn(
+        "fixed inset-0 z-50 h-dvh w-dvw flex items-end sm:items-center justify-center p-4",
+        modalScrimClass(),
       )}
-      <ToolRow icon={StoreIcon} title="Promote a shop">
-        <TextAction onClick={onPlace} locked={!home.premium}>
-          Place an Advert
-        </TextAction>
-      </ToolRow>
-      <div className="border-t border-gray-100">
-        <ToolRow icon={BellIcon} title="Vendor alerts">
-          <Switch
-            on={prefs.promoEnabled}
-            label="Vendor alerts"
-            onClick={() =>
-              onPrefs({ ...prefs, promoEnabled: !prefs.promoEnabled })
-            }
-          />
-        </ToolRow>
-        {prefs.promoEnabled && (
-          <div className="pb-3 pl-12 flex flex-wrap gap-1.5">
-            {home.premium ? (
-              <>
-                <TextAction
-                  active={allSectors}
-                  onClick={() => onPrefs({ ...prefs, promoSectors: [] }, true)}
-                >
-                  All Sectors
-                </TextAction>
-                {(home.sectors ?? []).slice(0, 8).map((row) => (
-                  <Chip
-                    key={row.value}
-                    active={
-                      !allSectors && prefs.promoSectors.includes(row.value)
-                    }
-                    onClick={() => toggleSector(row.value)}
+      onClick={onClose}
+    >
+      <div
+        className="bg-surface w-full sm:max-w-lg rounded-2xl border border-gray-200 dark:border-white/10 shadow-2xl flex flex-col max-h-[85dvh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 pb-3 border-b border-gray-100 dark:border-white/5">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400">
+              <SendIcon size={18} />
+            </span>
+            <div>
+              <h3 className="text-base font-bold text-ink">Message Contacts</h3>
+              <p className="text-xs text-gray-500 dark:text-ink/60 mt-0.5">
+                Send a direct broadcast notice to vendors on Velte
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:text-ink hover:bg-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            <CloseIcon size={16} />
+          </button>
+        </div>
+
+        {/* Tab selection */}
+        <div className="flex border-b border-gray-100 dark:border-white/5 px-5 bg-gray-50/50 dark:bg-white/[0.02]">
+          <button
+            type="button"
+            onClick={() => setActiveTab("compose")}
+            className={cn(
+              "py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer",
+              activeTab === "compose"
+                ? "border-orange-500 text-orange-600 dark:text-orange-400"
+                : "border-transparent text-gray-500 dark:text-ink/60 hover:text-ink",
+            )}
+          >
+            Compose Broadcast
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("history")}
+            className={cn(
+              "py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5",
+              activeTab === "history"
+                ? "border-orange-500 text-orange-600 dark:text-orange-400"
+                : "border-transparent text-gray-500 dark:text-ink/60 hover:text-ink",
+            )}
+          >
+            <span>History</span>
+            {broadcasts.length > 0 && (
+              <span className="rounded-full bg-gray-200 dark:bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-ink">
+                {broadcasts.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Body */}
+        {activeTab === "compose" ? (
+          <form
+            onSubmit={handleSubmit}
+            className="p-5 flex-1 flex flex-col overflow-y-auto space-y-4"
+          >
+            {/* Audience Banner */}
+            <div className="rounded-xl border border-orange-200/70 bg-gradient-to-r from-orange-50/70 to-amber-50/70 dark:border-orange-500/20 dark:from-orange-950/20 dark:to-amber-950/20 p-3 flex items-start gap-2.5">
+              <MegaphoneIcon
+                size={16}
+                className="text-orange-600 dark:text-orange-400 shrink-0 mt-0.5"
+              />
+              <div className="text-[11px] leading-relaxed text-gray-600 dark:text-ink/70">
+                <span className="font-semibold text-ink">
+                  Targeted Vendor Delivery:
+                </span>{" "}
+                Your note broadcasts instantly to all active verified vendors
+                matching your sector preferences.
+              </div>
+            </div>
+
+            {/* Quick Starters */}
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-ink/50 mb-1.5">
+                Quick Starters
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {quickStarters.map((starter) => (
+                  <button
+                    key={starter}
+                    type="button"
+                    onClick={() => setBody(starter + ": ")}
+                    className="rounded-lg border border-gray-200 dark:border-white/10 bg-surface px-2.5 py-1 text-[11px] font-medium text-gray-600 dark:text-ink/70 hover:border-orange-300 dark:hover:border-orange-500/30 hover:text-orange-600 dark:hover:text-orange-400 transition-colors cursor-pointer"
                   >
-                    {sectorLabel(row.value)}
-                  </Chip>
+                    + {starter}
+                  </button>
                 ))}
-              </>
+              </div>
+            </div>
+
+            {/* Message input */}
+            <div className="flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  htmlFor="broadcast-msg-input"
+                  className="text-xs font-bold text-ink"
+                >
+                  Your Broadcast Message
+                </label>
+                <span
+                  className={cn(
+                    "text-[11px] font-medium",
+                    body.length > 250
+                      ? "text-orange-600 font-bold"
+                      : "text-gray-400 dark:text-ink/50",
+                  )}
+                >
+                  {body.length}/280
+                </span>
+              </div>
+              <textarea
+                id="broadcast-msg-input"
+                rows={4}
+                maxLength={280}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Write your note to vendors (e.g., 'Looking for wholesale supplier for packaged snacks in Lagos with 48h delivery...')"
+                className="w-full flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-surface p-3 text-xs text-ink placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none leading-relaxed"
+                autoFocus
+              />
+              <p className="mt-1.5 text-[11px] text-gray-400 dark:text-ink/50">
+                Minimum 5 characters. Keep it clear, polite, and actionable.
+              </p>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-gray-200 dark:border-white/10 px-4 py-2 text-xs font-semibold text-ink hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!canSend}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 px-5 py-2 text-xs font-bold text-white transition-all disabled:opacity-40 cursor-pointer shadow-sm"
+              >
+                <SendIcon size={13} />
+                <span>{sending ? "Broadcasting…" : "Send Broadcast"}</span>
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="p-5 flex-1 overflow-y-auto space-y-3">
+            {broadcasts.length === 0 ? (
+              <div className="py-12 text-center">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 dark:bg-white/5 text-gray-400 mb-2">
+                  <SendIcon size={22} />
+                </span>
+                <p className="text-xs font-semibold text-ink">
+                  No Broadcasts Yet
+                </p>
+                <p className="text-[11px] text-gray-500 dark:text-ink/60 mt-1 max-w-xs mx-auto">
+                  Messages you send to vendor contacts will appear here with
+                  delivery stats.
+                </p>
+              </div>
             ) : (
-              <>
-                <TextAction active>All Sectors</TextAction>
-                <TextAction onClick={() => onLock("sectors")} locked>
-                  Choose sectors
-                </TextAction>
-              </>
+              <ul className="space-y-2.5">
+                {broadcasts.map((b) => (
+                  <li
+                    key={b.id}
+                    className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02] space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="inline-flex items-center gap-1 font-bold text-orange-600 dark:text-orange-400">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Queued · {b.audienceCount ?? 0}{" "}
+                        {b.audienceCount === 1 ? "vendor" : "vendors"}
+                      </span>
+                      <span className="text-gray-400 dark:text-ink/50">
+                        {timeAgo(b.at)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-ink leading-relaxed font-medium">
+                      {b.body}
+                    </p>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}
       </div>
-      <div className="border-t border-gray-100">
-        <ToolRow icon={SendIcon} title="Message contacts">
-          {home.premium ? (
-            <button
-              type="button"
-              disabled={sending || body.trim().length < 2}
-              onClick={onSend}
-              className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-            >
-              {sending ? "Sending…" : "Send"}
-            </button>
-          ) : (
-            <TextAction onClick={() => onLock("broadcast")} locked>
-              Send
-            </TextAction>
-          )}
-        </ToolRow>
-        {home.premium && (
-          <div className="pb-3 pl-12">
-            <input
-              value={body}
-              onChange={(event) => onBody(event.target.value)}
-              maxLength={280}
-              placeholder="A short note"
-              className="w-full rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm text-ink placeholder:text-gray-400"
-            />
-          </div>
-        )}
-        {broadcasts.length > 0 && (
-          <ul className="pb-3 pl-12 space-y-1">
-            {broadcasts.map((row) => (
-              <li key={row.id} className="text-xs text-gray-500 truncate">
-                <span className="font-semibold text-ink">
-                  Queued · {row.audienceCount}
-                </span>
-                {"  "}
-                {row.body}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </section>
+    </div>
   );
 }
 
-function ToolRow({
-  icon: Icon,
-  title,
-  children,
+function BuyerTools({
+  home,
+  prefs,
+  broadcasts,
+  notice,
+  onPlace,
+  onPrefs,
+  onLock,
+  onOpenChooseSectors,
+  onOpenMessageContacts,
 }: {
-  icon: IconComponent;
-  title: string;
-  children: ReactNode;
+  home: HubHome;
+  prefs: HubBroadcastPrefs;
+  broadcasts: HubBuyerBroadcast[];
+  notice: string | null;
+  onPlace: () => void;
+  onPrefs: (next: HubBroadcastPrefs, includeSectors?: boolean) => void;
+  onLock: (kind: "broadcast" | "sectors" | "place") => void;
+  onOpenChooseSectors: () => void;
+  onOpenMessageContacts: () => void;
 }) {
+  const allSectors = prefs.promoSectors.length === 0;
+
   return (
-    <div className="flex items-center gap-3 py-3">
-      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 text-orange-600 shrink-0">
-        <Icon size={16} />
-      </span>
-      <p className="min-w-0 flex-1 text-sm font-semibold text-ink">{title}</p>
-      {children}
-    </div>
+    <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-surface p-4 shadow-xs">
+      <div className="pb-3 border-b border-gray-100 dark:border-white/5">
+        <h3 className="text-sm font-bold text-ink">Your Tools</h3>
+        <p className="mt-0.5 text-[11px] text-gray-500 dark:text-ink/60">
+          Preferences &amp; promotions
+        </p>
+      </div>
+
+      {notice && (
+        <p className="pt-3 text-xs font-semibold text-orange-600">{notice}</p>
+      )}
+
+      <div className="mt-3 space-y-2">
+        {/* Tool 1: Promote a Shop / Place Advert */}
+        <button
+          type="button"
+          onClick={onPlace}
+          className="w-full group flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 dark:border-white/5 hover:border-orange-300 dark:hover:border-orange-500/30 hover:bg-orange-50/50 dark:hover:bg-orange-500/5 transition-all text-left cursor-pointer"
+        >
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400 group-hover:bg-orange-500 group-hover:text-white transition-colors">
+            <StoreIcon size={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-bold text-ink group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+              Place an Advert
+            </span>
+            <p className="text-[11px] text-gray-500 dark:text-ink/60 truncate mt-0.5">
+              Promote your shop or listing
+            </p>
+          </div>
+          {!home.premium ? (
+            <LockIcon size={14} className="shrink-0 text-gray-400" />
+          ) : (
+            <ChevronRightIcon
+              size={15}
+              className="shrink-0 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all"
+            />
+          )}
+        </button>
+
+        {/* Tool 2: Vendor Alerts */}
+        <div className="rounded-xl border border-gray-100 dark:border-white/5 p-2.5 transition-all">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
+              <BellIcon size={17} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-bold text-ink">Vendor Alerts</span>
+              <p className="text-[11px] text-gray-500 dark:text-ink/60 truncate mt-0.5">
+                Deals &amp; promotional updates
+              </p>
+            </div>
+            <Switch
+              on={prefs.promoEnabled}
+              label="Vendor alerts"
+              onClick={() =>
+                onPrefs({ ...prefs, promoEnabled: !prefs.promoEnabled })
+              }
+            />
+          </div>
+          {prefs.promoEnabled && (
+            <div className="mt-2.5 pt-2.5 border-t border-gray-100 dark:border-white/5 flex flex-wrap gap-1.5">
+              <TextAction
+                active={allSectors}
+                onClick={() => onPrefs({ ...prefs, promoSectors: [] }, true)}
+              >
+                All sectors
+              </TextAction>
+              <TextAction
+                active={!allSectors}
+                locked={!home.premium}
+                onClick={() => {
+                  if (!home.premium) {
+                    onLock("sectors");
+                  } else {
+                    onOpenChooseSectors();
+                  }
+                }}
+              >
+                <span>Choose sectors</span>
+                {!allSectors && prefs.promoSectors.length > 0 && (
+                  <span className="ml-1 rounded-full bg-orange-200 dark:bg-orange-900/60 text-orange-800 dark:text-orange-300 px-1.5 py-0.2 text-[10px] font-bold">
+                    {prefs.promoSectors.length}
+                  </span>
+                )}
+              </TextAction>
+            </div>
+          )}
+        </div>
+
+        {/* Tool 3: Message Contacts */}
+        <button
+          type="button"
+          onClick={() => {
+            if (!home.premium) {
+              onLock("broadcast");
+            } else {
+              onOpenMessageContacts();
+            }
+          }}
+          className="w-full group flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 dark:border-white/5 hover:border-orange-300 dark:hover:border-orange-500/30 hover:bg-orange-50/50 dark:hover:bg-orange-500/5 transition-all text-left cursor-pointer"
+        >
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400 group-hover:bg-orange-500 group-hover:text-white transition-colors">
+            <SendIcon size={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-ink group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+                Message Contacts
+              </span>
+              {broadcasts.length > 0 && (
+                <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400">
+                  {broadcasts.length}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-ink/60 truncate mt-0.5">
+              Direct broadcast to vendors
+            </p>
+          </div>
+          {!home.premium ? (
+            <LockIcon size={14} className="shrink-0 text-gray-400" />
+          ) : (
+            <ChevronRightIcon
+              size={15}
+              className="shrink-0 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all"
+            />
+          )}
+        </button>
+      </div>
+
+      {/* Account / Billing */}
+      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
+        <HubLink
+          href="/pricing?for=buyers"
+          className="w-full group flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 dark:border-white/5 hover:border-orange-300 dark:hover:border-orange-500/30 hover:bg-orange-50/50 dark:hover:bg-orange-500/5 transition-all text-left cursor-pointer"
+        >
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+            <CrownIcon size={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-bold text-ink group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+              Billing &amp; Plans
+            </span>
+            <p className="text-[11px] text-gray-500 dark:text-ink/60 truncate mt-0.5">
+              Buyer membership &amp; limits
+            </p>
+          </div>
+          <ChevronRightIcon
+            size={15}
+            className="shrink-0 text-gray-300 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all"
+          />
+        </HubLink>
+      </div>
+    </section>
   );
 }
 
@@ -2158,21 +2615,12 @@ function CommunityPanel({
     <section className="bg-surface border border-gray-200 rounded-none lg:rounded-2xl p-4">
       <div className="flex items-center justify-between gap-3 mb-3">
         <h3 className="text-sm font-bold text-ink">Community & Updates</h3>
-        <div className="flex items-center gap-2">
-          {!home.premium && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500">
-              <LockIcon size={12} />
-              Posting is Premium
-            </span>
-          )}
-          <Link
-            href="/hub/community"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-400 ml-1 transition-colors"
-          >
-            <span>Open Forum</span>
-            <ArrowRightIcon size={12} />
-          </Link>
-        </div>
+        {!home.premium && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500">
+            <LockIcon size={12} />
+            Posting is Premium
+          </span>
+        )}
       </div>
       {posts.length === 0 && updates.length === 0 ? (
         <p className="text-xs text-gray-500">
@@ -2315,25 +2763,33 @@ function SectorChip({
   );
 }
 
+function updateGallery(item: HubTimelineItem): string[] {
+  const images = [
+    ...(item.listing?.images ?? []),
+    item.imageUrl,
+    ...(item.images ?? []),
+  ].filter(Boolean) as string[];
+  return [...new Set(images)];
+}
+
 function FeedCard({
   item,
   now,
   premium,
   favourite,
-  compact = false,
   onContact,
   onVisit,
   onReview,
   onFavourite,
   onBoost,
   onOpenAdvertImage,
+  featuredVendors,
 }: {
   item: HubTimelineItem;
   now: number;
   premium: boolean;
   favourite: boolean;
-  /** Half-width mobile grid cell — denser until lg. */
-  compact?: boolean;
+  featuredVendors?: HubFeaturedVendor[];
   onContact: () => void;
   onVisit: () => void;
   onReview: () => void;
@@ -2341,20 +2797,69 @@ function FeedCard({
   onBoost?: () => void;
   onOpenAdvertImage?: (src: string) => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { navigate } = useNavigation();
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const isLongDescription = Boolean(
-    item.body && (item.body.length > 110 || item.body.includes("\n")),
+    item.body && (item.body.length > 120 || item.body.includes("\n")),
   );
-  const menuRef = useRef<HTMLButtonElement>(null);
-  const gallery = [...new Set((item.images ?? []).filter(Boolean))];
-  const cover = item.imageUrl || gallery[0] || null;
-  const extras = gallery.filter((url) => url !== cover);
-  const thumbs = gallery.length > 1 ? extras.slice(0, 3) : [];
-  const extra = gallery.length > 1 ? extras.length - thumbs.length : 0;
+
+  const gallery = updateGallery(item);
+  const storeName = item.storeName || "Vendor";
+  const isEnterprise = Boolean(
+    isEnterpriseVendor(item) ||
+    (item.vendorId &&
+      featuredVendors?.some(
+        (v) => v.vendorId === item.vendorId && isEnterpriseVendor(v),
+      )),
+  );
+  const isVendorBasic = !isEnterprise;
   const isBoosted = isBoostedProduct(item);
   const isAdvert = !isBoosted && isSponsoredAdvert(item);
   const advertId = isAdvert ? item.advertId || item.id : null;
+  const storeHref = item.storeHandle
+    ? `/store/${item.storeHandle}`
+    : item.vendorId
+      ? `/store/${item.vendorId}`
+      : null;
+  const productHref = item.listing?.slug ? `/${item.listing.slug}` : null;
+
+  const [addingToCart, setAddingToCart] = useState(false);
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!item.listing) return;
+    setAddingToCart(true);
+
+    const unitPrice = item.listing.price / 100;
+    const added = useCartStore.getState().addItem({
+      productId: item.listing.productId,
+      name: item.listing.name,
+      unitPrice,
+      imageUrl: gallery[0] || null,
+      vendorId: item.vendorId,
+      vendorName: storeName,
+    });
+
+    if (added) {
+      useCartStore.getState().openDrawer();
+      toast.success(`Added "${item.listing.name}" to cart`);
+    }
+    setAddingToCart(false);
+  };
+
+  const chatHref = Boolean(item.vendorId)
+    ? buildChatLink({
+        vendorId: item.vendorId,
+        productId: item.listing?.productId,
+        source: "browse",
+        message: isAdvert
+          ? `Hi ${storeName}! I saw your sponsored ad "${item.title}" on Velte Hub and would like to find out more.`
+          : item.listing?.kind === "service"
+            ? `Hi ${storeName}! I'm interested in your "${item.title}" service. I found you on Velte Hub.`
+            : `Hi ${storeName}! Is "${item.title}" still available? I found you on Velte Hub.`,
+      })
+    : null;
+
   const cardRef = useRef<HTMLElement>(null);
   const trackedViewRef = useRef(false);
 
@@ -2382,439 +2887,544 @@ function FeedCard({
     return () => observer.disconnect();
   }, [isAdvert, advertId]);
 
-  const badge = isAdvert
-    ? "Sponsored Ad"
-    : isBoosted || item.sponsored
-      ? "Boosted"
-      : item.kind === "product" && isNewListing(item.at, now)
-        ? "New Listing"
-        : item.kind === "product"
-          ? "Listing"
-          : "Promotion";
-  // Public product URL is always /{slug} — never /p/….
-  const productHref = item.listing?.slug ? `/${item.listing.slug}` : null;
-  const storeHref = item.storeHandle ? `/store/${item.storeHandle}` : null;
-
-  const runMenuAction = (action: () => void) => {
-    setMenuOpen(false);
-    action();
-  };
-
-  const coverClass = cn(
-    "w-full object-cover bg-gray-100",
-    compact
-      ? "h-[120px] rounded-lg lg:h-[180px] lg:rounded-xl"
-      : "h-[180px] rounded-xl",
-  );
+  // Price formatting
+  const listingPrice = item.listing?.price
+    ? formatNaira(item.listing.price)
+    : null;
 
   return (
     <article
       ref={cardRef}
-      className={cn(
-        "relative bg-surface border border-gray-200 rounded-none lg:rounded-2xl h-full",
-        compact ? "p-2 lg:p-4" : "p-3 sm:p-4",
-        // Laptop: title turns orange+underlined on card hover, but not while over CTAs.
-        (productHref || (isAdvert && storeHref)) &&
-          "lg:[&:hover:not(:has([data-card-cta]:hover))_[data-card-title]]:text-orange-600 lg:[&:hover:not(:has([data-card-cta]:hover))_[data-card-title]]:underline lg:[&:hover:not(:has([data-card-cta]:hover))_[data-card-title]]:underline-offset-2",
-      )}
+      className="relative rounded-2xl border border-gray-200 dark:border-white/10 bg-surface transition-all duration-200 overflow-hidden shadow-xs hover:border-gray-300 dark:hover:border-white/20"
     >
-      {/* Whole card → product page (prefetch + progress bar); CTAs sit above via z-10. */}
-      {productHref ? (
-        <HubLink
-          href={productHref}
-          className="absolute inset-0 z-0 rounded-none lg:rounded-2xl"
-          aria-label={`View ${item.title}`}
-        />
-      ) : isAdvert && storeHref ? (
-        <HubLink
-          href={storeHref}
-          onClick={() => {
-            if (advertId) trackHubAdvert(advertId, "click");
-          }}
-          className="absolute inset-0 z-0 rounded-none lg:rounded-2xl"
-          aria-label={`Visit ${item.storeName || "store"}`}
-        />
-      ) : null}
-      <div
-        className={cn(
-          "relative flex h-full pointer-events-none",
-          compact
-            ? "flex-col gap-2 lg:flex-row lg:gap-4 lg:items-start"
-            : "flex-col sm:flex-row gap-3 sm:gap-4 sm:items-start",
-        )}
-      >
-        <div
-          className={cn(
-            "relative shrink-0",
-            compact ? "w-full lg:w-[220px]" : "w-full sm:w-[220px]",
-          )}
-        >
-          {cover ? (
-            isAdvert ? (
-              <button
-                type="button"
-                data-card-cta
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  onOpenAdvertImage?.(cover);
-                }}
-                className="relative block w-full pointer-events-auto cursor-pointer focus:outline-hidden group"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={cover} alt="" className={coverClass} />
-                <span className="sr-only">View advert image in full</span>
-              </button>
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={cover} alt="" className={coverClass} />
-            )
-          ) : (
-            <div
-              className={cn(
-                "w-full bg-gray-100",
-                compact
-                  ? "h-[120px] rounded-lg lg:h-[180px] lg:rounded-xl"
-                  : "h-[180px] rounded-xl",
-              )}
-            />
-          )}
-          <span
-            className={cn(
-              "absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md",
-              badge === "Sponsored Ad"
-                ? "bg-orange-500 text-white"
-                : badge === "Boosted"
-                  ? "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300"
-                  : "bg-surface/95 text-ink",
-            )}
+      {/* ── Top Header: Vendor Identity & Classification Badge ── */}
+      <div className="p-4 sm:p-5 pb-3 flex items-start justify-between gap-3">
+        {storeHref ? (
+          <HubLink
+            href={storeHref}
+            onClick={() => {
+              if (isAdvert && advertId) trackHubAdvert(advertId, "click");
+            }}
+            className="flex items-center gap-3 min-w-0 group hover:opacity-90 transition-opacity"
           >
-            {badge}
-          </span>
-        </div>
-        <div className="min-w-0 flex-1 flex flex-col">
-          <div
-            className={cn(
-              "flex items-start",
-              compact ? "gap-1.5 lg:gap-2.5" : "gap-2.5",
-            )}
-          >
-            <div className="relative shrink-0">
-              <Avatar
-                name={item.storeName || "Vendor"}
-                src={item.avatar}
-                className={cn(
-                  "rounded-full text-xs shrink-0",
-                  compact ? "h-7 w-7 lg:h-10 lg:w-10" : "h-10 w-10",
-                )}
-              />
-              {isEnterpriseVendor(item) && (
-                <EnterpriseAvatarBadge size={compact ? "sm" : "md"} />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <p
-                  className={cn(
-                    "font-bold text-ink truncate",
-                    compact ? "text-xs lg:text-sm" : "text-sm",
+            {item.placedByBuyer ? (
+              <div className="relative flex shrink-0 items-center justify-center">
+                {/* Buyer main avatar */}
+                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-neutral-900 text-white dark:bg-neutral-800 dark:text-ink flex items-center justify-center font-bold text-xs overflow-hidden ring-2 ring-surface shadow-xs">
+                  {item.buyerAvatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.buyerAvatar}
+                      alt={item.buyerName || "Buyer"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>
+                      {(item.buyerName || "B").charAt(0).toUpperCase()}
+                    </span>
                   )}
+                </div>
+                {/* Vendor subset avatar badge */}
+                <div
+                  title={`Vendor: ${storeName}`}
+                  className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-[9px] overflow-hidden ring-2 ring-surface shadow-xs"
                 >
-                  {item.storeName || "Vendor"}
-                </p>
-                {isEnterpriseVendor(item) && <EnterpriseBadge size="sm" />}
-                {item.verified && (
-                  <BadgeCheckIcon
-                    size={compact ? 12 : 14}
-                    className="text-sky-500 shrink-0"
-                  />
-                )}
+                  {item.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.avatar}
+                      alt={storeName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{storeName.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
               </div>
-              {item.sectors?.[0] && (
-                <p className="text-[11px] text-gray-500 truncate">
-                  {sectorLabel(item.sectors[0])}
-                </p>
+            ) : (
+              <div className="relative flex shrink-0 items-center justify-center">
+                <div className="h-10 w-10 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-xs overflow-hidden ring-2 ring-surface">
+                  {item.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.avatar}
+                      alt={storeName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{storeName.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1">
+              {item.placedByBuyer ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-sm text-ink truncate max-w-[130px] sm:max-w-none">
+                    {item.buyerName || "Verified Buyer"}
+                  </span>
+                  <RepeatIcon size={12} className="text-orange-500 shrink-0" />
+                  <span className="font-semibold text-sm text-gray-700 dark:text-ink/90 truncate max-w-[130px] sm:max-w-none group-hover:text-orange-600 transition-colors">
+                    {storeName}
+                  </span>
+                  {item.verified && (
+                    <span
+                      title="Verified Vendor"
+                      className="inline-flex shrink-0 items-center"
+                    >
+                      <CheckIcon
+                        size={13}
+                        className="text-orange-500 shrink-0"
+                      />
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-sm text-ink truncate group-hover:text-orange-600 transition-colors">
+                    {storeName}
+                  </span>
+                  {item.verified && (
+                    <span
+                      title="Verified Vendor"
+                      className="inline-flex shrink-0 items-center"
+                    >
+                      <CheckIcon
+                        size={13}
+                        className="text-orange-500 shrink-0"
+                      />
+                    </span>
+                  )}
+                </div>
               )}
-              <div
-                className={cn(
-                  "mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5",
-                  compact && "hidden lg:flex",
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-ink/60 mt-0.5">
+                {item.placedByBuyer ? (
+                  <>
+                    <span className="text-orange-600 dark:text-orange-400 font-medium">
+                      Sponsored
+                    </span>
+                    <span>·</span>
+                    {item.place && (
+                      <>
+                        <span>{item.place}</span>
+                        <span>·</span>
+                      </>
+                    )}
+                    <span>{timeAgo(item.at, now)}</span>
+                  </>
+                ) : (
+                  <>
+                    {item.sectors?.[0] && (
+                      <>
+                        <span>{sectorLabel(item.sectors[0])}</span>
+                        <span>·</span>
+                      </>
+                    )}
+                    <span>{timeAgo(item.at, now)}</span>
+                    {(item.ratingCount ?? 0) > 0 && (
+                      <>
+                        <span>·</span>
+                        <span className="inline-flex items-center gap-0.5 text-amber-500 font-semibold">
+                          ★ {item.ratingAvg?.toFixed(1)}
+                        </span>
+                      </>
+                    )}
+                  </>
                 )}
-              >
-                <Stars avg={item.ratingAvg} count={item.ratingCount} />
               </div>
             </div>
-            <span
-              className={cn(
-                "text-[11px] text-gray-400 shrink-0",
-                compact && "hidden lg:inline",
-              )}
-            >
-              {timeAgo(item.at, now)}
-            </span>
-          </div>
-
-          <h3
-            data-card-title
-            className={cn(
-              "font-bold leading-snug line-clamp-2",
-              compact ? "mt-2 text-sm lg:mt-3 lg:text-base" : "mt-3 text-base",
-              productHref || (isAdvert && storeHref)
-                ? "text-orange-600 underline underline-offset-2 lg:text-ink lg:no-underline"
-                : "text-ink",
+          </HubLink>
+        ) : (
+          <div className="flex items-center gap-3 min-w-0">
+            {item.placedByBuyer ? (
+              <div className="relative flex shrink-0 items-center justify-center">
+                {/* Buyer main avatar */}
+                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-neutral-900 text-white dark:bg-neutral-800 dark:text-ink flex items-center justify-center font-bold text-xs overflow-hidden ring-2 ring-surface shadow-xs">
+                  {item.buyerAvatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.buyerAvatar}
+                      alt={item.buyerName || "Buyer"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>
+                      {(item.buyerName || "B").charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                {/* Vendor subset avatar badge */}
+                <div
+                  title={`Vendor: ${storeName}`}
+                  className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-[9px] overflow-hidden ring-2 ring-surface shadow-xs"
+                >
+                  {item.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.avatar}
+                      alt={storeName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{storeName.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="relative flex shrink-0 items-center justify-center">
+                <div className="h-10 w-10 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-xs overflow-hidden ring-2 ring-surface">
+                  {item.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.avatar}
+                      alt={storeName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{storeName.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+              </div>
             )}
+
+            <div className="min-w-0 flex-1">
+              {item.placedByBuyer ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-sm text-ink truncate max-w-[130px] sm:max-w-none">
+                    {item.buyerName || "Verified Buyer"}
+                  </span>
+                  <RepeatIcon size={12} className="text-orange-500 shrink-0" />
+                  <span className="font-semibold text-sm text-gray-700 dark:text-ink/90 truncate max-w-[130px] sm:max-w-none">
+                    {storeName}
+                  </span>
+                  {item.verified && (
+                    <span
+                      title="Verified Vendor"
+                      className="inline-flex shrink-0 items-center"
+                    >
+                      <CheckIcon
+                        size={13}
+                        className="text-orange-500 shrink-0"
+                      />
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-sm text-ink truncate">
+                    {storeName}
+                  </span>
+                  {item.verified && (
+                    <span
+                      title="Verified Vendor"
+                      className="inline-flex shrink-0 items-center"
+                    >
+                      <CheckIcon
+                        size={13}
+                        className="text-orange-500 shrink-0"
+                      />
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-ink/60 mt-0.5">
+                {item.placedByBuyer ? (
+                  <>
+                    <span className="text-orange-600 dark:text-orange-400 font-medium">
+                      Sponsored
+                    </span>
+                    <span>·</span>
+                    {item.place && (
+                      <>
+                        <span>{item.place}</span>
+                        <span>·</span>
+                      </>
+                    )}
+                    <span>{timeAgo(item.at, now)}</span>
+                  </>
+                ) : (
+                  <>
+                    {item.sectors?.[0] && (
+                      <>
+                        <span>{sectorLabel(item.sectors[0])}</span>
+                        <span>·</span>
+                      </>
+                    )}
+                    <span>{timeAgo(item.at, now)}</span>
+                    {(item.ratingCount ?? 0) > 0 && (
+                      <>
+                        <span>·</span>
+                        <span className="inline-flex items-center gap-0.5 text-amber-500 font-semibold">
+                          ★ {item.ratingAvg?.toFixed(1)}
+                        </span>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Badge: Sponsored Ad, Boosted, or New ── */}
+        <div className="shrink-0">
+          {isAdvert ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-2xs">
+              <MegaphoneIcon size={12} className="shrink-0" />
+              <span>Sponsored Ad</span>
+            </span>
+          ) : isBoosted || item.sponsored ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 dark:bg-sky-900/40 px-2.5 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">
+              <ZapIcon size={12} className="shrink-0 fill-current" />
+              <span>Boosted</span>
+            </span>
+          ) : item.kind === "product" && isNewListing(item.at, now) ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 dark:bg-sky-900/40 px-2.5 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
+              New
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ── Post Content / Title & Description ── */}
+      <div className="px-4 sm:px-5 pb-3">
+        {productHref ? (
+          <HubLink
+            href={productHref}
+            className="block text-base font-bold text-ink leading-snug hover:text-orange-600 transition-colors cursor-pointer"
           >
             {item.title}
-          </h3>
-          {item.placedByBuyer && (
+          </HubLink>
+        ) : isAdvert && storeHref ? (
+          <HubLink
+            href={storeHref}
+            onClick={() => {
+              if (advertId) trackHubAdvert(advertId, "click");
+            }}
+            className="block text-base font-bold text-ink leading-snug hover:text-orange-600 hover:underline transition-colors cursor-pointer"
+          >
+            {item.title}
+          </HubLink>
+        ) : (
+          <h4 className="text-base font-bold text-ink leading-snug">
+            {item.title}
+          </h4>
+        )}
+
+        {item.body && item.body !== item.title && (
+          <div className="mt-1.5">
             <p
               className={cn(
-                "mt-1 text-[11px] font-semibold text-gray-500",
-                compact && "hidden lg:block",
+                "text-sm text-gray-600 dark:text-ink/80 leading-relaxed transition-all whitespace-pre-line",
+                !isDescriptionExpanded && "line-clamp-3",
               )}
             >
-              Placed by a buyer
+              {item.body}
             </p>
-          )}
-          {item.body && item.body !== item.title && (
-            <div className={cn("mt-1", compact && "hidden lg:block")}>
-              <p
-                className={cn(
-                  "text-sm text-gray-600 leading-relaxed transition-all whitespace-pre-line",
-                  !isDescriptionExpanded && "line-clamp-2",
-                )}
+            {isLongDescription && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDescriptionExpanded((prev) => !prev);
+                }}
+                className="mt-1 inline-flex items-center gap-0.5 text-xs font-bold text-[#FF6B00] hover:text-orange-700 hover:underline cursor-pointer transition-colors"
               >
-                {item.body}
-              </p>
-              {isLongDescription && (
-                <button
-                  type="button"
-                  data-card-cta
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsDescriptionExpanded((prev) => !prev);
-                  }}
-                  className="relative z-10 mt-1 inline-flex items-center gap-0.5 text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
-                >
-                  <span>{isDescriptionExpanded ? "See less" : "See more"}</span>
-                </button>
-              )}
-            </div>
-          )}
-          {item.sentiment && (
-            <p
-              className={cn(
-                "mt-2 text-sm text-gray-600 leading-relaxed line-clamp-2",
-                compact && "hidden lg:block",
-              )}
-            >
-              <span className="font-semibold text-ink">
-                {item.sentiment.rating}/5
+                <span>{isDescriptionExpanded ? "See less" : "See more"}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Sentiment */}
+        {item.sentiment && (
+          <p className="mt-2 text-sm text-gray-600 dark:text-ink/70 leading-relaxed">
+            <span className="font-semibold text-ink">
+              {item.sentiment.rating}/5
+            </span>
+            {" · "}
+            {item.sentiment.text}
+          </p>
+        )}
+
+        {/* Badges */}
+        {(item.trusted || item.fastDelivery) && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {item.trusted && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                Trusted check
               </span>
-              {" · "}
-              {item.sentiment.text}
-            </p>
-          )}
-          {(item.verified || item.trusted) && (
-            <div
-              className={cn(
-                "mt-2 flex flex-wrap gap-1.5",
-                compact && "hidden lg:flex",
-              )}
-            >
-              {item.verified && <VerifiedBadge />}
-              {item.trusted && (
-                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                  Trusted check
-                </span>
-              )}
-              {item.fastDelivery && (
-                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
-                  Fast delivery
-                </span>
-              )}
-            </div>
-          )}
-          {!item.verified && !item.trusted && item.fastDelivery && (
-            <div className={cn("mt-2", compact && "hidden lg:block")}>
-              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+            )}
+            {item.fastDelivery && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:text-sky-300">
                 Fast delivery
               </span>
-            </div>
-          )}
-
-          {thumbs.length > 0 && (
-            <div
-              className={cn(
-                "mt-3 flex items-center gap-2",
-                compact && "hidden lg:flex",
-              )}
-            >
-              {thumbs.map((url) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={url}
-                  src={url}
-                  alt=""
-                  className="h-12 w-12 rounded-lg object-cover bg-gray-100 border border-gray-200"
-                />
-              ))}
-              {extra > 0 && (
-                <span className="text-xs font-semibold text-gray-500">
-                  +{extra}
-                </span>
-              )}
-            </div>
-          )}
-
-          <div
-            data-card-cta
-            className={cn(
-              "relative z-10 mt-auto flex flex-wrap gap-2 pointer-events-auto",
-              compact ? "pt-2 lg:pt-3" : "pt-3",
             )}
-          >
-            {isEnterpriseVendor(item) && (
+          </div>
+        )}
+
+        {/* Price Strip */}
+        {listingPrice && (
+          <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500/10 dark:bg-orange-500/15 px-3 py-1 text-sm font-extrabold text-orange-600 dark:text-orange-400 border border-orange-500/20">
+              <span>{listingPrice}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Media Gallery: Manual Swipeable Carousel (Not Automatic) ── */}
+      {gallery.length > 0 && (
+        <div className="px-4 sm:px-5 pb-3 relative">
+          <ManualProductCarousel
+            images={gallery}
+            altTitle={item.title}
+            aspectRatio="video"
+            isProtected={isAdvert}
+            onImageClick={(index) => {
+              if (isAdvert) {
+                const img = gallery[index] || gallery[0];
+                if (img) onOpenAdvertImage?.(img);
+              } else if (productHref) {
+                navigate(productHref);
+              }
+            }}
+          />
+          {(isBoosted || item.sponsored) && !isAdvert && (
+            <div className="absolute top-2 left-7 z-10 pointer-events-none">
+              <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                <ZapIcon
+                  size={11}
+                  className="shrink-0 fill-orange-400 text-orange-400"
+                />
+                <span>Boosted</span>
+              </span>
+            </div>
+          )}
+          {isAdvert && (
+            <div className="absolute top-2 left-7 z-10 pointer-events-none">
+              <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                <MegaphoneIcon size={11} className="shrink-0 text-orange-400" />
+                <span>Sponsored Ad</span>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Bottom Interactive Action Bar ── */}
+      <div className="px-4 sm:px-5 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 bg-gray-50/50 dark:bg-white/2">
+        {isAdvert ? (
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {storeHref && (
+              <HubLink
+                href={storeHref}
+                onClick={() => {
+                  if (advertId) trackHubAdvert(advertId, "click");
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-xs"
+              >
+                <StoreIcon size={14} />
+                <span>Visit store</span>
+              </HubLink>
+            )}
+
+            {chatHref ? (
+              <HubLink
+                href={chatHref}
+                onClick={() => {
+                  if (advertId) trackHubAdvert(advertId, "click");
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-95 text-gray-700 dark:text-ink px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs"
+              >
+                <MessageSquareIcon size={14} className="text-orange-500" />
+                <span>Chat up vendor now</span>
+              </HubLink>
+            ) : (
               <button
                 type="button"
                 onClick={() => {
-                  if (isAdvert && advertId) {
-                    trackHubAdvert(advertId, "click");
-                  }
+                  if (advertId) trackHubAdvert(advertId, "click");
                   onContact();
                 }}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 font-semibold text-orange-600 hover:bg-orange-100 transition-colors",
-                  compact
-                    ? "flex-1 justify-center px-2 py-1.5 text-[11px] lg:flex-none lg:px-3.5 lg:py-2 lg:text-xs"
-                    : "px-3.5 py-2 text-xs",
-                )}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-95 text-gray-700 dark:text-ink px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs"
               >
-                {!premium && <LockIcon size={12} />}
-                Contact
+                <MessageSquareIcon size={14} className="text-orange-500" />
+                <span>Chat up vendor now</span>
               </button>
             )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            {item.listing && (
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={addingToCart}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-xs disabled:opacity-60"
+              >
+                <ShoppingCartIcon size={14} />
+                <span>Add to Cart</span>
+              </button>
+            )}
+
+            {isEnterpriseVendor(item) && (
+              <button
+                type="button"
+                onClick={onContact}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-orange-200 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-950/30 px-3.5 py-1.5 text-xs font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-950/50 transition-colors cursor-pointer shadow-xs"
+              >
+                {!premium && <LockIcon size={12} />}
+                <span>Contact</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onVisit}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300",
-                compact && "hidden lg:inline-flex",
-              )}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-95 text-gray-700 dark:text-ink px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs"
             >
               {!premium && <LockIcon size={12} />}
-              Visit check
+              <span>Visit check</span>
             </button>
+
             <button
               type="button"
               onClick={onReview}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300",
-                compact && "hidden lg:inline-flex",
-              )}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-95 text-gray-700 dark:text-ink px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs"
             >
-              Review vendor
+              <span>Review vendor</span>
             </button>
+
             <button
               type="button"
               onClick={onFavourite}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300",
-                compact && "hidden lg:inline-flex",
-              )}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-95 text-gray-700 dark:text-ink px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs"
             >
               {!premium ? (
                 <LockIcon size={12} />
               ) : (
                 <HeartIcon
                   size={12}
-                  className={cn(favourite && "text-orange-600")}
+                  className={cn(favourite && "text-orange-600 fill-orange-600")}
                 />
               )}
-              {favourite ? "Saved" : "Favourite"}
+              <span>{favourite ? "Saved" : "Favourite"}</span>
             </button>
+
             {onBoost && (
               <button
                 type="button"
                 onClick={onBoost}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-ink hover:border-orange-300",
-                  compact && "hidden lg:inline-flex",
-                )}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-95 text-gray-700 dark:text-ink px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs"
               >
                 {!premium && <LockIcon size={12} />}
-                Boost
+                <span>Boost</span>
               </button>
             )}
-            {compact && (
-              <>
-                <button
-                  ref={menuRef}
-                  type="button"
-                  onClick={() => setMenuOpen((open) => !open)}
-                  aria-label="More actions"
-                  aria-expanded={menuOpen}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-transparent text-gray-500 hover:border-orange-300 hover:text-ink lg:hidden"
-                >
-                  <Ellipsis size={16} strokeWidth={2} />
-                </button>
-                <AnchoredPopover
-                  open={menuOpen}
-                  onClose={() => setMenuOpen(false)}
-                  anchorRef={menuRef}
-                  align="auto"
-                  className="w-44 bg-surface rounded-lg shadow-lg border border-gray-100 py-1"
-                >
-                  <button
-                    type="button"
-                    onClick={() => runMenuAction(onVisit)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors"
-                  >
-                    {!premium && (
-                      <LockIcon size={14} className="text-gray-400" />
-                    )}
-                    Visit check
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => runMenuAction(onReview)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors"
-                  >
-                    Review vendor
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => runMenuAction(onFavourite)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors"
-                  >
-                    {!premium ? (
-                      <LockIcon size={14} className="text-gray-400" />
-                    ) : (
-                      <HeartIcon
-                        size={14}
-                        className={cn(favourite && "text-orange-600")}
-                      />
-                    )}
-                    {favourite ? "Saved" : "Favourite"}
-                  </button>
-                  {onBoost && (
-                    <button
-                      type="button"
-                      onClick={() => runMenuAction(onBoost)}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors"
-                    >
-                      {!premium && (
-                        <LockIcon size={14} className="text-gray-400" />
-                      )}
-                      Boost
-                    </button>
-                  )}
-                </AnchoredPopover>
-              </>
-            )}
           </div>
-        </div>
+        )}
       </div>
     </article>
   );

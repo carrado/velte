@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
+import { fail } from "@/lib/server/guards";
+import { getActorAuth } from "@/lib/server/buyerGuards";
 import { generateAdvertCopy } from "@/lib/server/ai/generateAdvertCopy";
 
-// Vendor advert AI drafting — returns options, posts nothing. The vendor
-// picks an option into the composer and edits freely.
+// Advert AI drafting for vendors and buyers — returns options, posts nothing.
+// The user picks an option into the composer and edits freely.
 export async function POST(req: Request) {
-  const vendorAuth = await getOptionalVendorAuth();
-  if (!vendorAuth) {
+  const actor = await getActorAuth();
+  if (!actor) {
     return NextResponse.json(
-      { error: "Sign in as a vendor." },
+      { error: "Authentication required to draft advert copy." },
       { status: 401 },
     );
   }
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
     storeName?: unknown;
     productName?: unknown;
     seedHeadline?: unknown;
+    brief?: unknown;
   } | null;
 
   const storeName =
@@ -24,8 +26,6 @@ export async function POST(req: Request) {
       ? body.storeName.trim().slice(0, 80)
       : null;
   if (!storeName) {
-    // Grounded in the vendor's own store — never drafted from nothing. The
-    // composer fills this from the store profile it already loaded.
     return NextResponse.json(
       { error: "Store name is required." },
       { status: 400 },
@@ -43,6 +43,7 @@ export async function POST(req: Request) {
         typeof body?.seedHeadline === "string"
           ? body.seedHeadline.slice(0, 80)
           : null,
+      brief: typeof body?.brief === "string" ? body.brief.slice(0, 300) : null,
     });
     return NextResponse.json(copy);
   } catch (err) {

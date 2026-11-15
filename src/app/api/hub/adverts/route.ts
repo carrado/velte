@@ -7,10 +7,7 @@ import { broadcastHubEvent } from "@/server/hubWsServer";
 export async function GET() {
   const vendorAuth = await getOptionalVendorAuth();
   if (!vendorAuth) {
-    return NextResponse.json(
-      { error: "Sign in as a vendor." },
-      { status: 401 },
-    );
+    return NextResponse.json([]);
   }
   try {
     const data = await backendData("/hub/adverts/mine", {

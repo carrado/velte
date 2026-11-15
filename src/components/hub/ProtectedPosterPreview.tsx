@@ -7,6 +7,10 @@ import { CloseIcon } from "@/components/icons";
 import { modalScrimClass } from "@/lib/modalScrim";
 import { cn } from "@/lib/utils";
 
+// In-memory blob cache: allows the lightbox to instantly reuse the image
+// already fetched by the feed card thumbnail without making a second network request.
+const posterBlobCache = new Map<string, Blob>();
+
 function drawFitted(
   ctx: CanvasRenderingContext2D,
   bitmap: ImageBitmap,
@@ -75,13 +79,17 @@ export function ProtectedPosterPreview({
 
     (async () => {
       try {
-        const res = await fetch(src, {
-          mode: "cors",
-          credentials: "omit",
-          signal: ctrl.signal,
-        });
-        if (!res.ok) throw new Error("preview fetch failed");
-        const blob = await res.blob();
+        let blob = posterBlobCache.get(src);
+        if (!blob) {
+          const res = await fetch(src, {
+            mode: "cors",
+            credentials: "omit",
+            signal: ctrl.signal,
+          });
+          if (!res.ok) throw new Error("preview fetch failed");
+          blob = await res.blob();
+          posterBlobCache.set(src, blob);
+        }
         if (cancelled) return;
         const bitmap = await createImageBitmap(blob);
         if (cancelled) {

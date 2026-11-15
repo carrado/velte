@@ -27,6 +27,7 @@ interface UseHubWebSocketOptions {
 interface UseHubWebSocketReturn {
   now: number;
   isConnected: boolean;
+  clientCount: number;
   checkForNewListings: () => void;
   broadcastListing: (items: HubTimelineItem | HubTimelineItem[]) => void;
 }
@@ -51,9 +52,11 @@ export function useHubWebSocket({
   onHubDataChanged,
   enabled = true,
 }: UseHubWebSocketOptions = {}): UseHubWebSocketReturn {
-  const [status, setStatus] = useState<{ isConnected: boolean; now: number }>(
-    () => sharedWsClient.getStatus(),
-  );
+  const [status, setStatus] = useState<{
+    isConnected: boolean;
+    now: number;
+    clientCount: number;
+  }>(() => sharedWsClient.getStatus());
 
   const knownIdsRef = useRef<string[]>(knownListingIds);
   const onNewListingsRef = useRef(onNewListings);
@@ -116,8 +119,8 @@ export function useHubWebSocket({
     sharedWsClient.registerHubInit(knownIdsRef.current);
 
     const unsubscribeStatus = sharedWsClient.subscribeStatus(
-      (isConnected, now) => {
-        setStatus({ isConnected, now });
+      (isConnected, now, clientCount) => {
+        setStatus({ isConnected, now, clientCount: clientCount ?? 0 });
       },
     );
 
@@ -162,6 +165,7 @@ export function useHubWebSocket({
   return {
     now: status.now,
     isConnected: status.isConnected,
+    clientCount: status.clientCount,
     checkForNewListings,
     broadcastListing,
   };

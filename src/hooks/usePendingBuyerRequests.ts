@@ -68,6 +68,9 @@ export function usePendingBuyerRequests(): number {
   const { data } = useQuery({
     queryKey: queryKeys.vendorBuyerRequests.list,
     queryFn: fetchVendorBuyerRequests,
+    // Only run for vendor sessions — buyer-only sessions have no vendor
+    // cookie and must never hit /api/vendor/buyer-requests.
+    enabled: !!userId,
     // `select` shapes only THIS observer's view — the shared cache keeps
     // the full list the page and banner read.
     select: ({ requests }) => {

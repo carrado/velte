@@ -29,7 +29,7 @@ export function isNewListing(at: string, now: number) {
  *  read here so a caller re-rendering on a tick (a live list) recomputes
  *  from one shared clock instead of each row reading Date.now() at a
  *  slightly different instant. */
-export function timeAgo(iso: string, now: number): string {
+export function timeAgo(iso: string, now: number = Date.now()): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
   const minutes = Math.max(0, Math.round((now - then) / 60_000));

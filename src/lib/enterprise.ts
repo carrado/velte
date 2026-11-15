@@ -8,6 +8,8 @@ export function isEnterpriseVendor(vendor: unknown): boolean {
     tier?: string;
     subscription?: { plan?: string; status?: string };
     store?: { tier?: string };
+    enterprise?: boolean;
+    isEnterprise?: boolean;
   };
   const subStatus = v.subscription?.status;
   const isSubActive =
@@ -19,6 +21,9 @@ export function isEnterpriseVendor(vendor: unknown): boolean {
 
   return Boolean(
     v.tier === "vendor_enterprise" ||
+    v.tier === "enterprise" ||
+    v.enterprise === true ||
+    v.isEnterprise === true ||
     isSubActive ||
     v.store?.tier === "vendor_enterprise",
   );

@@ -100,6 +100,10 @@ export interface HubVendorBroadcast {
   message: string;
   imageUrl: string | null;
   advertId: string | null;
+  productId?: string | null;
+  format?: "custom" | "advert" | "product";
+  targetAudience?: "all_online" | "premium_only" | "nearby";
+  ctaType?: "chat" | "store" | "product";
   status: HubBroadcastStatus;
   audienceCount: number | null;
   costKobo: number | null;
@@ -136,6 +140,7 @@ export interface HubFeaturedVendor {
   ratingAvg: number | null;
   ratingCount: number;
   place: string | null;
+  state?: string | null;
   /** Present only for a Buyer Premium. The channel stays off the payload otherwise. */
   whatsapp: string | null;
   social: HubSocial | null;
@@ -221,6 +226,8 @@ export interface HubTimelineItem {
   social: HubSocial | null;
   advertId?: string | null;
   placedByBuyer?: boolean;
+  buyerName?: string | null;
+  buyerAvatar?: string | null;
   fastDelivery: boolean;
   favourite: boolean;
   trusted: boolean;
@@ -313,6 +320,11 @@ export interface CreateBroadcastPayload {
   message: string;
   imageUrl?: string | null;
   advertId?: string | null;
+  productId?: string | null;
+  format?: "custom" | "advert" | "product";
+  targetAudience?: "all_online" | "premium_only" | "nearby";
+  ctaType?: "chat" | "store" | "product";
+  sendNow?: boolean;
 }
 
 export interface HubBoostTier {
@@ -351,6 +363,14 @@ export interface HubContext {
   activeAdverts: number;
   draftBroadcasts: number;
   sendsPerDay: number;
+  sentBroadcastsPast24h?: number;
+  sendsRemaining?: number;
+  reachPool?: {
+    all: number;
+    recent: number;
+    premium: number;
+    today: number;
+  };
   walletBalanceKobo: number;
   /** AI advert poster gens — Basic 2 / Enterprise 5; 24h cooldown after last used. */
   aiPosterLimit?: number;

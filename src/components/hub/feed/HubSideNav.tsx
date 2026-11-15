@@ -65,7 +65,6 @@ export function HubSideNav({ audience }: { audience: "vendor" | "buyer" }) {
           <SideLink href="#hub-businesses" label="Businesses" />
           <SideLink href="/hub/vendors" label="All vendors" />
           <div className="mx-3 my-2 border-t border-gray-200/70" />
-          <SideLink href={"/hub/community"} label="Community Hub" />
           <SideLink href="/marketplace" label="Full marketplace" />
           <SideLink href="/chat" label="Ask Velte" />
         </>

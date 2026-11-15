@@ -7,10 +7,18 @@ import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
 export async function GET() {
   const vendorAuth = await getOptionalVendorAuth();
   if (!vendorAuth) {
-    return NextResponse.json(
-      { error: "Sign in as a vendor." },
-      { status: 401 },
-    );
+    return NextResponse.json({
+      tier: "guest",
+      enterprise: false,
+      advertCostKobo: 0,
+      broadcastCostKobo: 0,
+      advertDays: 0,
+      maxActiveAdverts: 0,
+      activeAdverts: 0,
+      draftBroadcasts: 0,
+      sendsPerDay: 0,
+      walletBalanceKobo: 0,
+    });
   }
   try {
     const data = await backendData("/hub/context", {

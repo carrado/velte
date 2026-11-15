@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { HubLink } from "@/components/hub/HubLink";
 
+import { ProtectedPosterPreview } from "@/components/hub/ProtectedPosterPreview";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { BadgeCheckIcon, StoreIcon } from "@/components/icons/hero";
 import { optimizedImageUrl } from "@/lib/cloudinary";
@@ -50,12 +51,12 @@ export function HubAdvertCard({ advert }: { advert: HubAdvert }) {
   const body = (
     <>
       <div className="relative aspect-[16/9] bg-gray-100 shrink-0">
-        <ProtectedImage
+        <ProtectedPosterPreview
           src={optimizedImageUrl(advert.imageUrl)}
-          alt={advert.headline}
-          className="w-full h-full object-cover"
+          fit="cover"
+          className="w-full h-full"
         />
-        <span className="absolute top-2.5 left-2.5 text-[10px] font-bold uppercase tracking-wider text-orange-600 bg-surface/95 px-2 py-1 rounded-md shadow-sm border border-orange-200/50">
+        <span className="pointer-events-none absolute top-2.5 left-2.5 text-[10px] font-bold uppercase tracking-wider text-orange-600 bg-surface/95 px-2 py-1 rounded-md shadow-sm border border-orange-200/50 z-[1]">
           Sponsored Ad
         </span>
       </div>

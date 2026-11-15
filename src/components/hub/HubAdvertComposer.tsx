@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { LockIcon } from "@/components/icons";
 import { HubLockedModal } from "./HubLockedModal";
+import { ProtectedPosterPreview } from "./ProtectedPosterPreview";
 import { api, ApiError } from "@/lib/api-client";
 import { uploadAdvertMedia, validateImageFile } from "@/lib/cloudinary";
 import { formatNaira } from "@/lib/utils";
@@ -216,11 +217,10 @@ export function HubAdvertComposer({
       {/* Preview + copy */}
       {imageUrl && (
         <div className="mt-4 rounded-xl overflow-hidden border border-gray-200">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <ProtectedPosterPreview
             src={imageUrl}
-            alt="Advert poster preview"
-            className="w-full aspect-[16/9] object-cover bg-gray-50"
+            fit="cover"
+            className="w-full aspect-[16/9] bg-gray-50"
           />
         </div>
       )}

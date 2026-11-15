@@ -10,8 +10,16 @@ import { getOptionalVendorAuth } from "@/lib/server/guards";
 // vendor page wins: this is the page a vendor opens from their dashboard,
 // and a linked buyer can still reach the directory by signing out of the
 // vendor session.
-export default async function Page() {
-  const vendor = await getOptionalVendorAuth();
+export default async function Page(props: {
+  searchParams?: Promise<{ view?: string; as?: string }>;
+}) {
+  const searchParams = props.searchParams
+    ? await props.searchParams
+    : undefined;
+  const forceBuyer =
+    searchParams?.view === "buyer" || searchParams?.as === "buyer";
+
+  const vendor = !forceBuyer ? await getOptionalVendorAuth() : null;
   if (vendor) return <HubVendorView userId={vendor.userId} />;
 
   const buyer = await getOptionalBuyerAuth();

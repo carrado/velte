@@ -23,13 +23,16 @@ export interface HubWsClientMessage {
     | "BUYER_REQUEST_UPDATED"
     | "LISTING_UPDATED"
     | "LISTING_REMOVED"
-    | "HUB_DATA_CHANGED";
+    | "HUB_DATA_CHANGED"
+    | "TRACK_ADVERT";
   now?: number;
   items?: HubTimelineItem[];
   knownListingIds?: string[];
   productId?: string;
   patch?: Partial<HubTimelineItem>;
   scope?: "adverts" | "boosts" | "community" | "performance" | "all";
+  advertId?: string;
+  kind?: "view" | "click";
   userId?: string;
   role?: "vendor" | "buyer";
   knownNotificationIds?: string[];
@@ -42,10 +45,15 @@ export interface HubWsClientMessage {
   request?: BuyerRequest;
   requestId?: string;
   decision?: string;
+  clientCount?: number;
 }
 
 type MessageListener = (msg: HubWsClientMessage) => void;
-type StatusListener = (connected: boolean, now: number) => void;
+type StatusListener = (
+  connected: boolean,
+  now: number,
+  clientCount?: number,
+) => void;
 
 const DEFAULT_WS_PORT = 4002;
 
@@ -65,6 +73,7 @@ class SharedWsClient {
   private isConnecting = false;
   private isConnected = false;
   private now: number = Date.now();
+  private clientCount = 0;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private fallbackTickTimer: ReturnType<typeof setInterval> | null = null;
@@ -84,7 +93,7 @@ class SharedWsClient {
 
   private notifyStatus() {
     for (const cb of this.statusListeners) {
-      cb(this.isConnected, this.now);
+      cb(this.isConnected, this.now, this.clientCount);
     }
   }
 
@@ -149,8 +158,16 @@ class SharedWsClient {
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as HubWsClientMessage;
+          let changed = false;
           if (typeof data.now === "number") {
             this.now = data.now;
+            changed = true;
+          }
+          if (typeof data.clientCount === "number") {
+            this.clientCount = data.clientCount;
+            changed = true;
+          }
+          if (changed) {
             this.notifyStatus();
           }
           for (const cb of this.messageListeners) {
@@ -254,14 +271,22 @@ class SharedWsClient {
   public subscribeStatus(listener: StatusListener): () => void {
     this.statusListeners.add(listener);
     this.connect();
-    listener(this.isConnected, this.now);
+    listener(this.isConnected, this.now, this.clientCount);
     return () => {
       this.statusListeners.delete(listener);
     };
   }
 
-  public getStatus(): { isConnected: boolean; now: number } {
-    return { isConnected: this.isConnected, now: this.now };
+  public getStatus(): {
+    isConnected: boolean;
+    now: number;
+    clientCount: number;
+  } {
+    return {
+      isConnected: this.isConnected,
+      now: this.now,
+      clientCount: this.clientCount,
+    };
   }
 }
 
