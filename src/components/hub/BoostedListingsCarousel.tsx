@@ -69,22 +69,12 @@ function BoostedListingCard({
         )}
       >
         {imageUrl ? (
-          isAdvert ? (
-            <ProtectedPosterPreview
-              src={imageUrl}
-              fit="cover"
-              className="h-full w-full"
-              onClick={() => onOpenListing?.(item)}
-            />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imageUrl}
-              alt={title}
-              className="h-full w-full object-cover cursor-pointer group-hover/card:scale-103 transition-transform duration-300"
-              onClick={() => onOpenListing?.(item)}
-            />
-          )
+          <ProtectedPosterPreview
+            src={imageUrl}
+            fit="cover"
+            className="h-full w-full cursor-pointer group-hover/card:scale-103 transition-transform duration-300"
+            onClick={() => onOpenListing?.(item)}
+          />
         ) : (
           <div
             className="flex h-full w-full items-center justify-center text-xs text-gray-400 cursor-pointer"

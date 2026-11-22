@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ProtectedImage } from "@/components/ProtectedImage";
+import { ProtectedPosterPreview } from "@/components/hub/ProtectedPosterPreview";
 import { BadgeCheckIcon, SendIcon, StoreIcon } from "@/components/icons/hero";
 import { optimizedImageUrl } from "@/lib/cloudinary";
 import type { HubBroadcastPost } from "@/types/hub";
@@ -51,12 +52,10 @@ export function HubBroadcastPost({ post }: { post: HubBroadcastPost }) {
         <p className="text-sm text-ink leading-relaxed">{post.message}</p>
         {post.imageUrl && (
           <div className="mt-3 rounded-xl overflow-hidden bg-gray-50">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={optimizedImageUrl(post.imageUrl)}
-              alt=""
-              className="w-full aspect-[16/9] object-cover"
-              loading="lazy"
+            <ProtectedPosterPreview
+              src={post.imageUrl}
+              fit="cover"
+              className="w-full aspect-[16/9]"
             />
           </div>
         )}

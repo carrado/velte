@@ -11,13 +11,13 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { ASK_VELTE_EVENT, type AskVelteDetail } from "@/lib/askVelte";
 import { cn } from "@/lib/utils";
 import { generateUUID } from "@/lib/uuid";
 import { buildProductTerm } from "@/lib/productTerm";
 import { runSearchStream } from "@/lib/searchStream";
-import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { isEnterpriseVendor } from "@/components/EnterpriseBadge";
 import { dedupeFinalEventStores } from "@/lib/searchTurnSnapshot";
 import {
@@ -1120,7 +1120,12 @@ function QuotaCard({
       <p className="text-sm leading-relaxed text-ink">{quota.message}</p>
       <div className="mt-3">
         {quota.isGuest ? (
-          <GoogleSignInButton />
+          <Link
+            href="/auth/login?redirect=/chat"
+            className="inline-flex cursor-pointer items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+          >
+            Sign in
+          </Link>
         ) : (
           <CreditsButton className="inline-flex cursor-pointer items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600">
             Top up credits
@@ -2000,10 +2005,12 @@ function ConversationTurnView({
                           button on scrollback. */}
                       {turn.buyerRequestOffer.status === "needs_signin" &&
                         isLatest && (
-                          <GoogleSignInButton
-                            variant="compact"
-                            onSignedIn={onIdentitySignedIn}
-                          />
+                          <Link
+                            href="/auth/login?redirect=/chat"
+                            className="inline-flex cursor-pointer items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+                          >
+                            Sign in to continue
+                          </Link>
                         )}
                     </div>
                   ) : turn.buyerRequestOffered ? (

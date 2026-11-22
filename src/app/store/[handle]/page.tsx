@@ -1,24 +1,59 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getPublicStore, getSimilarVendors } from "@/lib/server/store";
-import { BackendError } from "@/lib/server/backend";
+import { cookies } from "next/headers";
+import { getPublicStore } from "@/lib/server/store";
+import { BackendError, backendData } from "@/lib/server/backend";
+import { AUTH_COOKIE } from "@/lib/server/session";
+import { BUYER_AUTH_COOKIE } from "@/lib/server/buyerSession";
 import { getOptionalUserId } from "@/lib/server/guards";
 import { normalizeWhatsappNumber } from "@/lib/whatsapp";
 import { buildChatLink } from "@/lib/chatLink";
-import { OwnListingBadge } from "@/components/search/OwnListingBadge";
-import type {
-  IntroCardProps,
-  PublicStore,
-  PublicStoreTab,
-} from "@/types/store";
+import type { PublicStore, PublicStoreTab } from "@/types/store";
+import type { User } from "@/types/user";
+import type { Buyer } from "@/types/buyer";
 import StoreNavbar from "./_components/StoreNavbar";
 import StoreHero from "./_components/StoreHero";
 import StoreFooter from "./_components/StoreFooter";
 import StoreTabs from "./_components/StoreTabs";
-import SimilarVendors from "./_components/SimilarVendors";
-import { StoreWhatsAppButton } from "./_components/shared";
-import { MapPinIcon, PackageIcon, WrenchIcon } from "@/components/icons";
+import StoreMobileBottomNav from "./_components/StoreMobileBottomNav";
 import { isEnterpriseVendor } from "@/lib/enterprise";
+import { IdentitySessionSync } from "@/components/chat/IdentitySessionSync";
+import { HubNotificationsSync } from "@/components/hub/HubNotificationsSync";
+
+async function getServerSession(): Promise<{
+  vendor: User | null;
+  buyer: Buyer | null;
+}> {
+  try {
+    const jar = await cookies();
+    const vendorToken = jar.get(AUTH_COOKIE)?.value;
+    const buyerToken = jar.get(BUYER_AUTH_COOKIE)?.value;
+
+    if (!vendorToken && !buyerToken) {
+      return { vendor: null, buyer: null };
+    }
+
+    const parts: string[] = [];
+    if (vendorToken) parts.push(`${AUTH_COOKIE}=${vendorToken}`);
+    if (buyerToken) parts.push(`${BUYER_AUTH_COOKIE}=${buyerToken}`);
+
+    const data = await backendData<{
+      vendor: (User & { _id?: string }) | null;
+      buyer: (Buyer & { _id?: string }) | null;
+    }>("/auth/me", { cookie: parts.join("; ") });
+
+    const vendor = data.vendor
+      ? { ...data.vendor, id: data.vendor.id ?? data.vendor._id }
+      : null;
+    const buyer = data.buyer
+      ? { ...data.buyer, id: data.buyer.id ?? data.buyer._id }
+      : null;
+
+    return { vendor: vendor as User | null, buyer: buyer as Buyer | null };
+  } catch {
+    return { vendor: null, buyer: null };
+  }
+}
 
 // Public storefront — server-rendered for SEO and link previews. This is the
 // page the AI hands buyers off to. A real site shell (Navbar with a "Find on
@@ -99,71 +134,6 @@ function storeJsonLd(store: PublicStore) {
   };
 }
 
-function IntroCard({
-  store,
-  goodsCount,
-  servicesCount,
-  whatsappHref,
-  isOwn,
-}: IntroCardProps) {
-  return (
-    <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-      <h3 className="text-sm font-bold text-ink uppercase tracking-wide">
-        Intro
-      </h3>
-      {store.description && (
-        <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line line-clamp-6">
-          {store.description}
-        </p>
-      )}
-      <ul className="space-y-2.5">
-        {store.area && (
-          <li className="flex items-center gap-2.5 text-sm text-gray-600">
-            <MapPinIcon size={15} className="text-orange-500 flex-shrink-0" />
-            {store.area}
-          </li>
-        )}
-        {goodsCount > 0 && (
-          <li className="flex items-center gap-2.5 text-sm text-gray-600">
-            <PackageIcon size={15} className="text-orange-500 flex-shrink-0" />
-            {goodsCount} {goodsCount === 1 ? "product" : "products"} listed
-          </li>
-        )}
-        {servicesCount > 0 && (
-          <li className="flex items-center gap-2.5 text-sm text-gray-600">
-            <WrenchIcon size={15} className="text-orange-500 flex-shrink-0" />
-            {servicesCount} {servicesCount === 1 ? "service" : "services"}{" "}
-            offered
-          </li>
-        )}
-      </ul>
-      {store.sectors.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {store.sectors.map((sector) => (
-            <span
-              key={sector}
-              className="px-2.5 py-1 bg-orange-50 text-orange-700 text-xs font-semibold rounded-full"
-            >
-              {sector}
-            </span>
-          ))}
-        </div>
-      )}
-      {isOwn ? (
-        <OwnListingBadge label="This is your store" />
-      ) : (
-        whatsappHref && (
-          <StoreWhatsAppButton
-            href={whatsappHref}
-            label={`Chat ${store.name}`}
-            className="w-full"
-          />
-        )
-      )}
-    </div>
-  );
-}
-
 export default async function PublicStorePage({
   params,
 }: {
@@ -173,13 +143,11 @@ export default async function PublicStorePage({
   const store = await fetchStore(handle);
   if (!store) notFound();
 
-  // Best-effort — a backend hiccup here shouldn't take the whole storefront
-  // down, just quietly drop the "Other vendors" section (see SimilarVendors'
-  // own empty-state).
-  const similarVendors = await getSimilarVendors(handle).catch(() => []);
-
-  const currentUserId = await getOptionalUserId();
+  const { vendor: initialVendor, buyer: initialBuyer } =
+    await getServerSession();
+  const currentUserId = initialVendor?.id ?? (await getOptionalUserId());
   const isOwn = currentUserId != null && currentUserId === store.vendorId;
+  const initialIsLoggedIn = Boolean(initialVendor || initialBuyer);
 
   const isEnterprise = isEnterpriseVendor(store);
   const whatsappHref = isEnterprise
@@ -204,27 +172,36 @@ export default async function PublicStorePage({
 
   return (
     <div className="min-h-screen bg-canvas">
+      <IdentitySessionSync />
+      <HubNotificationsSync />
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(storeJsonLd(store)) }}
       />
-      <StoreNavbar />
+      <StoreNavbar initialVendor={initialVendor} initialBuyer={initialBuyer} />
 
       <StoreHero
         handle={store.handle}
         name={store.name}
         avatar={store.avatar}
         gallery={store.gallery}
+        productImages={
+          goods.map((p) => p.mainImageUrl).filter(Boolean) as string[]
+        }
         area={store.area}
         sectors={store.sectors}
         goodsCount={goods.length}
         servicesCount={services.length}
         enterprise={isEnterpriseVendor(store)}
+        description={store.description}
+        ratingAvg={store.ratingAvg ?? null}
+        ratingCount={store.ratingCount ?? 0}
+        whatsappHref={whatsappHref}
       />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8">
-        {/* ── Tabs + content ─────────────────────────────────────────────── */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
+        {/* ── Main Catalog and Categories ─────────────────────────────────── */}
         <StoreTabs
           goods={goods}
           services={services}
@@ -235,19 +212,13 @@ export default async function PublicStorePage({
           defaultTab={defaultTab}
           isOwn={isOwn}
           isEnterprise={isEnterprise}
-          sidebar={
-            <IntroCard
-              store={store}
-              goodsCount={goods.length}
-              servicesCount={services.length}
-              whatsappHref={whatsappHref}
-              isOwn={isOwn}
-            />
-          }
+          sectors={store.sectors}
+          description={store.description}
+          adverts={store.adverts}
+          sidebar={null}
+          initialIsLoggedIn={initialIsLoggedIn}
         />
       </div>
-
-      <SimilarVendors vendors={similarVendors} />
 
       <StoreFooter
         name={store.name}
@@ -256,16 +227,8 @@ export default async function PublicStorePage({
         sectors={store.sectors}
       />
 
-      {/* ── Mobile sticky chat bar ─────────────────────────────────────── */}
-      {!isOwn && whatsappHref && (
-        <div className="fixed bottom-0 inset-x-0 sm:hidden z-30 bg-white/95 backdrop-blur border-t border-gray-200 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
-          <StoreWhatsAppButton
-            href={whatsappHref}
-            label={`Chat ${store.name}`}
-            className="w-full"
-          />
-        </div>
-      )}
+      {/* ── Mobile Bottom Navigation Bar ───────────────────────────────── */}
+      <StoreMobileBottomNav />
     </div>
   );
 }

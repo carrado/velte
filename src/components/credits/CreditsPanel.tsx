@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
-import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { CreditsDonut } from "@/components/credits/CreditsDonut";
 import { ReferralCard } from "@/components/credits/ReferralCard";
 import { VENDOR_CATALOG_GRANTS } from "@/lib/credits";
@@ -183,7 +183,12 @@ export function CreditsPanel({
             Keep your search history, and top up whenever you need more.
           </p>
           <div className="mx-auto mt-4 flex max-w-xs justify-center">
-            <GoogleSignInButton />
+            <Link
+              href="/auth/login?redirect=/chat"
+              className="inline-flex items-center justify-center rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 text-sm font-semibold shadow-md shadow-orange-500/20 transition-colors"
+            >
+              Sign in
+            </Link>
           </div>
           <p className="mt-3 text-xs text-gray-500">
             Top-ups start at {naira(MIN_TOPUP_NGN)} for{" "}

@@ -1,8 +1,7 @@
-import { verifyPosterToken } from "@/lib/server/posterProxy";
+import { verifyAssetRef, maskMediaBuffer } from "@/lib/server/posterProxy";
 
 // GET /api/hub/e/[id]
-// [id] is an HMAC-signed, 30-second-lived opaque token that encodes the
-// actual image URL.  The raw origin URL is never sent to the browser.
+// Kept for backward compatibility with existing links.
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -13,16 +12,9 @@ export async function GET(
     return new Response(null, { status: 400 });
   }
 
-  // Block any attempt to load or download the image by pasting the URL in another tab
-  const dest = _request.headers.get("sec-fetch-dest");
-  const mode = _request.headers.get("sec-fetch-mode");
-  if (dest === "document" || mode === "navigate") {
-    return new Response(null, { status: 403 });
-  }
-
   let imageUrl: string;
   try {
-    ({ url: imageUrl } = verifyPosterToken(id));
+    ({ url: imageUrl } = verifyAssetRef(id));
   } catch {
     return new Response(null, { status: 403 });
   }
@@ -37,17 +29,20 @@ export async function GET(
   }
 
   if (!upstream.ok) {
-    return new Response(null, { status: 502 });
+    return new Response(null, {
+      status: upstream.status >= 500 ? 502 : upstream.status,
+    });
   }
 
-  const contentType = upstream.headers.get("content-type") ?? "image/webp";
-  const body = await upstream.arrayBuffer();
+  const rawBytes = Buffer.from(await upstream.arrayBuffer());
+  const maskedBytes = maskMediaBuffer(rawBytes, id);
 
-  return new Response(body, {
+  return new Response(new Uint8Array(maskedBytes), {
     status: 200,
     headers: {
-      "Content-Type": contentType,
-      "Cache-Control": "private, no-store",
+      "Content-Type": "application/octet-stream",
+      "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      Pragma: "no-cache",
       "Content-Disposition": "inline",
       "X-Content-Type-Options": "nosniff",
       "Cross-Origin-Resource-Policy": "same-origin",

@@ -59,6 +59,12 @@ export const queryKeys = {
     boosts: ["hub", "boosts"] as const,
     analytics: ["hub", "analytics", 1] as const,
     community: ["hub", "community", 1] as const,
+    buyerAdverts: ["hub", "buyer-adverts", "mine"] as const,
+    gigs: {
+      explore: (mode = "all", search = "", category = "all") =>
+        ["hub", "gigs", "explore", mode, search, category] as const,
+      mine: ["hub", "gigs", "mine"] as const,
+    },
   },
   vendorBuyerRequests: {
     list: ["vendor-buyer-requests"] as const,

@@ -70,21 +70,63 @@ export function HubAdvertCard({ advert }: { advert: HubAdvert }) {
           </p>
         )}
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-          <div className="w-7 h-7 rounded-full overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
-            {advert.avatar ? (
-              <ProtectedImage
-                src={optimizedImageUrl(advert.avatar)}
-                alt={advert.storeName ?? advert.headline}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <StoreIcon size={13} className="text-gray-300" />
-            )}
-          </div>
+          {advert.placedByBuyer ? (
+            <div className="relative flex shrink-0 items-center justify-center">
+              <div className="w-7 h-7 rounded-full overflow-hidden bg-neutral-900 text-white dark:bg-neutral-800 flex items-center justify-center text-[10px] font-bold ring-1 ring-surface">
+                {advert.buyerAvatar ? (
+                  <ProtectedImage
+                    src={optimizedImageUrl(advert.buyerAvatar)}
+                    alt={advert.buyerName || "Buyer"}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>
+                    {(advert.buyerName || "B").charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div
+                title={`Vendor: ${advert.storeName ?? "Vendor"}`}
+                className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full bg-orange-500 text-white flex items-center justify-center text-[7px] font-bold overflow-hidden ring-1 ring-surface"
+              >
+                {advert.avatar ? (
+                  <ProtectedImage
+                    src={optimizedImageUrl(advert.avatar)}
+                    alt={advert.storeName ?? advert.headline}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>
+                    {(advert.storeName || "V").charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="w-7 h-7 rounded-full overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+              {advert.avatar ? (
+                <ProtectedImage
+                  src={optimizedImageUrl(advert.avatar)}
+                  alt={advert.storeName ?? advert.headline}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <StoreIcon size={13} className="text-gray-300" />
+              )}
+            </div>
+          )}
           <p className="text-xs font-semibold text-gray-700 truncate flex items-center gap-1 min-w-0">
-            <span className="truncate">
-              {advert.storeName ?? "Velte vendor"}
-            </span>
+            {advert.placedByBuyer ? (
+              <span className="truncate">
+                {advert.buyerName || "Buyer"}{" "}
+                <span className="text-gray-400 font-normal">for</span>{" "}
+                {advert.storeName ?? "Velte vendor"}
+              </span>
+            ) : (
+              <span className="truncate">
+                {advert.storeName ?? "Velte vendor"}
+              </span>
+            )}
             {advert.verified && (
               <BadgeCheckIcon
                 size={13}

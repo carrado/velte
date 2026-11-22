@@ -73,9 +73,16 @@ export function HubManageLists({
                 className="w-14 h-14 rounded-xl object-cover bg-gray-50 shrink-0"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-ink truncate">
-                  {a.headline}
-                </p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-semibold text-ink truncate">
+                    {a.headline}
+                  </p>
+                  {a.placedByBuyer && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-200/60 dark:bg-orange-950/30 dark:border-orange-500/20">
+                      Sponsored by {a.buyerName || "Buyer"}
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
                   {a.status === "active"
                     ? `Live · ends ${formatDate(a.endsAt)}`

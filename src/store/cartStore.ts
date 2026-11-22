@@ -12,10 +12,23 @@ const CART_TTL_MS = 24 * 60 * 60 * 1000;
 interface CartStore {
   vendorId: string | null;
   vendorName: string | null;
+  promoterBuyerId: string | null;
+  advertId: string | null;
   items: CartLine[];
   updatedAt: number;
   drawerOpen: boolean;
-  addItem: (line: Omit<CartLine, "quantity">, quantity?: number) => boolean;
+  addItem: (
+    line: Omit<CartLine, "quantity">,
+    quantity?: number,
+    promoterInfo?: {
+      promoterBuyerId?: string | null;
+      advertId?: string | null;
+    },
+  ) => boolean;
+  setPromoter: (
+    promoterBuyerId: string | null,
+    advertId?: string | null,
+  ) => void;
   setQuantity: (productId: string, quantity: number) => void;
   removeItem: (productId: string) => void;
   clear: () => void;
@@ -33,17 +46,21 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       vendorId: null,
       vendorName: null,
+      promoterBuyerId: null,
+      advertId: null,
       items: [],
       updatedAt: 0,
       drawerOpen: false,
 
-      addItem: (line, quantity = 1) => {
+      addItem: (line, quantity = 1, promoterInfo) => {
         const current = get();
         if (isExpired(current.updatedAt) && current.items.length > 0) {
           set({
             items: [],
             vendorId: null,
             vendorName: null,
+            promoterBuyerId: null,
+            advertId: null,
             updatedAt: Date.now(),
           });
         }
@@ -77,10 +94,17 @@ export const useCartStore = create<CartStore>()(
         set({
           vendorId: line.vendorId,
           vendorName: line.vendorName,
+          promoterBuyerId:
+            promoterInfo?.promoterBuyerId ?? live.promoterBuyerId,
+          advertId: promoterInfo?.advertId ?? live.advertId,
           items: nextItems,
           updatedAt: Date.now(),
         });
         return true;
+      },
+
+      setPromoter: (promoterBuyerId, advertId = null) => {
+        set({ promoterBuyerId, advertId });
       },
 
       setQuantity: (productId, quantity) => {
@@ -117,6 +141,8 @@ export const useCartStore = create<CartStore>()(
           items: [],
           vendorId: null,
           vendorName: null,
+          promoterBuyerId: null,
+          advertId: null,
           updatedAt: Date.now(),
           drawerOpen: false,
         }),
@@ -132,6 +158,8 @@ export const useCartStore = create<CartStore>()(
       partialize: (state) => ({
         vendorId: state.vendorId,
         vendorName: state.vendorName,
+        promoterBuyerId: state.promoterBuyerId,
+        advertId: state.advertId,
         items: state.items,
         updatedAt: state.updatedAt,
       }),

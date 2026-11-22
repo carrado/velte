@@ -50,7 +50,6 @@ const alwaysPublicRoutes = [
 //    dashboard instead of showing the notice, defeating the whole point.
 const publicRegardlessOfAuth = [
   "/store",
-  "/p",
   "/track",
   "/privacy",
   "/terms",
@@ -264,24 +263,48 @@ export async function proxy(request: NextRequest) {
     return pass(NextResponse.redirect(new URL("/", request.url)));
   }
 
-  // Public product URLs are only /{slug}. The App Router page lives at
-  // /p/[slug] so it does not clash with the vendor dashboard's /[id] tree —
-  // that /p/ path is an implementation detail, never a public URL.
+  // Single product URLs (canonical /{slug} or direct /p/{slug|id}).
+  // Viewing a single product is NOT a public page — public users must not have access.
+  // The proxy redirects unauthenticated users to the login page with a return redirect.
   {
     const segs = pathname.split("/").filter(Boolean);
 
-    // Direct /p/{slug} hits → bounce to the canonical /{slug} in the bar.
-    // Must run before the /p public bypass below. ObjectIds stay on /p/{id}
-    // for one hop so the page can resolve the real slug (/{objectId} would
-    // be treated as a vendor dashboard id).
-    if (segs.length === 2 && segs[0] === "p" && isProductSlugSegment(segs[1])) {
-      return pass(NextResponse.redirect(new URL(`/${segs[1]}`, request.url)));
-    }
-
+    // Single product slug: /{slug}
     if (segs.length === 1 && isProductSlugSegment(segs[0])) {
+      if (!userId && !buyerId) {
+        const loginUrl = new URL("/auth/login", request.url);
+        loginUrl.searchParams.set(
+          "redirect",
+          pathname + (request.nextUrl.search || ""),
+        );
+        return pass(NextResponse.redirect(loginUrl));
+      }
       const url = request.nextUrl.clone();
       url.pathname = `/p/${segs[0]}`;
       return pass(NextResponse.rewrite(url));
+    }
+
+    // Direct /p/... hits (e.g. /p/{slug} or /p/{id})
+    if (segs.length >= 1 && segs[0] === "p") {
+      if (!userId && !buyerId) {
+        const target =
+          segs.length === 2 && isProductSlugSegment(segs[1])
+            ? `/${segs[1]}`
+            : pathname;
+        const loginUrl = new URL("/auth/login", request.url);
+        loginUrl.searchParams.set(
+          "redirect",
+          target + (request.nextUrl.search || ""),
+        );
+        return pass(NextResponse.redirect(loginUrl));
+      }
+
+      // If logged in and hitting /p/{slug}, bounce to the canonical /{slug}
+      if (segs.length === 2 && isProductSlugSegment(segs[1])) {
+        const canonicalUrl = new URL(`/${segs[1]}`, request.url);
+        canonicalUrl.search = request.nextUrl.search;
+        return pass(NextResponse.redirect(canonicalUrl));
+      }
     }
   }
 
@@ -372,3 +395,6 @@ export async function proxy(request: NextRequest) {
   }
   return pass(response);
 }
+
+export { proxy as middleware };
+export default proxy;

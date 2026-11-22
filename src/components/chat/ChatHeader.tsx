@@ -446,27 +446,12 @@ export function ChatHeader() {
                 <span>Top up</span>
               </CreditsButton>
 
-              {/* ONE vendor CTA, named for what it does (2026-09-01).
-                //
-                // This was "Sign in" + "Join", and both pointed at
-                // /auth/login and /auth/signup — which are VENDOR-only (see
-                // that page's own header comment; /join is just a redirect
-                // into it). On a surface whose signed-out visitors are
-                // overwhelmingly buyers that was not clutter, it was wrong:
-                // buyer sign-in here is Google, and it already lives in the
-                // sidebar's signed-out state, so a guest saw two sign-in
-                // affordances creating two different kinds of account, with
-                // the louder one aimed at the wrong one.
-                //
-                // It failed worst at the best moment. A guest who spends
-                // their credits is told "create a free account and get 15" —
-                // and the nearest button labelled "Join" dropped them into a
-                // business registration wizard asking for a company name.
-                //
-                // A signed-out VENDOR still gets to their dashboard from
-                // here, via the signup page's own log-in link. One extra
-                // click for the rarer case, and they mostly arrive through
-                // /launch or a bookmark anyway. */}
+              <Link
+                href="/auth/login?redirect=/chat"
+                className="flex items-center h-8 sm:h-auto px-3 sm:px-4 sm:py-1 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-semibold sm:font-medium transition-colors whitespace-nowrap"
+              >
+                Sign in
+              </Link>
               <Link
                 href="/auth/signup"
                 className="flex items-center h-8 sm:h-auto px-3 sm:px-4 sm:py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-semibold sm:font-medium transition-colors whitespace-nowrap"

@@ -17,11 +17,21 @@ export const usersApi = {
     return api.post("/api/auth/register", data);
   },
 
+  // POST (create buyer)
+  createBuyer: async (data: {
+    name: string;
+    email: string;
+    password: string;
+  }) => {
+    return api.post("/api/auth/register-buyer", data);
+  },
+
   // POST (login) – vendor-only, `{ identifier, password }`. Buyers never
   // log in (see LoginResult's own comment).
   login: async (data: { identifier: string; password: string }) => {
     const result = await api.post<LoginResult>("/api/auth/login", data);
-    useUserStore.getState().setUser(result.user);
+    if (result.user) useUserStore.getState().setUser(result.user);
+    if (result.buyer) useBuyerStore.getState().setBuyer(result.buyer);
     return result;
   },
 

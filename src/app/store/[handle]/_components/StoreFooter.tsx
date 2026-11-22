@@ -25,11 +25,11 @@ export default function StoreFooter({
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-ink">
               <StoreIcon size={16} className="text-orange-500" />
-              <span className="font-bold">{name}</span>
+              <span className="font-semibold">{name}</span>
               <span className="text-gray-400 font-normal">@{handle}</span>
             </div>
             {area && (
-              <p className="flex items-center gap-1.5 text-sm text-gray-500 mt-2">
+              <p className="flex items-center gap-1.5 text-sm text-gray-500 mt-2 font-normal">
                 <MapPinIcon size={13} className="text-orange-500" />
                 {area}
               </p>
@@ -39,7 +39,7 @@ export default function StoreFooter({
                 {sectors.map((sector) => (
                   <span
                     key={sector}
-                    className="px-2.5 py-1 bg-gray-50 text-gray-500 text-xs font-medium rounded-full border border-gray-100"
+                    className="px-2.5 py-1 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-ink/75 text-xs font-medium rounded-md border border-gray-100 dark:border-white/10"
                   >
                     {sector}
                   </span>

@@ -25,10 +25,10 @@ export function ManualProductCarousel({
   altTitle,
   className,
   aspectRatio = "video",
-  autoSlide = true,
+  autoSlide = false,
   autoSlideInterval = 3500,
   onImageClick,
-  isProtected = false,
+  isProtected = true,
 }: ManualProductCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -38,7 +38,14 @@ export function ManualProductCarousel({
   const validImages = images.filter(Boolean);
   const count = validImages.length;
 
-  // Auto-advance slides if there are multiple images
+  const aspectClass =
+    aspectRatio === "video"
+      ? "aspect-[16/10] sm:aspect-[16/9]"
+      : aspectRatio === "wide"
+        ? "aspect-[2/1]"
+        : "aspect-square";
+
+  // Auto-advance slides only if explicitly enabled and there are multiple images
   useEffect(() => {
     if (!autoSlide || count <= 1 || isPaused) return;
 
@@ -59,6 +66,37 @@ export function ManualProductCarousel({
         )}
       >
         No images available
+      </div>
+    );
+  }
+
+  // Single image: NOT a carousel. Render directly as a protected canvas element.
+  if (count === 1) {
+    return (
+      <div
+        className={cn(
+          "relative w-full overflow-hidden rounded-2xl bg-gray-900 select-none",
+          aspectClass,
+          className,
+        )}
+      >
+        {isProtected ? (
+          <ProtectedPosterPreview
+            src={validImages[0]}
+            fit="cover"
+            className="h-full w-full cursor-pointer"
+            onClick={() => onImageClick?.(0)}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={validImages[0]}
+            alt={altTitle}
+            className="h-full w-full object-cover cursor-pointer"
+            onClick={() => onImageClick?.(0)}
+            draggable={false}
+          />
+        )}
       </div>
     );
   }
@@ -99,13 +137,6 @@ export function ManualProductCarousel({
     touchStartX.current = null;
     touchEndX.current = null;
   };
-
-  const aspectClass =
-    aspectRatio === "video"
-      ? "aspect-[16/10] sm:aspect-[16/9]"
-      : aspectRatio === "wide"
-        ? "aspect-[2/1]"
-        : "aspect-square";
 
   return (
     <div

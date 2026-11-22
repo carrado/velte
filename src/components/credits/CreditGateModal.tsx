@@ -1,9 +1,9 @@
 "use client";
 
 import { createPortal } from "react-dom";
+import Link from "next/link";
 
 import { CloseIcon, LockIcon } from "@/components/icons/hero";
-import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { useCreditsModal } from "@/components/credits/CreditsModal";
 import { modalScrimClass } from "@/lib/modalScrim";
 
@@ -80,7 +80,13 @@ export function CreditGateModal({
             {isGuest ? (
               <>
                 <div className="flex justify-center">
-                  <GoogleSignInButton onSignedIn={onClose} />
+                  <Link
+                    href="/auth/login?redirect=/chat"
+                    onClick={onClose}
+                    className="inline-flex items-center justify-center rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 text-sm font-semibold shadow-md shadow-orange-500/20 transition-colors"
+                  >
+                    Sign in
+                  </Link>
                 </div>
                 <p className="mt-3 text-xs text-gray-500">
                   Signing in lets you top up — topping up isn&apos;t available

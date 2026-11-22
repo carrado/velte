@@ -8,7 +8,6 @@ import { motion } from "motion/react";
 
 import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
-import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { CardCarousel } from "@/components/search/CardCarousel";
 import {
   fetchShoppingPlan,
@@ -1423,7 +1422,12 @@ export function ShoppingPlanDetailPage({ planId }: { planId: string }) {
           <h1 className="text-lg font-bold text-ink">
             Sign in to see this Shopping Plan
           </h1>
-          <GoogleSignInButton />
+          <Link
+            href="/auth/login?redirect=/chat"
+            className="inline-flex items-center justify-center rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 text-sm font-semibold shadow-md shadow-orange-500/20 transition-colors"
+          >
+            Sign in
+          </Link>
         </div>
       </div>
     );

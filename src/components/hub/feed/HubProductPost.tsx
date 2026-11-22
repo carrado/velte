@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ProtectedImage } from "@/components/ProtectedImage";
+import { ProtectedPosterPreview } from "@/components/hub/ProtectedPosterPreview";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { BadgeCheckIcon, StoreIcon } from "@/components/icons/hero";
 import { optimizedImageUrl } from "@/lib/cloudinary";
@@ -80,12 +81,10 @@ export function HubProductPost({
 
       {product.mainImageUrl && (
         <div className="bg-gray-50">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={optimizedImageUrl(product.mainImageUrl)}
-            alt={product.name}
-            className="w-full aspect-[16/10] object-cover"
-            loading="lazy"
+          <ProtectedPosterPreview
+            src={product.mainImageUrl}
+            fit="cover"
+            className="w-full aspect-[16/10]"
           />
         </div>
       )}

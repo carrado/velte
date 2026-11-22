@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 
 import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
-import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
+import Link from "next/link";
 import { useNavigation } from "@/components/chat/ChatNavigationProgressContext";
 import { fetchShoppingPlans } from "@/services/shoppingPlan";
 import { fmt } from "@/lib/product-price";
@@ -422,7 +422,12 @@ export function ShoppingPlansIndexPage() {
             Shopping Plans track a background search until your deadline — sign
             in to create and follow one.
           </p>
-          <GoogleSignInButton />
+          <Link
+            href="/auth/login?redirect=/chat"
+            className="inline-flex items-center justify-center rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 text-sm font-semibold shadow-md shadow-orange-500/20 transition-colors"
+          >
+            Sign in
+          </Link>
         </div>
       </div>
     );

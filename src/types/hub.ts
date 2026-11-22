@@ -26,6 +26,9 @@ export interface HubAdvert {
   /** Level-3 verification only. `trusted` / `fastDelivery` arrive with
    *  Phase 1.2/1.4 data. */
   verified: boolean;
+  placedByBuyer?: boolean;
+  buyerName?: string | null;
+  buyerAvatar?: string | null;
 }
 
 /** Vendor directory entry on the Hub feed — the marketplace vendor shape
@@ -93,6 +96,27 @@ export interface HubVendorAdvert {
   enterpriseFree: boolean;
   views: number;
   clicks: number;
+  placedByBuyer?: boolean;
+  buyerName?: string | null;
+  buyerAvatar?: string | null;
+}
+
+export interface HubBuyerPromotion {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  vendorHandle: string | null;
+  vendorAvatar: string | null;
+  verified?: boolean;
+  vendorVerified?: boolean;
+  headline: string;
+  blurb: string | null;
+  imageUrl: string;
+  status: HubAdvertStatus;
+  views: number;
+  clicks: number;
+  endsAt: string;
+  createdAt: string;
 }
 
 export interface HubVendorBroadcast {
@@ -503,4 +527,85 @@ export interface CreateCommunityPostPayload {
   body: string;
   category?: HubCommunityCategory;
   pinned?: boolean;
+}
+
+export interface HubGigVendor {
+  vendorId: string;
+  name: string;
+  handle: string | null;
+  avatar: string | null;
+  verified: boolean;
+}
+
+export interface HubGigItem {
+  id: string;
+  vendorId?: string;
+  title: string;
+  description: string;
+  category: string;
+  workMode: "remote" | "on-site" | "hybrid";
+  location: string;
+  rewardType: "instant" | "milestone";
+  rewardKobo: number;
+  milestones?: Array<{
+    title: string;
+    amountKobo: number;
+    completed?: boolean;
+  }>;
+  deadline?: string | null;
+  requiredSkills: string[];
+  status: "open" | "assigned" | "submitted" | "completed" | "cancelled";
+  applicantCount: number;
+  createdAt: string;
+  vendor: HubGigVendor;
+  imageUrl?: string | null;
+  posterUrl?: string | null;
+  hasApplied?: boolean;
+  myApplicationStatus?:
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "submitted"
+    | "completed"
+    | null;
+}
+
+export interface HubBuyerGigItem {
+  applicationId: string;
+  gigId: string;
+  title: string;
+  category: string;
+  workMode: "remote" | "on-site" | "hybrid";
+  location: string;
+  rewardKobo: number;
+  rewardType: "instant" | "milestone";
+  status: "pending" | "accepted" | "rejected" | "submitted" | "completed";
+  isWon: boolean;
+  payoutStatus: "unpaid" | "released";
+  pitch: string;
+  proposedDuration: string;
+  submissionProof?: {
+    notes: string;
+    photos: string[];
+    links: string[];
+    submittedAt: string | null;
+  };
+  createdAt: string;
+  updatedAt: string;
+  vendor: {
+    vendorId: string;
+    name: string;
+    handle: string | null;
+    avatar: string | null;
+  };
+}
+
+export interface HubBuyerGigsData {
+  gigs: HubBuyerGigItem[];
+  metrics: {
+    totalWon: number;
+    activeTasks: number;
+    completedTasks: number;
+    totalEarnedKobo: number;
+  };
 }

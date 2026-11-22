@@ -4,11 +4,14 @@ import { cartApi } from "@/services/cart";
 import { queryKeys } from "@/lib/query-keys";
 import { categoriesApi } from "@/services/products";
 import {
+  fetchBuyerSponsoredAdverts,
   fetchHubAdverts,
   fetchHubBoosts,
   fetchHubContext,
+  fetchHubGigs,
   fetchHubHome,
   fetchHubVendors,
+  fetchMyBuyerGigs,
 } from "@/services/hub";
 import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
@@ -124,6 +127,26 @@ export function getChatPrefetchTasks(routeKey: string): PrefetchTask[] {
         {
           queryKey: queryKeys.hub.vendors,
           queryFn: fetchHubVendors,
+        },
+      ];
+    case "hub/sponsored-adverts":
+    case "hub/my-adverts":
+      return [
+        {
+          queryKey: queryKeys.hub.buyerAdverts,
+          queryFn: fetchBuyerSponsoredAdverts,
+        },
+      ];
+    case "hub/gigs":
+      return [
+        {
+          queryKey: queryKeys.hub.gigs.explore("all", "", "all"),
+          queryFn: () =>
+            fetchHubGigs({ workMode: "all", search: "", category: "all" }),
+        },
+        {
+          queryKey: queryKeys.hub.gigs.mine,
+          queryFn: fetchMyBuyerGigs,
         },
       ];
     // "" (bare /chat) and anything else this tree doesn't recognise — no

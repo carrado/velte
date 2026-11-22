@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-
-import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { CloseIcon, CrownIcon, LockIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { modalScrimClass } from "@/lib/modalScrim";
@@ -174,17 +172,11 @@ export function HubLockedModal({
           {/* Call to Actions */}
           {variant === "auth" ? (
             <div className="mt-6 space-y-2.5 w-full">
-              <GoogleSignInButton
-                onSignedIn={() => {
-                  if (onSignedIn) onSignedIn();
-                  else onClose();
-                }}
-              />
               <Link
-                href="/auth/login"
-                className="block w-full px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-700 dark:text-ink text-sm font-semibold hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                href="/auth/login?redirect=/hub"
+                className="flex items-center justify-center w-full px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow-md shadow-orange-500/20 transition-colors"
               >
-                Vendor sign-in
+                Sign in to Velte
               </Link>
             </div>
           ) : (

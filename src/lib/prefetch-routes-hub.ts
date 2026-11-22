@@ -2,13 +2,16 @@ import { categoriesApi } from "@/services/products";
 import { queryKeys } from "@/lib/query-keys";
 import { isPublicProductSlug } from "@/lib/publicProductSlug";
 import {
+  fetchBuyerSponsoredAdverts,
   fetchHubAdverts,
   fetchHubAnalytics,
   fetchHubBoosts,
   fetchHubCommunity,
   fetchHubContext,
+  fetchHubGigs,
   fetchHubHome,
   fetchHubVendors,
+  fetchMyBuyerGigs,
 } from "@/services/hub";
 import { storeApi } from "@/services/store";
 import { getPrefetchTasks, type PrefetchTask } from "@/lib/prefetch-routes";
@@ -133,6 +136,32 @@ export function getHubPrefetchTasks(routeKey: string): PrefetchTask[] {
           queryKey: queryKeys.hub.home("vendor"),
           queryFn: () => fetchHubHome("vendor"),
         },
+      ];
+
+    case "hub/sponsored-adverts":
+    case "hub/my-adverts":
+      return [
+        {
+          queryKey: queryKeys.hub.buyerAdverts,
+          queryFn: fetchBuyerSponsoredAdverts,
+        },
+      ];
+
+    case "hub/gigs":
+      return [
+        {
+          queryKey: queryKeys.hub.gigs.explore("all", "", "all"),
+          queryFn: () =>
+            fetchHubGigs({ workMode: "all", search: "", category: "all" }),
+        },
+        ...(isBuyer || isVendor
+          ? [
+              {
+                queryKey: queryKeys.hub.gigs.mine,
+                queryFn: fetchMyBuyerGigs,
+              },
+            ]
+          : []),
       ];
 
     case "chat/requests":

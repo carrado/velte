@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { backendData } from "@/lib/server/backend";
 import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
 import { broadcastHubEvent } from "@/server/hubWsServer";
+import { proxyImageUrl } from "@/lib/server/posterProxy";
 
 export async function GET() {
   const vendorAuth = await getOptionalVendorAuth();
@@ -10,9 +11,18 @@ export async function GET() {
     return NextResponse.json([]);
   }
   try {
-    const data = await backendData("/hub/adverts/mine", {
+    const raw = await backendData("/hub/adverts/mine", {
       cookie: vendorAuth.cookie,
     });
+    // Proxy advert image URLs
+    const data = Array.isArray(raw)
+      ? raw.map((ad: Record<string, unknown>) => ({
+          ...ad,
+          ...(ad.imageUrl != null
+            ? { imageUrl: proxyImageUrl(ad.imageUrl as string) }
+            : {}),
+        }))
+      : raw;
     return NextResponse.json(data);
   } catch (err) {
     return fail(err, "Couldn't load your adverts.");

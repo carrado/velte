@@ -13,6 +13,8 @@ interface QuotePayload {
 
 interface CheckoutPayload extends QuotePayload {
   fulfillment: OrderFulfillment;
+  promoterBuyerId?: string | null;
+  advertId?: string | null;
 }
 
 export const cartApi = {

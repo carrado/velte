@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowLeftIcon,
   ArrowRightIcon,
   BadgeCheckIcon,
   CheckIcon,
@@ -332,24 +331,9 @@ export function BuyerAdvertPage({ buyerId }: { buyerId: string }) {
 
   return (
     <div className="min-h-screen bg-canvas text-ink flex flex-col">
-      <main className="flex-1 w-full max-w-[1240px] mx-auto px-4 sm:px-6 py-8">
-        {/* Navigation Breadcrumb */}
-        <div className="flex items-center justify-between pb-6 border-b border-gray-100 dark:border-white/5">
-          <Link
-            href="/hub"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-orange-600 transition-colors"
-          >
-            <ArrowLeftIcon size={14} />
-            <span>Back to Vendor Hub</span>
-          </Link>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 text-xs font-bold">
-            <CrownIcon size={13} weight="fill" />
-            <span>Buyer Premium Tool</span>
-          </div>
-        </div>
-
+      <main className="flex-1 w-full max-w-[1240px] mx-auto px-0 sm:px-6 py-0 sm:py-8">
         {/* Hero Header */}
-        <div className="py-6 sm:py-8 max-w-2xl">
+        <div className="pb-6 sm:pb-8 max-w-2xl px-4 sm:px-0 pt-4 sm:pt-0">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
             Place a Sponsored Advert
           </h1>
@@ -362,7 +346,7 @@ export function BuyerAdvertPage({ buyerId }: { buyerId: string }) {
 
         {/* Upgrade Gate if Buyer is not premium */}
         {!isPremium ? (
-          <div className="bg-surface rounded-2xl border border-orange-200 dark:border-orange-500/20 p-8 sm:p-12 text-center max-w-xl mx-auto shadow-sm">
+          <div className="bg-surface rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-orange-200 dark:border-orange-500/20 p-8 sm:p-12 text-center max-w-xl mx-auto shadow-sm">
             <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/20 mb-4">
               <CrownIcon size={28} weight="fill" />
             </div>
@@ -390,7 +374,7 @@ export function BuyerAdvertPage({ buyerId }: { buyerId: string }) {
             {/* Left Column: Form Controls */}
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Step 1: Choose Business (Scalable Active Card) */}
-              <section className="bg-surface rounded-2xl border border-gray-200 dark:border-white/10 p-5 sm:p-6 shadow-xs">
+              <section className="bg-surface rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-200 dark:border-white/10 p-5 sm:p-6 shadow-xs">
                 <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-white/5">
                   <div className="flex items-center gap-2.5">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-white text-xs font-bold">
@@ -483,7 +467,7 @@ export function BuyerAdvertPage({ buyerId }: { buyerId: string }) {
               </section>
 
               {/* Step 2: Choose Creative Photo */}
-              <section className="bg-surface rounded-2xl border border-gray-200 dark:border-white/10 p-5 sm:p-6 shadow-xs">
+              <section className="bg-surface rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-200 dark:border-white/10 p-5 sm:p-6 shadow-xs">
                 <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100 dark:border-white/5">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-white text-xs font-bold">
                     2
@@ -540,7 +524,7 @@ export function BuyerAdvertPage({ buyerId }: { buyerId: string }) {
               </section>
 
               {/* Step 3: Write Headline & Copy */}
-              <section className="bg-surface rounded-2xl border border-gray-200 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+              <section className="bg-surface rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-200 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-white/5">
                   <div className="flex items-center gap-2.5">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-white text-xs font-bold shrink-0">
@@ -748,7 +732,7 @@ export function BuyerAdvertPage({ buyerId }: { buyerId: string }) {
               </section>
 
               {/* Publish Action Bar */}
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-3 pt-2 px-4 sm:px-0">
                 <Link
                   href="/hub"
                   className="rounded-xl border border-gray-200 dark:border-white/10 px-5 py-3 text-xs sm:text-sm font-semibold text-ink hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
@@ -777,7 +761,7 @@ export function BuyerAdvertPage({ buyerId }: { buyerId: string }) {
 
             {/* Right Column: Live Feed Preview */}
             <aside className="space-y-4 lg:sticky lg:top-24">
-              <div className="flex items-center justify-between px-1">
+              <div className="flex items-center justify-between px-4 sm:px-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
                   Live Feed Preview
                 </span>
@@ -788,7 +772,7 @@ export function BuyerAdvertPage({ buyerId }: { buyerId: string }) {
               </div>
 
               {/* Preview Card */}
-              <article className="rounded-2xl border border-gray-200 dark:border-white/10 bg-surface overflow-hidden shadow-md">
+              <article className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-200 dark:border-white/10 bg-surface overflow-hidden shadow-md">
                 {/* Image */}
                 <div className="relative aspect-video w-full bg-gray-100 dark:bg-white/5 overflow-hidden">
                   {selectedImage ? (

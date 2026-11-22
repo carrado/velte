@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -11,7 +12,6 @@ import { useBuyerStore } from "@/store/buyerStore";
 import { useUserStore } from "@/store/userStore";
 import { useAccountSignOut } from "@/hooks/useAccountSignOut";
 import { useChatHistoryStore } from "@/store/chatHistoryStore";
-import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import { CreditsSidebarMeter } from "@/components/credits/CreditsSidebarMeter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogoutConfirmModal } from "@/components/chat/LogoutConfirmModal";
@@ -520,7 +520,12 @@ export function ConversationSidebar() {
                     to.
                   </p>
                 </div>
-                <GoogleSignInButton />
+                <Link
+                  href="/auth/login?redirect=/chat"
+                  className="inline-flex items-center justify-center w-full rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 text-sm font-semibold shadow-md shadow-orange-500/20 transition-colors"
+                >
+                  Sign in
+                </Link>
               </div>
             ) : isLoading ? (
               <ul className="px-3 space-y-2">

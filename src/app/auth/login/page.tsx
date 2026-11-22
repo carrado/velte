@@ -15,31 +15,31 @@ import { Label } from "@/components/ui/label";
 import { BuyerAuthShell } from "@/components/buyer/BuyerAuthShell";
 import { ApiError } from "@/lib/api-client";
 import { usersApi } from "@/services/users";
-import type { AuthPanelContent } from "@/types/common";
+import type { AuthPanelContent, IconComponent } from "@/types/common";
+import type { Buyer } from "@/types/buyer";
+import { GoogleSignInButton } from "@/components/chat/GoogleSignInButton";
 import {
-  ArrowRightIcon,
-  EyeIcon,
-  EyeOffIcon,
-  LockIcon,
-  ShieldCheckIcon,
-  SparklesIcon,
-  UserRoundIcon,
-} from "@/components/icons/hero";
-
-/* Vendor-only login. Used to be unified with a Buyer branch (2026-08-15);
-   that's gone again (2026-08-18) — buyers never log in at all, see
-   Buyer.model.js's own comment ("just phone and OTP verification, nothing
-   buyers again on the system"). */
+  Eye,
+  EyeSlash,
+  Lock,
+  User,
+  ArrowRight,
+  ShieldCheck,
+  Sparkle,
+} from "@phosphor-icons/react";
 
 const LOGIN_PANEL: AuthPanelContent = {
   headline: "Welcome back.",
   subtitle: "Sign in to manage your store, orders, and wallet.",
   features: [
     {
-      icon: SparklesIcon,
+      icon: Sparkle as unknown as IconComponent,
       text: "Get discovered, manage orders, get paid",
     },
-    { icon: ShieldCheckIcon, text: "Your data stays private, always" },
+    {
+      icon: ShieldCheck as unknown as IconComponent,
+      text: "Your data stays private, always",
+    },
   ],
 };
 
@@ -57,24 +57,42 @@ function FieldError({ message }: { message: string | undefined }) {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Set by proxy.ts when it bounces an unauthenticated vendor visit to a
-  // protected route here.
   const redirectTo = searchParams.get("redirect");
 
   const [showPassword, setShowPassword] = useState(false);
 
+  /* ── Buyer Google sign-in ─────────────────────────────────────────────── */
+  function handleBuyerSignedIn(_buyer: Buyer) {
+    const dest =
+      redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+        ? redirectTo
+        : "/";
+    router.replace(dest);
+  }
+
+  /* ── Vendor email/password sign-in ───────────────────────────────────── */
   const loginMutation = useMutation({
     mutationFn: (data: { identifier: string; password: string }) =>
       usersApi.login(data),
     onSuccess: (result) => {
       toast.success("Welcome back!");
-      const dest =
-        redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
-          ? redirectTo.replace(/^\/[a-f0-9]{24}(\/|$)/, "/") || "/wallet"
-          : "/wallet";
-      // .replace(), not .push() — otherwise the login form stays one
-      // back-press away from the dashboard.
-      router.replace(dest);
+      if (result.accountType === "buyer" || result.buyer) {
+        const dest =
+          redirectTo &&
+          redirectTo.startsWith("/") &&
+          !redirectTo.startsWith("//")
+            ? redirectTo
+            : "/chat";
+        router.replace(dest);
+      } else {
+        const dest =
+          redirectTo &&
+          redirectTo.startsWith("/") &&
+          !redirectTo.startsWith("//")
+            ? redirectTo.replace(/^\/[a-f0-9]{24}(\/|$)/, "/") || "/wallet"
+            : "/wallet";
+        router.replace(dest);
+      }
     },
     onError: (error: unknown, variables) => {
       const message =
@@ -82,14 +100,8 @@ function LoginForm() {
           ? error.message
           : "Invalid email/username or password";
       const status = error instanceof ApiError ? error.status : 0;
-      // A blocked account (423) already shows BlockedAccountModal (mounted
-      // globally, triggered from api-client.ts) — a toast here would be
-      // redundant noise on top of it.
       if (status !== 423) toast.error(message);
       if (status === 403) {
-        // Unverified VENDOR account — the backend echoes the real email
-        // back (see /api/auth/login's own comment) since `identifier` may
-        // have been a username, not the email /auth/verify needs.
         const email =
           (error instanceof ApiError &&
             (error.data as { email?: string } | undefined)?.email) ||
@@ -119,6 +131,7 @@ function LoginForm() {
       transition={{ duration: 0.5 }}
       className="w-full max-w-[440px]"
     >
+      {/* Mobile logo */}
       <Link
         href="/"
         className="flex items-center gap-2.5 justify-center mb-6 lg:hidden"
@@ -127,15 +140,27 @@ function LoginForm() {
       </Link>
 
       <div className="bg-surface border border-gray-100 sm:rounded-2xl p-8 shadow-md shadow-black/5">
-        <div className="mb-8 text-center">
+        {/* Header */}
+        <div className="mb-7 text-center">
           <h1 className="text-2xl font-bold text-ink mb-2 tracking-tight">
             Welcome back
           </h1>
           <p className="text-gray-500 text-sm">
-            Sign in with your email or username.
+            Sign in to your Velte account.
           </p>
         </div>
 
+        {/* ── Google sign-in (buyers) ───────────────────────────────────── */}
+        <GoogleSignInButton onSignedIn={handleBuyerSignedIn} variant="full" />
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-5">
+          <div className="flex-1 h-px bg-gray-100" />
+          <span className="text-xs text-gray-400">or sign in with email</span>
+          <div className="flex-1 h-px bg-gray-100" />
+        </div>
+
+        {/* ── Vendor email/password form ────────────────────────────────── */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -155,7 +180,7 @@ function LoginForm() {
             {(field) => (
               <div>
                 <Label className="text-gray-600 text-sm mb-1.5 flex items-center gap-2">
-                  <UserRoundIcon className="w-3.5 h-3.5 text-orange-400" />
+                  <User size={14} weight="bold" className="text-orange-400" />
                   Email or username
                 </Label>
                 <Input
@@ -184,7 +209,7 @@ function LoginForm() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <Label className="text-gray-600 text-sm flex items-center gap-2">
-                    <LockIcon className="w-3.5 h-3.5 text-orange-400" />
+                    <Lock size={14} weight="bold" className="text-orange-400" />
                     Password
                   </Label>
                   <Link
@@ -213,11 +238,7 @@ function LoginForm() {
                       showPassword ? "Hide password" : "Show password"
                     }
                   >
-                    {showPassword ? (
-                      <EyeOffIcon className="w-4 h-4" />
-                    ) : (
-                      <EyeIcon className="w-4 h-4" />
-                    )}
+                    {showPassword ? <EyeSlash size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
                 <FieldError message={field.state.meta.errors[0]} />
@@ -235,7 +256,7 @@ function LoginForm() {
               >
                 {loginMutation.isPending ? "Signing in..." : "Sign in"}
                 {!loginMutation.isPending && (
-                  <ArrowRightIcon className="w-4 h-4" />
+                  <ArrowRight size={16} weight="bold" />
                 )}
               </Button>
             )}

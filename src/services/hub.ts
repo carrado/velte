@@ -6,10 +6,13 @@ import type {
   CreateCommunityPostPayload,
   HubAnalyticsData,
   HubBroadcastStatus,
+  HubBuyerGigsData,
+  HubBuyerPromotion,
   HubCommunityData,
   HubCommunityReply,
   HubCommunityThread,
   HubContext,
+  HubGigItem,
   HubHome,
   HubListingBoost,
   HubVendorAdvert,
@@ -251,4 +254,49 @@ export async function generateAiPoster(body: {
         : "Couldn't save the poster image. Check your connection and try again.",
     );
   }
+}
+
+export async function fetchBuyerSponsoredAdverts(): Promise<
+  HubBuyerPromotion[]
+> {
+  const res = await fetch("/api/hub/buyer-adverts");
+  if (!res.ok)
+    throw new ApiError(res.status, "Could not load your sponsored adverts");
+  const json = await res.json();
+  const raw = json?.data ?? json;
+  if (Array.isArray(raw)) return raw;
+  if (raw && Array.isArray((raw as { data?: HubBuyerPromotion[] }).data)) {
+    return (raw as { data: HubBuyerPromotion[] }).data;
+  }
+  return [];
+}
+
+export async function fetchHubGigs(params?: {
+  workMode?: string;
+  search?: string;
+  category?: string;
+}): Promise<HubGigItem[]> {
+  const q = new URLSearchParams();
+  if (params?.workMode && params.workMode !== "all")
+    q.set("workMode", params.workMode);
+  if (params?.search?.trim()) q.set("search", params.search.trim());
+  if (params?.category && params.category !== "all")
+    q.set("category", params.category);
+  const path = q.toString() ? `/api/hub/gigs?${q.toString()}` : "/api/hub/gigs";
+  const res = await fetch(path);
+  if (!res.ok) throw new ApiError(res.status, "Could not fetch available gigs");
+  const json = await res.json();
+  const raw = json?.data ?? json;
+  if (Array.isArray(raw)) return raw;
+  if (raw && Array.isArray((raw as { data?: HubGigItem[] }).data)) {
+    return (raw as { data: HubGigItem[] }).data;
+  }
+  return [];
+}
+
+export async function fetchMyBuyerGigs(): Promise<HubBuyerGigsData> {
+  const res = await fetch("/api/hub/gigs/mine");
+  if (!res.ok) throw new ApiError(res.status, "Could not fetch your gigs");
+  const json = await res.json();
+  return json?.data ?? json;
 }

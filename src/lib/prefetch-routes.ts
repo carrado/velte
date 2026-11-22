@@ -12,13 +12,16 @@ import {
 } from "@/services/vendorBuyerRequests";
 import { queryKeys } from "@/lib/query-keys";
 import {
+  fetchBuyerSponsoredAdverts,
   fetchHubAdverts,
   fetchHubAnalytics,
   fetchHubBoosts,
   fetchHubCommunity,
   fetchHubContext,
+  fetchHubGigs,
   fetchHubHome,
   fetchHubVendors,
+  fetchMyBuyerGigs,
 } from "@/services/hub";
 import { getErrorMessage } from "@/lib/error-message";
 import { useBuyerStore } from "@/store/buyerStore";
@@ -240,6 +243,26 @@ export function getPrefetchTasks(routeKey: string): PrefetchTask[] {
         {
           queryKey: queryKeys.hub.vendors,
           queryFn: fetchHubVendors,
+        },
+      ];
+    case "hub/sponsored-adverts":
+    case "hub/my-adverts":
+      return [
+        {
+          queryKey: queryKeys.hub.buyerAdverts,
+          queryFn: fetchBuyerSponsoredAdverts,
+        },
+      ];
+    case "hub/gigs":
+      return [
+        {
+          queryKey: queryKeys.hub.gigs.explore("all", "", "all"),
+          queryFn: () =>
+            fetchHubGigs({ workMode: "all", search: "", category: "all" }),
+        },
+        {
+          queryKey: queryKeys.hub.gigs.mine,
+          queryFn: fetchMyBuyerGigs,
         },
       ];
     default:

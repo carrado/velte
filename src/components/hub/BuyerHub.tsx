@@ -23,6 +23,7 @@ import {
   ChevronRightIcon,
   CloseIcon,
   CrownIcon,
+  EyeIcon,
   FileTextIcon,
   FlameIcon,
   GiftIcon,
@@ -51,6 +52,7 @@ import {
   WrenchIcon,
   ZapIcon,
 } from "@/components/icons";
+import { ChevronRight } from "lucide-react";
 import type { IconComponent } from "@/types/common";
 import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
 import { HubLink } from "@/components/hub/HubLink";
@@ -67,9 +69,11 @@ import { isEnterpriseVendor } from "@/components/EnterpriseBadge";
 import { isPremiumBuyer } from "@/lib/enterprise";
 import { modalScrimClass } from "@/lib/modalScrim";
 import { cn, formatNaira, isNewListing, timeAgo } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import type {
   HubBroadcastPrefs,
   HubBuyerBroadcast,
+  HubBuyerPromotion,
   HubCommunityPost,
   HubFeaturedVendor,
   HubHome,
@@ -78,6 +82,7 @@ import type {
 } from "@/types/hub";
 import TabBar from "@/components/TabBar";
 import { HubLockedModal } from "./HubLockedModal";
+import { BuyerGigsModal } from "./BuyerGigsModal";
 import {
   PosterPreviewLightbox,
   ProtectedPosterPreview,
@@ -662,6 +667,8 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   );
   const [broadcasting, setBroadcasting] = useState(false);
   const [messageContactsOpen, setMessageContactsOpen] = useState(false);
+  const [myAdvertsOpen, setMyAdvertsOpen] = useState(false);
+  const [gigsModalOpen, setGigsModalOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [postBody, setPostBody] = useState("");
   const [posting, setPosting] = useState(false);
@@ -1099,7 +1106,7 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
         photo="/hub/buyer-hub-purchase.jpg"
       />
 
-      <div className="w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-5">
+      <div className="w-full max-w-[1280px] mx-auto px-0 sm:px-6 py-0 sm:py-5">
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_330px]">
           {/* ── LEFT COLUMN: Your Tools (Fixed / Sticky sidebar) ── */}
           <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
@@ -1113,6 +1120,8 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
               onLock={(kind) => setLock(kind)}
               onOpenChooseSectors={() => setChooseSectorsOpen(true)}
               onOpenMessageContacts={() => setMessageContactsOpen(true)}
+              onOpenMyAdverts={() => navigate("/hub/sponsored-adverts")}
+              onOpenGigs={() => navigate("/hub/gigs")}
             />
             <HubSidebarFooter />
           </aside>
@@ -1191,7 +1200,7 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
               />
 
               {boostedListings.length === 0 && feed.length === 0 ? (
-                <div className="bg-surface border border-gray-200 dark:border-white/10 rounded-2xl p-10 text-center shadow-xs">
+                <div className="bg-surface border-y sm:border border-x-0 sm:border-x border-gray-200 dark:border-white/10 rounded-none sm:rounded-2xl p-6 sm:p-10 text-center shadow-xs">
                   <p className="font-semibold text-ink">
                     {sector
                       ? `No listings in ${sectorLabel(sector)} yet`
@@ -1693,6 +1702,19 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
         onSend={submitBroadcast}
         sending={broadcasting}
         broadcasts={buyerBroadcasts}
+      />
+
+      <BuyerPromotionsModal
+        open={myAdvertsOpen}
+        onClose={() => setMyAdvertsOpen(false)}
+        onPlace={() => navigate("/hub/advert")}
+      />
+
+      <BuyerGigsModal
+        open={gigsModalOpen}
+        onClose={() => setGigsModalOpen(false)}
+        isPremium={home.premium}
+        onUpgrade={() => navigate("/pricing?for=buyers")}
       />
 
       {lock && (
@@ -2324,6 +2346,230 @@ function MessageContactsModal({
   );
 }
 
+function BuyerPromotionsModal({
+  open,
+  onClose,
+  onPlace,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPlace: () => void;
+}) {
+  const { data, isLoading, error } = useQuery<{
+    success: boolean;
+    data: HubBuyerPromotion[];
+  }>({
+    queryKey: ["hub", "buyer-adverts", "mine"],
+    queryFn: async () => {
+      const res = await fetch("/api/hub/buyer-adverts");
+      if (!res.ok) throw new Error("Could not load your sponsored adverts");
+      return res.json();
+    },
+    enabled: open,
+  });
+
+  if (!open) return null;
+
+  const adverts: HubBuyerPromotion[] = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { data?: HubBuyerPromotion[] })?.data)
+      ? (data as { data: HubBuyerPromotion[] }).data
+      : [];
+  const totalViews = adverts.reduce((sum, a) => sum + (a.views || 0), 0);
+  const totalClicks = adverts.reduce((sum, a) => sum + (a.clicks || 0), 0);
+  const activeCount = adverts.filter((a) => a.status === "active").length;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="My Sponsored Adverts"
+      className={cn(
+        "fixed inset-0 z-50 h-dvh w-dvw flex items-end sm:items-center justify-center p-4",
+        modalScrimClass(),
+      )}
+      onClick={onClose}
+    >
+      <div
+        className="bg-surface w-full sm:max-w-xl rounded-2xl border border-gray-200 dark:border-white/10 shadow-2xl flex flex-col max-h-[85dvh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400">
+              <MegaphoneIcon size={18} />
+            </span>
+            <div>
+              <h3 className="text-base font-bold text-ink">
+                My Sponsored Adverts
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-ink/60">
+                Track your promotions, reach &amp; engagement
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-ink hover:bg-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            <CloseIcon size={16} />
+          </button>
+        </div>
+
+        {/* Stats Summary Bar */}
+        <div className="grid grid-cols-3 gap-2 p-4 bg-gray-50/70 dark:bg-white/[0.02] border-b border-gray-100 dark:border-white/5 text-center">
+          <div className="p-2 rounded-xl bg-surface border border-gray-100 dark:border-white/5">
+            <p className="text-xs text-gray-400 font-medium">
+              Active Campaigns
+            </p>
+            <p className="text-lg font-bold text-orange-600 dark:text-orange-400 mt-0.5">
+              {activeCount}
+            </p>
+          </div>
+          <div className="p-2 rounded-xl bg-surface border border-gray-100 dark:border-white/5">
+            <p className="text-xs text-gray-400 font-medium">Total Views</p>
+            <p className="text-lg font-bold text-ink mt-0.5">
+              {totalViews.toLocaleString()}
+            </p>
+          </div>
+          <div className="p-2 rounded-xl bg-surface border border-gray-100 dark:border-white/5">
+            <p className="text-xs text-gray-400 font-medium">Total Clicks</p>
+            <p className="text-lg font-bold text-ink mt-0.5">
+              {totalClicks.toLocaleString()}
+            </p>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-3 flex-1">
+          {isLoading ? (
+            <div className="py-12 text-center text-sm text-gray-400">
+              Loading your sponsored adverts...
+            </div>
+          ) : error ? (
+            <div className="py-12 text-center text-sm text-rose-500">
+              Could not load your sponsored adverts.
+            </div>
+          ) : adverts.length === 0 ? (
+            <div className="py-10 text-center space-y-3">
+              <div className="h-12 w-12 rounded-2xl bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 mx-auto flex items-center justify-center">
+                <MegaphoneIcon size={22} />
+              </div>
+              <h4 className="text-sm font-bold text-ink">
+                No Sponsored Adverts Yet
+              </h4>
+              <p className="text-xs text-gray-500 dark:text-ink/60 max-w-sm mx-auto leading-relaxed">
+                As a Buyer Premium member, you can sponsor vendors and their
+                listings on the Hub to earn commissions and bonus credit tokens
+                when buyers place orders.
+              </p>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onPlace();
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+                >
+                  <span>Place Your First Advert</span>
+                  <ArrowRightIcon size={12} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            adverts.map((item) => (
+              <div
+                key={item.id}
+                className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-surface flex items-start gap-3.5 hover:border-orange-500/30 transition-all"
+              >
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 dark:bg-white/5 shrink-0 border border-gray-100 dark:border-white/5">
+                  <ProtectedPosterPreview
+                    src={item.imageUrl}
+                    fit="cover"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-ink truncate">
+                      {item.headline}
+                    </p>
+                    <span
+                      className={cn(
+                        "text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0",
+                        item.status === "active"
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                          : item.status === "cancelled"
+                            ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                            : "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400 border border-gray-200 dark:border-white/10",
+                      )}
+                    >
+                      {item.status}
+                    </span>
+                  </div>
+                  {item.blurb && (
+                    <p className="text-[11px] text-gray-500 dark:text-ink/60 line-clamp-1 mt-0.5">
+                      {item.blurb}
+                    </p>
+                  )}
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-gray-400 flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-white/5">
+                    <div className="flex items-center gap-1.5">
+                      <StoreIcon size={12} className="text-orange-500" />
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">
+                        {item.vendorName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1">
+                        <EyeIcon size={12} />
+                        <span className="font-bold text-ink">
+                          {item.views}
+                        </span>{" "}
+                        views
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-orange-500">
+                          🎯
+                        </span>
+                        <span className="font-bold text-ink">
+                          {item.clicks}
+                        </span>{" "}
+                        clicks
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-white/[0.02]">
+          <span className="text-xs text-gray-500 dark:text-ink/60">
+            {adverts.length} {adverts.length === 1 ? "advert" : "adverts"}{" "}
+            sponsored
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onPlace();
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+          >
+            <span>Place New Advert</span>
+            <ArrowRightIcon size={12} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BuyerTools({
   home,
   prefs,
@@ -2334,6 +2580,8 @@ function BuyerTools({
   onLock,
   onOpenChooseSectors,
   onOpenMessageContacts,
+  onOpenMyAdverts,
+  onOpenGigs,
 }: {
   home: HubHome;
   prefs: HubBroadcastPrefs;
@@ -2344,11 +2592,13 @@ function BuyerTools({
   onLock: (kind: "broadcast" | "sectors" | "place") => void;
   onOpenChooseSectors: () => void;
   onOpenMessageContacts: () => void;
+  onOpenMyAdverts: () => void;
+  onOpenGigs: () => void;
 }) {
   const allSectors = prefs.promoSectors.length === 0;
 
   return (
-    <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-surface p-4 shadow-xs">
+    <section className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-200 dark:border-white/10 bg-surface p-4 shadow-xs">
       <div className="pb-3 border-b border-gray-100 dark:border-white/5">
         <h3 className="text-sm font-bold text-ink">Your Tools</h3>
         <p className="mt-0.5 text-[11px] text-gray-500 dark:text-ink/60">
@@ -2381,7 +2631,7 @@ function BuyerTools({
           {!home.premium ? (
             <LockIcon size={14} className="shrink-0 text-gray-400" />
           ) : (
-            <ChevronRightIcon
+            <ChevronRight
               size={15}
               className="shrink-0 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all"
             />
@@ -2471,9 +2721,75 @@ function BuyerTools({
           {!home.premium ? (
             <LockIcon size={14} className="shrink-0 text-gray-400" />
           ) : (
-            <ChevronRightIcon
+            <ChevronRight
               size={15}
               className="shrink-0 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all"
+            />
+          )}
+        </button>
+
+        {/* Tool 4: My Adverts */}
+        <button
+          type="button"
+          onClick={() => {
+            if (!home.premium) {
+              onLock("place");
+            } else {
+              onOpenMyAdverts();
+            }
+          }}
+          className="w-full group flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 dark:border-white/5 hover:border-orange-300 dark:hover:border-orange-500/30 hover:bg-orange-50/50 dark:hover:bg-orange-500/5 transition-all text-left cursor-pointer"
+        >
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400 group-hover:bg-orange-500 group-hover:text-white transition-colors">
+            <MegaphoneIcon size={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-bold text-ink group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+              My Adverts
+            </span>
+            <p className="text-[11px] text-gray-500 dark:text-ink/60 truncate mt-0.5">
+              Track campaigns, reach &amp; engagement
+            </p>
+          </div>
+          {!home.premium ? (
+            <LockIcon size={14} className="shrink-0 text-gray-400" />
+          ) : (
+            <ChevronRight
+              size={15}
+              className="shrink-0 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all"
+            />
+          )}
+        </button>
+
+        {/* Tool 5: Gigs & Tasks (Jobs Won by Buyer) */}
+        <button
+          type="button"
+          onClick={() => {
+            if (!home.premium) {
+              onLock("place");
+            } else {
+              onOpenGigs();
+            }
+          }}
+          className="w-full group flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 dark:border-white/5 hover:border-emerald-300 dark:hover:border-emerald-500/30 hover:bg-emerald-50/50 dark:hover:bg-emerald-500/5 transition-all text-left cursor-pointer"
+        >
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+            <BriefcaseIcon size={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-bold text-ink group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+              Gigs &amp; Bounties
+            </span>
+            <p className="text-[11px] text-gray-500 dark:text-ink/60 truncate mt-0.5">
+              Win vendor tasks &amp; cash rewards
+            </p>
+          </div>
+          {!home.premium ? (
+            <LockIcon size={14} className="shrink-0 text-gray-400" />
+          ) : (
+            <ChevronRight
+              size={15}
+              className="shrink-0 text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all"
             />
           )}
         </button>
@@ -2496,7 +2812,7 @@ function BuyerTools({
               Buyer membership &amp; limits
             </p>
           </div>
-          <ChevronRightIcon
+          <ChevronRight
             size={15}
             className="shrink-0 text-gray-300 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all"
           />
@@ -2764,12 +3080,33 @@ function SectorChip({
 }
 
 function updateGallery(item: HubTimelineItem): string[] {
-  const images = [
-    ...(item.listing?.images ?? []),
-    item.imageUrl,
-    ...(item.images ?? []),
-  ].filter(Boolean) as string[];
-  return [...new Set(images)];
+  const seen = new Set<string>();
+  const gallery: string[] = [];
+
+  const add = (img?: string | null) => {
+    if (img && typeof img === "string") {
+      const trimmed = img.trim();
+      if (trimmed && !seen.has(trimmed)) {
+        seen.add(trimmed);
+        gallery.push(trimmed);
+      }
+    }
+  };
+
+  // Add primary listing images if present
+  if (item.listing?.images && Array.isArray(item.listing.images)) {
+    for (const img of item.listing.images) add(img);
+  }
+  // Add item.images if present
+  if (item.images && Array.isArray(item.images)) {
+    for (const img of item.images) add(img);
+  }
+  // Add item.imageUrl if present and not already added
+  if (item.imageUrl) {
+    add(item.imageUrl);
+  }
+
+  return gallery;
 }
 
 function FeedCard({
@@ -2831,14 +3168,25 @@ function FeedCard({
     setAddingToCart(true);
 
     const unitPrice = item.listing.price / 100;
-    const added = useCartStore.getState().addItem({
-      productId: item.listing.productId,
-      name: item.listing.name,
-      unitPrice,
-      imageUrl: gallery[0] || null,
-      vendorId: item.vendorId,
-      vendorName: storeName,
-    });
+    const added = useCartStore.getState().addItem(
+      {
+        productId: item.listing.productId,
+        name: item.listing.name,
+        unitPrice,
+        imageUrl: gallery[0] || null,
+        vendorId: item.vendorId,
+        vendorName: storeName,
+      },
+      1,
+      {
+        promoterBuyerId: item.placedByBuyer
+          ? (item as { buyerId?: string; placedByBuyerId?: string }).buyerId ||
+            (item as { placedByBuyerId?: string }).placedByBuyerId ||
+            null
+          : null,
+        advertId: isAdvert ? advertId : null,
+      },
+    );
 
     if (added) {
       useCartStore.getState().openDrawer();
@@ -2999,7 +3347,10 @@ function FeedCard({
                 </div>
               )}
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-ink/60 mt-0.5">
-                {item.placedByBuyer ? (
+                {item.placedByBuyer ||
+                isAdvert ||
+                item.sponsored ||
+                item.kind === "promotion" ? (
                   <>
                     <span className="text-orange-600 dark:text-orange-400 font-medium">
                       Sponsored
@@ -3129,7 +3480,10 @@ function FeedCard({
                 </div>
               )}
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-ink/60 mt-0.5">
-                {item.placedByBuyer ? (
+                {item.placedByBuyer ||
+                isAdvert ||
+                item.sponsored ||
+                item.kind === "promotion" ? (
                   <>
                     <span className="text-orange-600 dark:text-orange-400 font-medium">
                       Sponsored
@@ -3169,12 +3523,12 @@ function FeedCard({
 
         {/* ── Badge: Sponsored Ad, Boosted, or New ── */}
         <div className="shrink-0">
-          {isAdvert ? (
+          {isAdvert || item.sponsored || item.kind === "promotion" ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-2xs">
               <MegaphoneIcon size={12} className="shrink-0" />
               <span>Sponsored Ad</span>
             </span>
-          ) : isBoosted || item.sponsored ? (
+          ) : isBoosted ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 dark:bg-sky-900/40 px-2.5 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">
               <ZapIcon size={12} className="shrink-0 fill-current" />
               <span>Boosted</span>
@@ -3274,14 +3628,53 @@ function FeedCard({
         )}
       </div>
 
-      {/* ── Media Gallery: Manual Swipeable Carousel (Not Automatic) ── */}
-      {gallery.length > 0 && (
+      {/* ── Media Gallery: Single Image (Protected Canvas) or Multi-Image Swipeable Carousel ── */}
+      {gallery.length === 1 ? (
+        <div className="px-4 sm:px-5 pb-3 relative">
+          <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] overflow-hidden rounded-2xl bg-gray-900">
+            <ProtectedPosterPreview
+              src={gallery[0]}
+              fit="cover"
+              className="h-full w-full cursor-pointer"
+              onClick={() => {
+                if (isAdvert) {
+                  const img = gallery[0];
+                  if (img) onOpenAdvertImage?.(img);
+                } else if (productHref) {
+                  navigate(productHref);
+                }
+              }}
+            />
+          </div>
+          {(isAdvert || item.sponsored || item.kind === "promotion") && (
+            <div className="absolute top-2 left-7 z-10 pointer-events-none">
+              <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                <MegaphoneIcon size={11} className="shrink-0 text-orange-400" />
+                <span>Sponsored Ad</span>
+              </span>
+            </div>
+          )}
+          {isBoosted &&
+            !(isAdvert || item.sponsored || item.kind === "promotion") && (
+              <div className="absolute top-2 left-7 z-10 pointer-events-none">
+                <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                  <ZapIcon
+                    size={11}
+                    className="shrink-0 fill-orange-400 text-orange-400"
+                  />
+                  <span>Boosted</span>
+                </span>
+              </div>
+            )}
+        </div>
+      ) : gallery.length > 1 ? (
         <div className="px-4 sm:px-5 pb-3 relative">
           <ManualProductCarousel
             images={gallery}
             altTitle={item.title}
             aspectRatio="video"
-            isProtected={isAdvert}
+            autoSlide={false}
+            isProtected={true}
             onImageClick={(index) => {
               if (isAdvert) {
                 const img = gallery[index] || gallery[0];
@@ -3291,18 +3684,7 @@ function FeedCard({
               }
             }}
           />
-          {(isBoosted || item.sponsored) && !isAdvert && (
-            <div className="absolute top-2 left-7 z-10 pointer-events-none">
-              <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
-                <ZapIcon
-                  size={11}
-                  className="shrink-0 fill-orange-400 text-orange-400"
-                />
-                <span>Boosted</span>
-              </span>
-            </div>
-          )}
-          {isAdvert && (
+          {(isAdvert || item.sponsored || item.kind === "promotion") && (
             <div className="absolute top-2 left-7 z-10 pointer-events-none">
               <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
                 <MegaphoneIcon size={11} className="shrink-0 text-orange-400" />
@@ -3310,8 +3692,20 @@ function FeedCard({
               </span>
             </div>
           )}
+          {isBoosted &&
+            !(isAdvert || item.sponsored || item.kind === "promotion") && (
+              <div className="absolute top-2 left-7 z-10 pointer-events-none">
+                <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                  <ZapIcon
+                    size={11}
+                    className="shrink-0 fill-orange-400 text-orange-400"
+                  />
+                  <span>Boosted</span>
+                </span>
+              </div>
+            )}
         </div>
-      )}
+      ) : null}
 
       {/* ── Bottom Interactive Action Bar ── */}
       <div className="px-4 sm:px-5 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 bg-gray-50/50 dark:bg-white/2">

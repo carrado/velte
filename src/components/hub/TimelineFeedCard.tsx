@@ -26,7 +26,10 @@ import { buildChatLink } from "@/lib/chatLink";
 import { cn, formatNaira, isNewListing, timeAgo } from "@/lib/utils";
 import { isBoostedProduct, isSponsoredAdvert } from "@/lib/hubFeed";
 import { trackHubAdvert } from "@/lib/advertTracker";
-import { PosterPreviewLightbox } from "@/components/hub/ProtectedPosterPreview";
+import {
+  ProtectedPosterPreview,
+  PosterPreviewLightbox,
+} from "@/components/hub/ProtectedPosterPreview";
 import type { HubTimelineItem } from "@/types/hub";
 
 interface TimelineFeedCardProps {
@@ -38,12 +41,33 @@ interface TimelineFeedCardProps {
 }
 
 function updateGallery(item: HubTimelineItem): string[] {
-  const images = [
-    ...(item.listing?.images ?? []),
-    item.imageUrl,
-    ...(item.images ?? []),
-  ].filter(Boolean) as string[];
-  return [...new Set(images)];
+  const seen = new Set<string>();
+  const gallery: string[] = [];
+
+  const add = (img?: string | null) => {
+    if (img && typeof img === "string") {
+      const trimmed = img.trim();
+      if (trimmed && !seen.has(trimmed)) {
+        seen.add(trimmed);
+        gallery.push(trimmed);
+      }
+    }
+  };
+
+  // Add primary listing images if present
+  if (item.listing?.images && Array.isArray(item.listing.images)) {
+    for (const img of item.listing.images) add(img);
+  }
+  // Add item.images if present
+  if (item.images && Array.isArray(item.images)) {
+    for (const img of item.images) add(img);
+  }
+  // Add item.imageUrl if present and not already added
+  if (item.imageUrl) {
+    add(item.imageUrl);
+  }
+
+  return gallery;
 }
 
 export function TimelineFeedCard({
@@ -139,7 +163,7 @@ export function TimelineFeedCard({
   return (
     <article
       ref={cardRef}
-      className="relative rounded-2xl border border-gray-200 dark:border-white/10 bg-surface transition-all duration-200 overflow-hidden shadow-xs hover:border-gray-300 dark:hover:border-white/20"
+      className="relative rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-200 dark:border-white/10 bg-surface transition-all duration-200 overflow-hidden shadow-xs hover:border-gray-300 dark:hover:border-white/20"
     >
       {/* ── Top Header: Vendor Identity & Classification Badge ── */}
       <div className="p-4 sm:p-5 pb-3 flex items-start justify-between gap-3">
@@ -183,6 +207,14 @@ export function TimelineFeedCard({
                 )}
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-ink/60 mt-0.5">
+                {(isAdvert || item.sponsored || item.kind === "promotion") && (
+                  <>
+                    <span className="text-orange-600 dark:text-orange-400 font-medium">
+                      Sponsored
+                    </span>
+                    <span>·</span>
+                  </>
+                )}
                 <span>{timeAgo(item.at, now)}</span>
               </div>
             </div>
@@ -221,6 +253,14 @@ export function TimelineFeedCard({
                 )}
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-ink/60 mt-0.5">
+                {(isAdvert || item.sponsored || item.kind === "promotion") && (
+                  <>
+                    <span className="text-orange-600 dark:text-orange-400 font-medium">
+                      Sponsored
+                    </span>
+                    <span>·</span>
+                  </>
+                )}
                 <span>{timeAgo(item.at, now)}</span>
               </div>
             </div>
@@ -229,12 +269,12 @@ export function TimelineFeedCard({
 
         {/* ── Badge: Sponsored Ad for adverts, Sponsored for boosted listings & sponsored items, or New ── */}
         <div className="shrink-0">
-          {isAdvert ? (
+          {isAdvert || item.sponsored || item.kind === "promotion" ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-2xs">
               <MegaphoneIcon size={12} className="shrink-0" />
               <span>Sponsored Ad</span>
             </span>
-          ) : isBoosted || item.sponsored ? (
+          ) : isBoosted ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 dark:bg-sky-900/40 px-2.5 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">
               <ZapIcon size={12} className="shrink-0 fill-current" />
               <span>Boosted</span>
@@ -312,14 +352,52 @@ export function TimelineFeedCard({
         )}
       </div>
 
-      {/* ── Media Gallery: Manual Swipeable Carousel (Not Automatic) ── */}
-      {gallery.length > 0 && (
+      {/* ── Media Gallery: Single Image (Protected Canvas) or Multi-Image Swipeable Carousel ── */}
+      {gallery.length === 1 ? (
+        <div className="px-4 sm:px-5 pb-3 relative">
+          <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] overflow-hidden rounded-2xl bg-gray-900">
+            <ProtectedPosterPreview
+              src={gallery[0]}
+              fit="cover"
+              className="h-full w-full cursor-pointer"
+              onClick={() => {
+                if (isAdvert) {
+                  setLightboxSrc(gallery[0]);
+                } else if (item.listing && !isOwn) {
+                  onOpenListing?.(item);
+                }
+              }}
+            />
+          </div>
+          {(isAdvert || item.sponsored || item.kind === "promotion") && (
+            <div className="absolute top-2 left-7 z-10 pointer-events-none">
+              <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                <MegaphoneIcon size={11} className="shrink-0 text-orange-400" />
+                <span>Sponsored Ad</span>
+              </span>
+            </div>
+          )}
+          {isBoosted &&
+            !(isAdvert || item.sponsored || item.kind === "promotion") && (
+              <div className="absolute top-2 left-7 z-10 pointer-events-none">
+                <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                  <ZapIcon
+                    size={11}
+                    className="shrink-0 fill-orange-400 text-orange-400"
+                  />
+                  <span>Boosted</span>
+                </span>
+              </div>
+            )}
+        </div>
+      ) : gallery.length > 1 ? (
         <div className="px-4 sm:px-5 pb-3 relative">
           <ManualProductCarousel
             images={gallery}
             altTitle={item.title}
             aspectRatio="video"
-            isProtected={isAdvert}
+            autoSlide={false}
+            isProtected={true}
             onImageClick={(index) => {
               if (isAdvert) {
                 const img = gallery[index] || gallery[0];
@@ -329,18 +407,7 @@ export function TimelineFeedCard({
               }
             }}
           />
-          {(isBoosted || item.sponsored) && !isAdvert && (
-            <div className="absolute top-2 left-7 z-10 pointer-events-none">
-              <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
-                <ZapIcon
-                  size={11}
-                  className="shrink-0 fill-orange-400 text-orange-400"
-                />
-                <span>Boosted</span>
-              </span>
-            </div>
-          )}
-          {isAdvert && (
+          {(isAdvert || item.sponsored || item.kind === "promotion") && (
             <div className="absolute top-2 left-7 z-10 pointer-events-none">
               <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
                 <MegaphoneIcon size={11} className="shrink-0 text-orange-400" />
@@ -348,8 +415,20 @@ export function TimelineFeedCard({
               </span>
             </div>
           )}
+          {isBoosted &&
+            !(isAdvert || item.sponsored || item.kind === "promotion") && (
+              <div className="absolute top-2 left-7 z-10 pointer-events-none">
+                <span className="inline-flex items-center gap-1 rounded-md bg-black/75 backdrop-blur-xs px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+                  <ZapIcon
+                    size={11}
+                    className="shrink-0 fill-orange-400 text-orange-400"
+                  />
+                  <span>Boosted</span>
+                </span>
+              </div>
+            )}
         </div>
-      )}
+      ) : null}
 
       {/* ── Bottom Interactive Action Bar (Facebook / X style) ── */}
       <div className="px-4 sm:px-5 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 bg-gray-50/50 dark:bg-white/2">

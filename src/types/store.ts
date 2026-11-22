@@ -22,6 +22,7 @@ export interface Store {
 export type UpdateStorePayload = Partial<Omit<Store, "sectors">>;
 
 export interface PublicStoreProduct {
+  isCurrentlyAvailable?: boolean;
   id: string;
   name: string;
   /** Public URL path `/{slug}`. Null only for unsynced legacy rows. */
@@ -39,6 +40,10 @@ export interface PublicStoreProduct {
    *  as a swipeable carousel when there's more than one. */
   thumbnailUrls: string[];
   description: string | null;
+  category?: string | null;
+  sectorValue?: string | null;
+  ratingAvg?: number | null;
+  ratingCount?: number;
   /** Vendor-entered "service details" — a service's own attributes, shown in
    *  full only in OfferingDetailModal (the card itself only has room for a
    *  truncated description). */
@@ -66,6 +71,17 @@ export interface PublicStore extends Store {
    *  velte-backend's getPublicStore) — not a stored account field. */
   businessType: SectorClassification;
   products: PublicStoreProduct[];
+  ratingAvg?: number | null;
+  ratingCount?: number;
+  adverts?: PublicStoreAdvert[];
+}
+
+export interface PublicStoreAdvert {
+  id: string;
+  headline: string;
+  blurb?: string;
+  imageUrl: string;
+  productId?: string | null;
 }
 
 /** Tab switcher for the public storefront's catalog body — About was dropped,
@@ -97,6 +113,10 @@ export interface StoreTabsProps {
   sidebar: ReactNode;
   isOwn: boolean;
   isEnterprise?: boolean;
+  sectors?: string[];
+  description?: string | null;
+  adverts?: PublicStoreAdvert[];
+  initialIsLoggedIn?: boolean;
 }
 
 export interface IntroCardProps {

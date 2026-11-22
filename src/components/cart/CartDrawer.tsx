@@ -105,6 +105,8 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
           phone: phone.trim(),
           address: address.trim(),
         },
+        promoterBuyerId: useCartStore.getState().promoterBuyerId,
+        advertId: useCartStore.getState().advertId,
       }),
     onSuccess: (result) => {
       window.location.href = result.authorizationUrl;

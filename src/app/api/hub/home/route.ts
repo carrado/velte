@@ -5,7 +5,11 @@ import { backendData } from "@/lib/server/backend";
 import { fail, getOptionalVendorAuth } from "@/lib/server/guards";
 import { listVendorOrders } from "@/lib/server/cart";
 import { getWalletStats } from "@/lib/server/wallet";
-import { posterProxyUrl } from "@/lib/server/posterProxy";
+import {
+  posterProxyUrl,
+  proxyImageUrl,
+  proxyImageUrls,
+} from "@/lib/server/posterProxy";
 import type {
   HubContext,
   HubHome,
@@ -29,12 +33,13 @@ function isCloudinaryUrl(url?: string | null): boolean {
 }
 
 /**
- * Replace all advert imageUrl fields in a HubHome payload with signed
- * poster-proxy URLs so the raw Cloudinary URL never reaches the browser.
+ * Replace all image URL fields in a HubHome payload with signed
+ * proxy media references so raw Cloudinary URLs never reach the browser.
  *
- * We only proxy advert images (not regular product thumbnails) because:
- *  • Advert posters are AI-generated assets the vendor paid to produce.
- *  • Regular product images are publicly listed on the marketplace anyway.
+ * Covers:
+ *  • Advert posters (imageUrl on advert objects)
+ *  • Timeline items — advert posters, product images, boost images
+ *  • Boost productImage fields
  */
 function proxyAdvertImages(home: HubHome): HubHome {
   // 1. Top-level adverts array (HubAdvert[])
@@ -45,24 +50,54 @@ function proxyAdvertImages(home: HubHome): HubHome {
       : ad.imageUrl,
   }));
 
-  // 2. Timeline items that are adverts (have advertId set or kind === "promotion")
+  // 2. Timeline items — proxy imageUrl and images[] for ALL items (adverts and products)
   const timeline = (home.timeline ?? []).map((item) => {
-    const isAdvert = Boolean(item.advertId) || item.kind === "promotion";
-    if (!isAdvert) return item;
     const rawImageUrl = item.imageUrl;
+    const proxiedImageUrl =
+      rawImageUrl && isCloudinaryUrl(rawImageUrl)
+        ? posterProxyUrl(rawImageUrl)
+        : rawImageUrl;
+
+    const proxiedImages = (item.images ?? []).map((img) =>
+      isCloudinaryUrl(img) ? posterProxyUrl(img) : img,
+    );
+
+    // Proxy nested listing images too
+    const listing = item.listing
+      ? {
+          ...item.listing,
+          images: (item.listing.images ?? []).map((img) =>
+            isCloudinaryUrl(img) ? posterProxyUrl(img) : img,
+          ),
+        }
+      : item.listing;
+
     return {
       ...item,
-      imageUrl:
-        rawImageUrl && isCloudinaryUrl(rawImageUrl)
-          ? posterProxyUrl(rawImageUrl)
-          : rawImageUrl,
-      images: (item.images ?? []).map((img) =>
-        isCloudinaryUrl(img) ? posterProxyUrl(img) : img,
-      ),
+      imageUrl: proxiedImageUrl,
+      images: proxiedImages,
+      ...(listing !== item.listing ? { listing } : {}),
     };
   });
 
-  return { ...home, adverts, timeline };
+  // 3. Active boosts productImage
+  const boosts = (home.boosts ?? []).map((b) => ({
+    ...b,
+    productImage:
+      b.productImage && isCloudinaryUrl(b.productImage)
+        ? proxyImageUrl(b.productImage)
+        : b.productImage,
+  }));
+
+  const activeBoosts = (home.activeBoosts ?? []).map((b) => ({
+    ...b,
+    productImage:
+      b.productImage && isCloudinaryUrl(b.productImage)
+        ? proxyImageUrl(b.productImage)
+        : b.productImage,
+  }));
+
+  return { ...home, adverts, timeline, boosts, activeBoosts };
 }
 
 // GET /api/hub/home
@@ -222,7 +257,7 @@ export async function GET(request: Request) {
           body: homeData?.store?.name
             ? `Featured product from ${homeData.store.name}`
             : "Sponsored product listing",
-          imageUrl: boost.productImage,
+          imageUrl: proxyImageUrl(boost.productImage),
           storeName: homeData?.store?.name ?? "Vendor",
           storeHandle: homeData?.store?.handle ?? null,
           avatar: homeData?.store?.avatar ?? null,
@@ -231,7 +266,9 @@ export async function GET(request: Request) {
           boosted: true,
           sectors: [],
           place: null,
-          images: boost.productImage ? [boost.productImage] : [],
+          images: boost.productImage
+            ? ([proxyImageUrl(boost.productImage)].filter(Boolean) as string[])
+            : [],
           ratingAvg: null,
           ratingCount: 0,
           whatsapp: null,
@@ -250,7 +287,11 @@ export async function GET(request: Request) {
             priceMax: null,
             currency: "NGN",
             description: null,
-            images: boost.productImage ? [boost.productImage] : [],
+            images: boost.productImage
+              ? ([proxyImageUrl(boost.productImage)].filter(
+                  Boolean,
+                ) as string[])
+              : [],
             attributes: [],
             checkoutEligible: true,
           },

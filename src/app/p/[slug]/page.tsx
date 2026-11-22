@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getPublicProductBySlug } from "@/lib/server/store";
 import { BackendError } from "@/lib/server/backend";
-import { getActorAuth } from "@/lib/server/buyerGuards";
+import { getActorAuth, getOptionalBuyerId } from "@/lib/server/buyerGuards";
+import { getOptionalUserId } from "@/lib/server/guards";
 import { PublicProductPageClient } from "@/components/products/PublicProductPageClient";
 
 async function fetchProduct(slug: string) {
@@ -46,6 +48,11 @@ export default async function PublicProductSlugPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const vendorUserId = await getOptionalUserId();
+  const buyerId = await getOptionalBuyerId();
+  if (!vendorUserId && !buyerId) {
+    redirect(`/auth/login?redirect=/${slug}`);
+  }
   // Data load is client-side (same query key as Hub nav prefetch) so a
   // Hub → product click lands from cache. Metadata still resolves server-side.
   return <PublicProductPageClient slug={slug} />;

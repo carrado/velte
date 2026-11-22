@@ -1,4 +1,5 @@
 import { backendFetch } from "./backend";
+import { proxyImageUrl, proxyImageUrls } from "./posterProxy";
 import type {
   Category,
   CategoryProduct,
@@ -148,8 +149,8 @@ function mapProduct(p: ApiProduct): CategoryProduct {
     currency: p.currency,
     featured: p.is_featured,
     tags: p.tags,
-    mainImageUrl: p.main_image_url,
-    thumbnailUrls: p.thumbnail_urls,
+    mainImageUrl: proxyImageUrl(p.main_image_url),
+    thumbnailUrls: proxyImageUrls(p.thumbnail_urls),
     videoUrl: p.video_url ?? null,
     colorClass: p.color_class ?? "bg-gray-200",
     createdDate: p.created_at,

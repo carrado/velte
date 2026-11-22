@@ -81,13 +81,74 @@ export function ProtectedPosterPreview({
       try {
         let blob = posterBlobCache.get(src);
         if (!blob) {
-          const res = await fetch(src, {
-            mode: "cors",
-            credentials: "omit",
-            signal: ctrl.signal,
-          });
-          if (!res.ok) throw new Error("preview fetch failed");
-          blob = await res.blob();
+          let res: Response;
+          if (
+            src.startsWith("http://") ||
+            src.startsWith("https://") ||
+            (src.startsWith("/") &&
+              !src.startsWith("/api/hub/e/") &&
+              !src.startsWith("/api/hub/media"))
+          ) {
+            // Direct URL or local static asset
+            res = await fetch(src, {
+              signal: ctrl.signal,
+            });
+            if (!res.ok) throw new Error("direct fetch failed");
+            blob = await res.blob();
+          } else {
+            // Send media ref via POST /api/hub/media body (no raw URL is ever sent)
+            const ref = src.startsWith("/api/hub/e/")
+              ? src.replace("/api/hub/e/", "")
+              : src;
+
+            res = await fetch("/api/hub/media", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ref }),
+              signal: ctrl.signal,
+            });
+
+            if (!res.ok) throw new Error("preview fetch failed");
+            const buf = await res.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+
+            // Unmask the protected byte stream in memory using SHA-256 of ref
+            const refBytes = new TextEncoder().encode(ref);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", refBytes);
+            const mask = new Uint8Array(hashBuffer);
+            const headerLen = Math.min(bytes.length, 64);
+            for (let i = 0; i < headerLen; i++) {
+              bytes[i] ^= mask[i % mask.length];
+            }
+
+            // Sniff actual mime type from unmasked magic numbers
+            let mime = "image/jpeg";
+            if (bytes.length > 4) {
+              if (
+                bytes[0] === 0x89 &&
+                bytes[1] === 0x50 &&
+                bytes[2] === 0x4e &&
+                bytes[3] === 0x47
+              ) {
+                mime = "image/png";
+              } else if (
+                bytes[0] === 0x52 &&
+                bytes[1] === 0x49 &&
+                bytes[2] === 0x46 &&
+                bytes[3] === 0x46
+              ) {
+                mime = "image/webp";
+              } else if (
+                bytes[0] === 0x47 &&
+                bytes[1] === 0x49 &&
+                bytes[2] === 0x46
+              ) {
+                mime = "image/gif";
+              }
+            }
+
+            blob = new Blob([bytes], { type: mime });
+          }
           posterBlobCache.set(src, blob);
         }
         if (cancelled) return;

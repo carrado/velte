@@ -6,21 +6,17 @@ import type { HubTimelineItem } from "@/types/hub";
  */
 export function isBoostedProduct(item: HubTimelineItem): boolean {
   if (!item) return false;
+  // Adverts and promotions are feed adverts, not carousel boosted products
+  if (Boolean(item.advertId || item.kind === "promotion")) return false;
+
   const isExplicitBoost = Boolean(
     (item as { boosted?: boolean }).boosted ||
     (item as { is_boosted?: boolean }).is_boosted ||
     (item as { isBoosted?: boolean }).isBoosted ||
     (item.listing as { boosted?: boolean } | undefined)?.boosted ||
-    (item.listing as { is_boosted?: boolean } | undefined)?.is_boosted ||
-    (item.listing as { sponsored?: boolean } | undefined)?.sponsored,
+    (item.listing as { is_boosted?: boolean } | undefined)?.is_boosted,
   );
   if (isExplicitBoost) return true;
-
-  // If item is marked sponsored and is a product or not an explicit advert flyer
-  if (item.sponsored) {
-    if (Boolean(item.listing) || item.kind === "product") return true;
-    if (!item.advertId && item.kind !== "promotion") return true;
-  }
 
   return false;
 }
@@ -30,8 +26,9 @@ export function isBoostedProduct(item: HubTimelineItem): boolean {
  */
 export function isSponsoredAdvert(item: HubTimelineItem): boolean {
   if (!item) return false;
+  if (Boolean(item.advertId || item.kind === "promotion")) return true;
   if (isBoostedProduct(item)) return false;
-  return Boolean(item.advertId || item.kind === "promotion" || item.sponsored);
+  return Boolean(item.sponsored);
 }
 
 /**
@@ -153,9 +150,16 @@ export function assembleTimelineWithSandwichedAds(
   const feed: HubTimelineItem[] = [];
   let adCursor = 0;
   let organicCursor = 0;
+
+  // 1. Sponsored adverts come first at the top of the feed so promoters immediately see their live advert
+  if (adPool.length > 0) {
+    feed.push(adPool[adCursor % adPool.length]);
+    adCursor++;
+  }
+
+  // 2. Interleave organic listings and sandwich recurring/remaining sponsored adverts every 2 or 3 listings
   let listingsSinceAd = 0;
   let gapIndex = 0;
-  // Deterministic initial gap
   let nextAdGap = 2;
 
   while (organicCursor < organicListings.length) {

@@ -1,21 +1,12 @@
 import crypto from "crypto";
 
-// Token lifetime — 5 minutes gives users enough time to scroll through the
-// feed, while the sec-fetch-dest check blocks new-tab opening at all times.
-const TOKEN_TTL_S = 300;
+// Token lifetime — 30 days so active campaigns and feed items remain viewable
+const TOKEN_TTL_S = 30 * 24 * 60 * 60;
 
-// HMAC-SHA256 produces 32 bytes = 43 base64url chars (no padding).
-// The signature is always appended as the last SIG_LEN characters of the
-// token so no separator is needed and the token looks like one opaque blob.
-const SIG_LEN = 43;
-
-function signingKey(): Buffer {
-  const raw = process.env.JWT_SECRET;
-  if (!raw) throw new Error("JWT_SECRET is not set");
-  if (/^[0-9a-f]{64,}$/i.test(raw.trim())) {
-    return Buffer.from(raw.trim(), "hex");
-  }
-  return Buffer.from(raw, "utf8");
+function encryptionKey(): Buffer {
+  const raw =
+    process.env.JWT_SECRET || "velte-poster-proxy-secret-fallback-key-2026";
+  return crypto.createHash("sha256").update(raw.trim()).digest();
 }
 
 function b64u(buf: Buffer): string {
@@ -31,65 +22,118 @@ function b64uDecode(s: string): Buffer {
   return Buffer.from(padded.replace(/-/g, "+").replace(/_/g, "/"), "base64");
 }
 
-function hmac(payload: Buffer): Buffer {
-  return crypto.createHmac("sha256", signingKey()).update(payload).digest();
+/**
+ * Builds an opaque, encrypted media reference for an image URL using AES-256-GCM.
+ * The payload is completely encrypted — no part of the URL (or Cloudinary domain)
+ * is readable or exposed in client payloads or network tabs.
+ *
+ * Uses deterministic IV derived from the URL so identical image URLs across
+ * listings, adverts, and gallery arrays yield identical reference strings,
+ * allowing UI deduplication (new Set) to work accurately.
+ */
+export function buildAssetRef(imageUrl: string): string {
+  if (!imageUrl) return "";
+  const key = encryptionKey();
+  const iv = crypto
+    .createHmac("sha256", key)
+    .update(imageUrl)
+    .digest()
+    .subarray(0, 12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
+  const payloadStr = JSON.stringify({ u: imageUrl });
+  const encrypted = Buffer.concat([
+    cipher.update(payloadStr, "utf8"),
+    cipher.final(),
+  ]);
+  const tag = cipher.getAuthTag(); // 16 bytes
+
+  // Format: [12-byte IV][16-byte AuthTag][Ciphertext]
+  return b64u(Buffer.concat([iv, tag, encrypted]));
 }
 
-function buildToken(imageUrl: string): string {
-  const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL_S;
-  const payload = Buffer.from(JSON.stringify({ u: imageUrl, e: exp }), "utf8");
-  const encodedPayload = b64u(payload);
-  const encodedSig = b64u(hmac(payload));
-  // Concatenate directly — no separator character
-  return encodedPayload + encodedSig;
-}
-
-/** Returns the internal fetch path the browser should use. No query params. */
-export function posterProxyUrl(imageUrl: string): string {
+/** Returns the opaque media reference for the asset. */
+export function assetRef(imageUrl: string): string {
   if (!imageUrl) return imageUrl;
-  return `/api/hub/e/${buildToken(imageUrl)}`;
+  // If it's already an encrypted ref (doesn't start with http or slash), return as is
+  if (
+    !imageUrl.startsWith("http://") &&
+    !imageUrl.startsWith("https://") &&
+    !imageUrl.startsWith("/")
+  ) {
+    return imageUrl;
+  }
+  return buildAssetRef(imageUrl);
 }
 
-export interface VerifiedToken {
+/** @deprecated Use assetRef() instead */
+export const posterProxyUrl = assetRef;
+/** @deprecated Use buildAssetRef() instead */
+export const buildToken = buildAssetRef;
+
+export interface VerifiedAssetRef {
   url: string;
 }
 
+/** @deprecated Use VerifiedAssetRef instead */
+export type VerifiedToken = VerifiedAssetRef;
+
 /**
- * Verify a path-segment token (no separator — last SIG_LEN chars are the sig).
- * Throws on any failure so the caller can safely return 403.
+ * Decrypts and verifies an opaque media reference.
+ * Strictly forbids raw URLs to prevent exposing or bypassing encryption.
  */
-export function verifyPosterToken(raw: string): VerifiedToken {
-  if (raw.length <= SIG_LEN) throw new Error("Token too short");
+export function verifyAssetRef(raw: string): VerifiedAssetRef {
+  if (!raw || typeof raw !== "string") {
+    throw new Error("Missing token");
+  }
 
-  const encodedPayload = raw.slice(0, raw.length - SIG_LEN);
-  const encodedSig = raw.slice(raw.length - SIG_LEN);
+  const clean = raw.trim().replace(/^\/api\/hub\/(e|media)\//, "");
 
-  const payload = b64uDecode(encodedPayload);
-  const expected = hmac(payload);
-  const actual = b64uDecode(encodedSig);
+  // Strictly reject raw URLs in the token payload
+  if (clean.startsWith("http://") || clean.startsWith("https://")) {
+    throw new Error(
+      "Raw URLs are not allowed. A secure media token is required.",
+    );
+  }
 
-  if (
-    actual.length !== expected.length ||
-    !crypto.timingSafeEqual(actual, expected)
-  ) {
-    throw new Error("Invalid signature");
+  let buf: Buffer;
+  try {
+    buf = b64uDecode(clean);
+  } catch {
+    throw new Error("Invalid token encoding");
+  }
+
+  // Minimum length: 12 (IV) + 16 (Tag) + 1 (Ciphertext) = 29
+  if (buf.length < 29) {
+    throw new Error("Token payload too short");
+  }
+
+  const key = encryptionKey();
+  const iv = buf.subarray(0, 12);
+  const tag = buf.subarray(12, 28);
+  const ciphertext = buf.subarray(28);
+
+  let decryptedStr: string;
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(tag);
+    decryptedStr = Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final(),
+    ]).toString("utf8");
+  } catch {
+    throw new Error("Token verification or decryption failed");
   }
 
   let parsed: { u?: string; e?: number };
   try {
-    parsed = JSON.parse(payload.toString("utf8"));
+    parsed = JSON.parse(decryptedStr);
   } catch {
-    throw new Error("Malformed payload");
+    throw new Error("Malformed decrypted payload");
   }
 
   if (!parsed.u || typeof parsed.u !== "string") {
-    throw new Error("Missing url");
-  }
-  if (
-    typeof parsed.e !== "number" ||
-    Math.floor(Date.now() / 1000) > parsed.e
-  ) {
-    throw new Error("Token expired");
+    throw new Error("Missing url in token");
   }
 
   // Allowlist: only proxy Cloudinary-hosted assets
@@ -103,8 +147,44 @@ export function verifyPosterToken(raw: string): VerifiedToken {
     }
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "Untrusted origin") throw err;
-    throw new Error("Invalid url");
+    throw new Error("Invalid url in token");
   }
 
   return { url: parsed.u };
+}
+
+/** @deprecated Use verifyAssetRef() instead */
+export const verifyPosterToken = verifyAssetRef;
+
+/**
+ * Proxy any Cloudinary image URL through the protected media proxy.
+ * Pass-through for null / undefined / already-encrypted refs.
+ * Use this on every product image, advert image, and gig image field
+ * before the value reaches a client payload.
+ */
+export function proxyImageUrl(url: string | null | undefined): string | null {
+  if (!url) return url ?? null;
+  return assetRef(url);
+}
+
+/**
+ * Proxy an array of image URLs.
+ */
+export function proxyImageUrls(urls: (string | null | undefined)[]): string[] {
+  return urls.map((u) => proxyImageUrl(u) ?? "").filter(Boolean);
+}
+
+/**
+ * Masks the header of an image buffer with a deterministic key derived from token.
+ * This corrupts magic numbers and prevents DevTools from previewing it or allowing
+ * saving/copying elsewhere.
+ */
+export function maskMediaBuffer(buffer: Buffer, token: string): Buffer {
+  const mask = crypto.createHash("sha256").update(token).digest();
+  const out = Buffer.from(buffer);
+  const headerLen = Math.min(out.length, 64);
+  for (let i = 0; i < headerLen; i++) {
+    out[i] ^= mask[i % mask.length];
+  }
+  return out;
 }
