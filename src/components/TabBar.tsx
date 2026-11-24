@@ -32,7 +32,7 @@ export default function TabBar<T extends string = string>({
     <div
       role="tablist"
       className={cn(
-        "flex items-center border border-gray-200 bg-gray-50",
+        "flex items-center border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5",
         large
           ? "gap-1 rounded-xl p-1 sm:rounded-2xl"
           : "gap-0.5 rounded-lg p-0.5 sm:rounded-xl",
@@ -57,7 +57,7 @@ export default function TabBar<T extends string = string>({
                 : "gap-1.5 rounded-md px-2.5 py-1.5 text-xs sm:rounded-lg",
               selected
                 ? "bg-surface text-ink shadow-sm"
-                : "text-gray-500 hover:text-gray-700",
+                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
             )}
           >
             {tab.label}

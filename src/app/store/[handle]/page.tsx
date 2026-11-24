@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { getPublicStore } from "@/lib/server/store";
+import { formatMetadataImageUrl } from "@/lib/media";
 import { BackendError, backendData } from "@/lib/server/backend";
 import { AUTH_COOKIE } from "@/lib/server/session";
 import { BUYER_AUTH_COOKIE } from "@/lib/server/buyerSession";
@@ -84,7 +85,8 @@ export async function generateMetadata({
   const description =
     store.description ||
     `${store.name} on Velte — chat with this vendor directly.`;
-  const image = store.gallery[0] ?? store.avatar ?? undefined;
+  const rawImage = store.gallery[0] ?? store.avatar ?? undefined;
+  const image = formatMetadataImageUrl(rawImage);
   return {
     title: `${store.name} · Velte`,
     description,
@@ -113,7 +115,8 @@ function storeJsonLd(store: PublicStore) {
   const telephone = store.whatsapp
     ? `+${normalizeWhatsappNumber(store.whatsapp)}`
     : undefined;
-  const image = store.gallery[0] ?? store.avatar ?? undefined;
+  const rawImage = store.gallery[0] ?? store.avatar ?? undefined;
+  const image = formatMetadataImageUrl(rawImage);
   return {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
@@ -158,17 +161,7 @@ export default async function PublicStorePage({
       })
     : null;
 
-  const goods = store.products.filter((p) => p.kind === "product");
-  const services = store.products.filter((p) => p.kind === "service");
-  // Lead with whichever offering the store actually deals in.
-  const servicesFirst =
-    services.length > 0 &&
-    (goods.length === 0 || services.length >= goods.length);
-
-  const defaultTab: PublicStoreTab =
-    servicesFirst || (services.length > 0 && goods.length === 0)
-      ? "services"
-      : "products";
+  const goods = store.products;
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -190,9 +183,12 @@ export default async function PublicStorePage({
           goods.map((p) => p.mainImageUrl).filter(Boolean) as string[]
         }
         area={store.area}
+        state={store.state}
+        country={store.country}
+        locations={store.locations}
+        storeType={store.storeType}
         sectors={store.sectors}
         goodsCount={goods.length}
-        servicesCount={services.length}
         enterprise={isEnterpriseVendor(store)}
         description={store.description}
         ratingAvg={store.ratingAvg ?? null}
@@ -204,12 +200,10 @@ export default async function PublicStorePage({
         {/* ── Main Catalog and Categories ─────────────────────────────────── */}
         <StoreTabs
           goods={goods}
-          services={services}
           storeName={store.name}
           storeHandle={store.handle}
           whatsapp={store.whatsapp}
           vendorId={store.vendorId}
-          defaultTab={defaultTab}
           isOwn={isOwn}
           isEnterprise={isEnterprise}
           sectors={store.sectors}
@@ -217,6 +211,17 @@ export default async function PublicStorePage({
           adverts={store.adverts}
           sidebar={null}
           initialIsLoggedIn={initialIsLoggedIn}
+          gallery={store.gallery}
+          locations={store.locations}
+          area={store.area}
+          state={store.state}
+          country={store.country}
+          companyLocation={store.companyLocation}
+          storeType={store.storeType}
+          reviews={store.reviews}
+          ratingAvg={store.ratingAvg}
+          ratingCount={store.ratingCount}
+          ratingDistribution={store.ratingDistribution}
         />
       </div>
 
@@ -224,6 +229,7 @@ export default async function PublicStorePage({
         name={store.name}
         handle={store.handle}
         area={store.area}
+        state={store.state}
         sectors={store.sectors}
       />
 

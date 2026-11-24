@@ -24,7 +24,8 @@ import { ProtectedPosterPreview } from "@/components/hub/ProtectedPosterPreview"
 import { HubLink } from "@/components/hub/HubLink";
 import { useNavigation } from "@/components/hub/HubNavigationProgressContext";
 import { useBuyerStore } from "@/store/buyerStore";
-import { isPremiumBuyer } from "@/lib/enterprise";
+import { isEnterpriseVendor, isPremiumBuyer } from "@/lib/enterprise";
+import { EnterpriseAvatarBadge } from "@/components/EnterpriseBadge";
 import { cn, timeAgo } from "@/lib/utils";
 import { queryKeys } from "@/lib/query-keys";
 import {
@@ -238,7 +239,7 @@ export function BuyerSponsoredAdvertsPage() {
         {/* ========================================================= */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           {/* Card 1: Active Campaigns */}
-          <div className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-100 dark:border-white/10 border-b-2 sm:border-b-2 border-b-[#ff5500] bg-surface p-4 sm:p-5 shadow-xs">
+          <div className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-100 dark:border-white/10 bg-surface p-4 sm:p-5 shadow-xs">
             <div className="flex items-center gap-2.5">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 dark:bg-orange-950/40 text-[#ff5500] shrink-0">
                 <MegaphoneIcon size={14} />
@@ -256,7 +257,7 @@ export function BuyerSponsoredAdvertsPage() {
           </div>
 
           {/* Card 2: Total Impressions */}
-          <div className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-100 dark:border-white/10 border-b-2 sm:border-b-2 border-b-blue-500 bg-surface p-4 sm:p-5 shadow-xs">
+          <div className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-100 dark:border-white/10 bg-surface p-4 sm:p-5 shadow-xs">
             <div className="flex items-center gap-2.5">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-500 shrink-0">
                 <Eye size={14} />
@@ -274,7 +275,7 @@ export function BuyerSponsoredAdvertsPage() {
           </div>
 
           {/* Card 3: Storefront Clicks */}
-          <div className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-100 dark:border-white/10 border-b-2 sm:border-b-2 border-b-emerald-500 bg-surface p-4 sm:p-5 shadow-xs">
+          <div className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-100 dark:border-white/10 bg-surface p-4 sm:p-5 shadow-xs">
             <div className="flex items-center gap-2.5">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 shrink-0">
                 <MousePointer size={14} />
@@ -292,7 +293,7 @@ export function BuyerSponsoredAdvertsPage() {
           </div>
 
           {/* Card 4: Engagement CTR */}
-          <div className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-100 dark:border-white/10 border-b-2 sm:border-b-2 border-b-purple-500 bg-surface p-4 sm:p-5 shadow-xs">
+          <div className="rounded-none sm:rounded-2xl border-y sm:border border-x-0 sm:border-x border-gray-100 dark:border-white/10 bg-surface p-4 sm:p-5 shadow-xs">
             <div className="flex items-center gap-2.5">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-500 shrink-0">
                 <BarChart3 size={14} />
@@ -473,8 +474,26 @@ export function BuyerSponsoredAdvertsPage() {
                       />
                     )}
                     <div className="absolute top-3 left-3">
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full bg-white/95 dark:bg-canvas/95 text-emerald-600 shadow-sm border border-emerald-100 dark:border-emerald-900/30 uppercase tracking-wide">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full bg-white/95 dark:bg-canvas/95 shadow-sm uppercase tracking-wide border",
+                          ad.status === "active"
+                            ? "text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30"
+                            : ad.status === "cancelled"
+                              ? "text-rose-500 dark:text-rose-400 border-rose-100 dark:border-rose-900/30"
+                              : "text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/10",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "h-2 w-2 rounded-full",
+                            ad.status === "active"
+                              ? "bg-emerald-500"
+                              : ad.status === "cancelled"
+                                ? "bg-rose-500"
+                                : "bg-gray-400 dark:bg-gray-500",
+                          )}
+                        />
                         {ad.status.toUpperCase()}
                       </span>
                     </div>
@@ -485,15 +504,20 @@ export function BuyerSponsoredAdvertsPage() {
                     {/* Header Row: Vendor Info & Timestamp */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="h-9 w-9 rounded-full bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-ink font-bold text-sm flex items-center justify-center shrink-0 border border-gray-200/60 dark:border-white/10">
-                          {ad.vendorAvatar ? (
-                            <img
-                              src={ad.vendorAvatar}
-                              alt={ad.vendorName}
-                              className="h-full w-full object-cover rounded-full"
-                            />
-                          ) : (
-                            ad.vendorName?.[0] || "C"
+                        <div className="relative shrink-0">
+                          <div className="h-9 w-9 rounded-full bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-ink font-bold text-sm flex items-center justify-center shrink-0 border border-gray-200/60 dark:border-white/10 overflow-hidden">
+                            {ad.vendorAvatar ? (
+                              <img
+                                src={ad.vendorAvatar}
+                                alt={ad.vendorName}
+                                className="h-full w-full object-cover rounded-full"
+                              />
+                            ) : (
+                              ad.vendorName?.[0] || "C"
+                            )}
+                          </div>
+                          {isEnterpriseVendor(ad) && (
+                            <EnterpriseAvatarBadge size="sm" />
                           )}
                         </div>
                         <div className="min-w-0">
@@ -553,7 +577,7 @@ export function BuyerSponsoredAdvertsPage() {
 
                       <div>
                         <span className="text-[10px] uppercase font-bold text-gray-400 flex items-center justify-center gap-1">
-                          <Share2 size={12} />
+                          <BarChart3 size={12} />
                           CTR
                         </span>
                         <p className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
@@ -586,7 +610,7 @@ export function BuyerSponsoredAdvertsPage() {
                           className="p-1.5 text-gray-400 hover:text-ink transition-colors cursor-pointer"
                           title="Share Campaign Link"
                         >
-                          <BarChart3 size={16} />
+                          <Share2 size={16} />
                         </button>
                         <button
                           type="button"

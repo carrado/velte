@@ -65,14 +65,16 @@ import {
   SECTOR_TAXONOMY,
 } from "@/lib/sectors";
 import { NIGERIA_STATES, normalizeNigeriaState } from "@/lib/states";
-import { isEnterpriseVendor } from "@/components/EnterpriseBadge";
+import {
+  EnterpriseAvatarBadge,
+  isEnterpriseVendor,
+} from "@/components/EnterpriseBadge";
 import { isPremiumBuyer } from "@/lib/enterprise";
 import { modalScrimClass } from "@/lib/modalScrim";
 import { cn, formatNaira, isNewListing, timeAgo } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type {
   HubBroadcastPrefs,
-  HubBuyerBroadcast,
   HubBuyerPromotion,
   HubCommunityPost,
   HubFeaturedVendor,
@@ -83,6 +85,7 @@ import type {
 import TabBar from "@/components/TabBar";
 import { HubLockedModal } from "./HubLockedModal";
 import { BuyerGigsModal } from "./BuyerGigsModal";
+import { StoreVisitCheckModal } from "@/components/hub/StoreVisitCheckModal";
 import {
   PosterPreviewLightbox,
   ProtectedPosterPreview,
@@ -274,22 +277,21 @@ function Avatar({
   name,
   src,
   className,
+  isEnterprise,
 }: {
   name: string;
   src: string | null;
   className?: string;
+  isEnterprise?: boolean;
 }) {
-  if (src) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt=""
-        className={cn("object-cover bg-gray-100", className)}
-      />
-    );
-  }
-  return (
+  const content = src ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className={cn("object-cover bg-gray-100", className)}
+    />
+  ) : (
     <span
       className={cn(
         "inline-flex items-center justify-center bg-orange-100 text-orange-700 font-bold",
@@ -299,6 +301,16 @@ function Avatar({
       {initials(name)}
     </span>
   );
+
+  if (isEnterprise) {
+    return (
+      <div className="relative inline-flex shrink-0">
+        {content}
+        <EnterpriseAvatarBadge size="sm" />
+      </div>
+    );
+  }
+  return content;
 }
 
 function contactFromFeatured(vendor: HubFeaturedVendor): ContactTarget {
@@ -490,6 +502,7 @@ function FeaturedVendorsPanel({
                       name={vendor.name}
                       src={vendor.avatar}
                       className="h-10 w-10 rounded-full text-xs shrink-0"
+                      isEnterprise={isEnterpriseVendor(vendor)}
                     />
                   </div>
                   <div className="min-w-0 flex-1 space-y-1">
@@ -662,11 +675,6 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   const [prefs, setPrefs] = useState<HubBroadcastPrefs>(
     home.broadcastPrefs ?? { promoEnabled: false, promoSectors: [] },
   );
-  const [buyerBroadcasts, setBuyerBroadcasts] = useState<HubBuyerBroadcast[]>(
-    home.buyerBroadcasts ?? [],
-  );
-  const [broadcasting, setBroadcasting] = useState(false);
-  const [messageContactsOpen, setMessageContactsOpen] = useState(false);
   const [myAdvertsOpen, setMyAdvertsOpen] = useState(false);
   const [gigsModalOpen, setGigsModalOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -677,6 +685,8 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
   const [reviewing, setReviewing] = useState(false);
   const [visitOpen, setVisitOpen] = useState(false);
   const [visitSaved, setVisitSaved] = useState(false);
+  const [visitAuditTarget, setVisitAuditTarget] =
+    useState<ContactTarget | null>(null);
   const [visit, setVisit] = useState({
     visited: false,
     stockSeen: false,
@@ -909,8 +919,7 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
       setLock("visit");
       return;
     }
-    visitIntent.current = true;
-    setContact(target);
+    setVisitAuditTarget(target);
   };
 
   const openReview = (target: ContactTarget) => {
@@ -988,61 +997,6 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
     navigate("/hub/advert");
   };
 
-  const submitBroadcast = async (message: string) => {
-    const trimmed = message.trim();
-    if (trimmed.length < 2 || broadcasting) return;
-    if (!home.premium) {
-      setLock("broadcast");
-      return;
-    }
-    setBroadcasting(true);
-    try {
-      const res = await fetch("/api/hub/buyer-broadcasts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
-      });
-      if (res.status === 403) {
-        setLock("broadcast");
-        return;
-      }
-      if (!res.ok) {
-        toast.error("Failed to broadcast message");
-        return;
-      }
-      const data = (await res.json()) as {
-        id?: string;
-        audienceCount?: number;
-        status?: "queued";
-      };
-      setBuyerBroadcasts((current) => [
-        {
-          id: data.id ?? trimmed,
-          body: trimmed,
-          at: new Date().toISOString(),
-          audienceCount: data.audienceCount ?? 0,
-          status: "queued",
-        },
-        ...current,
-      ]);
-      setNotice(
-        `Queued · ${data.audienceCount ?? 0} ${
-          (data.audienceCount ?? 0) === 1 ? "contact" : "contacts"
-        }`,
-      );
-      toast.success(
-        `Broadcast queued for ${data.audienceCount ?? 0} ${
-          (data.audienceCount ?? 0) === 1 ? "vendor" : "vendors"
-        }!`,
-      );
-      setMessageContactsOpen(false);
-    } catch {
-      toast.error("Network error sending broadcast");
-    } finally {
-      setBroadcasting(false);
-    }
-  };
-
   const savePrefs = async (next: HubBroadcastPrefs, includeSectors = false) => {
     const previous = prefs;
     setPrefs(next);
@@ -1113,13 +1067,11 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
             <BuyerTools
               home={home}
               prefs={prefs}
-              broadcasts={buyerBroadcasts}
               notice={notice}
               onPlace={openPlace}
               onPrefs={savePrefs}
               onLock={(kind) => setLock(kind)}
               onOpenChooseSectors={() => setChooseSectorsOpen(true)}
-              onOpenMessageContacts={() => setMessageContactsOpen(true)}
               onOpenMyAdverts={() => navigate("/hub/sponsored-adverts")}
               onOpenGigs={() => navigate("/hub/gigs")}
             />
@@ -1405,6 +1357,7 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
                 name={contact.name}
                 src={contact.avatar}
                 className="h-12 w-12 rounded-full text-sm shrink-0"
+                isEnterprise={isEnterpriseVendor(contact)}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
@@ -1559,93 +1512,25 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
                 </button>
               </form>
             )}
-            {home.premium && visitOpen ? (
-              <form
-                className="mt-4 space-y-2"
-                onSubmit={async (event) => {
-                  event.preventDefault();
-                  if (savingVisit) return;
-                  setSavingVisit(true);
-                  try {
-                    const res = await fetch("/api/trust/validations", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        vendorId: contact.vendorId,
-                        visited: visit.visited,
-                        stockSeen: visit.stockSeen,
-                        addressMatched: visit.addressMatched,
-                        note: visit.note,
-                      }),
-                    });
-                    if (res.status === 403) {
-                      setLock("visit");
-                      return;
-                    }
-                    if (!res.ok) return;
-                    setVisitSaved(true);
-                    setVisitOpen(false);
-                  } finally {
-                    setSavingVisit(false);
-                  }
-                }}
-              >
-                {(
-                  [
-                    ["visited", "I visited"],
-                    ["stockSeen", "I saw the stock"],
-                    ["addressMatched", "The address matched"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label
-                    key={key}
-                    className="flex items-center gap-2 text-sm text-ink"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={visit[key]}
-                      onChange={(event) =>
-                        setVisit((current) => ({
-                          ...current,
-                          [key]: event.target.checked,
-                        }))
-                      }
-                    />
-                    {label}
-                  </label>
-                ))}
-                <textarea
-                  value={visit.note}
-                  onChange={(event) =>
-                    setVisit((current) => ({
-                      ...current,
-                      note: event.target.value,
-                    }))
-                  }
-                  rows={2}
-                  maxLength={400}
-                  placeholder="Note"
-                  className="w-full rounded-xl border border-gray-200 bg-surface px-3 py-2 text-sm text-ink placeholder:text-gray-400"
-                />
-                <button
-                  type="submit"
-                  disabled={savingVisit}
-                  className="w-full rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
-                >
-                  {savingVisit ? "Saving…" : "Save visit check"}
-                </button>
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  home.premium ? setVisitOpen(true) : setLock("visit")
+            <button
+              type="button"
+              onClick={() => {
+                if (!home.premium) {
+                  setLock("visit");
+                  return;
                 }
-                className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-ink hover:border-orange-300"
-              >
-                {visitSaved ? "Visit check saved" : "Visit check"}
-              </button>
-            )}
+                setVisitAuditTarget(contact);
+                setContact(null);
+              }}
+              className="mt-3 w-full rounded-xl border border-orange-200 dark:border-white/10 bg-orange-50/50 dark:bg-white/5 py-2.5 px-3 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-white/10 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <ShieldIcon size={14} />
+              <span>
+                {visitSaved
+                  ? "Audit Storefront Again"
+                  : "Verify Storefront & Earn ₦500"}
+              </span>
+            </button>
             <button
               type="button"
               onClick={() => setContact(null)}
@@ -1694,14 +1579,6 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
         onSave={(selected) => {
           savePrefs({ ...prefs, promoSectors: selected }, true);
         }}
-      />
-
-      <MessageContactsModal
-        open={messageContactsOpen}
-        onClose={() => setMessageContactsOpen(false)}
-        onSend={submitBroadcast}
-        sending={broadcasting}
-        broadcasts={buyerBroadcasts}
       />
 
       <BuyerPromotionsModal
@@ -1795,6 +1672,20 @@ export function BuyerHub({ home: initialHome }: { home: HubHome }) {
         <PosterPreviewLightbox
           src={advertLightboxSrc}
           onClose={() => setAdvertLightboxSrc(null)}
+        />
+      )}
+
+      {visitAuditTarget && (
+        <StoreVisitCheckModal
+          vendorId={visitAuditTarget.vendorId}
+          vendorName={visitAuditTarget.vendorName}
+          vendorAvatar={visitAuditTarget.vendorAvatar}
+          vendorArea={visitAuditTarget.area}
+          onClose={() => setVisitAuditTarget(null)}
+          onSuccess={() => {
+            setVisitAuditTarget(null);
+            setVisitSaved(true);
+          }}
         />
       )}
     </div>
@@ -2095,257 +1986,6 @@ function ChooseSectorsModal({
   );
 }
 
-function MessageContactsModal({
-  open,
-  onClose,
-  onSend,
-  sending,
-  broadcasts,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSend: (message: string) => Promise<void> | void;
-  sending: boolean;
-  broadcasts: HubBuyerBroadcast[];
-}) {
-  const [activeTab, setActiveTab] = useState<"compose" | "history">("compose");
-  const [body, setBody] = useState("");
-
-  useEffect(() => {
-    if (open) {
-      setBody("");
-      setActiveTab("compose");
-    }
-  }, [open]);
-
-  if (!open) return null;
-
-  const quickStarters = [
-    "Bulk order quotation request",
-    "Availability & fastest delivery time",
-    "Looking for vendor partnership",
-    "Custom specification inquiry",
-  ];
-
-  const canSend = body.trim().length >= 5 && !sending;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canSend) return;
-    onSend(body.trim());
-  };
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Message contacts"
-      className={cn(
-        "fixed inset-0 z-50 h-dvh w-dvw flex items-end sm:items-center justify-center p-4",
-        modalScrimClass(),
-      )}
-      onClick={onClose}
-    >
-      <div
-        className="bg-surface w-full sm:max-w-lg rounded-2xl border border-gray-200 dark:border-white/10 shadow-2xl flex flex-col max-h-[85dvh] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 pb-3 border-b border-gray-100 dark:border-white/5">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400">
-              <SendIcon size={18} />
-            </span>
-            <div>
-              <h3 className="text-base font-bold text-ink">Message Contacts</h3>
-              <p className="text-xs text-gray-500 dark:text-ink/60 mt-0.5">
-                Send a direct broadcast notice to vendors on Velte
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:text-ink hover:bg-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-          >
-            <CloseIcon size={16} />
-          </button>
-        </div>
-
-        {/* Tab selection */}
-        <div className="flex border-b border-gray-100 dark:border-white/5 px-5 bg-gray-50/50 dark:bg-white/[0.02]">
-          <button
-            type="button"
-            onClick={() => setActiveTab("compose")}
-            className={cn(
-              "py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer",
-              activeTab === "compose"
-                ? "border-orange-500 text-orange-600 dark:text-orange-400"
-                : "border-transparent text-gray-500 dark:text-ink/60 hover:text-ink",
-            )}
-          >
-            Compose Broadcast
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("history")}
-            className={cn(
-              "py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5",
-              activeTab === "history"
-                ? "border-orange-500 text-orange-600 dark:text-orange-400"
-                : "border-transparent text-gray-500 dark:text-ink/60 hover:text-ink",
-            )}
-          >
-            <span>History</span>
-            {broadcasts.length > 0 && (
-              <span className="rounded-full bg-gray-200 dark:bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-ink">
-                {broadcasts.length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Body */}
-        {activeTab === "compose" ? (
-          <form
-            onSubmit={handleSubmit}
-            className="p-5 flex-1 flex flex-col overflow-y-auto space-y-4"
-          >
-            {/* Audience Banner */}
-            <div className="rounded-xl border border-orange-200/70 bg-gradient-to-r from-orange-50/70 to-amber-50/70 dark:border-orange-500/20 dark:from-orange-950/20 dark:to-amber-950/20 p-3 flex items-start gap-2.5">
-              <MegaphoneIcon
-                size={16}
-                className="text-orange-600 dark:text-orange-400 shrink-0 mt-0.5"
-              />
-              <div className="text-[11px] leading-relaxed text-gray-600 dark:text-ink/70">
-                <span className="font-semibold text-ink">
-                  Targeted Vendor Delivery:
-                </span>{" "}
-                Your note broadcasts instantly to all active verified vendors
-                matching your sector preferences.
-              </div>
-            </div>
-
-            {/* Quick Starters */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-ink/50 mb-1.5">
-                Quick Starters
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {quickStarters.map((starter) => (
-                  <button
-                    key={starter}
-                    type="button"
-                    onClick={() => setBody(starter + ": ")}
-                    className="rounded-lg border border-gray-200 dark:border-white/10 bg-surface px-2.5 py-1 text-[11px] font-medium text-gray-600 dark:text-ink/70 hover:border-orange-300 dark:hover:border-orange-500/30 hover:text-orange-600 dark:hover:text-orange-400 transition-colors cursor-pointer"
-                  >
-                    + {starter}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Message input */}
-            <div className="flex-1 flex flex-col">
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="broadcast-msg-input"
-                  className="text-xs font-bold text-ink"
-                >
-                  Your Broadcast Message
-                </label>
-                <span
-                  className={cn(
-                    "text-[11px] font-medium",
-                    body.length > 250
-                      ? "text-orange-600 font-bold"
-                      : "text-gray-400 dark:text-ink/50",
-                  )}
-                >
-                  {body.length}/280
-                </span>
-              </div>
-              <textarea
-                id="broadcast-msg-input"
-                rows={4}
-                maxLength={280}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Write your note to vendors (e.g., 'Looking for wholesale supplier for packaged snacks in Lagos with 48h delivery...')"
-                className="w-full flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-surface p-3 text-xs text-ink placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none leading-relaxed"
-                autoFocus
-              />
-              <p className="mt-1.5 text-[11px] text-gray-400 dark:text-ink/50">
-                Minimum 5 characters. Keep it clear, polite, and actionable.
-              </p>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-gray-200 dark:border-white/10 px-4 py-2 text-xs font-semibold text-ink hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!canSend}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 px-5 py-2 text-xs font-bold text-white transition-all disabled:opacity-40 cursor-pointer shadow-sm"
-              >
-                <SendIcon size={13} />
-                <span>{sending ? "Broadcasting…" : "Send Broadcast"}</span>
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="p-5 flex-1 overflow-y-auto space-y-3">
-            {broadcasts.length === 0 ? (
-              <div className="py-12 text-center">
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 dark:bg-white/5 text-gray-400 mb-2">
-                  <SendIcon size={22} />
-                </span>
-                <p className="text-xs font-semibold text-ink">
-                  No Broadcasts Yet
-                </p>
-                <p className="text-[11px] text-gray-500 dark:text-ink/60 mt-1 max-w-xs mx-auto">
-                  Messages you send to vendor contacts will appear here with
-                  delivery stats.
-                </p>
-              </div>
-            ) : (
-              <ul className="space-y-2.5">
-                {broadcasts.map((b) => (
-                  <li
-                    key={b.id}
-                    className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02] space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="inline-flex items-center gap-1 font-bold text-orange-600 dark:text-orange-400">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        Queued · {b.audienceCount ?? 0}{" "}
-                        {b.audienceCount === 1 ? "vendor" : "vendors"}
-                      </span>
-                      <span className="text-gray-400 dark:text-ink/50">
-                        {timeAgo(b.at)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-ink leading-relaxed font-medium">
-                      {b.body}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function BuyerPromotionsModal({
   open,
   onClose,
@@ -2573,25 +2213,21 @@ function BuyerPromotionsModal({
 function BuyerTools({
   home,
   prefs,
-  broadcasts,
   notice,
   onPlace,
   onPrefs,
   onLock,
   onOpenChooseSectors,
-  onOpenMessageContacts,
   onOpenMyAdverts,
   onOpenGigs,
 }: {
   home: HubHome;
   prefs: HubBroadcastPrefs;
-  broadcasts: HubBuyerBroadcast[];
   notice: string | null;
   onPlace: () => void;
   onPrefs: (next: HubBroadcastPrefs, includeSectors?: boolean) => void;
   onLock: (kind: "broadcast" | "sectors" | "place") => void;
   onOpenChooseSectors: () => void;
-  onOpenMessageContacts: () => void;
   onOpenMyAdverts: () => void;
   onOpenGigs: () => void;
 }) {
@@ -2688,47 +2324,7 @@ function BuyerTools({
           )}
         </div>
 
-        {/* Tool 3: Message Contacts */}
-        <button
-          type="button"
-          onClick={() => {
-            if (!home.premium) {
-              onLock("broadcast");
-            } else {
-              onOpenMessageContacts();
-            }
-          }}
-          className="w-full group flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 dark:border-white/5 hover:border-orange-300 dark:hover:border-orange-500/30 hover:bg-orange-50/50 dark:hover:bg-orange-500/5 transition-all text-left cursor-pointer"
-        >
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400 group-hover:bg-orange-500 group-hover:text-white transition-colors">
-            <SendIcon size={17} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-ink group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
-                Message Contacts
-              </span>
-              {broadcasts.length > 0 && (
-                <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400">
-                  {broadcasts.length}
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-gray-500 dark:text-ink/60 truncate mt-0.5">
-              Direct broadcast to vendors
-            </p>
-          </div>
-          {!home.premium ? (
-            <LockIcon size={14} className="shrink-0 text-gray-400" />
-          ) : (
-            <ChevronRight
-              size={15}
-              className="shrink-0 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all"
-            />
-          )}
-        </button>
-
-        {/* Tool 4: My Adverts */}
+        {/* Tool 3: My Adverts */}
         <button
           type="button"
           onClick={() => {
@@ -2972,6 +2568,7 @@ function CommunityPanel({
                 name={item.storeName || "Velte"}
                 src={item.avatar}
                 className="h-8 w-8 rounded-full text-[10px] shrink-0"
+                isEnterprise={isEnterpriseVendor(item)}
               />
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-ink truncate">
@@ -3303,6 +2900,9 @@ function FeedCard({
                     <span>{storeName.charAt(0).toUpperCase()}</span>
                   )}
                 </div>
+                {isEnterpriseVendor(item) && (
+                  <EnterpriseAvatarBadge size="sm" />
+                )}
               </div>
             )}
 
@@ -3436,6 +3036,9 @@ function FeedCard({
                     <span>{storeName.charAt(0).toUpperCase()}</span>
                   )}
                 </div>
+                {isEnterpriseVendor(item) && (
+                  <EnterpriseAvatarBadge size="sm" />
+                )}
               </div>
             )}
 

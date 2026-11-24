@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { StoreIcon } from "@/components/icons/hero";
 import { optimizedImageUrl } from "@/lib/cloudinary";
+import { isEnterpriseVendor } from "@/lib/enterprise";
+import { EnterpriseAvatarBadge } from "@/components/EnterpriseBadge";
 import type { HubFeed } from "@/types/hub";
 
 // Right discovery rail: suggested businesses + the honesty note. The note
@@ -34,16 +36,19 @@ export function HubRightRail({
                 href={`/store/${v.handle}`}
                 className="flex items-center gap-2.5 px-1 py-1.5 rounded-xl hover:bg-gray-50 transition-colors"
               >
-                <span className="w-9 h-9 rounded-full overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
-                  {v.avatar ? (
-                    <ProtectedImage
-                      src={optimizedImageUrl(v.avatar)}
-                      alt={v.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <StoreIcon size={15} className="text-gray-300" />
-                  )}
+                <span className="relative shrink-0">
+                  <span className="w-9 h-9 rounded-full overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center">
+                    {v.avatar ? (
+                      <ProtectedImage
+                        src={optimizedImageUrl(v.avatar)}
+                        alt={v.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <StoreIcon size={15} className="text-gray-300" />
+                    )}
+                  </span>
+                  {isEnterpriseVendor(v) && <EnterpriseAvatarBadge size="sm" />}
                 </span>
                 <span className="min-w-0">
                   <span className="block text-[13px] font-bold text-ink truncate">

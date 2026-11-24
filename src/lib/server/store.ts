@@ -1,4 +1,5 @@
 import { backendData } from "./backend";
+import { proxyImageUrl, proxyImageUrls } from "./posterProxy";
 import type {
   Store,
   UpdateStorePayload,
@@ -27,9 +28,24 @@ export async function updateMyStore(
 
 /** Public — no cookie; used by the /store/[handle] server component. */
 export async function getPublicStore(handle: string): Promise<PublicStore> {
-  return backendData<PublicStore>(
+  const store = await backendData<PublicStore>(
     `/store/by-handle/${encodeURIComponent(handle)}`,
   );
+  if (!store) return store;
+  return {
+    ...store,
+    avatar: proxyImageUrl(store.avatar),
+    gallery: proxyImageUrls(store.gallery || []),
+    products: (store.products || []).map((p) => ({
+      ...p,
+      mainImageUrl: proxyImageUrl(p.mainImageUrl),
+      thumbnailUrls: proxyImageUrls(p.thumbnailUrls || []),
+    })),
+    adverts: (store.adverts || []).map((a) => ({
+      ...a,
+      imageUrl: proxyImageUrl(a.imageUrl) || a.imageUrl,
+    })),
+  };
 }
 
 /** Public product detail by slug — cookie optional so signed-in viewers get WhatsApp. */
@@ -37,10 +53,23 @@ export async function getPublicProductBySlug(
   slug: string,
   cookie?: string,
 ): Promise<PublicProductDetail> {
-  return backendData<PublicProductDetail>(
+  const data = await backendData<PublicProductDetail>(
     `/store/products/by-slug/${encodeURIComponent(slug)}`,
     cookie ? { cookie } : undefined,
   );
+  if (!data) return data;
+  return {
+    ...data,
+    product: {
+      ...data.product,
+      mainImageUrl: proxyImageUrl(data.product.mainImageUrl),
+      thumbnailUrls: proxyImageUrls(data.product.thumbnailUrls || []),
+    },
+    store: {
+      ...data.store,
+      avatar: proxyImageUrl(data.store.avatar),
+    },
+  };
 }
 
 /** Legacy /store/:handle/:id — used to redirect to /{slug}. */
@@ -49,27 +78,63 @@ export async function getPublicProduct(
   productId: string,
   cookie?: string,
 ): Promise<PublicProductDetail> {
-  return backendData<PublicProductDetail>(
+  const data = await backendData<PublicProductDetail>(
     `/store/by-handle/${encodeURIComponent(handle)}/products/${encodeURIComponent(productId)}`,
     cookie ? { cookie } : undefined,
   );
+  if (!data) return data;
+  return {
+    ...data,
+    product: {
+      ...data.product,
+      mainImageUrl: proxyImageUrl(data.product.mainImageUrl),
+      thumbnailUrls: proxyImageUrls(data.product.thumbnailUrls || []),
+    },
+    store: {
+      ...data.store,
+      avatar: proxyImageUrl(data.store.avatar),
+    },
+  };
 }
 
 /** Public — no cookie; feeds the "/" homepage's marketplace preview grid. */
 export async function getMarketplacePreview(): Promise<
   MarketplacePreviewItem[]
 > {
-  return backendData<MarketplacePreviewItem[]>("/store/marketplace-preview");
+  const items = await backendData<MarketplacePreviewItem[]>(
+    "/store/marketplace-preview",
+  );
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    ...item,
+    mainImageUrl: proxyImageUrl(item.mainImageUrl),
+    storeAvatar: proxyImageUrl(item.storeAvatar),
+  }));
 }
 
 /** Public — no cookie; feeds the "/" homepage's Vendors section. */
 export async function getVendorsPreview(): Promise<VendorPreviewItem[]> {
-  return backendData<VendorPreviewItem[]>("/store/vendors-preview");
+  const items = await backendData<VendorPreviewItem[]>(
+    "/store/vendors-preview",
+  );
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    ...item,
+    avatar: proxyImageUrl(item.avatar),
+    gallery: proxyImageUrls(item.gallery || []),
+  }));
 }
 
 /** Public — no cookie; feeds the /marketplace browse page's full grid. */
 export async function getMarketplaceBrowse(): Promise<MarketplaceBrowseItem[]> {
-  return backendData<MarketplaceBrowseItem[]>("/store/marketplace");
+  const items =
+    await backendData<MarketplaceBrowseItem[]>("/store/marketplace");
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    ...item,
+    mainImageUrl: proxyImageUrl(item.mainImageUrl),
+    storeAvatar: proxyImageUrl(item.storeAvatar),
+  }));
 }
 
 /** Public — no cookie; feeds the /store/[handle] page's "Other vendors you
@@ -79,15 +144,27 @@ export async function getMarketplaceBrowse(): Promise<MarketplaceBrowseItem[]> {
 export async function getSimilarVendors(
   handle: string,
 ): Promise<VendorPreviewItem[]> {
-  return backendData<VendorPreviewItem[]>(
+  const items = await backendData<VendorPreviewItem[]>(
     `/store/by-handle/${encodeURIComponent(handle)}/similar`,
   );
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    ...item,
+    avatar: proxyImageUrl(item.avatar),
+    gallery: proxyImageUrls(item.gallery || []),
+  }));
 }
 
 /** Public — no cookie; feeds the /marketplace browse page's Vendors
  *  section — the full directory, not the "/" homepage's capped preview. */
 export async function getVendorsBrowse(): Promise<VendorPreviewItem[]> {
-  return backendData<VendorPreviewItem[]>("/store/vendors");
+  const items = await backendData<VendorPreviewItem[]>("/store/vendors");
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    ...item,
+    avatar: proxyImageUrl(item.avatar),
+    gallery: proxyImageUrls(item.gallery || []),
+  }));
 }
 
 /** Public — no cookie; feeds the /marketplace browse page's category rail.

@@ -395,6 +395,7 @@ export function PublicProductDetailView({
                     label={getInitial(store.name)}
                     src={store.avatar}
                     className="h-12 w-12 rounded-2xl text-base shrink-0 ring-2 ring-surface shadow-xs"
+                    isEnterprise={isEnterprise}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -818,6 +819,7 @@ export function PublicProductDetailView({
                       label={getInitial(store.name)}
                       src={store.avatar}
                       className="h-12 w-12 rounded-2xl text-base"
+                      isEnterprise={isEnterprise}
                     />
                     <div>
                       <div className="flex items-center gap-1.5">

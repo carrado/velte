@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getPublicProductBySlug } from "@/lib/server/store";
+import { formatMetadataImageUrl } from "@/lib/media";
 import { BackendError } from "@/lib/server/backend";
 import { getActorAuth, getOptionalBuyerId } from "@/lib/server/buyerGuards";
 import { getOptionalUserId } from "@/lib/server/guards";
@@ -27,7 +28,8 @@ export async function generateMetadata({
   const { product, store } = data;
   const description =
     product.description || `${product.name} from ${store.name} on Velte.`;
-  const image = product.mainImageUrl ?? undefined;
+  const rawImage = product.mainImageUrl ?? undefined;
+  const image = formatMetadataImageUrl(rawImage);
   const canonical = `/${product.slug || slug}`;
   return {
     title: `${product.name} · ${store.name} · Velte`,

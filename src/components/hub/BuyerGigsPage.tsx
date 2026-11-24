@@ -51,13 +51,6 @@ import type {
 } from "@/types/hub";
 import { ProtectedPosterPreview } from "@/components/hub/ProtectedPosterPreview";
 
-function getGigImage(index: number, mode?: string) {
-  if (mode === "remote") return "/hub/gig-laptop.jpg";
-  if (index % 3 === 0) return "/hub/gig-storefront.jpg";
-  if (index % 3 === 1) return "/hub/gig-camera.jpg";
-  return "/hub/gig-laptop.jpg";
-}
-
 export function BuyerGigsPage() {
   const queryClient = useQueryClient();
   const buyer = useBuyerStore((s) => s.buyer);
@@ -625,12 +618,14 @@ export function BuyerGigsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {gigListToRender.map((gig, idx) => {
+                {gigListToRender.map((gig) => {
                   const hasApplied = gig.hasApplied;
                   const cardImage =
                     gig.imageUrl ||
                     gig.posterUrl ||
-                    getGigImage(idx, gig.workMode);
+                    (gig.images && gig.images[0]) ||
+                    gig.vendor?.avatar ||
+                    null;
                   return (
                     <div
                       key={gig.id}
@@ -639,11 +634,25 @@ export function BuyerGigsPage() {
                       <div>
                         {/* Card Image with Floating WorkMode Badge */}
                         <div className="relative aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-white/5">
-                          <ProtectedPosterPreview
-                            src={cardImage}
-                            fit="cover"
-                            className="h-full w-full group-hover:scale-105 transition-transform duration-500"
-                          />
+                          {cardImage ? (
+                            <ProtectedPosterPreview
+                              src={cardImage}
+                              fit="cover"
+                              className="h-full w-full group-hover:scale-105 transition-transform duration-500"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent text-[#ff5500] p-4 text-center">
+                              <div className="w-12 h-12 rounded-2xl bg-white dark:bg-white/10 shadow-xs flex items-center justify-center mb-2">
+                                <BriefcaseIcon
+                                  size={24}
+                                  className="text-[#ff5500]"
+                                />
+                              </div>
+                              <span className="text-[11px] font-bold text-gray-500 dark:text-ink/60 uppercase tracking-wider">
+                                {gig.category.replace(/_/g, " ")}
+                              </span>
+                            </div>
+                          )}
                           <div className="absolute top-3 right-3">
                             <span
                               className={cn(

@@ -8,6 +8,7 @@ import { VendorDetailModal } from "@/components/VendorDetailModal";
 import { useUserStore } from "@/store/userStore";
 import { buildChatLink } from "@/lib/chatLink";
 import { isEnterpriseVendor } from "@/lib/enterprise";
+import { EnterpriseAvatarBadge } from "@/components/EnterpriseBadge";
 import { fmt } from "@/lib/product-price";
 import type { StoreMatch } from "@/types/search";
 import { MapPinIcon, StoreIcon, WrenchIcon } from "@/components/icons/hero";
@@ -133,16 +134,19 @@ export function StoreResultCard({
   return (
     <div className="bg-surface rounded-2xl border border-gray-100 shadow-sm p-4 space-y-2.5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <div className="flex items-center gap-2">
-        <div className="w-9 h-9 rounded-full bg-orange-50 overflow-hidden flex items-center justify-center shrink-0">
-          {match.avatar ? (
-            <ProtectedImage
-              src={optimizedImageUrl(match.avatar)}
-              alt={match.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <StoreIcon size={16} className="text-orange-500" />
-          )}
+        <div className="relative shrink-0">
+          <div className="w-9 h-9 rounded-full bg-orange-50 overflow-hidden flex items-center justify-center">
+            {match.avatar ? (
+              <ProtectedImage
+                src={optimizedImageUrl(match.avatar)}
+                alt={match.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <StoreIcon size={16} className="text-orange-500" />
+            )}
+          </div>
+          {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
         </div>
         <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-1 min-w-0">
           {match.name}

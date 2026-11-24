@@ -10,3 +10,33 @@ export function resolveGalleryImages(
     Boolean(url),
   );
 }
+
+/**
+ * Builds a generic media URL using the /api/media proxy.
+ * Can be used across all components for user-uploaded images (products, avatars, adverts, gigs, etc.).
+ */
+export function getMediaUrl(
+  source: string | null | undefined,
+  options?: { raw?: boolean; mask?: boolean },
+): string {
+  if (!source) return "";
+  if (source.startsWith("/api/media") || source.startsWith("/api/hub/media")) {
+    return source;
+  }
+  const params = new URLSearchParams();
+  params.set("ref", source);
+  if (options?.raw) params.set("raw", "1");
+  if (options?.mask) params.set("mask", "1");
+  return `/api/media?${params.toString()}`;
+}
+
+/**
+ * Returns a fully-qualified URL for OpenGraph, Twitter, and Schema.org metadata.
+ */
+export function formatMetadataImageUrl(
+  img?: string | null,
+): string | undefined {
+  if (!img) return undefined;
+  if (img.startsWith("http://") || img.startsWith("https://")) return img;
+  return `https://velte.ng/api/media?ref=${encodeURIComponent(img)}&raw=1`;
+}

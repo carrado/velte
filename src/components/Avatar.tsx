@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { EnterpriseAvatarBadge } from "@/components/EnterpriseBadge";
 
 // A circular avatar with a graceful fallback (2026-09-04) — found live: a
 // buyer's avatar showed as a plain broken-image icon right after Google
@@ -33,17 +34,19 @@ export function Avatar({
    *  rows) — omitted (browser default, effectively eager) for the one or
    *  two identity chips a header/sidebar ever shows at once. */
   loading,
+  isEnterprise,
 }: {
   src: string | null | undefined;
   alt?: string;
   label: string;
   className?: string;
   loading?: "lazy" | "eager";
+  isEnterprise?: boolean;
 }) {
   const [broken, setBroken] = useState(false);
   const showImage = Boolean(src) && !broken;
 
-  return (
+  const node = (
     <span
       className={cn(
         "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-orange-500 text-xs font-bold text-white",
@@ -68,4 +71,15 @@ export function Avatar({
       )}
     </span>
   );
+
+  if (isEnterprise) {
+    return (
+      <span className="relative inline-flex shrink-0">
+        {node}
+        <EnterpriseAvatarBadge size="sm" />
+      </span>
+    );
+  }
+
+  return node;
 }

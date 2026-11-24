@@ -8,6 +8,7 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { buildChatLink } from "@/lib/chatLink";
 import { formatNaira } from "@/lib/utils";
 import { isEnterpriseVendor } from "@/lib/enterprise";
+import { EnterpriseAvatarBadge } from "@/components/EnterpriseBadge";
 import type { HubProduct } from "@/types/hub";
 
 // One vendor upload on the Hub timeline. Price renders from the listing's own
@@ -43,16 +44,19 @@ export function HubProductPost({
   return (
     <article className="bg-surface rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
       <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-3">
-        <div className="w-9 h-9 rounded-full overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
-          {product.avatar ? (
-            <ProtectedImage
-              src={optimizedImageUrl(product.avatar)}
-              alt={product.storeName ?? product.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <StoreIcon size={15} className="text-gray-300" />
-          )}
+        <div className="relative shrink-0">
+          <div className="w-9 h-9 rounded-full overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center">
+            {product.avatar ? (
+              <ProtectedImage
+                src={optimizedImageUrl(product.avatar)}
+                alt={product.storeName ?? product.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <StoreIcon size={15} className="text-gray-300" />
+            )}
+          </div>
+          {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-bold text-ink truncate flex items-center gap-1">

@@ -6,6 +6,7 @@ export interface StoreFooterProps {
   name: string;
   handle: string;
   area: string | null;
+  state?: string | null;
   sectors: string[];
 }
 
@@ -16,8 +17,10 @@ export default function StoreFooter({
   name,
   handle,
   area,
+  state,
   sectors,
 }: StoreFooterProps) {
+  const locationStr = [area, state].filter(Boolean).join(", ");
   return (
     <footer className="border-t border-gray-200 bg-surface mt-10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
@@ -28,10 +31,10 @@ export default function StoreFooter({
               <span className="font-semibold">{name}</span>
               <span className="text-gray-400 font-normal">@{handle}</span>
             </div>
-            {area && (
+            {locationStr && (
               <p className="flex items-center gap-1.5 text-sm text-gray-500 mt-2 font-normal">
                 <MapPinIcon size={13} className="text-orange-500" />
-                {area}
+                {locationStr}
               </p>
             )}
             {sectors.length > 0 && (

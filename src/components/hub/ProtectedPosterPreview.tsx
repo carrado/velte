@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { CloseIcon } from "@/components/icons";
@@ -10,8 +10,160 @@ import { cn } from "@/lib/utils";
 // In-memory blob cache: allows the lightbox to instantly reuse the image
 // already fetched by the feed card thumbnail without making a second network request.
 const posterBlobCache = new Map<string, Blob>();
+// In-flight request deduplication: prevents multiple simultaneous requests for the same asset
+const inFlightRequests = new Map<string, Promise<Blob>>();
 
-function drawFitted(
+interface BatchQueueItem {
+  ref: string;
+  resolve: (blob: Blob) => void;
+  reject: (err: unknown) => void;
+}
+
+let batchQueue: BatchQueueItem[] = [];
+let batchTimeout: NodeJS.Timeout | null = null;
+
+async function flushBatchQueue() {
+  const currentBatch = [...batchQueue];
+  batchQueue = [];
+  batchTimeout = null;
+
+  if (currentBatch.length === 0) return;
+
+  const refs = Array.from(new Set(currentBatch.map((item) => item.ref)));
+
+  try {
+    const res = await fetch("/api/media", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refs }),
+    });
+
+    if (!res.ok) throw new Error("Batch fetch failed");
+    const json = await res.json();
+    const items = json.items || {};
+
+    for (const item of currentBatch) {
+      const result = items[item.ref];
+      if (result && result.data) {
+        // Decode base64 bytes
+        const binaryStr = atob(result.data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+
+        // Unmask the byte stream in memory using SHA-256 of ref
+        const refBytes = new TextEncoder().encode(item.ref);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", refBytes);
+        const mask = new Uint8Array(hashBuffer);
+        const headerLen = Math.min(bytes.length, 64);
+        for (let i = 0; i < headerLen; i++) {
+          bytes[i] ^= mask[i % mask.length];
+        }
+
+        const blob = new Blob([bytes], { type: result.mime || "image/jpeg" });
+        posterBlobCache.set(item.ref, blob);
+        item.resolve(blob);
+      } else {
+        item.reject(new Error(result?.error || "Asset failed in batch"));
+      }
+    }
+  } catch (err) {
+    for (const item of currentBatch) {
+      item.reject(err);
+    }
+  }
+}
+
+export function extractMediaRef(src: string): string | null {
+  if (!src) return null;
+  const s = src.trim();
+  if (s.startsWith("data:") || s.startsWith("blob:")) return null;
+
+  // Cloudinary direct URL (uploaded by user)
+  if (s.includes("cloudinary.com")) {
+    return s;
+  }
+
+  // API media proxy URL (relative or absolute, e.g. /api/media?ref=... or http://.../api/media?ref=...)
+  if (
+    s.includes("/api/media") ||
+    s.includes("/api/hub/media") ||
+    s.includes("/api/hub/e/")
+  ) {
+    try {
+      const url = new URL(s, "http://localhost:4001");
+      const refParam =
+        url.searchParams.get("ref") ||
+        url.searchParams.get("url") ||
+        url.searchParams.get("src") ||
+        url.searchParams.get("token");
+      if (refParam) return refParam;
+
+      const parts = url.pathname.split("/").filter(Boolean);
+      const last = parts[parts.length - 1];
+      if (last && last !== "media" && last !== "e") return last;
+    } catch {
+      // fallback if URL constructor fails
+    }
+  }
+
+  // Raw encrypted token (no http, no slash)
+  if (
+    !s.startsWith("http://") &&
+    !s.startsWith("https://") &&
+    !s.startsWith("/")
+  ) {
+    return s;
+  }
+
+  return null;
+}
+
+function queueBatchRef(ref: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    batchQueue.push({ ref, resolve, reject });
+    if (!batchTimeout) {
+      // 20ms debounce window collects all cards rendered in this viewport frame
+      batchTimeout = setTimeout(flushBatchQueue, 20);
+    }
+  });
+}
+
+export async function fetchProtectedMediaBlob(src: string): Promise<Blob> {
+  const cached = posterBlobCache.get(src);
+  if (cached) return cached;
+
+  const inFlight = inFlightRequests.get(src);
+  if (inFlight) return inFlight;
+
+  const promise = (async () => {
+    try {
+      const mediaRef = extractMediaRef(src);
+      let blob: Blob;
+
+      if (mediaRef) {
+        // Send media ref via batch queue (batches multiple visible cards into 1 single POST /api/media request!)
+        blob = await queueBatchRef(mediaRef);
+      } else {
+        // Direct URL or local static asset from /public
+        const res = await fetch(src);
+        if (!res.ok) throw new Error("direct fetch failed");
+        blob = await res.blob();
+      }
+
+      posterBlobCache.set(src, blob);
+      return blob;
+    } finally {
+      inFlightRequests.delete(src);
+    }
+  })();
+
+  inFlightRequests.set(src, promise);
+  return promise;
+}
+
+export function drawFitted(
   ctx: CanvasRenderingContext2D,
   bitmap: ImageBitmap,
   cw: number,
@@ -51,16 +203,42 @@ export function ProtectedPosterPreview({
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bitmapRef = useRef<ImageBitmap | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
   const labelId = useId();
   const clickable = typeof onClick === "function";
 
+  // 1. Viewport observer: only request media when the card enters (or is close to) the viewport
   useEffect(() => {
     const wrap = wrapRef.current;
+    if (!wrap) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "250px" }, // Pre-load 250px before entering viewport for smooth scrolling
+    );
+
+    observer.observe(wrap);
+    return () => observer.disconnect();
+  }, []);
+
+  // 2. Load & render only once the card is visible in the viewport
+  useEffect(() => {
+    if (!isVisible || !src) return;
+    const wrap = wrapRef.current;
     const canvas = canvasRef.current;
-    if (!wrap || !canvas || !src) return;
+    if (!wrap || !canvas) return;
 
     let cancelled = false;
-    const ctrl = new AbortController();
 
     const paint = () => {
       const bitmap = bitmapRef.current;
@@ -79,78 +257,7 @@ export function ProtectedPosterPreview({
 
     (async () => {
       try {
-        let blob = posterBlobCache.get(src);
-        if (!blob) {
-          let res: Response;
-          if (
-            src.startsWith("http://") ||
-            src.startsWith("https://") ||
-            (src.startsWith("/") &&
-              !src.startsWith("/api/hub/e/") &&
-              !src.startsWith("/api/hub/media"))
-          ) {
-            // Direct URL or local static asset
-            res = await fetch(src, {
-              signal: ctrl.signal,
-            });
-            if (!res.ok) throw new Error("direct fetch failed");
-            blob = await res.blob();
-          } else {
-            // Send media ref via POST /api/hub/media body (no raw URL is ever sent)
-            const ref = src.startsWith("/api/hub/e/")
-              ? src.replace("/api/hub/e/", "")
-              : src;
-
-            res = await fetch("/api/hub/media", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ref }),
-              signal: ctrl.signal,
-            });
-
-            if (!res.ok) throw new Error("preview fetch failed");
-            const buf = await res.arrayBuffer();
-            const bytes = new Uint8Array(buf);
-
-            // Unmask the protected byte stream in memory using SHA-256 of ref
-            const refBytes = new TextEncoder().encode(ref);
-            const hashBuffer = await crypto.subtle.digest("SHA-256", refBytes);
-            const mask = new Uint8Array(hashBuffer);
-            const headerLen = Math.min(bytes.length, 64);
-            for (let i = 0; i < headerLen; i++) {
-              bytes[i] ^= mask[i % mask.length];
-            }
-
-            // Sniff actual mime type from unmasked magic numbers
-            let mime = "image/jpeg";
-            if (bytes.length > 4) {
-              if (
-                bytes[0] === 0x89 &&
-                bytes[1] === 0x50 &&
-                bytes[2] === 0x4e &&
-                bytes[3] === 0x47
-              ) {
-                mime = "image/png";
-              } else if (
-                bytes[0] === 0x52 &&
-                bytes[1] === 0x49 &&
-                bytes[2] === 0x46 &&
-                bytes[3] === 0x46
-              ) {
-                mime = "image/webp";
-              } else if (
-                bytes[0] === 0x47 &&
-                bytes[1] === 0x49 &&
-                bytes[2] === 0x46
-              ) {
-                mime = "image/gif";
-              }
-            }
-
-            blob = new Blob([bytes], { type: mime });
-          }
-          posterBlobCache.set(src, blob);
-        }
+        const blob = await fetchProtectedMediaBlob(src);
         if (cancelled) return;
         const bitmap = await createImageBitmap(blob);
         if (cancelled) {
@@ -178,12 +285,11 @@ export function ProtectedPosterPreview({
 
     return () => {
       cancelled = true;
-      ctrl.abort();
       ro.disconnect();
       bitmapRef.current?.close();
       bitmapRef.current = null;
     };
-  }, [src, fit]);
+  }, [isVisible, src, fit]);
 
   return (
     <div

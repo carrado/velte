@@ -9,6 +9,7 @@ import { optimizedImageUrl } from "@/lib/cloudinary";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { buildChatLink } from "@/lib/chatLink";
 import { isEnterpriseVendor } from "@/lib/enterprise";
+import { EnterpriseAvatarBadge } from "@/components/EnterpriseBadge";
 import type { VendorPreviewItem } from "@/types/store";
 import {
   ArrowRightIcon,
@@ -153,7 +154,7 @@ export function VendorCard({
           expanded sector list above happens to be, instead of drifting
           wherever the content above happens to end. */}
       <div className="px-4 pb-4 flex flex-col flex-1">
-        <div className="relative -mt-8 mb-2">
+        <div className="relative -mt-8 mb-2 w-16 h-16">
           <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-50 border-4 border-white shadow-sm flex items-center justify-center">
             {item.avatar ? (
               <ProtectedImage
@@ -165,6 +166,7 @@ export function VendorCard({
               <StoreIcon size={22} className="text-gray-300" />
             )}
           </div>
+          {isEnterprise && <EnterpriseAvatarBadge size="md" />}
         </div>
 
         <div className="flex items-center gap-1 min-w-0">

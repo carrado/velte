@@ -559,6 +559,7 @@ export interface HubGigItem {
   createdAt: string;
   vendor: HubGigVendor;
   imageUrl?: string | null;
+  images?: string[];
   posterUrl?: string | null;
   hasApplied?: boolean;
   myApplicationStatus?:

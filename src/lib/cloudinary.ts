@@ -72,7 +72,7 @@ async function requestUploadSignature(
   return (await res.json()) as CloudinarySignResponse;
 }
 
-async function uploadToCloudinary(
+export async function uploadToCloudinary(
   file: File,
   folder: string,
   profile: "advert" | "default",
@@ -136,6 +136,13 @@ export async function uploadAdvertMedia(
 
 export async function uploadAvatarToCloudinary(file: File): Promise<string> {
   return uploadToCloudinary(file, "velte/avatars", "default", 512, 0.85);
+}
+
+export async function uploadValidationMedia(
+  file: File,
+  folder = "velte/validations",
+): Promise<string> {
+  return uploadToCloudinary(file, folder, "default", 1200, 0.85);
 }
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];

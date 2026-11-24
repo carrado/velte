@@ -644,7 +644,7 @@ export function HubCommunityPage({ userId: _userId }: { userId?: string }) {
     setGigSkillsList((prev) => prev.filter((s) => s !== skillToRemove));
   };
 
-  const handleCreateGig = (e: React.FormEvent) => {
+  const handleCreateGig = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (gigType === "job") {
@@ -701,15 +701,18 @@ export function HubCommunityPage({ userId: _userId }: { userId?: string }) {
 
     setIsAiScreening(true);
 
-    setTimeout(() => {
-      setIsAiScreening(false);
-
+    try {
       let formattedReward = "Negotiable";
       let modelSummary = "";
       let finalTitle = "";
       let finalBody = "";
       let finalLocation = "Nigeria";
       let finalWorkMode: "remote" | "on-site" | "hybrid" = "on-site";
+      let rewardKobo = 0;
+      let rewardType: "instant" | "milestone" = "instant";
+      let milestonesPayload: Array<{ title: string; amountKobo: number }> = [];
+      let skillsPayload: string[] = [];
+      let categoryPayload = "custom";
 
       if (gigType === "job") {
         finalTitle = jobTitle.trim();
@@ -724,6 +727,16 @@ export function HubCommunityPage({ userId: _userId }: { userId?: string }) {
           : "on-site";
         modelSummary = `[${jobEmploymentType || "Full-time"} • Salary: ${formattedReward}${jobDeadline ? ` • Apply before: ${jobDeadline}` : ""}${jobExperienceLevel ? ` • Exp: ${jobExperienceLevel}` : ""}${jobSkills ? ` • Skills: ${jobSkills}` : ""} • Send CV to: ${jobCvEmail}]`;
         finalBody = `${modelSummary}\n\n${jobDescription.trim()}${jobAdditionalInfo ? `\n\nAdditional Information:\n${jobAdditionalInfo.trim()}` : ""}`;
+        rewardKobo =
+          Math.max(0, Number(jobSalaryRange.replace(/\D/g, ""))) * 100;
+        rewardType = "instant";
+        skillsPayload = jobSkills
+          ? jobSkills
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+        categoryPayload = "job";
       } else if (gigType === "gig") {
         finalTitle = gigTitle.trim();
         finalLocation =
@@ -738,8 +751,16 @@ export function HubCommunityPage({ userId: _userId }: { userId?: string }) {
             gigBudget.replace(/\D/g, "") || 50000,
           ).toLocaleString();
           formattedReward = `₦${num} Payout`;
+          rewardKobo = Math.max(0, Number(gigBudget.replace(/\D/g, ""))) * 100;
+          rewardType = "instant";
         } else {
           formattedReward = `₦${totalMilestonesSum.toLocaleString()} (Milestone Pay)`;
+          rewardKobo = totalMilestonesSum * 100;
+          rewardType = "milestone";
+          milestonesPayload = gigMilestonesList.map((m) => ({
+            title: m.title.trim(),
+            amountKobo: Math.max(0, Number(m.amount.replace(/\D/g, ""))) * 100,
+          }));
         }
         const milestoneText =
           gigPaymentMethod === "milestone"
@@ -747,6 +768,36 @@ export function HubCommunityPage({ userId: _userId }: { userId?: string }) {
             : "";
         modelSummary = `[${gigTaskType || "Task"} • ${formattedReward}${gigDeadline ? ` • Deadline: ${gigDeadline}` : ""}${milestoneText}${gigSkillsList.length ? ` • Skills: ${gigSkillsList.join(", ")}` : ""}]`;
         finalBody = `${modelSummary}\n\n${gigDescription.trim()}`;
+        skillsPayload = gigSkillsList;
+
+        const taskTypeLower = (gigTaskType || "").toLowerCase();
+        if (
+          taskTypeLower.includes("photo") ||
+          taskTypeLower.includes("camera") ||
+          taskTypeLower.includes("video")
+        ) {
+          categoryPayload = "photography_media";
+        } else if (
+          taskTypeLower.includes("audit") ||
+          taskTypeLower.includes("kyc") ||
+          taskTypeLower.includes("verify")
+        ) {
+          categoryPayload = "audit_kyc";
+        } else if (
+          taskTypeLower.includes("delivery") ||
+          taskTypeLower.includes("rider") ||
+          taskTypeLower.includes("logistics")
+        ) {
+          categoryPayload = "delivery_logistics";
+        } else if (
+          taskTypeLower.includes("market") ||
+          taskTypeLower.includes("promo") ||
+          taskTypeLower.includes("social")
+        ) {
+          categoryPayload = "marketing_promotion";
+        } else {
+          categoryPayload = "custom";
+        }
       } else if (gigType === "service") {
         finalTitle = serviceTitle.trim();
         finalLocation = serviceLocation.trim();
@@ -757,12 +808,45 @@ export function HubCommunityPage({ userId: _userId }: { userId?: string }) {
             : "Quote On Inspection";
         modelSummary = `[On-Site Professional Service • ${formattedReward}${serviceTurnaround ? ` • Availability: ${serviceTurnaround}` : ""}]`;
         finalBody = `${modelSummary}\n\n${serviceDescription.trim()}${serviceNotes ? `\n\nNotes & Requirements:\n${serviceNotes.trim()}` : ""}`;
+        rewardKobo =
+          Math.max(0, Number(serviceAmount.replace(/\D/g, ""))) * 100;
+        rewardType = "instant";
+        skillsPayload = ["Professional Service"];
+        categoryPayload = "service";
       }
 
+      // Create the gig in the backend database
+      const res = await fetch("/api/hub/gigs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: finalTitle,
+          description: finalBody,
+          category: categoryPayload,
+          workMode: finalWorkMode,
+          location: finalLocation,
+          rewardType,
+          rewardKobo: rewardKobo || 2500000,
+          milestones: milestonesPayload,
+          deadline:
+            gigDeadline || jobDeadline
+              ? new Date(gigDeadline || jobDeadline).toISOString()
+              : null,
+          requiredSkills: skillsPayload,
+        }),
+      });
+
+      const resData = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(resData?.error || "Failed to publish gig to backend.");
+      }
+
+      const createdGigId = resData?.data?.id || `gig-${Date.now()}`;
+
       const created: CommunityPostItem = {
-        id: `gig-${Date.now()}`,
+        id: createdGigId,
         authorName: user?.name || "Verified Storefront",
-        authorAvatar: "/community/avatar-tunde.png",
+        authorAvatar: user?.avatar || "/community/avatar-tunde.png",
         verified: true,
         timeAgo: "Just now",
         room: "Business Opportunities",
@@ -814,8 +898,16 @@ export function HubCommunityPage({ userId: _userId }: { userId?: string }) {
       setServiceNotes("");
 
       setSelectedRoom("business");
-      toast.success("Opportunity published successfully to the Community Hub!");
-    }, 500);
+      toast.success(
+        "Gig published successfully! Verified buyers and agents can now apply.",
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Error publishing opportunity.",
+      );
+    } finally {
+      setIsAiScreening(false);
+    }
   };
 
   // Toggle Likes

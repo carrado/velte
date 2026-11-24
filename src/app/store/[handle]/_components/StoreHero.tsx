@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
+import { ProtectedImage } from "@/components/ProtectedImage";
 import {
   MapPin,
   Star,
@@ -9,10 +9,13 @@ import {
   ChatCircleDots,
   Check,
   SealCheck,
+  Copy,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { getInitial } from "@/lib/initials";
 import { cn } from "@/lib/utils";
+import { EnterpriseAvatarBadge } from "@/components/EnterpriseBadge";
+import type { StoreLocation } from "@/types/store";
 
 export interface StoreHeroProps {
   handle: string;
@@ -21,9 +24,13 @@ export interface StoreHeroProps {
   gallery: string[];
   productImages?: string[];
   area: string | null;
+  state?: string | null;
+  country?: string | null;
+  locations?: StoreLocation[];
+  storeType?: "online" | "physical";
   sectors: string[];
-  goodsCount: number;
-  servicesCount: number;
+  goodsCount?: number;
+  servicesCount?: number;
   enterprise?: boolean;
   description?: string | null;
   ratingAvg?: number | null;
@@ -34,17 +41,24 @@ export interface StoreHeroProps {
 const VELTE_TEMPLATE_BACKGROUND = "/hub/vendor-hub-store.jpg";
 
 export default function StoreHero({
+  handle,
   name,
   avatar,
   gallery = [],
   productImages = [],
   area,
+  state,
+  locations = [],
+  storeType = "online",
+  sectors = [],
+  enterprise,
   description,
   ratingAvg,
   ratingCount,
   whatsappHref,
 }: StoreHeroProps) {
   const [isFollowing, setIsFollowing] = useState(false);
+  const [copiedHandle, setCopiedHandle] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
 
   // Background carousel images:
@@ -80,11 +94,32 @@ export default function StoreHero({
     });
   };
 
+  const handleCopyNamespace = () => {
+    const url =
+      typeof window !== "undefined"
+        ? window.location.href
+        : `https://velte.ng/store/${handle}`;
+    navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        setCopiedHandle(true);
+        toast.success(`Copied store link: https://velte.ng/store/${handle}`);
+        setTimeout(() => setCopiedHandle(false), 2000);
+      })
+      .catch(() => {
+        toast.info(`Store handle: @${handle}`);
+      });
+  };
+
   const hasRealRating =
     ratingAvg != null && ratingCount != null && ratingCount > 0;
 
+  const fullLocationStr = [area, state].filter(Boolean).join(", ");
+  const isPhysical =
+    storeType === "physical" || locations.length > 0 || Boolean(area);
+
   return (
-    <div className="relative w-full overflow-hidden bg-neutral-900 select-none min-h-[170px] sm:min-h-[190px]">
+    <div className="relative w-full overflow-hidden bg-neutral-900 select-none min-h-[180px] sm:min-h-[210px]">
       {/* ── Background Carousel with Dark Overlay ───────────────────── */}
       <div className="absolute inset-0 z-0 bg-neutral-950 overflow-hidden">
         {heroImages.length > 0 ? (
@@ -102,12 +137,11 @@ export default function StoreHero({
                 transitionDuration: "1000ms",
               }}
             >
-              <Image
+              <ProtectedImage
                 src={src}
                 alt={`${name} showcase photo ${idx + 1}`}
-                fill
                 priority={idx === 0}
-                className="w-full h-full object-cover object-center"
+                className="w-full h-full object-cover"
               />
             </div>
           ))
@@ -142,15 +176,14 @@ export default function StoreHero({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 sm:gap-6">
           {/* Left: Avatar + Identity */}
           <div className="flex items-center gap-4 sm:gap-5 min-w-0">
-            {/* Circular Store Avatar with Green Checkmark */}
+            {/* Circular Store Avatar with Green Checkmark or Enterprise Crown */}
             <div className="relative shrink-0">
               <div className="w-20 h-20 sm:w-24 sm:h-24 lg:w-26 lg:h-26 rounded-full ring-4 ring-white bg-white shadow-2xl overflow-hidden flex items-center justify-center">
                 {avatar ? (
-                  <Image
+                  <ProtectedImage
                     src={avatar}
                     alt={name}
-                    width={110}
-                    height={110}
+                    priority
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -159,17 +192,25 @@ export default function StoreHero({
                   </div>
                 )}
               </div>
-              {/* Green Verified Badge at bottom right of Avatar */}
-              <div
-                className="absolute bottom-0.5 right-0.5 h-6 w-6 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center text-white shadow-md"
-                title="Verified Store"
-              >
-                <Check size={13} weight="bold" />
-              </div>
+              {/* Enterprise Crown Badge or Green Verified Badge */}
+              {enterprise ? (
+                <EnterpriseAvatarBadge
+                  size="lg"
+                  className="-bottom-0.5 -right-0.5 ring-3"
+                />
+              ) : (
+                <div
+                  className="absolute bottom-0.5 right-0.5 h-6 w-6 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center text-white shadow-md"
+                  title="Verified Store"
+                >
+                  <Check size={13} weight="bold" />
+                </div>
+              )}
             </div>
 
             {/* Store Information */}
             <div className="min-w-0 flex-1">
+              {/* Title, Verified Seal, and Namespace Handle */}
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white leading-tight drop-shadow-sm truncate">
                   {name}
@@ -180,16 +221,31 @@ export default function StoreHero({
                   weight="fill"
                   className="text-sky-400 shrink-0"
                 />
+
+                {/* Namespace Handle Chip with Copy Action */}
+                <button
+                  type="button"
+                  onClick={handleCopyNamespace}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/15 hover:bg-white/25 text-white/90 border border-white/20 transition-colors cursor-pointer"
+                  title="Click to copy store URL"
+                >
+                  <span>@{handle}</span>
+                  {copiedHandle ? (
+                    <Check size={12} className="text-emerald-300" />
+                  ) : (
+                    <Copy size={12} className="text-white/70" />
+                  )}
+                </button>
               </div>
 
               {/* Tagline / Description */}
-              <p className="text-xs sm:text-sm text-white/85 mt-1 font-normal line-clamp-1">
+              <p className="text-xs sm:text-sm text-white/85 mt-1 font-normal line-clamp-2 max-w-2xl">
                 {description || `Welcome to ${name} on Velte.`}
               </p>
 
               {/* Meta Stats Row (Real data only, no hardcoded stats) */}
               <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 mt-2.5 text-xs text-white/90">
-                {/* Real DB Star Rating (Never manufactured) */}
+                {/* Real DB Star Rating */}
                 {hasRealRating ? (
                   <span className="flex items-center gap-1 font-semibold text-amber-300">
                     <Star size={13} weight="fill" className="text-amber-300" />
@@ -209,16 +265,43 @@ export default function StoreHero({
                   </span>
                 )}
 
-                {/* Location */}
-                {area && (
+                {/* Primary Address & Multiple Locations */}
+                {fullLocationStr && (
                   <span className="flex items-center gap-1">
                     <MapPin
                       size={13}
                       weight="fill"
                       className="text-white/80 shrink-0"
                     />
-                    <span>{area}</span>
+                    <span>{fullLocationStr}</span>
                   </span>
+                )}
+
+                {/* Multiple locations branch count */}
+                {locations.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-md bg-white/10 text-white/90 text-[10px] font-semibold">
+                    +{locations.length} branch{" "}
+                    {locations.length === 1 ? "location" : "locations"}
+                  </span>
+                )}
+
+                {/* Sectors badges in Hero */}
+                {sectors.length > 0 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+                    {sectors.slice(0, 2).map((sec) => (
+                      <span
+                        key={sec}
+                        className="px-2 py-0.5 rounded-full bg-white/10 text-white/85 text-[10px] font-medium border border-white/15 whitespace-nowrap"
+                      >
+                        {sec}
+                      </span>
+                    ))}
+                    {sectors.length > 2 && (
+                      <span className="text-[10px] text-white/60">
+                        +{sectors.length - 2} more
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -228,7 +311,7 @@ export default function StoreHero({
           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 self-start sm:self-center">
             {/* Chat Store Button */}
             <a
-              href={whatsappHref || "#chat"}
+              href={whatsappHref || `/chat?store=${encodeURIComponent(handle)}`}
               className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white hover:bg-orange-50 text-[#ff5500] font-semibold text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <ChatCircleDots

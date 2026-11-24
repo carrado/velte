@@ -1,6 +1,23 @@
 import type { ReactNode } from "react";
 import type { SectorClassification } from "@/types/sectors";
 
+export interface StoreLocation {
+  label?: string | null;
+  area?: string | null;
+  state?: string | null;
+}
+
+export interface StoreReview {
+  id: string;
+  rating: number;
+  text: string;
+  createdAt?: string | null;
+  buyerName?: string;
+  buyerAvatar?: string | null;
+  reply?: string | null;
+  repliedAt?: string | null;
+}
+
 /** The vendor's own store profile — editable fields only. */
 export interface Store {
   handle: string;
@@ -15,6 +32,7 @@ export interface Store {
     x: string | null;
   };
   gallery: string[];
+  locations?: StoreLocation[];
 }
 
 // `sectors` is read-only here — it's a derived cache of User.sectors,
@@ -67,12 +85,23 @@ export interface PublicStore extends Store {
   vendorId: string;
   avatar: string | null;
   area: string | null;
+  state?: string | null;
+  country?: string | null;
+  companyLocation?: string | null;
+  storeType?: "online" | "physical";
+  tier?: string;
+  isEnterprise?: boolean;
+  enterprise?: boolean;
+  verified?: boolean;
+  addressVerified?: boolean;
   /** Server-derived shim from the store's current sectors (see
-   *  velte-backend's getPublicStore) — not a stored account field. */
+   *  svelte-backend's getPublicStore) — not a stored account field. */
   businessType: SectorClassification;
   products: PublicStoreProduct[];
   ratingAvg?: number | null;
   ratingCount?: number;
+  ratingDistribution?: ReviewDistribution;
+  reviews?: StoreReview[];
   adverts?: PublicStoreAdvert[];
 }
 
@@ -104,12 +133,12 @@ export interface PublicStoreProductProps {
 
 export interface StoreTabsProps {
   goods: PublicStoreProduct[];
-  services: PublicStoreProduct[];
+  services?: PublicStoreProduct[];
   storeName: string;
   storeHandle: string;
   whatsapp: string | null;
   vendorId: string;
-  defaultTab: PublicStoreTab;
+  defaultTab?: PublicStoreTab;
   sidebar: ReactNode;
   isOwn: boolean;
   isEnterprise?: boolean;
@@ -117,6 +146,17 @@ export interface StoreTabsProps {
   description?: string | null;
   adverts?: PublicStoreAdvert[];
   initialIsLoggedIn?: boolean;
+  gallery?: string[];
+  locations?: StoreLocation[];
+  area?: string | null;
+  state?: string | null;
+  country?: string | null;
+  companyLocation?: string | null;
+  storeType?: "online" | "physical";
+  reviews?: StoreReview[];
+  ratingAvg?: number | null;
+  ratingCount?: number;
+  ratingDistribution?: ReviewDistribution;
 }
 
 export interface IntroCardProps {

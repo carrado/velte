@@ -4,6 +4,8 @@ import { ProtectedImage } from "@/components/ProtectedImage";
 import { ProtectedPosterPreview } from "@/components/hub/ProtectedPosterPreview";
 import { BadgeCheckIcon, SendIcon, StoreIcon } from "@/components/icons/hero";
 import { optimizedImageUrl } from "@/lib/cloudinary";
+import { isEnterpriseVendor } from "@/lib/enterprise";
+import { EnterpriseAvatarBadge } from "@/components/EnterpriseBadge";
 import type { HubBroadcastPost } from "@/types/hub";
 
 // A sent broadcast rendered inline on the timeline. Renders nothing until the
@@ -13,16 +15,19 @@ export function HubBroadcastPost({ post }: { post: HubBroadcastPost }) {
   return (
     <article className="bg-surface rounded-2xl border border-orange-200/70 shadow-sm overflow-hidden">
       <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-3">
-        <div className="w-9 h-9 rounded-full overflow-hidden bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0">
-          {post.avatar ? (
-            <ProtectedImage
-              src={optimizedImageUrl(post.avatar)}
-              alt={post.storeName ?? "Vendor broadcast"}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <StoreIcon size={15} className="text-orange-300" />
-          )}
+        <div className="relative shrink-0">
+          <div className="w-9 h-9 rounded-full overflow-hidden bg-orange-50 border border-orange-100 flex items-center justify-center">
+            {post.avatar ? (
+              <ProtectedImage
+                src={optimizedImageUrl(post.avatar)}
+                alt={post.storeName ?? "Vendor broadcast"}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <StoreIcon size={15} className="text-orange-300" />
+            )}
+          </div>
+          {isEnterpriseVendor(post) && <EnterpriseAvatarBadge size="sm" />}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-bold text-ink truncate flex items-center gap-1">

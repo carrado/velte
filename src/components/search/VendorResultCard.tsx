@@ -15,6 +15,7 @@ import { useUserStore } from "@/store/userStore";
 import { cn } from "@/lib/utils";
 import { buildChatLink } from "@/lib/chatLink";
 import { isEnterpriseVendor } from "@/lib/enterprise";
+import { EnterpriseAvatarBadge } from "@/components/EnterpriseBadge";
 import type { VendorMatch } from "@/types/search";
 import {
   ChevronLeftIcon,
@@ -232,16 +233,19 @@ export function VendorResultCard({
           <ComparisonDetailBlock detail={comparisonDetail} />
         )}
         <div className="flex items-center gap-2 min-w-0 pt-1">
-          <div className="w-7 h-7 rounded-full bg-orange-50 overflow-hidden flex items-center justify-center shrink-0">
-            {match.avatar ? (
-              <ProtectedImage
-                src={optimizedImageUrl(match.avatar)}
-                alt={match.vendorName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <StoreIcon size={13} className="text-orange-500" />
-            )}
+          <div className="relative shrink-0">
+            <div className="w-7 h-7 rounded-full bg-orange-50 overflow-hidden flex items-center justify-center">
+              {match.avatar ? (
+                <ProtectedImage
+                  src={optimizedImageUrl(match.avatar)}
+                  alt={match.vendorName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <StoreIcon size={13} className="text-orange-500" />
+              )}
+            </div>
+            {isEnterprise && <EnterpriseAvatarBadge size="sm" />}
           </div>
           <span className="truncate min-w-0 text-xs">
             <span className="text-gray-400">Sold by </span>

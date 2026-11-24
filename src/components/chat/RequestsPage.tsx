@@ -418,6 +418,7 @@ function OfferCard({
           label={responder.name.trim().charAt(0).toUpperCase()}
           className="h-10 w-10"
           loading="lazy"
+          isEnterprise={isEnterprise}
         />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-ink">
